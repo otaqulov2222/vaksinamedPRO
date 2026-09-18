@@ -1,7 +1,7 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApp } from '@/context/AppContext';
 import { Screen, formatUzs } from '@/components/AppUI';
 import { useColors } from '@/hooks/useColors';
@@ -35,7 +35,7 @@ export default function QrScreen() {
   const { t, user, balance } = useApp();
   return (
     <Screen>
-      <View style={styles.top}><View style={[styles.brandMark, { backgroundColor: colors.accent }]}><MaterialCommunityIcons name="leaf" size={20} color={colors.primary} /></View><View style={styles.brandText}><Text style={[styles.brandName, { color: colors.foreground }]}>Sog‘lom</Text><Text style={[styles.brandSub, { color: colors.mutedForeground }]}>APTEKA TARMOғI</Text></View><View style={styles.spacer} /><Pressable onPress={() => router.push('/profile')}><Feather name="more-horizontal" size={22} color={colors.foreground} /></Pressable></View>
+      <View style={styles.top}><Image source={require('../assets/images/vaksina-med-wordmark.png')} style={styles.qrWordmark} resizeMode="contain" /><View style={styles.spacer} /><Pressable onPress={() => router.push('/profile')}><Feather name="more-horizontal" size={22} color={colors.foreground} /></Pressable></View>
       <View style={[styles.qrCard, { backgroundColor: colors.primary }]}><Text style={styles.qrTitle}>{t('myQr')}</Text><Text style={styles.qrSubtitle}>Kassada ushbu kodni ko‘rsating</Text><View style={styles.qrWrap}><View style={styles.qrGrid}>{qrPattern.map((row, rowIndex) => row.split('').map((cell, cellIndex) => <View key={`${rowIndex}-${cellIndex}`} style={[styles.qrCell, { backgroundColor: cell === '1' ? '#122a25' : '#fff' }]} />))}</View></View><Text style={styles.code}>1234 5678 9012</Text><View style={styles.customerRow}><View><Text style={styles.customerLabel}>Mijoz</Text><Text style={styles.customerName}>{user.name}</Text></View><View style={styles.customerRight}><Text style={styles.customerLabel}>Cashback</Text><Text style={styles.customerName}>{formatUzs(balance)}</Text></View></View></View>
       <View style={[styles.tip, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.tipIcon, { backgroundColor: colors.secondary }]}><Feather name="shield" size={17} color={colors.primary} /></View><Text style={[styles.tipText, { color: colors.mutedForeground }]}>QR kodingizni boshqa odamlarga yubormang. U faqat shaxsiy profilingizga tegishli.</Text></View>
     </Screen>
@@ -44,10 +44,7 @@ export default function QrScreen() {
 
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', marginBottom: 17 },
-  brandMark: { width: 38, height: 38, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  brandText: { marginLeft: 9 },
-  brandName: { fontFamily: 'Inter_700Bold', fontSize: 15 },
-  brandSub: { fontFamily: 'Inter_500Medium', fontSize: 7, letterSpacing: 1 },
+  qrWordmark: { width: 150, height: 24 },
   spacer: { flex: 1 },
   qrCard: { borderRadius: 25, padding: 18, alignItems: 'center' },
   qrTitle: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 20 },

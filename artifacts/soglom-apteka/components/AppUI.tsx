@@ -42,8 +42,8 @@ export function SectionTitle({ title, action, onPress }: { title: string; action
 
 export function ActionTile({ icon, label, onPress, tint = 'green' }: { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; onPress?: () => void; tint?: 'green' | 'gold' | 'mint' | 'pink' }) {
   const colors = useColors();
-  const backgrounds = { green: colors.accent, gold: '#fff2cf', mint: '#e0f5ee', pink: '#fde7ed' };
-  const iconColors = { green: colors.primary, gold: '#d69b0a', mint: '#278f71', pink: '#d54d73' };
+  const backgrounds = { green: colors.accent, gold: '#fff2cf', mint: '#eee3f7', pink: '#fde7ed' };
+  const iconColors = { green: colors.primary, gold: '#d69b0a', mint: '#603085', pink: '#d54d73' };
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.actionTile, { opacity: pressed ? 0.74 : 1 }]}>
       <View style={[styles.actionIcon, { backgroundColor: backgrounds[tint] }]}>

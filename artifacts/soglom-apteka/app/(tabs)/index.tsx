@@ -1,7 +1,7 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApp } from '@/context/AppContext';
 import { ActionTile, IconButton, ProgressLine, Screen, SectionTitle, formatUzs } from '@/components/AppUI';
 import { useColors } from '@/hooks/useColors';
@@ -19,16 +19,16 @@ export default function HomeScreen() {
         <IconButton icon="bell" badge onPress={() => router.push('/profile')} />
       </View>
 
-      <View style={[styles.hero, { backgroundColor: colors.primary }]}>
+      <View style={[styles.hero, { backgroundColor: '#fff4c9' }]}>
         <View style={styles.heroBrand}>
-          <View style={styles.leafCircle}><MaterialCommunityIcons name="leaf" size={24} color={colors.primary} /></View>
-          <View><Text style={styles.brandName}>Sog‘lom</Text><Text style={styles.brandSub}>APTEKA TARMOғI</Text></View>
+          <Image source={require('../../assets/images/icon.png')} style={styles.brandImage} />
+          <Image source={require('../../assets/images/vaksina-med-wordmark.png')} style={styles.wordmark} resizeMode="contain" />
         </View>
         <View>
-          <Text style={styles.heroTitle}>{t('welcome')}</Text>
-          <Text style={styles.heroCaption}>Sodiqlik dasturidagi imtiyozlardan foydalaning</Text>
+          <Text style={[styles.heroTitle, { color: colors.primary }]}>{t('welcome')}</Text>
+          <Text style={[styles.heroCaption, { color: '#785f2a' }]}>Sodiqlik dasturidagi imtiyozlardan foydalaning</Text>
         </View>
-        <View style={styles.heroDecoration}><MaterialCommunityIcons name="gift-outline" size={58} color="rgba(255,255,255,0.28)" /></View>
+        <View style={styles.heroDecoration}><MaterialCommunityIcons name="needle" size={58} color="rgba(96,48,133,0.18)" /></View>
       </View>
 
       <View style={[styles.balanceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -50,12 +50,12 @@ export default function HomeScreen() {
         <ActionTile icon="qrcode-scan" label={t('myQr')} onPress={() => router.push('/qr')} />
         <ActionTile icon="map-marker-outline" label={t('branches')} tint="mint" onPress={() => router.push('/branches')} />
         <ActionTile icon="sale" label={t('offers')} tint="gold" onPress={() => router.push('/promos')} />
-        <ActionTile icon="account-multiple-plus-outline" label={t('invite')} tint="pink" onPress={() => router.push('/profile')} />
+        <ActionTile icon="gift-outline" label={t('bonuses')} tint="pink" onPress={() => router.push('/(tabs)/bonuses')} />
       </View>
 
-      <View style={[styles.promoCard, { backgroundColor: '#e3f5ea' }]}>
-        <View style={styles.promoCopy}><Text style={[styles.promoTitle, { color: '#165c47' }]}>Sodiq mijozlarga</Text><Text style={[styles.promoTitle, { color: '#165c47' }]}>maxsus takliflar</Text><Pressable onPress={() => router.push('/promos')}><Text style={[styles.promoButton, { color: colors.primary }]}>{t('details')} <Feather name="arrow-right" size={13} color={colors.primary} /></Text></Pressable></View>
-        <View style={styles.promoIllustration}><MaterialCommunityIcons name="face-woman-shimmer-outline" size={82} color="#3ca979" /></View>
+      <View style={[styles.promoCard, { backgroundColor: '#f0e7f7' }]}>
+        <View style={styles.promoCopy}><Text style={[styles.promoTitle, { color: colors.primary }]}>Sodiq mijozlarga</Text><Text style={[styles.promoTitle, { color: colors.primary }]}>maxsus takliflar</Text><Pressable onPress={() => router.push('/promos')}><Text style={[styles.promoButton, { color: colors.primary }]}>{t('details')} <Feather name="arrow-right" size={13} color={colors.primary} /></Text></Pressable></View>
+        <View style={styles.promoIllustration}><MaterialCommunityIcons name="needle" size={82} color="#8e63aa" /></View>
       </View>
 
       <SectionTitle title={t('nearby')} action={t('details')} onPress={() => router.push('/branches')} />
@@ -88,11 +88,10 @@ const styles = StyleSheet.create({
   name: { fontFamily: 'Inter_700Bold', fontSize: 23 },
   hero: { minHeight: 172, borderRadius: 24, padding: 18, overflow: 'hidden', marginBottom: 14 },
   heroBrand: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 21 },
-  leafCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#e5faea', justifyContent: 'center', alignItems: 'center' },
-  brandName: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 16 },
-  brandSub: { color: 'rgba(255,255,255,0.72)', fontFamily: 'Inter_500Medium', fontSize: 8, letterSpacing: 1 },
-  heroTitle: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 20, maxWidth: 245, lineHeight: 26 },
-  heroCaption: { color: 'rgba(255,255,255,0.78)', fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 6, maxWidth: 235 },
+  brandImage: { width: 42, height: 42, borderRadius: 13 },
+  wordmark: { width: 150, height: 25 },
+  heroTitle: { fontFamily: 'Inter_700Bold', fontSize: 20, maxWidth: 245, lineHeight: 26 },
+  heroCaption: { fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 6, maxWidth: 235 },
   heroDecoration: { position: 'absolute', right: 16, bottom: 18 },
   balanceCard: { borderRadius: 22, padding: 18, borderWidth: 1 },
   balanceTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },

@@ -184,8 +184,8 @@ const initialTransactions: Transaction[] = [
 const rewards: Reward[] = [
   { id: 'discount', title: 'Barcha mahsulotlarga 10% chegirma', subtitle: 'Keyingi xaridingizda', points: 500, icon: 'percent', accent: '#e1f6e8' },
   { id: 'vitamin', title: 'Vitamin D3', subtitle: '60 kapsula', points: 1000, icon: 'pill', accent: '#fff2d5' },
-  { id: 'bag', title: 'Kosmetichka', subtitle: 'Sog‘lom apteka', points: 1500, icon: 'shopping-bag', accent: '#e5f4ef' },
-  { id: 'thermos', title: 'Termos', subtitle: 'Sog‘lom apteka', points: 2000, icon: 'coffee', accent: '#eaf0f4' },
+  { id: 'bag', title: 'Kosmetichka', subtitle: 'Vaksina Med', points: 1500, icon: 'shopping', accent: '#f1e7f7' },
+  { id: 'thermos', title: 'Termos', subtitle: 'Vaksina Med', points: 2000, icon: 'coffee', accent: '#fff1c9' },
 ];
 
 type AppContextValue = {
