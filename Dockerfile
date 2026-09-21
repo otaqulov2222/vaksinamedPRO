@@ -9,12 +9,13 @@
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+# Full workspace members must exist for pnpm workspace install (even if unused in image).
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json .npmrc ./
 COPY lib ./lib
-COPY artifacts/api-server ./artifacts/api-server
-COPY artifacts/api-zod ./artifacts/api-zod
+COPY artifacts ./artifacts
+COPY scripts ./scripts
 
 RUN pnpm install --frozen-lockfile --filter @workspace/api-server... \
   && pnpm --filter @workspace/api-server run build

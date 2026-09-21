@@ -31,7 +31,8 @@ Connection sources (first match):
 
 1. `TEST_DATABASE_URL` (preferred; name should contain `test`)
 2. `DATABASE_URL` (must pass `assertSafeTestDatabaseUrl`)
-3. `embedded-postgres` local real PG binaries (not PGlite)
+3. `embedded-postgres` (optional local install — not a CI dependency):
+   `pnpm --filter @workspace/api-server add -D embedded-postgres@18.4.0-beta.17`
 4. Docker Compose profile:
 
 ```bash
