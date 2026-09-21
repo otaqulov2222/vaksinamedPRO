@@ -25,10 +25,16 @@ app.use(
     },
   }),
 );
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const error = err as { status?: number; message?: string };
+  logger.error({ err }, "Request failed");
+  res.status(error.status || 500).json({ message: error.message || "Ichki xatolik" });
+});
 
 export default app;

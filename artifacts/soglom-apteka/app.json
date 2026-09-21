@@ -1,23 +1,51 @@
 {
   "expo": {
-    "name": "Sog‘lom Apteka Loyalty",
-    "slug": "soglom-apteka",
+    "name": "Vaksina Med",
+    "slug": "vaksina-med",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "soglom-apteka",
+    "scheme": "vaksinamed",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "uz.vaksinamed.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Eng yaqin Vaksina Med filialini topish uchun joylashuvingiz kerak."
+      }
     },
-    "android": {},
+    "android": {
+      "package": "uz.vaksinamed.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#5C328E"
+      },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Eng yaqin Vaksina Med filialini va yo‘lni ko‘rsatish uchun joylashuvingiz kerak."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "vaksina-med-loyalty"
+      },
+      "telegramMiniApp": true,
+      "storeReady": true
     }
   }
 }

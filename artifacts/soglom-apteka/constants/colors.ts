@@ -1,58 +1,38 @@
 /**
- * Semantic design tokens for the mobile app.
- *
- * These tokens mirror the naming conventions used in web artifacts (index.css)
- * so that multi-artifact projects share a cohesive visual identity.
- *
- * Replace the placeholder values below with values that match the project's
- * brand. If a sibling web artifact exists, read its index.css and convert the
- * HSL values to hex so both artifacts use the same palette.
- *
- * To add dark mode, add a `dark` key with the same token names.
- * The useColors() hook will automatically pick it up.
+ * Official Vaksina Med brand tokens from vaksinamed.uz
+ * Purple #5C328E / #2A104E + Yellow #FFCC00 + Teal #0D9488
  */
 
 const colors = {
   light: {
-    // Legacy aliases (kept for backward compatibility)
-    text: '#29153f',
-    tint: '#603085',
+    text: '#2A104E',
+    tint: '#5C328E',
 
-    // Core surfaces
-    background: '#fcfaff',
-    foreground: '#29153f',
+    background: '#F8FAFC',
+    foreground: '#2A104E',
 
-    // Cards / elevated surfaces
     card: '#ffffff',
-    cardForeground: '#29153f',
+    cardForeground: '#2A104E',
 
-    // Primary action color (buttons, links, active states)
-    primary: '#603085',
+    primary: '#5C328E',
     primaryForeground: '#ffffff',
 
-    // Secondary / less-emphasis interactive surfaces
-    secondary: '#f0e8f7',
-    secondaryForeground: '#603085',
+    secondary: '#F3EAFB',
+    secondaryForeground: '#5C328E',
 
-    // Muted / subdued elements (dividers, timestamps, placeholders)
-    muted: '#f3eef7',
-    mutedForeground: '#7d7085',
+    muted: '#F1F5F9',
+    mutedForeground: '#64748B',
 
-    // Accent highlights (badges, selected items, focus rings)
-    accent: '#fff0b8',
-    accentForeground: '#603085',
+    accent: '#FFF9CC',
+    accentForeground: '#2A104E',
 
-    // Destructive actions (delete, error states)
     destructive: '#d94d4d',
     destructiveForeground: '#ffffff',
 
-    // Borders and input outlines
-    border: '#e5d9ed',
-    input: '#e5d9ed',
+    border: '#E2E8F0',
+    input: '#E2E8F0',
   },
 
-  // Border radius (in px). Sync from the sibling web artifact's --radius
-  // CSS variable. This value applies to cards, buttons, inputs, and modals.
   radius: 20,
 };
 

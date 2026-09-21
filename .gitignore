@@ -47,3 +47,11 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+.data/
+
+# secrets
+.env
+**/.env
+
+# local image-upscale tooling
+artifacts/soglom-apteka/assets/images/_upscale/

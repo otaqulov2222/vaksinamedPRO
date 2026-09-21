@@ -5,6 +5,7 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { useApp } from '@/context/AppContext';
 import { Screen } from '@/components/AppUI';
 import { useColors } from '@/hooks/useColors';
+import { api } from '@/lib/api';
 
 const tags = ['Loyiha', 'Mehribon', 'Professional', 'Tez xizmat', 'Savolimga javob berdi'];
 
@@ -14,7 +15,13 @@ export default function RatingScreen() {
   const [rating, setRating] = useState(4);
   const [selected, setSelected] = useState<string[]>([]);
   const [comment, setComment] = useState('');
-  const submit = () => { if (!rating) return; Alert.alert(t('thankYou'), 'Sizning bahoyingiz saqlandi.'); router.back(); };
+  const submit = () => {
+    if (!rating) return;
+    void api.rateStaff({ employeeName: 'Dilnoza Ahmedova', branchId: 12, rating, tags: selected, comment }).then(() => {
+      Alert.alert(t('thankYou'), 'Sizning bahoyingiz saqlandi.');
+      router.back();
+    });
+  };
   return (
     <Screen>
       <View style={styles.employee}><View style={[styles.avatar, { backgroundColor: colors.secondary }]}><Feather name="user" size={37} color={colors.primary} /></View><Text style={[styles.name, { color: colors.foreground }]}>Dilnoza Ahmedova</Text><Text style={[styles.role, { color: colors.mutedForeground }]}>Farmatsevt</Text><Text style={[styles.branch, { color: colors.mutedForeground }]}><Feather name="map-pin" size={12} color={colors.mutedForeground} /> Sog‘lom apteka №12</Text></View>

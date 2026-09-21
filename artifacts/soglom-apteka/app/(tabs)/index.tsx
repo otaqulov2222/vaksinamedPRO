@@ -1,129 +1,516 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useApp } from '@/context/AppContext';
-import { ActionTile, IconButton, ProgressLine, Screen, SectionTitle, formatUzs } from '@/components/AppUI';
-import { useColors } from '@/hooks/useColors';
+import { ProgressLine, Screen, formatUzs } from '@/components/AppUI';
+import { api } from '@/lib/api';
+
+const PURPLE = '#5C328E';
+const PURPLE_DEEP = '#2A104E';
+const YELLOW = '#FFCC00';
+
+function shortBranch(name?: string) {
+  return String(name || '').replace(/^Vaksina Med\s*[·•]\s*/i, '').trim() || 'Chilonzor';
+}
+
+const QUICK = [
+  { icon: 'pill' as const, label: 'Dori qidirish', to: '/(tabs)/catalog', bg: '#FFF4CC' },
+  { icon: 'map-marker-outline' as const, label: 'Dorixonalar', to: '/branches', bg: '#F3EAFB' },
+  { icon: 'qrcode-scan' as const, label: 'Mening QR kodim', to: '/qr', bg: '#F3EAFB' },
+  { icon: 'truck-delivery-outline' as const, label: 'Yetkazib berish', to: '/checkout', bg: '#F3EAFB' },
+  { icon: 'file-document-outline' as const, label: 'Retsept', to: '/(tabs)/catalog', bg: '#FFF8E0' },
+];
+
+const FALLBACK_PRODUCTS = [
+  { id: 'p1', name: 'Paracetamol 500 mg', price: 12000, image: require('../../assets/images/home-prod-1.jpg') },
+  { id: 'p2', name: 'Vitamin D3 1000 IU', price: 85000, image: require('../../assets/images/home-prod-2.jpg') },
+  { id: 'p3', name: 'Omega 3', price: 110000, image: require('../../assets/images/home-prod-3.jpg') },
+];
 
 export default function HomeScreen() {
-  const colors = useColors();
-  const { t, balance, user } = useApp();
+  const { t, balance, user, cartCount } = useApp();
+  const [nearest, setNearest] = useState<any>(null);
+  const [products, setProducts] = useState<any[]>([]);
+  const [query, setQuery] = useState('');
+  const nextTier = 150000;
+  const left = Math.max(0, nextTier - balance);
+
+  useEffect(() => {
+    void api.branches(41.3111, 69.2797).then((data) => setNearest(data.branches?.[0] || null));
+    void api
+      .products()
+      .then((data) => setProducts(data.products?.slice(0, 8) || []))
+      .catch(() => setProducts([]));
+  }, []);
+
+  const onSearch = () => {
+    const q = query.trim();
+    router.push({ pathname: '/(tabs)/catalog', params: q ? { q } : {} } as any);
+  };
+
+  const displayProducts =
+    products.length > 0
+      ? products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: Number(p.price || 0),
+          imageUrl: p.imageUrl,
+          image: null as any,
+        }))
+      : FALLBACK_PRODUCTS.map((p) => ({ ...p, imageUrl: null }));
+
   return (
     <Screen>
+      {/* HEADER — mockup */}
       <View style={styles.header}>
-        <View>
-          <Text style={[styles.eyebrow, { color: colors.mutedForeground }]}>{t('hello')}</Text>
-          <Text style={[styles.name, { color: colors.foreground }]}>{user.name.split(' ')[0]} <Text style={{ color: colors.primary }}>•</Text></Text>
+        <View style={styles.brandRow}>
+          <Image
+            source={require('../../assets/images/vaksina-mark-clean.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.brandLine}>
+              <Text style={styles.brandVaksina}>VAKSINA </Text>
+              <Text style={styles.brandMed}>MED</Text>
+            </Text>
+            <Text style={styles.brandSlogan} numberOfLines={1}>
+              СОХРАНЯЯ ЗДОРОВЬЕ, ДАРИМ РАДОСТЬ ЖИЗНИ!
+            </Text>
+          </View>
         </View>
-        <IconButton icon="bell" badge onPress={() => router.push('/profile')} />
-      </View>
-
-      <View style={[styles.hero, { backgroundColor: '#fff4c9' }]}>
-        <View style={styles.heroBrand}>
-          <Image source={require('../../assets/images/icon.png')} style={styles.brandImage} />
-          <Image source={require('../../assets/images/vaksina-med-wordmark.png')} style={styles.wordmark} resizeMode="contain" />
-        </View>
-        <View>
-          <Text style={[styles.heroTitle, { color: colors.primary }]}>{t('welcome')}</Text>
-          <Text style={[styles.heroCaption, { color: '#785f2a' }]}>Sodiqlik dasturidagi imtiyozlardan foydalaning</Text>
-        </View>
-        <View style={styles.heroDecoration}><MaterialCommunityIcons name="needle" size={58} color="rgba(96,48,133,0.18)" /></View>
-      </View>
-
-      <View style={[styles.balanceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.balanceTop}>
-          <View><Text style={[styles.cardLabel, { color: colors.mutedForeground }]}>{t('balance')}</Text><Text style={[styles.balance, { color: colors.foreground }]}>{formatUzs(balance)}</Text></View>
-          <View style={[styles.coin, { backgroundColor: '#fff1c9' }]}><MaterialCommunityIcons name="star-four-points" size={22} color="#e3a816" /></View>
-        </View>
-        <View style={styles.tierRow}><View style={[styles.tierIcon, { backgroundColor: '#efe1d5' }]}><MaterialCommunityIcons name="medal-outline" size={16} color="#956331" /></View><Text style={[styles.tier, { color: colors.foreground }]}>{t('gold')}</Text><Text style={[styles.tierHint, { color: colors.mutedForeground }]}>• 150 000 so‘m</Text></View>
-        <ProgressLine progress={balance / 150000} />
-        <Text style={[styles.progressCaption, { color: colors.mutedForeground }]}>{t('nextLevel')}: {formatUzs(Math.max(0, 150000 - balance))}</Text>
-        <View style={styles.balanceActions}>
-          <Pressable onPress={() => router.push('/qr')} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 }]}><Feather name="maximize" size={16} color={colors.primaryForeground} /><Text style={styles.primaryButtonText}>{t('spend')}</Text></Pressable>
-          <Pressable onPress={() => router.push('/cashback')} style={({ pressed }) => [styles.secondaryButton, { backgroundColor: colors.secondary, opacity: pressed ? 0.8 : 1 }]}><Text style={[styles.secondaryButtonText, { color: colors.secondaryForeground }]}>{t('history')}</Text><Feather name="arrow-up-right" size={17} color={colors.secondaryForeground} /></Pressable>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.roundBtn} onPress={() => router.push('/promos')}>
+            <Feather name="bell" size={18} color={PURPLE_DEEP} />
+            <View style={styles.bellDot} />
+          </Pressable>
+          <Pressable style={styles.roundBtn} onPress={() => router.push('/cart')}>
+            <Feather name="shopping-cart" size={18} color={PURPLE_DEEP} />
+            {cartCount > 0 ? <View style={styles.bellDot} /> : null}
+          </Pressable>
         </View>
       </View>
 
-      <SectionTitle title={t('quickAccess')} />
-      <View style={styles.actionRow}>
-        <ActionTile icon="qrcode-scan" label={t('myQr')} onPress={() => router.push('/qr')} />
-        <ActionTile icon="map-marker-outline" label={t('branches')} tint="mint" onPress={() => router.push('/branches')} />
-        <ActionTile icon="sale" label={t('offers')} tint="gold" onPress={() => router.push('/promos')} />
-        <ActionTile icon="gift-outline" label={t('bonuses')} tint="pink" onPress={() => router.push('/(tabs)/bonuses')} />
+      <Text style={styles.greet}>Salom, {user.name || 'mehmon'} 👋</Text>
+      <Text style={styles.greetSub}>Bugun sizga nima kerak?</Text>
+
+      {/* SEARCH */}
+      <View style={styles.searchBox}>
+        <Feather name="search" size={18} color="#94A3B8" />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Dori yoki mahsulot qidirish..."
+          placeholderTextColor="#A8B0C0"
+          style={styles.searchInput}
+          returnKeyType="search"
+          onSubmitEditing={onSearch}
+        />
+        <Pressable onPress={() => router.push('/qr')} hitSlop={8}>
+          <MaterialCommunityIcons name="qrcode-scan" size={22} color={PURPLE} />
+        </Pressable>
       </View>
 
-      <View style={[styles.promoCard, { backgroundColor: '#f0e7f7' }]}>
-        <View style={styles.promoCopy}><Text style={[styles.promoTitle, { color: colors.primary }]}>Sodiq mijozlarga</Text><Text style={[styles.promoTitle, { color: colors.primary }]}>maxsus takliflar</Text><Pressable onPress={() => router.push('/promos')}><Text style={[styles.promoButton, { color: colors.primary }]}>{t('details')} <Feather name="arrow-right" size={13} color={colors.primary} /></Text></Pressable></View>
-        <View style={styles.promoIllustration}><MaterialCommunityIcons name="needle" size={82} color="#8e63aa" /></View>
+      {/* HERO — fayldan, cho‘zilmasin */}
+      <View style={styles.heroWrap}>
+        <Image
+          source={require('../../assets/images/home-hero-banner.jpg')}
+          style={styles.heroImg}
+          resizeMode="contain"
+        />
+        <Pressable
+          accessibilityLabel="Katalogga o‘tish"
+          onPress={() => router.push('/(tabs)/catalog')}
+          style={styles.heroHit}
+        />
       </View>
 
-      <SectionTitle title={t('nearby')} action={t('details')} onPress={() => router.push('/branches')} />
-      <Pressable onPress={() => router.push('/branches')} style={[styles.branchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={[styles.branchIcon, { backgroundColor: colors.accent }]}><Feather name="map-pin" size={21} color={colors.primary} /></View>
-        <View style={styles.branchCopy}><Text style={[styles.branchTitle, { color: colors.foreground }]}>Sog‘lom apteka №12</Text><Text style={[styles.branchMeta, { color: colors.mutedForeground }]}>Toshkent sh., Amir Temur ko‘chasi, 42</Text><Text style={[styles.branchOpen, { color: colors.primary }]}>{t('openNow')}  ·  08:00 — 22:00</Text></View><View style={styles.distance}><Text style={[styles.distanceText, { color: colors.foreground }]}>1.2 km</Text><ChevronIcon /></View>
-      </Pressable>
-      <View style={styles.statsRow}>
-        <Stat icon="shopping-bag" value={`${user.purchases}`} label={t('purchasesCount')} />
-        <Stat icon="trending-up" value={formatUzs(user.saved)} label={t('saved')} />
-        <Stat icon="award" value={user.tier} label={t('level')} />
+      {/* 5 QUICK ACTIONS */}
+      <View style={styles.quickRow}>
+        {QUICK.map((item) => (
+          <Pressable key={item.label} onPress={() => router.push(item.to as any)} style={styles.quickItem}>
+            <View style={[styles.quickIcon, { backgroundColor: item.bg }]}>
+              <MaterialCommunityIcons name={item.icon} size={22} color={PURPLE} />
+            </View>
+            <Text style={styles.quickLabel} numberOfLines={2}>
+              {item.label}
+            </Text>
+          </Pressable>
+        ))}
       </View>
+
+      {/* BALANCE + NEAREST */}
+      <View style={styles.twoCol}>
+        <View style={styles.card}>
+          <Text style={styles.cardLabel} numberOfLines={1}>
+            {t('balance')}
+          </Text>
+          <Text style={styles.balance} numberOfLines={1}>
+            {formatUzs(balance)}
+          </Text>
+          <View style={styles.tierRow}>
+            <MaterialCommunityIcons name="medal-outline" size={14} color="#C9A227" />
+            <Text style={styles.tier} numberOfLines={1}>
+              {user.tier} daraja
+            </Text>
+          </View>
+          <ProgressLine progress={balance / nextTier} />
+          <Text style={styles.progressCaption} numberOfLines={2}>
+            {t('nextLevel')}: {formatUzs(left)}
+          </Text>
+          <Pressable onPress={() => router.push('/qr')} style={styles.cashbackBtn}>
+            <MaterialCommunityIcons name="qrcode-scan" size={14} color="#fff" />
+            <Text style={styles.cashbackBtnText} numberOfLines={1}>
+              {t('spend')}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => router.push('/cashback')} style={styles.historyBtn}>
+            <Text style={styles.historyBtnText} numberOfLines={1}>
+              {t('history')}
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardLabel} numberOfLines={1}>
+            {t('nearby')}
+          </Text>
+          <View style={styles.nearPhotoWrap}>
+            <Image
+              source={require('../../assets/images/home-near-photo.jpg')}
+              style={styles.nearPhoto}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={styles.nearName} numberOfLines={2}>
+            VAKSINA MED — {shortBranch(nearest?.name)}
+          </Text>
+          <View style={styles.openRow}>
+            <View style={styles.openDot} />
+            <Text style={styles.openText} numberOfLines={1}>
+              Ochiq · 24/7
+            </Text>
+          </View>
+          <Text style={styles.nearMeta} numberOfLines={1}>
+            {nearest?.distanceKm != null ? `${nearest.distanceKm} km` : '1.2 km'} ·{' '}
+            {nearest?.distanceKm != null ? 'yaqin' : '6 daqiqa'}
+          </Text>
+          <Pressable onPress={() => router.push('/branches')} style={styles.routeBtn}>
+            <Text style={styles.routeBtnText} numberOfLines={1}>
+              Yo‘lni ko‘rsatish →
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* RECOMMENDATIONS */}
+      <View style={styles.sectionRow}>
+        <Text style={styles.section}>Siz uchun tavsiyalar</Text>
+        <Pressable onPress={() => router.push('/(tabs)/catalog')}>
+          <Text style={styles.link}>Barchasini ko‘rish →</Text>
+        </Pressable>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productsRow}>
+        {displayProducts.map((p) => (
+          <Pressable
+            key={String(p.id)}
+            style={styles.productCard}
+            onPress={() => {
+              if (typeof p.id === 'number') router.push(`/product/${p.id}` as any);
+              else router.push('/(tabs)/catalog');
+            }}
+          >
+            <View style={styles.productImgWrap}>
+              {p.imageUrl ? (
+                <Image source={{ uri: p.imageUrl }} style={styles.productImg} resizeMode="contain" />
+              ) : p.image ? (
+                <Image source={p.image} style={styles.productImg} resizeMode="cover" />
+              ) : (
+                <MaterialCommunityIcons name="pill" size={36} color={PURPLE} />
+              )}
+            </View>
+            <Text style={styles.productName} numberOfLines={2}>
+              {p.name}
+            </Text>
+            <View style={styles.productBottom}>
+              <Text style={styles.productPrice}>{formatUzs(p.price)}</Text>
+              <Pressable
+                style={styles.addBtn}
+                onPress={() => {
+                  if (typeof p.id === 'number') void api.addToCart(p.id, 1);
+                  else router.push('/(tabs)/catalog');
+                }}
+              >
+                <Feather name="shopping-cart" size={12} color="#fff" />
+              </Pressable>
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
     </Screen>
   );
 }
 
-function ChevronIcon() {
-  const colors = useColors();
-  return <Feather name="chevron-right" size={18} color={colors.mutedForeground} />;
-}
-
-function Stat({ icon, value, label }: { icon: keyof typeof Feather.glyphMap; value: string; label: string }) {
-  const colors = useColors();
-  return <View style={styles.stat}><Feather name={icon} size={16} color={colors.primary} /><Text style={[styles.statValue, { color: colors.foreground }]} numberOfLines={1}>{value}</Text><Text style={[styles.statLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{label}</Text></View>;
-}
-
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
-  eyebrow: { fontFamily: 'Inter_500Medium', fontSize: 13, marginBottom: 2 },
-  name: { fontFamily: 'Inter_700Bold', fontSize: 23 },
-  hero: { minHeight: 172, borderRadius: 24, padding: 18, overflow: 'hidden', marginBottom: 14 },
-  heroBrand: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 21 },
-  brandImage: { width: 42, height: 42, borderRadius: 13 },
-  wordmark: { width: 150, height: 25 },
-  heroTitle: { fontFamily: 'Inter_700Bold', fontSize: 20, maxWidth: 245, lineHeight: 26 },
-  heroCaption: { fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 6, maxWidth: 235 },
-  heroDecoration: { position: 'absolute', right: 16, bottom: 18 },
-  balanceCard: { borderRadius: 22, padding: 18, borderWidth: 1 },
-  balanceTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardLabel: { fontFamily: 'Inter_500Medium', fontSize: 13 },
-  balance: { fontFamily: 'Inter_700Bold', fontSize: 29, marginTop: 5 },
-  coin: { width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center' },
-  tierRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 14, marginBottom: 10 },
-  tierIcon: { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  tier: { fontFamily: 'Inter_700Bold', fontSize: 12 },
-  tierHint: { fontFamily: 'Inter_400Regular', fontSize: 11 },
-  progressCaption: { fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 7 },
-  balanceActions: { flexDirection: 'row', gap: 9, marginTop: 17 },
-  primaryButton: { flex: 1, minHeight: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
-  primaryButtonText: { color: '#fff', fontFamily: 'Inter_600SemiBold', fontSize: 12 },
-  secondaryButton: { minHeight: 46, borderRadius: 14, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
-  secondaryButtonText: { fontFamily: 'Inter_600SemiBold', fontSize: 12 },
-  actionRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  promoCard: { minHeight: 118, borderRadius: 22, padding: 16, flexDirection: 'row', overflow: 'hidden', marginTop: 25 },
-  promoCopy: { flex: 1 },
-  promoTitle: { fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 22 },
-  promoButton: { fontFamily: 'Inter_700Bold', fontSize: 12, marginTop: 13 },
-  promoIllustration: { width: 100, justifyContent: 'flex-end', alignItems: 'center' },
-  branchCard: { borderRadius: 18, borderWidth: 1, padding: 13, flexDirection: 'row', alignItems: 'center' },
-  branchIcon: { width: 43, height: 43, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
-  branchCopy: { flex: 1, marginLeft: 11 },
-  branchTitle: { fontFamily: 'Inter_700Bold', fontSize: 13 },
-  branchMeta: { fontFamily: 'Inter_400Regular', fontSize: 10, marginTop: 4 },
-  branchOpen: { fontFamily: 'Inter_600SemiBold', fontSize: 10, marginTop: 4 },
-  distance: { alignItems: 'flex-end', gap: 4 },
-  distanceText: { fontFamily: 'Inter_600SemiBold', fontSize: 11 },
-  statsRow: { flexDirection: 'row', marginTop: 20, marginBottom: 16 },
-  stat: { flex: 1, alignItems: 'center', gap: 4, borderRightWidth: 1, borderRightColor: '#dcebe2' },
-  statValue: { fontFamily: 'Inter_700Bold', fontSize: 13 },
-  statLabel: { fontFamily: 'Inter_400Regular', fontSize: 10 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    gap: 8,
+  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  headerLogo: { width: 46, height: 46 },
+  brandLine: { fontFamily: 'Inter_700Bold', fontSize: 15 },
+  brandVaksina: { color: PURPLE },
+  brandMed: { color: YELLOW },
+  brandSlogan: {
+    marginTop: 2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 6.5,
+    letterSpacing: 0.15,
+    color: PURPLE,
+    opacity: 0.8,
+  },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  roundBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#EEEAF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2A104E',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 10,
+    right: 11,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: YELLOW,
+  },
+
+  greet: { fontFamily: 'Inter_700Bold', fontSize: 22, color: PURPLE_DEEP },
+  greetSub: {
+    marginTop: 4,
+    marginBottom: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: '#64748B',
+  },
+
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    minHeight: 52,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#EEEAF5',
+    marginBottom: 14,
+    shadowColor: '#2A104E',
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+    outlineStyle: 'none' as any,
+  },
+
+  heroWrap: {
+    width: '100%',
+    aspectRatio: 2.485,
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 16,
+    backgroundColor: '#EEF0F8',
+    position: 'relative',
+  },
+  heroImg: {
+    width: '100%',
+    height: '100%',
+  },
+  heroHit: {
+    position: 'absolute',
+    left: '5%',
+    bottom: '7%',
+    width: '42%',
+    height: '24%',
+    borderRadius: 14,
+  },
+
+  quickRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 4,
+  },
+  quickItem: { flex: 1, minWidth: 0, alignItems: 'center', gap: 6 },
+  quickIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 9,
+    color: PURPLE_DEEP,
+    textAlign: 'center',
+    lineHeight: 12,
+  },
+
+  twoCol: { flexDirection: 'row', gap: 10, marginBottom: 6, width: '100%' },
+  card: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#EEEAF5',
+    shadowColor: '#2A104E',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
+  },
+  cardLabel: { fontFamily: 'Inter_500Medium', fontSize: 11, color: '#64748B' },
+  balance: { fontFamily: 'Inter_700Bold', fontSize: 18, color: PURPLE_DEEP, marginTop: 4 },
+  tierRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, marginBottom: 6 },
+  tier: { fontFamily: 'Inter_700Bold', fontSize: 10, color: PURPLE_DEEP, flexShrink: 1 },
+  progressCaption: { fontFamily: 'Inter_400Regular', fontSize: 9, color: '#64748B', marginTop: 6 },
+  cashbackBtn: {
+    marginTop: 10,
+    minHeight: 38,
+    borderRadius: 12,
+    backgroundColor: PURPLE,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+  },
+  cashbackBtnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 10 },
+  historyBtn: {
+    marginTop: 6,
+    minHeight: 34,
+    borderRadius: 12,
+    backgroundColor: '#F3EAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyBtnText: { fontFamily: 'Inter_700Bold', fontSize: 11, color: PURPLE },
+
+  nearPhotoWrap: {
+    marginTop: 8,
+    width: '100%',
+    aspectRatio: 2.6875,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#1a0a2e',
+    overflow: 'hidden',
+  },
+  nearPhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  nearName: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    color: PURPLE_DEEP,
+    lineHeight: 15,
+  },
+  openRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  openDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E', flexShrink: 0 },
+  openText: { fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#16A34A', flexShrink: 1 },
+  nearMeta: { fontFamily: 'Inter_400Regular', fontSize: 10, color: '#64748B', marginTop: 4 },
+  routeBtn: {
+    marginTop: 10,
+    minHeight: 34,
+    borderRadius: 12,
+    backgroundColor: '#F3EAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  routeBtnText: { fontFamily: 'Inter_700Bold', fontSize: 10, color: PURPLE },
+
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  section: { fontFamily: 'Inter_700Bold', fontSize: 17, color: PURPLE_DEEP },
+  link: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: PURPLE },
+
+  productsRow: { gap: 12, paddingBottom: 28 },
+  productCard: {
+    width: 148,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#EEEAF5',
+  },
+  productImgWrap: {
+    height: 100,
+    borderRadius: 14,
+    backgroundColor: '#F8F5FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  productImg: { width: '100%', height: '100%' },
+  productName: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: PURPLE_DEEP,
+    lineHeight: 16,
+    minHeight: 32,
+  },
+  productBottom: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  productPrice: { fontFamily: 'Inter_700Bold', fontSize: 13, color: PURPLE },
+  addBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

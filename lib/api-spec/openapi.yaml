@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: loyalty
+    description: Customer loyalty and cashback operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /loyalty/profile:
+    get:
+      operationId: getLoyaltyProfile
+      tags: [loyalty]
+      summary: Get or create a loyalty profile
+      parameters:
+        - name: telegramId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Loyalty profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoyaltyProfile"
+  /loyalty/redeem:
+    post:
+      operationId: redeemLoyaltyReward
+      tags: [loyalty]
+      summary: Redeem a reward with loyalty points
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedeemRewardRequest"
+      responses:
+        "200":
+          description: Reward redeemed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RedeemRewardResponse"
+        "400":
+          description: Not enough points or reward already redeemed
+  /loyalty/purchases:
+    post:
+      operationId: createLoyaltyPurchase
+      tags: [loyalty]
+      summary: Record a purchase scanned from a loyalty QR code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePurchaseRequest"
+      responses:
+        "201":
+          description: Purchase recorded and cashback added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoyaltyProfile"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +91,108 @@ components:
           type: string
       required:
         - status
+    LoyaltyTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+        title:
+          type: string
+        branch:
+          type: string
+        amount:
+          type: integer
+        cashback:
+          type: integer
+        kind:
+          type: string
+          enum: [earn, use]
+      required: [id, date, title, branch, amount, cashback, kind]
+    LoyaltyReward:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        subtitle:
+          type: string
+        points:
+          type: integer
+        icon:
+          type: string
+        accent:
+          type: string
+      required: [id, title, subtitle, points, icon, accent]
+    LoyaltyProfile:
+      type: object
+      properties:
+        telegramId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        tier:
+          type: string
+        balance:
+          type: integer
+        purchasesCount:
+          type: integer
+        totalPurchases:
+          type: integer
+        savedAmount:
+          type: integer
+        qrCode:
+          type: string
+        redeemedRewards:
+          type: array
+          items:
+            type: string
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoyaltyTransaction"
+        rewards:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoyaltyReward"
+      required: [telegramId, firstName, lastName, phone, tier, balance, purchasesCount, totalPurchases, savedAmount, qrCode, redeemedRewards, transactions, rewards]
+    RedeemRewardRequest:
+      type: object
+      properties:
+        telegramId:
+          type: string
+        rewardId:
+          type: string
+      required: [telegramId, rewardId]
+    RedeemRewardResponse:
+      type: object
+      properties:
+        balance:
+          type: integer
+        rewardId:
+          type: string
+      required: [balance, rewardId]
+    CreatePurchaseRequest:
+      type: object
+      properties:
+        telegramId:
+          type: string
+        amount:
+          type: integer
+          minimum: 1
+        branch:
+          type: string
+        title:
+          type: string
+        cashbackRate:
+          type: number
+          minimum: 0
+          maximum: 1
+      required: [telegramId, amount, branch]
 

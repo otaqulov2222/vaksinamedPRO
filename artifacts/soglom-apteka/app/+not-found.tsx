@@ -7,16 +7,11 @@ export default function NotFoundScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Oops!' }} />
+      <Stack.Screen options={{ title: 'Sahifa topilmadi' }} />
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.title, { color: colors.foreground }]}>
-          This screen doesn&apos;t exist.
-        </Text>
-
+        <Text style={[styles.title, { color: colors.foreground }]}>Bu sahifa topilmadi</Text>
         <Link href="/" style={styles.link}>
-          <Text style={[styles.linkText, { color: colors.primary }]}>
-            Go to home screen!
-          </Text>
+          <Text style={[styles.linkText, { color: colors.primary }]}>Bosh sahifaga qaytish</Text>
         </Link>
       </View>
     </>
@@ -31,14 +26,15 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontFamily: 'Inter_700Bold',
   },
   link: {
-    marginTop: 15,
-    paddingVertical: 15,
+    marginTop: 16,
+    paddingVertical: 12,
   },
   linkText: {
     fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
   },
 });

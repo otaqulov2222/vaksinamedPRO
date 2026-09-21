@@ -11,25 +11,83 @@ import {
   Inter_700Bold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { AppProvider } from '@/context/AppContext';
+import { AppProvider, useApp } from '@/context/AppContext';
+import { ActivityIndicator, Platform, View } from 'react-native';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  const webApp = (window as any).Telegram?.WebApp;
+  if (webApp) {
+    webApp.ready?.();
+    webApp.expand?.();
+  }
+}
 
 const queryClient = new QueryClient();
 
+const stackScreenOptions = {
+  headerBackTitle: 'Orqaga',
+  headerBackVisible: true,
+  headerTintColor: '#5C328E',
+  headerTitleAlign: 'center' as const,
+  headerShadowVisible: false,
+  headerStyle: { backgroundColor: '#FFFFFF' },
+  headerTitleStyle: { fontFamily: 'Inter_700Bold', color: '#2A104E', fontSize: 17 },
+  contentStyle: { backgroundColor: '#F7F5F2' },
+  headerLeft: () => <HeaderBackButton />,
+};
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { loading, isAuthenticated } = useApp();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+    const inAuthGroup = segments[0] === 'welcome' || segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'verify-otp';
+    if (!isAuthenticated && !inAuthGroup) {
+      router.replace('/welcome');
+    } else if (isAuthenticated && inAuthGroup) {
+      router.replace('/(tabs)');
+    }
+  }, [loading, isAuthenticated, segments]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#2A104E' }}>
+        <ActivityIndicator color="#FFCC00" size="large" />
+      </View>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: 'Orqaga', headerTintColor: '#15966b' }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="qr" options={{ title: 'Mening QR kodim', headerBackTitle: 'Orqaga' }} />
-      <Stack.Screen name="branches" options={{ title: 'Aptekalar', headerBackTitle: 'Orqaga' }} />
-      <Stack.Screen name="promos" options={{ title: 'Aksiyalar', headerBackTitle: 'Orqaga' }} />
-      <Stack.Screen name="rating" options={{ title: 'Xodimni baholash', headerBackTitle: 'Orqaga' }} />
-      <Stack.Screen name="language" options={{ title: 'Til', headerBackTitle: 'Orqaga' }} />
-    </Stack>
+    <AuthGate>
+      <Stack screenOptions={stackScreenOptions}>
+        <Stack.Screen name="welcome" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="register" options={{ headerShown: false }} />
+        <Stack.Screen name="verify-otp" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, headerLeft: undefined }} />
+        <Stack.Screen name="qr" options={{ headerShown: false, title: 'Mening QR kodim' }} />
+        <Stack.Screen name="branches" options={{ title: 'Dorixonalar' }} />
+        <Stack.Screen name="promos" options={{ title: 'Aksiyalar' }} />
+        <Stack.Screen name="rating" options={{ title: 'Xodimni baholash' }} />
+        <Stack.Screen name="language" options={{ title: 'Til' }} />
+        <Stack.Screen name="cart" options={{ title: 'Savat' }} />
+        <Stack.Screen name="checkout" options={{ title: 'Buyurtma' }} />
+        <Stack.Screen name="product/[id]" options={{ title: 'Mahsulot' }} />
+        <Stack.Screen name="order/[id]" options={{ title: 'Buyurtma holati' }} />
+        <Stack.Screen name="+not-found" options={{ title: 'Sahifa topilmadi' }} />
+      </Stack>
+    </AuthGate>
   );
 }
 
@@ -54,7 +112,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AppProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
+            <GestureHandlerRootView style={{ flex: 1, minWidth: 0, width: '100%' }}>
               <KeyboardProvider>
                 <RootLayoutNav />
               </KeyboardProvider>
