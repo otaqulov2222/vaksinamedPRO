@@ -1,15 +1,23 @@
+# Keep ALL pnpm workspace package roots present in the build context
+# (artifacts/*, lib/*, scripts). Omitting a workspace member breaks
+# `pnpm install --frozen-lockfile` inside Docker.
+
 node_modules
+**/node_modules
 .data
 .git
 .env
 .env.*
 !.env.example
-dist
+**/dist
 coverage
+.expo
+**/.expo
+docs
 *.md
 !README.md
-artifacts/admin-web
-artifacts/soglom-apteka
-scripts
-docs
+Umumiy rasmlar
+attached_assets
 .replit
+.replitignore
+agent-transcripts

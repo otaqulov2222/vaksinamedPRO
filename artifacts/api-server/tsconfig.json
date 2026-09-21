@@ -8,6 +8,7 @@
     "types": ["node"]
   },
   "include": ["src"],
+  "exclude": ["src/scripts/**"],
   "references": [
     {
       "path": "../../lib/db"
