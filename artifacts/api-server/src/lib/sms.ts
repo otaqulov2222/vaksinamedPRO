@@ -1,8 +1,10 @@
 /**
  * SMS yuborish — O‘zbekiston: Eskiz.uz
  * Env: ESKIZ_EMAIL, ESKIZ_PASSWORD, ESKIZ_FROM (optional)
- * Kalitlar bo‘lmasa development rejimida logga yoziladi (SMS yuborilmaydi).
+ * P2: OTP plaintext never logged in production-like environments.
  */
+
+import { allowOtpConsoleLog, isProductionLike } from "./securityEnv";
 
 type SendResult = { ok: boolean; provider: "eskiz" | "dev"; messageId?: string };
 
@@ -30,7 +32,14 @@ async function getEskizToken() {
 export async function sendSms(phone998: string, text: string): Promise<SendResult> {
   const token = await getEskizToken().catch(() => null);
   if (!token) {
-    console.info(`[SMS:dev] +${phone998} → ${text}`);
+    if (isProductionLike()) {
+      throw Object.assign(new Error("SMS provider is not configured"), { status: 503 });
+    }
+    if (allowOtpConsoleLog()) {
+      console.info(`[SMS:dev] +${phone998} → ${text}`);
+    } else {
+      console.info(`[SMS:dev] +${phone998} → (message redacted)`);
+    }
     return { ok: true, provider: "dev" };
   }
 
@@ -49,8 +58,7 @@ export async function sendSms(phone998: string, text: string): Promise<SendResul
   });
 
   if (!response.ok) {
-    const errText = await response.text();
-    console.error("[SMS:eskiz]", errText);
+    console.error("[SMS:eskiz] send failed");
     throw Object.assign(new Error("SMS yuborilmadi. Keyinroq urinib ko‘ring."), { status: 502 });
   }
 

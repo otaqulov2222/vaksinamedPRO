@@ -6,11 +6,13 @@ import branchesRouter from "./branches";
 import cartRouter from "./cart";
 import ordersRouter from "./orders";
 import paymentsRouter from "./payments";
+import deliveriesRouter from "./deliveries";
 import adminRouter from "./admin";
 import integrationsRouter from "./integrations";
 import mapsRouter from "./maps";
 import authRouter from "./auth";
 import posRouter from "./pos";
+import workersRouter from "./workers";
 
 const router: IRouter = Router();
 
@@ -23,6 +25,8 @@ router.use(branchesRouter);
 router.use(cartRouter);
 router.use(ordersRouter);
 router.use(paymentsRouter);
+router.use(deliveriesRouter);
+router.use(workersRouter);
 router.use(adminRouter);
 router.use(integrationsRouter);
 router.use(mapsRouter);

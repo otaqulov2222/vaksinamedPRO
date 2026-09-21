@@ -1,3 +1,8 @@
+/**
+ * @deprecated P1 — Prefer versioned migrations in `lib/db/migrations/`.
+ * This file mirrors the baseline for historical reference and emergency local repair.
+ * Application startup no longer uses bootstrap as the production schema path.
+ */
 import { sql, type SQL } from "drizzle-orm";
 
 type Executor = {

@@ -20,7 +20,12 @@ export const productStocks = pgTable("product_stocks", {
   id: serial("id").primaryKey(),
   productId: integer("product_id").notNull(),
   branchId: integer("branch_id").notNull(),
+  /** @deprecated Legacy mirror of physical_quantity until P4.5 switches writers. */
   quantity: integer("quantity").notNull().default(0),
+  physicalQuantity: integer("physical_quantity").notNull().default(0),
+  reservedQuantity: integer("reserved_quantity").notNull().default(0),
+  /** STORED GENERATED in SQL: physical_quantity - reserved_quantity (read-only). */
+  availableQuantity: integer("available_quantity"),
 });
 
 export const rewards = pgTable("rewards", {

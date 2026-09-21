@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { customers, db, loyaltyLedger, rewards } from "@workspace/db";
 import { requireCustomer } from "../lib/auth";
 import { loyaltyCardNumber, publicQrCode } from "../lib/pos";
+import { earnCashback, useCashback, getAuthoritativeBalance } from "../lib/cashbackFinance";
 
 const router = Router();
 
@@ -16,16 +17,36 @@ function parseRewards(raw: string) {
 }
 
 async function profileFor(telegramId: string) {
-  const customer = (await db.select().from(customers).where(eq(customers.telegramId, telegramId)).limit(1))[0]
-    ?? (await db.insert(customers).values({
+  let customer = (await db.select().from(customers).where(eq(customers.telegramId, telegramId)).limit(1))[0];
+  if (!customer) {
+    const welcome = telegramId === "firdavs" ? 125500 : 0;
+    customer = (await db.insert(customers).values({
       telegramId,
       firstName: telegramId === "firdavs" ? "Firdavs" : "Mijoz",
       lastName: "",
       phone: "+998 90 123 45 67",
-      balance: telegramId === "firdavs" ? 125500 : 0,
+      balance: 0,
     }).returning())[0];
+    if (welcome > 0) {
+      await earnCashback({
+        customerId: customer.id,
+        amount: welcome,
+        commercial: {
+          sourceType: "SYSTEM",
+          sourceKey: `welcome:customer:${customer.id}`,
+          customerId: customer.id,
+          amount: welcome,
+        },
+        actor: "loyalty:profile",
+        reason: "demo_opening",
+        idempotencyKey: `welcome:customer:${customer.id}`,
+      });
+      customer = (await db.select().from(customers).where(eq(customers.id, customer.id)).limit(1))[0];
+    }
+  }
   const transactions = await db.select().from(loyaltyLedger).where(eq(loyaltyLedger.customerId, customer.id));
   const catalog = await db.select().from(rewards);
+  const balance = await getAuthoritativeBalance(customer.id);
   return {
     telegramId: customer.telegramId,
     firstName: customer.firstName,
@@ -33,7 +54,7 @@ async function profileFor(telegramId: string) {
     phone: customer.phone,
     language: customer.language,
     tier: customer.tier,
-    balance: customer.balance,
+    balance,
     purchasesCount: customer.purchasesCount,
     totalPurchases: customer.totalPurchases,
     savedAmount: customer.savedAmount,
@@ -63,9 +84,9 @@ async function profileFor(telegramId: string) {
 router.get("/loyalty/profile", async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
-    res.json(await profileFor(customer.telegramId));
+    return res.json(await profileFor(customer.telegramId));
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -76,9 +97,9 @@ router.patch("/loyalty/profile", async (req, res, next) => {
     if (language && ["uz", "ru", "en"].includes(language)) {
       await db.update(customers).set({ language }).where(eq(customers.id, customer.id));
     }
-    res.json(await profileFor(customer.telegramId));
+    return res.json(await profileFor(customer.telegramId));
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -90,15 +111,28 @@ router.post("/loyalty/redeem", async (req, res, next) => {
     if (!reward) return res.status(400).json({ message: "Mukofot topilmadi" });
     const redeemed = parseRewards(customer.redeemedRewards);
     if (redeemed.includes(reward.code)) return res.status(400).json({ message: "Mukofot avval olingan" });
-    if (customer.balance < reward.points) return res.status(400).json({ message: "Ball yetarli emas" });
+    const balance = await getAuthoritativeBalance(customer.id);
+    if (balance < reward.points) return res.status(400).json({ message: "Ball yetarli emas" });
     const nextRedeemed = [...redeemed, reward.code];
-    const updated = await db.update(customers).set({
-      balance: customer.balance - reward.points,
+    const used = await useCashback({
+      customerId: customer.id,
+      amount: reward.points,
+      commercial: {
+        sourceType: "SYSTEM",
+        sourceKey: `reward:${customer.id}:${reward.code}`,
+        customerId: customer.id,
+        amount: reward.points,
+      },
+      actor: `customer:${customer.id}`,
+      reason: "loyalty_redeem",
+      idempotencyKey: `reward:${customer.id}:${reward.code}`,
+    });
+    await db.update(customers).set({
       redeemedRewards: JSON.stringify(nextRedeemed),
-    }).where(eq(customers.id, customer.id)).returning();
-    res.json({ balance: updated[0].balance, rewardId: reward.code });
+    }).where(eq(customers.id, customer.id));
+    return res.json({ balance: used.account.balance, rewardId: reward.code });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

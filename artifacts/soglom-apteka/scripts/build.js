@@ -69,6 +69,11 @@ function getDeploymentDomain() {
     return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
   }
 
+  // CI / non-Replit: allow deterministic host so `pnpm -r build` does not hard-fail.
+  if (process.env.CI === 'true' || process.env.CI === '1') {
+    return 'ci.localhost';
+  }
+
   console.error(
     'ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN',
   );

@@ -20,7 +20,16 @@ export const orders = pgTable("orders", {
   customerId: integer("customer_id").notNull(),
   branchId: integer("branch_id").notNull(),
   fulfillment: text("fulfillment").notNull(),
+  /** Legacy compatibility only — not long-term SoT (P5 / Q2). */
   status: text("status").notNull(),
+  /** P5 axis A — authoritative fulfillment lifecycle. */
+  fulfillmentStatus: text("fulfillment_status").notNull().default("CREATED"),
+  /** P5 axis B — denormalized; payments table remains payment truth. */
+  paymentStatus: text("payment_status").notNull().default("PENDING"),
+  /** P5 axis C — denormalized mirror of reservations.status | NONE. */
+  reservationStatus: text("reservation_status").notNull().default("NONE"),
+  /** Checkout idempotency (P5.3) — unique when present. */
+  checkoutIdempotencyKey: text("checkout_idempotency_key"),
   paymentMethod: text("payment_method").notNull(),
   subtotal: integer("subtotal").notNull(),
   deliveryFee: integer("delivery_fee").notNull().default(0),
@@ -29,7 +38,10 @@ export const orders = pgTable("orders", {
   total: integer("total").notNull(),
   address: text("address").notNull().default(""),
   comment: text("comment").notNull().default(""),
+  /** Legacy/cache display only — not reservation authority (P4). */
   reservedUntil: timestamp("reserved_until", { withTimezone: true }),
+  /** Nullable FK to reservations — set when checkout holds stock (P4.5+). */
+  reservationId: integer("reservation_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -42,6 +54,7 @@ export const orderItems = pgTable("order_items", {
   quantity: integer("quantity").notNull(),
 });
 
+/** Legacy payment row — API compatibility. P7 SoT is payment_intents + captures. */
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull(),
@@ -51,6 +64,8 @@ export const payments = pgTable("payments", {
   externalId: text("external_id").notNull().default(""),
   status: text("status").notNull(),
   amount: integer("amount").notNull(),
+  currency: text("currency").notNull().default("UZS"),
+  paymentIntentId: integer("payment_intent_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -61,6 +76,61 @@ export const deliveries = pgTable("deliveries", {
   timeWindow: text("time_window").notNull().default("Bugun 10:00 — 18:00"),
   status: text("status").notNull().default("pending"),
   courierName: text("courier_name").notNull().default(""),
+  courierId: integer("courier_id"),
+  courierBranchId: integer("courier_branch_id"),
+  provider: text("provider").notNull().default("internal"),
+  providerRef: text("provider_ref").notNull().default(""),
+  mode: text("mode").notNull().default("internal_courier"),
+  assignedAt: timestamp("assigned_at", { withTimezone: true }),
+  pickedUpAt: timestamp("picked_up_at", { withTimezone: true }),
+  outAt: timestamp("out_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  meta: text("meta").notNull().default("{}"),
+});
+
+export const deliveryStatusHistory = pgTable("delivery_status_history", {
+  id: serial("id").primaryKey(),
+  deliveryId: integer("delivery_id").notNull(),
+  orderId: integer("order_id").notNull(),
+  fromStatus: text("from_status").notNull().default(""),
+  toStatus: text("to_status").notNull(),
+  actor: text("actor").notNull().default(""),
+  actorType: text("actor_type").notNull().default("system"),
+  reason: text("reason").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const fomSaleEvents = pgTable("fom_sale_events", {
+  id: serial("id").primaryKey(),
+  receiptId: text("receipt_id").notNull(),
+  branchId: integer("branch_id"),
+  orderId: integer("order_id"),
+  mode: text("mode").notNull().default(""),
+  status: text("status").notNull().default("PROCESSED"),
+  payload: text("payload").notNull().default("{}"),
+  resultMeta: text("result_meta").notNull().default("{}"),
+  actor: text("actor").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const workerJobs = pgTable("worker_jobs", {
+  id: serial("id").primaryKey(),
+  jobType: text("job_type").notNull(),
+  entityKey: text("entity_key").notNull().default(""),
+  status: text("status").notNull().default("PENDING"),
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(5),
+  runAfter: timestamp("run_after", { withTimezone: true }).defaultNow().notNull(),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  lockedBy: text("locked_by").notNull().default(""),
+  lastError: text("last_error").notNull().default(""),
+  payload: text("payload").notNull().default("{}"),
+  result: text("result").notNull().default("{}"),
+  idempotencyKey: text("idempotency_key"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const loyaltyLedger = pgTable("loyalty_ledger", {

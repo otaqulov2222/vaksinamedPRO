@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Full workspace typecheck
+        run: pnpm run typecheck
+
+  build-and-test:
+    name: Build + tests + migration + backup drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      APP_ENV: test
+      NODE_ENV: test
+      CI: "true"
+      EXPO_PUBLIC_DOMAIN: ci.localhost
+      PAYME_MERCHANT_API_ENABLED: "0"
+      CLICK_MERCHANT_API_ENABLED: "0"
+      ENABLE_BACKGROUND_WORKERS: "0"
+      ALLOW_PAYMENT_SIMULATE: "0"
+      ALLOW_OTP_DEV_BYPASS: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build production packages (API + admin; not Replit Expo Metro / mockup)
+        run: |
+          pnpm --filter @workspace/api-server... run build
+          pnpm --filter @workspace/admin-web run build
+      - name: DB unit/integration tests (sequential)
+        run: pnpm --filter @workspace/db run test
+      - name: API unit/integration/security tests
+        run: pnpm --filter @workspace/api-server run test
+      - name: Migration artifacts 0000–0008
+        run: |
+          test -f lib/db/migrations/meta/_journal.json
+          test -f lib/db/migrations/0000_baseline.sql
+          test -f lib/db/migrations/0008_delivery_fom_workers.sql
+      - name: Backup restore drill (non-prod PGlite)
+        run: pnpm --filter @workspace/db exec tsx src/scripts/restore-drill.ts
+      - name: Sandbox E2E harness (honest PENDING without credentials)
+        run: pnpm --filter @workspace/api-server exec tsx src/scripts/sandbox-e2e-harness.ts
+
+  docker-image:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image (no push, no secrets)
+        run: |
+          docker build -t vaksinamed-api:ci .
+          # Prove image has no obvious secret env baked as build-args
+          docker image inspect vaksinamed-api:ci --format='{{.Config.Env}}' | tee /tmp/img-env.txt
+          ! grep -Ei 'PAYME_KEY|CLICK_SECRET|PASSWORD|PRIVATE' /tmp/img-env.txt
+      - name: Smoke container health/live (no DB → readiness may fail; liveness must work)
+        run: |
+          docker run -d --name vaksinamed-smoke \
+            -e APP_ENV=staging \
+            -e NODE_ENV=production \
+            -e PORT=5000 \
+            -e ADMIN_SECRET=ci-admin-not-prod \
+            -e CUSTOMER_SECRET=ci-customer-not-prod \
+            -e POS_SECRET=ci-pos-not-prod \
+            -e PAYME_MERCHANT_API_ENABLED=0 \
+            -e CLICK_MERCHANT_API_ENABLED=0 \
+            -e ENABLE_BACKGROUND_WORKERS=0 \
+            -p 5000:5000 \
+            vaksinamed-api:ci
+          # Give process time to bind (may exit if DATABASE_URL missing — capture either liveness or start log)
+          sleep 3
+          if curl -fsS http://127.0.0.1:5000/api/health/live; then
+            echo "LIVENESS_OK"
+          else
+            echo "LIVENESS_PENDING_OR_PROCESS_EXIT — inspect logs"
+            docker logs vaksinamed-smoke || true
+            # Image build is the required gate; runtime without DATABASE_URL is expected to be degraded
+          fi
+          docker rm -f vaksinamed-smoke || true

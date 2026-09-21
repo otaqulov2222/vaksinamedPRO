@@ -9,6 +9,8 @@ import {
 import { customers } from "@workspace/db";
 import { rateLimit } from "../lib/rateLimit";
 import { loyaltyCardNumber, publicQrCode } from "../lib/pos";
+import { revokeSessionFromToken } from "../lib/sessions";
+import { recordAuthEvent } from "../lib/authEvents";
 
 const router = Router();
 
@@ -44,7 +46,7 @@ const authLimiter = rateLimit({
 router.post("/auth/register", authLimiter, async (req, res, next) => {
   try {
     const { phone, password, firstName, lastName } = req.body || {};
-    const result = await registerCustomer({ phone, password, firstName, lastName });
+    const result = await registerCustomer({ phone, password, firstName, lastName }, req);
     res.status(201).json({ token: result.token, customer: publicCustomer(result.user) });
   } catch (error) {
     next(error);
@@ -54,7 +56,7 @@ router.post("/auth/register", authLimiter, async (req, res, next) => {
 router.post("/auth/login", authLimiter, async (req, res, next) => {
   try {
     const { phone, password } = req.body || {};
-    const result = await loginCustomer(phone, password);
+    const result = await loginCustomer(phone, password, req);
     res.json({ token: result.token, customer: publicCustomer(result.user) });
   } catch (error) {
     next(error);
@@ -84,7 +86,7 @@ router.post("/auth/otp/verify", authLimiter, async (req, res, next) => {
       purpose,
       firstName: req.body?.firstName,
       password: req.body?.password,
-    });
+    }, req);
     res.json({ token: result.token, customer: publicCustomer(result.user) });
   } catch (error) {
     next(error);
@@ -100,8 +102,21 @@ router.get("/auth/me", async (req, res, next) => {
   }
 });
 
-router.post("/auth/logout", async (_req, res) => {
-  res.json({ ok: true });
+router.post("/auth/logout", async (req, res, next) => {
+  try {
+    const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
+    const result = await revokeSessionFromToken(token, { actorType: "customer" });
+    await recordAuthEvent({
+      actorType: "customer",
+      eventType: "logout",
+      success: true,
+      meta: { revoked: result.revoked },
+    });
+    // Idempotent — do not leak whether another user's session exists
+    res.json({ ok: true, revoked: result.revoked });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;

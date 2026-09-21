@@ -3,6 +3,8 @@
 ## Concurrent load (1000+ users)
 - Local demo: PGlite (single process, NOT for production traffic)
 - Production: set `DATABASE_URL` to managed PostgreSQL (Neon/Supabase/Yandex Cloud)
+- Schema evolution: `pnpm db:migrate` (versioned SQL in `lib/db/migrations/`) — **do not** use `drizzle-kit push --force` in production
+- See `docs/PHASE_3_3_P1_DATABASE_FOUNDATION.md`
 - Run multiple API instances behind a load balancer; use Redis for rate-limit buckets
 - CDN for Expo web / static assets; sticky sessions not required (JWT auth)
 
@@ -21,7 +23,10 @@
 6. Darajalar: Silver 3% · Gold 5% · Platinum 7%
 
 ## Checklist before App Store / Play
-- [ ] Postgres + backups
+- [ ] Postgres + backups (see `scripts/backup/README.md` — BACKUP_GAP until drill done)
+- [ ] Read `docs/PHASE_3_3_P11_P12_PRODUCTION_READINESS.md`
+- [ ] Payme/Click production flags remain OFF until cutover checklist
+- [ ] FOM inventory writer OFF
 - [ ] Eskiz SMS live
 - [ ] HTTPS API domain
 - [ ] Privacy policy + terms URLs in store listing

@@ -7,9 +7,9 @@ const router = Router();
 router.get("/catalog/categories", async (_req, res, next) => {
   try {
     const rows = await db.select({ category: products.category }).from(products);
-    res.json({ categories: [...new Set(rows.map((row) => row.category))] });
+    return res.json({ categories: [...new Set(rows.map((row) => row.category))] });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -30,14 +30,14 @@ router.get("/catalog/products", async (req, res, next) => {
       stocks = await db.select({ productId: productStocks.productId, quantity: productStocks.quantity }).from(productStocks).where(eq(productStocks.branchId, branchId));
     }
     const stockMap = new Map(stocks.map((item) => [item.productId, item.quantity]));
-    res.json({
+    return res.json({
       products: filtered.map((item) => ({
         ...item,
         stock: branchId ? stockMap.get(item.id) ?? 0 : undefined,
       })),
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -50,25 +50,25 @@ router.get("/catalog/products/:id", async (req, res, next) => {
       ? await db.select().from(products).where(eq(products.analogGroup, rows[0].analogGroup))
       : [];
     const availability = await db.select().from(productStocks).where(eq(productStocks.productId, id));
-    res.json({ product: rows[0], analogs, availability });
+    return res.json({ product: rows[0], analogs, availability });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
 router.get("/catalog/promos", async (_req, res, next) => {
   try {
-    res.json({ promos: await db.select().from(promos).where(eq(promos.active, true)) });
+    return res.json({ promos: await db.select().from(promos).where(eq(promos.active, true)) });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
 router.get("/catalog/rewards", async (_req, res, next) => {
   try {
-    res.json({ rewards: await db.select().from(rewards) });
+    return res.json({ rewards: await db.select().from(rewards) });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

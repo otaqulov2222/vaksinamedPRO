@@ -23,7 +23,7 @@ router.get("/maps/route", async (req, res, next) => {
       return res.status(404).json({ message: "Marshrut topilmadi" });
     }
 
-    res.json({
+    return res.json({
       distanceKm: Number((route.distance / 1000).toFixed(1)),
       durationMin: Math.max(1, Math.round(route.duration / 60)),
       coordinates: route.geometry.coordinates.map(([lng, lat]: [number, number]) => ({ lat, lng })),
@@ -31,7 +31,7 @@ router.get("/maps/route", async (req, res, next) => {
       yandexUrl: `https://yandex.ru/maps/?rtext=${fromLat},${fromLng}~${toLat},${toLng}&rtt=auto`,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

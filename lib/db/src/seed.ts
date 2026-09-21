@@ -4,7 +4,7 @@ import { customers } from "./schema/customers";
 import { loyaltyLedger } from "./schema/commerce";
 import { adminUsers } from "./schema/admin";
 import { hashPassword } from "./password";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import officialBranches from "./data/branches.json";
 
 function buildBranches() {
@@ -63,9 +63,28 @@ const PRODUCT_SEED = [
   { sku: "VM-FEM", nameUz: "Femibion natal", nameRu: "Фемибион natal", category: "Ona va bola", manufacturer: "Merck", description: "Homiladorlik davri uchun vitaminlar.", price: 186000, icon: "baby-face-outline", analogGroup: "prenatal", rx: false },
 ];
 
-export async function seedDatabase(database: any) {
+export type SeedOptions = {
+  /** Demo/dev credentials only — never production. */
+  profile?: "demo";
+  environment?: string;
+};
+
+/**
+ * Development/demo seed only.
+ * Credentials such as 123456 / vaksinamed / kassa123 are NOT production credentials.
+ * Gated by shouldAutoSeed() — never auto-runs in production/staging/test.
+ */
+export async function seedDatabase(database: any, options: SeedOptions = {}) {
   const existing = await database.select().from(customers).limit(1);
   if (existing[0]) return;
+
+  if (options.environment === "production" || options.environment === "staging") {
+    throw new Error("[db] Refusing demo seed in production/staging.");
+  }
+
+  console.warn(
+    `[db] Applying DEMO seed (profile=${options.profile ?? "demo"}, env=${options.environment ?? "unknown"}). Demo passwords are not production credentials.`,
+  );
 
   await database.insert(customers).values({
     telegramId: "firdavs",
@@ -152,4 +171,55 @@ export async function seedDatabase(database: any) {
       { customerId: firdavs[0].id, externalId: "9834", date: "04.09.2026", title: "Kosmetika", branch: "Vaksina Med №12", amount: 275000, cashback: 9000, kind: "earn" },
     ]);
   }
+
+  // P6: seed runs after migrate — open cashback SoT for seeded legacy balances (auditable ADJUSTMENT).
+  await database.execute(sql`
+    INSERT INTO cashback_accounts (customer_id, balance, created_at, updated_at)
+    SELECT c.id, GREATEST(0, c.balance), now(), now()
+    FROM customers c
+    WHERE NOT EXISTS (
+      SELECT 1 FROM cashback_accounts a WHERE a.customer_id = c.id
+    )
+  `);
+  await database.execute(sql`
+    INSERT INTO commercial_transactions (source_type, source_key, customer_id, amount, meta)
+    SELECT
+      'SYSTEM',
+      'opening:customer:' || a.customer_id::text,
+      a.customer_id,
+      a.balance,
+      '{"reason":"legacy_balance_opening","source":"seed"}'
+    FROM cashback_accounts a
+    WHERE a.balance > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM commercial_transactions ct
+        WHERE ct.source_type = 'SYSTEM'
+          AND ct.source_key = 'opening:customer:' || a.customer_id::text
+      )
+  `);
+  await database.execute(sql`
+    INSERT INTO cashback_ledger (
+      account_id, customer_id, entry_type, amount,
+      commercial_transaction_id, actor, reason, idempotency_key, meta
+    )
+    SELECT
+      a.id,
+      a.customer_id,
+      'ADJUSTMENT',
+      a.balance,
+      ct.id,
+      'seed',
+      'legacy_balance_opening',
+      'opening:customer:' || a.customer_id::text,
+      '{"source":"customers.balance"}'
+    FROM cashback_accounts a
+    JOIN commercial_transactions ct
+      ON ct.source_type = 'SYSTEM'
+     AND ct.source_key = 'opening:customer:' || a.customer_id::text
+    WHERE a.balance > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM cashback_ledger l
+        WHERE l.idempotency_key = 'opening:customer:' || a.customer_id::text
+      )
+  `);
 }

@@ -4,12 +4,17 @@
  * FOM (dorixona kassasi) = haqiqiy sotuv manbai (skan, narx, ombor, Click/Payme/naqd).
  * Ilova = qidiruv, filial, bron, yetkazish, loyalty QR.
  * Cashback faqat "sotuv yakunlanganda" hisobga o‘tadi (qaytarish/bron bekor uchun xavfsiz).
+ *
+ * P6.5: max spend ratio is server-configurable (default 30% of eligible goods).
+ * Client never authoritative for balance, eligibility, spend cap, or earn amount.
  */
 
 export const CASHBACK_TTL_DAYS = 90;
 export const MIN_PURCHASE_UZS = 1_000;
-/** Xarid summasining necha foizigacha cashback bilan to‘lash mumkin */
-export const MAX_SPEND_RATIO = 1;
+/** Default production spend cap — overridable via system_settings `cashback.max_spend_ratio`. */
+export const DEFAULT_MAX_SPEND_RATIO = 0.3;
+/** @deprecated Prefer getMaxSpendRatio() / computeCashback({ maxSpendRatio }) — kept as default constant. */
+export const MAX_SPEND_RATIO = DEFAULT_MAX_SPEND_RATIO;
 export const DELIVERY_FEE = 15_000;
 export const RESERVE_HOURS = 2;
 
@@ -35,9 +40,32 @@ export function rateFraction(tier: string) {
   return cashbackRateBps(tier) / 10_000;
 }
 
+export function normalizeSpendRatio(raw: unknown): number {
+  const v = Number(raw);
+  if (!Number.isFinite(v) || v <= 0) return DEFAULT_MAX_SPEND_RATIO;
+  if (v > 1) return 1;
+  return v;
+}
+
+/** Server-side spend clamp — never trust client amount. */
+export function clampCashbackSpend(input: {
+  goodsAmount: number;
+  balance: number;
+  requested: number;
+  maxSpendRatio?: number;
+}): { cashbackUsed: number; maxSpend: number; ratio: number } {
+  const goodsAmount = Math.max(0, Math.floor(Number(input.goodsAmount) || 0));
+  const balance = Math.max(0, Math.floor(Number(input.balance) || 0));
+  const ratio = normalizeSpendRatio(input.maxSpendRatio ?? DEFAULT_MAX_SPEND_RATIO);
+  const maxSpend = Math.min(balance, Math.floor(goodsAmount * ratio));
+  let cashbackUsed = Math.max(0, Math.floor(Number(input.requested) || 0));
+  if (cashbackUsed > maxSpend) cashbackUsed = maxSpend;
+  return { cashbackUsed, maxSpend, ratio };
+}
+
 /**
  * Hisob-kitob:
- * - cashback ishlatiladi: min(balans, summa * MAX_SPEND_RATIO)
+ * - cashback ishlatiladi: min(balans, summa * maxSpendRatio)  — default 30%
  * - yangi cashback: (to‘langan qism) * foiz  — yetkazish haqi uchun cashback YO‘Q
  */
 export function computeCashback(input: {
@@ -46,6 +74,7 @@ export function computeCashback(input: {
   balance: number;
   tier: string;
   deliveryFee?: number;
+  maxSpendRatio?: number;
 }) {
   const goodsAmount = Math.max(0, Math.floor(Number(input.goodsAmount) || 0));
   const deliveryFee = Math.max(0, Math.floor(Number(input.deliveryFee) || 0));
@@ -58,9 +87,12 @@ export function computeCashback(input: {
     );
   }
 
-  const maxSpend = Math.min(input.balance, Math.floor(goodsAmount * MAX_SPEND_RATIO));
-  let cashbackUsed = Math.max(0, Math.floor(Number(input.cashbackToUse) || 0));
-  if (cashbackUsed > maxSpend) cashbackUsed = maxSpend;
+  const { cashbackUsed, maxSpend, ratio } = clampCashbackSpend({
+    goodsAmount,
+    balance: input.balance,
+    requested: input.cashbackToUse,
+    maxSpendRatio: input.maxSpendRatio,
+  });
 
   const payableGoods = goodsAmount - cashbackUsed;
   const payableTotal = payableGoods + deliveryFee;
@@ -74,6 +106,7 @@ export function computeCashback(input: {
     payableGoods,
     payableTotal,
     maxSpend,
+    maxSpendRatio: ratio,
     rateBps: bps,
     rateLabel: rateLabel(bps),
     rate: bps / 10_000,
@@ -89,6 +122,8 @@ export function computeCashback(input: {
  *
  * Online Payme/Click to‘lovning o‘zi cashback bermaydi (faqat status),
  * chunki bron bekor / qaytarish bo‘lishi mumkin.
+ *
+ * Q3 OPEN: exact pickup earn moment — do not invent alternate policy here.
  */
 export type EarnTrigger =
   | "fom_walk_in"
@@ -111,12 +146,14 @@ export function earnTriggerLabel(trigger: EarnTrigger) {
   }
 }
 
-export function publicCashbackRules() {
+export function publicCashbackRules(maxSpendRatio: number = DEFAULT_MAX_SPEND_RATIO) {
+  const ratio = normalizeSpendRatio(maxSpendRatio);
   return {
     title: "Vaksina Med Cashback qoidalari",
     ttlDays: CASHBACK_TTL_DAYS,
     minPurchase: MIN_PURCHASE_UZS,
-    maxSpendRatio: MAX_SPEND_RATIO,
+    maxSpendRatio: ratio,
+    maxSpendPercent: Math.round(ratio * 100),
     deliveryFee: DELIVERY_FEE,
     tiers: [
       { tier: "Silver", rate: "3%", fromTotal: 200_000 },
@@ -129,22 +166,23 @@ export function publicCashbackRules() {
       "Yetkazib berish: buyurtma yetkazilganda",
     ],
     spendWhen: [
-      "Ilovada buyurtma berishda (balansdan)",
+      "Ilovada buyurtma berishda (balansdan, max 30% tovar summasidan)",
       "Kassada QR skanlanganda (FOM / Kassa POS)",
     ],
-    note: "FOM — dorixona kassasi (skaner, ombor, Click/Payme/naqd). Ilova loyalty va onlayn bron/yetkazish uchun.",
+    note: "FOM — dorixona kassasi (skaner, ombor, Click/Payme/naqd). Ilova loyalty va onlayn bron/yetkazish uchun. Mijoz balansi/limit/earn server tomonidan hisoblanadi.",
     fom: {
       saleEndpoint: "POST /api/integrations/fom/sale",
       fields: {
-        receiptId: "FOM chek raqami (majburiy, unique)",
+        receiptId: "FOM chek raqami (majburiy, unique) — vendor contract beyond this alias is OPEN",
         branchCode: "masalan apteka53",
         branchId: "yoki ichki filial id",
         customerQr: "mijoz QR (VM1… yoki VAKSINA-id)",
         amount: "xarid summasi (so‘m)",
-        cashbackToUse: "ishlatilgan cashback (ixtiyoriy)",
+        cashbackToUse: "so‘rov (server clamp; client not authoritative)",
         paymentMethod: "click | payme | cash | card",
         orderCode: "ilova buyurtmasi bo‘lsa VM-…",
       },
+      openDependency: "Stable FOM vendor receipt identity beyond receiptId/orderCode aliases is not invented",
     },
   };
 }

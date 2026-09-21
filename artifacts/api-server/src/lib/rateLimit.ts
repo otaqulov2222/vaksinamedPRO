@@ -19,7 +19,7 @@ export function rateLimit(options: { windowMs: number; max: number; key?: (req: 
     if (bucket.count > options.max) {
       return res.status(429).json({ message: "Juda ko‘p urinish. Biroz kutib qayta urinib ko‘ring." });
     }
-    next();
+    return next();
   };
 }
 

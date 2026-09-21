@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   lockOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'transparent',
     zIndex: 400,
     // Zoom tugmalari ochiq qolsin (o‘ng yuqori)

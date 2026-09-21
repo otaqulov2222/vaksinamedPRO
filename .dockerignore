@@ -1,0 +1,15 @@
+node_modules
+.data
+.git
+.env
+.env.*
+!.env.example
+dist
+coverage
+*.md
+!README.md
+artifacts/admin-web
+artifacts/soglom-apteka
+scripts
+docs
+.replit

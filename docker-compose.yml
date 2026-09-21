@@ -1,0 +1,52 @@
+# Optional local compose — never for production secrets.
+# Usage:
+#   docker compose up --build
+#   docker compose --profile p13 up -d postgres
+#   REAL_POSTGRES_LOAD_TEST=1 TEST_DATABASE_URL=postgresql://vaksinamed:vaksinamed@localhost:55432/vaksinamed_p13_test pnpm p13:load
+
+services:
+  postgres:
+    profiles: ["p13"]
+    image: postgres:16-alpine
+    ports:
+      - "55432:5432"
+    environment:
+      POSTGRES_USER: vaksinamed
+      POSTGRES_PASSWORD: vaksinamed
+      POSTGRES_DB: vaksinamed_p13_test
+    volumes:
+      - p13_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaksinamed -d vaksinamed_p13_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Staging/load only — not production
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      APP_ENV: development
+      NODE_ENV: production
+      PORT: "5000"
+      DATABASE_URL: ${DATABASE_URL:-}
+      ADMIN_SECRET: ${ADMIN_SECRET:-change-me-admin}
+      CUSTOMER_SECRET: ${CUSTOMER_SECRET:-change-me-customer}
+      POS_SECRET: ${POS_SECRET:-change-me-pos}
+      # Keep PSPs disabled
+      PAYME_MERCHANT_API_ENABLED: "0"
+      CLICK_MERCHANT_API_ENABLED: "0"
+      ENABLE_BACKGROUND_WORKERS: "0"
+      PG_POOL_MAX: ${PG_POOL_MAX:-20}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  p13_pgdata:

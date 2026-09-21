@@ -8,9 +8,9 @@ import { useColors } from '@/hooks/useColors';
 export default function BonusesScreen() {
   const colors = useColors();
   const { t, balance, rewards, redeemedRewards, redeemReward } = useApp();
-  const handleRedeem = (reward: (typeof rewards)[number]) => {
+  const handleRedeem = async (reward: (typeof rewards)[number]) => {
     if (redeemedRewards.includes(reward.id)) return;
-    const success = redeemReward(reward);
+    const success = await redeemReward(reward);
     Alert.alert(success ? t('redeemed') : t('noData'), success ? reward.title : `Kamida ${formatUzs(reward.points)} kerak`);
   };
   return (

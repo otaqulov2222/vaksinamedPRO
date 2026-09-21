@@ -7,6 +7,13 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "test": "pnpm --filter @workspace/db run test && pnpm --filter @workspace/api-server run test",
+    "test:security": "pnpm --filter @workspace/api-server run test:security",
+    "db:migrate": "pnpm --filter @workspace/db run migrate",
+    "db:migrate:status": "pnpm --filter @workspace/db run migrate:status",
+    "backup:drill": "pnpm --filter @workspace/db exec tsx src/scripts/restore-drill.ts",
+    "sandbox:e2e": "pnpm --filter @workspace/api-server exec tsx src/scripts/sandbox-e2e-harness.ts",
+    "p13:load": "pnpm --filter @workspace/api-server run p13:load",
     "dev:api": "pnpm --filter @workspace/api-server run dev",
     "dev:admin": "pnpm --filter @workspace/admin-web run dev",
     "dev:app": "pnpm --filter @workspace/soglom-apteka run dev:web"

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { adminUsers, branches, customers, db, loyaltyLedger, posSales } from "@workspace/db";
+import { adminUsers, branches, cashbackLedger, commercialTransactions, customers, db, loyaltyLedger, posSales } from "@workspace/db";
 import { formatDate } from "./money";
 import {
   MIN_PURCHASE_UZS,
@@ -10,8 +10,13 @@ import {
   nextTier,
 } from "./cashback";
 import { logger } from "./logger";
+import { isHqAdminRole, requireConfiguredSecret } from "./securityEnv";
+import { earnCashback, useCashback, reverseCashbackEntry, ensureCashbackAccount, getMaxSpendRatio } from "./cashbackFinance";
 
-const POS_SECRET = process.env.POS_SECRET || process.env.CUSTOMER_SECRET || "vaksinamed-pos-secret";
+const POS_SECRET = requireConfiguredSecret(
+  "POS_SECRET",
+  process.env.CUSTOMER_SECRET || "vaksinamed-pos-secret",
+);
 const QR_TTL_MS = 90_000;
 const VOID_WINDOW_MS = 15 * 60 * 1000;
 
@@ -130,12 +135,14 @@ export function computePosPreview(input: {
   balance: number;
   rateBps: number;
   tier?: string;
+  maxSpendRatio?: number;
 }) {
   const calc = computeCashback({
     goodsAmount: input.amount,
     cashbackToUse: input.cashbackToUse,
     balance: input.balance,
     tier: input.tier || (input.rateBps >= 700 ? "Platinum" : input.rateBps >= 500 ? "Gold" : "Silver"),
+    maxSpendRatio: input.maxSpendRatio,
   });
   return {
     amount: calc.goodsAmount,
@@ -143,6 +150,7 @@ export function computePosPreview(input: {
     cashbackEarned: calc.cashbackEarned,
     payable: calc.payableTotal,
     maxSpend: calc.maxSpend,
+    maxSpendRatio: calc.maxSpendRatio,
     earnBase: calc.payableGoods,
     balanceAfter: input.balance - calc.cashbackUsed + calc.cashbackEarned,
     rateBps: calc.rateBps,
@@ -159,12 +167,14 @@ export async function lookupPosCustomer(qrRaw: string) {
 export async function previewPosSale(input: { qr: string; amount: number; cashbackToUse?: number }) {
   const { customer, source } = await resolveCustomerFromScan(input.qr);
   const view = customerPosView(customer);
+  const maxSpendRatio = await getMaxSpendRatio();
   const preview = computePosPreview({
     amount: input.amount,
     cashbackToUse: input.cashbackToUse ?? 0,
     balance: customer.balance,
     rateBps: view.rateBps,
     tier: customer.tier,
+    maxSpendRatio,
   });
   return { customer: view, preview, scanSource: source };
 }
@@ -207,92 +217,160 @@ export async function confirmPosSale(input: {
 
   const { customer } = await resolveCustomerFromScan(input.qr);
   const view = customerPosView(customer);
+  await ensureCashbackAccount(customer.id);
+  const fresh = (await db.select().from(customers).where(eq(customers.id, customer.id)).limit(1))[0];
+  if (!fresh) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
+
   const preview = computePosPreview({
     amount: input.amount,
     cashbackToUse: input.cashbackToUse ?? 0,
-    balance: customer.balance,
+    balance: fresh.balance,
     rateBps: view.rateBps,
     tier: customer.tier,
+    maxSpendRatio: await getMaxSpendRatio(),
   });
 
-  // Optimistic lock via balance check re-read
-  const fresh = (await db.select().from(customers).where(eq(customers.id, customer.id)).limit(1))[0];
-  if (!fresh) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
   if (fresh.balance < preview.cashbackUsed) {
     throw Object.assign(new Error("Cashback balansi yetarli emas"), { status: 409 });
   }
 
-  const nextBalance = fresh.balance - preview.cashbackUsed + preview.cashbackEarned;
-  await db.update(customers).set({
-    balance: nextBalance,
-    purchasesCount: fresh.purchasesCount + 1,
-    totalPurchases: fresh.totalPurchases + preview.amount,
-    savedAmount: fresh.savedAmount + preview.cashbackEarned,
-    tier: nextTier(fresh.totalPurchases + preview.amount, fresh.tier),
-  }).where(eq(customers.id, fresh.id));
-
-  const saleRows = await db.insert(posSales).values({
-    receiptId,
+  const commercial = {
+    sourceType: "POS" as const,
+    sourceKey: `receipt:${receiptId}`,
     customerId: fresh.id,
-    branchId,
-    staffId: input.staffId ?? null,
+    receiptId,
     amount: preview.amount,
-    cashbackUsed: preview.cashbackUsed,
-    cashbackEarned: preview.cashbackEarned,
-    payable: preview.payable,
-    rateBps: preview.rateBps,
-    status: "completed",
-    actor: input.actor || "kassa",
-  }).returning();
+    meta: { branchId },
+  };
 
-  const sale = saleRows[0];
+  try {
+    await db.transaction(async (tx) => {
+      const executor = tx as unknown as typeof db;
+      if (preview.cashbackUsed > 0) {
+        await useCashback(
+          {
+            customerId: fresh.id,
+            amount: preview.cashbackUsed,
+            eligibleGoodsAmount: preview.amount,
+            maxSpendRatio: preview.maxSpendRatio,
+            commercial,
+            actor: input.actor || "kassa",
+            reason: "pos_use",
+            idempotencyKey: `use:receipt:${receiptId}`,
+          },
+          executor,
+          { alreadyInTx: true },
+        );
+      }
+      if (preview.cashbackEarned > 0) {
+        await earnCashback(
+          {
+            customerId: fresh.id,
+            amount: preview.cashbackEarned,
+            commercial,
+            actor: input.actor || "kassa",
+            reason: "pos_earn",
+            idempotencyKey: `earn:receipt:${receiptId}`,
+            legacyTitle: "Kassada cashback",
+            legacyBranch: branch.name,
+            legacyAmount: preview.payable,
+          },
+          executor,
+          { alreadyInTx: true },
+        );
+      }
 
-  if (preview.cashbackUsed > 0) {
-    await db.insert(loyaltyLedger).values({
-      customerId: fresh.id,
-      orderId: null,
-      externalId: `${receiptId}:use`,
-      date: formatDate(),
-      title: "Kassada cashback ishlatildi",
-      branch: branch.name,
-      amount: preview.amount,
-      cashback: -preview.cashbackUsed,
-      kind: "use",
-    });
-  }
+      await executor.update(customers).set({
+        purchasesCount: fresh.purchasesCount + 1,
+        totalPurchases: fresh.totalPurchases + preview.amount,
+        savedAmount: fresh.savedAmount + preview.cashbackEarned,
+        tier: nextTier(fresh.totalPurchases + preview.amount, fresh.tier),
+      }).where(eq(customers.id, fresh.id));
 
-  if (preview.cashbackEarned > 0) {
-    await db.insert(loyaltyLedger).values({
-      customerId: fresh.id,
-      orderId: null,
-      externalId: `${receiptId}:earn`,
-      date: formatDate(),
-      title: "Kassada cashback",
-      branch: branch.name,
-      amount: preview.payable,
-      cashback: preview.cashbackEarned,
-      kind: "earn",
-    });
-  }
-
-  await db.execute(sql`
-    INSERT INTO audit_log (actor, action, entity, payload)
-    VALUES (
-      ${input.actor || "kassa"},
-      ${"pos.sale"},
-      ${"pos_sale"},
-      ${JSON.stringify({
+      await executor.insert(posSales).values({
         receiptId,
         customerId: fresh.id,
         branchId,
+        staffId: input.staffId ?? null,
         amount: preview.amount,
         cashbackUsed: preview.cashbackUsed,
         cashbackEarned: preview.cashbackEarned,
         payable: preview.payable,
-      })}
-    )
-  `);
+        rateBps: preview.rateBps,
+        status: "completed",
+        actor: input.actor || "kassa",
+      });
 
+      if (preview.cashbackUsed > 0) {
+        try {
+          await executor.insert(loyaltyLedger).values({
+            customerId: fresh.id,
+            orderId: null,
+            externalId: `${receiptId}:use`,
+            date: formatDate(),
+            title: "Kassada cashback ishlatildi",
+            branch: branch.name,
+            amount: preview.amount,
+            cashback: -preview.cashbackUsed,
+            kind: "use",
+          });
+        } catch {
+          /* display only */
+        }
+      }
+      if (preview.cashbackEarned > 0) {
+        try {
+          await executor.insert(loyaltyLedger).values({
+            customerId: fresh.id,
+            orderId: null,
+            externalId: `${receiptId}:earn`,
+            date: formatDate(),
+            title: "Kassada cashback",
+            branch: branch.name,
+            amount: preview.payable,
+            cashback: preview.cashbackEarned,
+            kind: "earn",
+          });
+        } catch {
+          /* display only — earnCashback may already soft-write for orderId paths */
+        }
+      }
+
+      await executor.execute(sql`
+        INSERT INTO audit_log (actor, action, entity, payload)
+        VALUES (
+          ${input.actor || "kassa"},
+          ${"pos.sale"},
+          ${"pos_sale"},
+          ${JSON.stringify({
+            receiptId,
+            customerId: fresh.id,
+            branchId,
+            amount: preview.amount,
+            cashbackUsed: preview.cashbackUsed,
+            cashbackEarned: preview.cashbackEarned,
+            payable: preview.payable,
+          })}
+        )
+      `);
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      const raced = await db.select().from(posSales).where(eq(posSales.receiptId, receiptId)).limit(1);
+      if (raced[0]) {
+        const cust = (await db.select().from(customers).where(eq(customers.id, raced[0].customerId)).limit(1))[0];
+        return {
+          idempotent: true,
+          sale: raced[0],
+          customer: cust ? customerPosView(cust) : null,
+          receipt: serializeReceipt(raced[0], cust, branch),
+        };
+      }
+    }
+    throw error;
+  }
+
+  const sale = (await db.select().from(posSales).where(eq(posSales.receiptId, receiptId)).limit(1))[0];
   const updated = (await db.select().from(customers).where(eq(customers.id, fresh.id)).limit(1))[0];
   logger.info({ receiptId, customerId: fresh.id, amount: preview.amount }, "POS sale confirmed");
 
@@ -302,6 +380,11 @@ export async function confirmPosSale(input: {
     customer: customerPosView(updated),
     receipt: serializeReceipt(sale, updated, branch),
   };
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  const msg = String((error as Error)?.message || error || "").toLowerCase();
+  return msg.includes("unique") || msg.includes("duplicate");
 }
 
 function serializeReceipt(
@@ -347,9 +430,38 @@ export async function voidPosSale(input: { receiptId: string; staffId?: number |
   const customer = (await db.select().from(customers).where(eq(customers.id, sale.customerId)).limit(1))[0];
   if (!customer) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
 
-  const restored = customer.balance + sale.cashbackUsed - sale.cashbackEarned;
+  const commercialKey = `receipt:${receiptId}`;
+  const commercial = (await db
+    .select()
+    .from(commercialTransactions)
+    .where(
+      and(
+        eq(commercialTransactions.sourceType, "POS"),
+        eq(commercialTransactions.sourceKey, commercialKey),
+      ),
+    )
+    .limit(1))[0];
+
+  if (commercial) {
+    const related = await db
+      .select()
+      .from(cashbackLedger)
+      .where(eq(cashbackLedger.commercialTransactionId, commercial.id));
+    for (const entry of related.filter((r) => r.entryType === "EARN")) {
+      await reverseCashbackEntry(entry.id, {
+        actor: input.actor || "kassa",
+        reason: "pos_void",
+      });
+    }
+    for (const entry of related.filter((r) => r.entryType === "USE")) {
+      await reverseCashbackEntry(entry.id, {
+        actor: input.actor || "kassa",
+        reason: "pos_void",
+      });
+    }
+  }
+
   await db.update(customers).set({
-    balance: Math.max(0, restored),
     purchasesCount: Math.max(0, customer.purchasesCount - 1),
     totalPurchases: Math.max(0, customer.totalPurchases - sale.amount),
     savedAmount: Math.max(0, customer.savedAmount - sale.cashbackEarned),
@@ -427,8 +539,9 @@ export async function issueCustomerPosCard(customerId: number) {
 }
 
 export async function assertStaffBranch(staff: typeof adminUsers.$inferSelect, branchId: number) {
-  if (staff.role === "hq" || staff.role === "admin" || !staff.branchId) return;
-  if (staff.branchId !== branchId) {
+  // P2: null branchId is HQ only for explicit HQ roles — not cashiers
+  if (isHqAdminRole(staff.role)) return;
+  if (!staff.branchId || staff.branchId !== branchId) {
     throw Object.assign(new Error("Bu filial uchun ruxsat yo‘q"), { status: 403 });
   }
 }

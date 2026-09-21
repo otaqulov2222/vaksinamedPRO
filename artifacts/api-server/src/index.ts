@@ -40,11 +40,39 @@ if (Number.isNaN(port) || port <= 0) {
 
 const smsMode = process.env.ESKIZ_EMAIL && process.env.ESKIZ_PASSWORD ? "eskiz" : "dev";
 
-app.listen(port, "0.0.0.0", (err) => {
+/** No background worker loop on boot — workers are explicit HTTP/ops only. */
+const server = app.listen(port, "0.0.0.0", (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
 
-  logger.info({ port, smsMode }, "Vaksina Med API listening");
+  logger.info(
+    {
+      port,
+      smsMode,
+      workersAutoStart: false,
+      note: "ENABLE_BACKGROUND_WORKERS gates /workers/run-due in production-like",
+    },
+    "Vaksina Med API listening",
+  );
 });
+
+function shutdown(signal: string) {
+  logger.info({ signal }, "Graceful shutdown starting");
+  server.close((closeErr) => {
+    if (closeErr) {
+      logger.error({ err: closeErr }, "Error during server close");
+      process.exit(1);
+    }
+    logger.info("HTTP server closed");
+    process.exit(0);
+  });
+  setTimeout(() => {
+    logger.warn("Shutdown timeout — forcing exit");
+    process.exit(1);
+  }, 15_000).unref?.();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

@@ -3,12 +3,40 @@ import type { Request } from "express";
 import { eq, sql } from "drizzle-orm";
 import { adminUsers, customers, db, hashPassword, verifyPassword } from "@workspace/db";
 import { otpSmsText, sendSms } from "./sms";
+import {
+  allowLegacyHmacTokens,
+  allowOtpDevBypass,
+  allowOtpDevCodeInResponse,
+  allowTelegramAutoProvision,
+  allowTelegramHeaderAuth,
+  isHqAdminRole,
+  isProductionLike,
+  requireConfiguredSecret,
+} from "./securityEnv";
+import { createSession, isSessionToken, validateSessionToken, type SessionMeta } from "./sessions";
+import { recordAuthEvent } from "./authEvents";
+import { normalizeAdminRole } from "./securityEnv";
+import { earnCashback } from "./cashbackFinance";
 
-const SECRET = process.env.ADMIN_SECRET || "vaksinamed-admin-secret";
-const CUSTOMER_SECRET = process.env.CUSTOMER_SECRET || "vaksinamed-customer-secret";
+const WELCOME_CASHBACK = 5000;
+const SECRET = requireConfiguredSecret("ADMIN_SECRET", "vaksinamed-admin-secret");
+const CUSTOMER_SECRET = requireConfiguredSecret("CUSTOMER_SECRET", "vaksinamed-customer-secret");
 
 function hashOtp(phone: string, code: string) {
   return createHash("sha256").update(`${phone}:${code}:${CUSTOMER_SECRET}`).digest("hex");
+}
+
+function bearerFrom(req: Request): string | undefined {
+  return req.header("authorization")?.replace(/^Bearer\s+/i, "") || undefined;
+}
+
+function sessionMetaFrom(req?: Request): SessionMeta {
+  if (!req) return {};
+  return {
+    userAgent: req.header("user-agent") || "",
+    ip: req.ip || "",
+    deviceLabel: typeof req.body?.deviceLabel === "string" ? req.body.deviceLabel : "",
+  };
 }
 
 export function normalizePhone(input: string) {
@@ -35,6 +63,7 @@ export function customerTelegramId(req: Request) {
   return (header || query || body || "").trim();
 }
 
+/** @deprecated Prefer issueCustomerSession — kept for dual-accept / tests. */
 export function signCustomerToken(customerId: number) {
   const payload = `${customerId}:${Date.now() + 1000 * 60 * 60 * 24 * 30}`;
   const sig = createHmac("sha256", CUSTOMER_SECRET).update(payload).digest("hex");
@@ -42,7 +71,8 @@ export function signCustomerToken(customerId: number) {
 }
 
 export function readCustomerToken(token: string | undefined) {
-  if (!token) return null;
+  if (!token || isSessionToken(token)) return null;
+  if (!allowLegacyHmacTokens()) return null;
   const parts = token.split(":");
   if (parts.length < 3) return null;
   const [customerId, exp, ...sigParts] = parts;
@@ -53,16 +83,40 @@ export function readCustomerToken(token: string | undefined) {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   if (Number(exp) < Date.now()) return null;
-  return { customerId: Number(customerId) };
+  return { customerId: Number(customerId), legacy: true as const };
+}
+
+export async function issueCustomerSession(customerId: number, req?: Request) {
+  const created = await createSession({
+    actorType: "customer",
+    actorId: customerId,
+    meta: sessionMetaFrom(req),
+  });
+  return created.token;
 }
 
 export async function requireCustomer(req: Request) {
-  const bearer = req.header("authorization")?.replace(/^Bearer\s+/i, "");
+  const bearer = bearerFrom(req);
+
+  if (isSessionToken(bearer)) {
+    const session = await validateSessionToken(bearer);
+    if (!session || session.actorType !== "customer") {
+      throw Object.assign(new Error("Kirish muddati tugagan"), { status: 401 });
+    }
+    const rows = await db.select().from(customers).where(eq(customers.id, session.actorId)).limit(1);
+    if (rows[0]) return rows[0];
+    throw Object.assign(new Error("Kirish muddati tugagan"), { status: 401 });
+  }
+
   const parsed = readCustomerToken(bearer);
   if (parsed) {
     const rows = await db.select().from(customers).where(eq(customers.id, parsed.customerId)).limit(1);
     if (rows[0]) return rows[0];
     throw Object.assign(new Error("Kirish muddati tugagan"), { status: 401 });
+  }
+
+  if (!allowTelegramHeaderAuth()) {
+    throw Object.assign(new Error("Kirish talab qilinadi"), { status: 401 });
   }
 
   const telegramId = customerTelegramId(req);
@@ -72,6 +126,10 @@ export async function requireCustomer(req: Request) {
 
   const existing = await db.select().from(customers).where(eq(customers.telegramId, telegramId)).limit(1);
   if (existing[0]) return existing[0];
+
+  if (!allowTelegramAutoProvision()) {
+    throw Object.assign(new Error("Kirish talab qilinadi"), { status: 401 });
+  }
 
   const inserted = await db.insert(customers).values({
     telegramId,
@@ -91,7 +149,7 @@ export async function findCustomerByPhone(phoneRaw: string) {
   if (rows[0]) return rows[0];
   rows = await db.select().from(customers).where(eq(customers.phone, display)).limit(1);
   if (rows[0]) return rows[0];
-  if (phone === "998901234567") {
+  if (!isProductionLike() && phone === "998901234567") {
     rows = await db.select().from(customers).where(eq(customers.telegramId, "firdavs")).limit(1);
     if (rows[0]) return rows[0];
   }
@@ -103,7 +161,7 @@ export async function registerCustomer(input: {
   password: string;
   firstName: string;
   lastName?: string;
-}) {
+}, req?: Request) {
   const phone = normalizePhone(input.phone);
   if (phone.length !== 12 || !phone.startsWith("998")) {
     throw Object.assign(new Error("Telefon raqam noto‘g‘ri. Masalan: 90 123 45 67"), { status: 400 });
@@ -128,29 +186,75 @@ export async function registerCustomer(input: {
     lastName: (input.lastName || "").trim(),
     phone: display,
     passwordHash: hashPassword(input.password),
-    balance: 5000,
+    balance: 0,
     tier: "Silver",
   }).returning();
 
   const user = inserted[0];
-  return { user, token: signCustomerToken(user.id) };
+  await earnCashback({
+    customerId: user.id,
+    amount: WELCOME_CASHBACK,
+    commercial: {
+      sourceType: "SYSTEM",
+      sourceKey: `welcome:customer:${user.id}`,
+      customerId: user.id,
+      amount: WELCOME_CASHBACK,
+    },
+    actor: "auth:register",
+    reason: "welcome_bonus",
+    idempotencyKey: `welcome:customer:${user.id}`,
+  });
+  await recordAuthEvent({
+    actorType: "customer",
+    actorId: user.id,
+    eventType: "login.success",
+    success: true,
+    reason: "register",
+  });
+  return { user: (await db.select().from(customers).where(eq(customers.id, user.id)).limit(1))[0], token: await issueCustomerSession(user.id, req) };
 }
 
-export async function loginCustomer(phoneRaw: string, password: string) {
+export async function loginCustomer(phoneRaw: string, password: string, req?: Request) {
   const phone = normalizePhone(phoneRaw);
   const display = formatPhoneDisplay(phone);
   let user = await findCustomerByPhone(phone);
 
-  if (user && phone === "998901234567" && password === "123456" && (!user.passwordHash || user.telegramId === "firdavs")) {
+  // Demo special-case — development only, never production-like
+  if (
+    allowOtpDevBypass()
+    && user
+    && phone === "998901234567"
+    && password === "123456"
+    && (!user.passwordHash || user.telegramId === "firdavs")
+  ) {
     const hashed = hashPassword("123456");
     await db.update(customers).set({ passwordHash: hashed, phone: display }).where(eq(customers.id, user.id));
-    return { user: { ...user, passwordHash: hashed, phone: display }, token: signCustomerToken(user.id) };
+    await recordAuthEvent({
+      actorType: "customer",
+      actorId: user.id,
+      eventType: "login.success",
+      success: true,
+      reason: "demo_bypass",
+    });
+    return { user: { ...user, passwordHash: hashed, phone: display }, token: await issueCustomerSession(user.id, req) };
   }
 
   if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+    await recordAuthEvent({
+      actorType: "customer",
+      eventType: "login.failure",
+      success: false,
+      reason: "bad_credentials",
+    });
     throw Object.assign(new Error("Telefon yoki parol noto‘g‘ri"), { status: 401 });
   }
-  return { user, token: signCustomerToken(user.id) };
+  await recordAuthEvent({
+    actorType: "customer",
+    actorId: user.id,
+    eventType: "login.success",
+    success: true,
+  });
+  return { user, token: await issueCustomerSession(user.id, req) };
 }
 
 export async function createOtp(phoneRaw: string, purpose: "login" | "register" = "login") {
@@ -188,14 +292,13 @@ export async function createOtp(phoneRaw: string, purpose: "login" | "register" 
   `);
 
   const sms = await sendSms(phone, otpSmsText(code));
-  const isDev = sms.provider === "dev";
 
   return {
     phone: formatPhoneDisplay(phone),
     expiresIn: 300,
     purpose: safePurpose,
     provider: sms.provider,
-    ...(isDev ? { devCode: code } : {}),
+    ...(allowOtpDevCodeInResponse() && sms.provider === "dev" ? { devCode: code } : {}),
   };
 }
 
@@ -205,7 +308,7 @@ export async function verifyOtpAndAuth(input: {
   purpose?: "login" | "register";
   firstName?: string;
   password?: string;
-}) {
+}, req?: Request) {
   const phone = normalizePhone(input.phone);
   const safeCode = String(input.code).replace(/\D/g, "");
   const purpose = input.purpose === "register" ? "register" : "login";
@@ -222,8 +325,14 @@ export async function verifyOtpAndAuth(input: {
   `);
   const list = Array.isArray(result) ? result : (result?.rows || []);
 
-  const allowDevBypass = !process.env.ESKIZ_EMAIL && safeCode === "000000";
+  const allowDevBypass = allowOtpDevBypass() && safeCode === "000000";
   if (!list[0] && !allowDevBypass) {
+    await recordAuthEvent({
+      actorType: "customer",
+      eventType: "login.failure",
+      success: false,
+      reason: "otp_invalid",
+    });
     throw Object.assign(new Error("Kod noto‘g‘ri yoki muddati tugagan"), { status: 401 });
   }
 
@@ -252,29 +361,52 @@ export async function verifyOtpAndAuth(input: {
       lastName: "",
       phone: display,
       passwordHash: hashPassword(password),
-      balance: 5000,
+      balance: 0,
       tier: "Silver",
     }).returning();
     user = inserted[0];
+    await earnCashback({
+      customerId: user.id,
+      amount: WELCOME_CASHBACK,
+      commercial: {
+        sourceType: "SYSTEM",
+        sourceKey: `welcome:customer:${user.id}`,
+        customerId: user.id,
+        amount: WELCOME_CASHBACK,
+      },
+      actor: "auth:otp_register",
+      reason: "welcome_bonus",
+      idempotencyKey: `welcome:customer:${user.id}`,
+    });
+    user = (await db.select().from(customers).where(eq(customers.id, user.id)).limit(1))[0];
   } else if (!user) {
     throw Object.assign(new Error("Foydalanuvchi topilmadi"), { status: 404 });
   }
 
-  return { user, token: signCustomerToken(user.id) };
+  await recordAuthEvent({
+    actorType: "customer",
+    actorId: user.id,
+    eventType: "login.success",
+    success: true,
+    reason: purpose === "register" ? "otp_register" : "otp_login",
+  });
+  return { user, token: await issueCustomerSession(user.id, req) };
 }
 
-export async function verifyOtpAndLogin(phoneRaw: string, code: string) {
-  return verifyOtpAndAuth({ phone: phoneRaw, code, purpose: "login" });
+export async function verifyOtpAndLogin(phoneRaw: string, code: string, req?: Request) {
+  return verifyOtpAndAuth({ phone: phoneRaw, code, purpose: "login" }, req);
 }
 
+/** @deprecated Prefer issueAdminSession — kept for dual-accept / tests. */
 export function signAdminToken(userId: number, role: string, branchId: number | null) {
-  const payload = `${userId}:${role}:${branchId ?? ""}:${Date.now() + 1000 * 60 * 60 * 12}`;
+  const payload = `${userId}:${normalizeAdminRole(role)}:${branchId ?? ""}:${Date.now() + 1000 * 60 * 60 * 12}`;
   const sig = createHmac("sha256", SECRET).update(payload).digest("hex");
   return `${payload}:${sig}`;
 }
 
 export function readAdminToken(token: string | undefined) {
-  if (!token) return null;
+  if (!token || isSessionToken(token)) return null;
+  if (!allowLegacyHmacTokens()) return null;
   const parts = token.split(":");
   if (parts.length < 5) return null;
   const [userId, role, branchId, exp, ...sigParts] = parts;
@@ -285,11 +417,31 @@ export function readAdminToken(token: string | undefined) {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   if (Number(exp) < Date.now()) return null;
-  return { userId: Number(userId), role, branchId: branchId ? Number(branchId) : null };
+  return { userId: Number(userId), role, branchId: branchId ? Number(branchId) : null, legacy: true as const };
+}
+
+export async function issueAdminSession(userId: number, req?: Request) {
+  const created = await createSession({
+    actorType: "admin",
+    actorId: userId,
+    meta: sessionMetaFrom(req),
+  });
+  return created.token;
 }
 
 export async function requireAdmin(req: Request) {
-  const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
+  const token = bearerFrom(req);
+
+  if (isSessionToken(token)) {
+    const session = await validateSessionToken(token);
+    if (!session || session.actorType !== "admin") {
+      throw Object.assign(new Error("Kirish talab qilinadi"), { status: 401 });
+    }
+    const rows = await db.select().from(adminUsers).where(eq(adminUsers.id, session.actorId)).limit(1);
+    if (!rows[0]) throw Object.assign(new Error("Admin topilmadi"), { status: 401 });
+    return rows[0];
+  }
+
   const parsed = readAdminToken(token);
   if (!parsed) throw Object.assign(new Error("Kirish talab qilinadi"), { status: 401 });
   const rows = await db.select().from(adminUsers).where(eq(adminUsers.id, parsed.userId)).limit(1);
@@ -297,11 +449,47 @@ export async function requireAdmin(req: Request) {
   return rows[0];
 }
 
-export async function loginAdmin(email: string, password: string) {
+/** HQ-only — uses normalized role (super_admin / legacy admin|hq). Prefer permission checks. */
+export async function requireHqAdmin(req: Request) {
+  const user = await requireAdmin(req);
+  if (!isHqAdminRole(user.role)) {
+    await recordAuthEvent({
+      actorType: "admin",
+      actorId: user.id,
+      eventType: "authz.denied",
+      success: false,
+      reason: "hq_required",
+      meta: { role: normalizeAdminRole(user.role) },
+    });
+    throw Object.assign(new Error("Bu amal uchun ruxsat yo‘q"), { status: 403 });
+  }
+  return user;
+}
+
+export async function loginAdmin(email: string, password: string, req?: Request) {
   const rows = await db.select().from(adminUsers).where(eq(adminUsers.email, email.trim().toLowerCase())).limit(1);
   const user = rows[0];
   if (!user || !verifyPassword(password, user.passwordHash)) {
+    await recordAuthEvent({
+      actorType: "admin",
+      eventType: "login.failure",
+      success: false,
+      reason: "bad_credentials",
+    });
     throw Object.assign(new Error("Email yoki parol noto‘g‘ri"), { status: 401 });
   }
-  return { user, token: signAdminToken(user.id, user.role, user.branchId) };
+  // Persist normalized role if legacy label present (deterministic, no privilege expansion)
+  const normalized = normalizeAdminRole(user.role);
+  if (normalized !== user.role) {
+    await db.update(adminUsers).set({ role: normalized }).where(eq(adminUsers.id, user.id));
+    user.role = normalized;
+  }
+  await recordAuthEvent({
+    actorType: "admin",
+    actorId: user.id,
+    eventType: "login.success",
+    success: true,
+    meta: { role: normalized },
+  });
+  return { user, token: await issueAdminSession(user.id, req) };
 }

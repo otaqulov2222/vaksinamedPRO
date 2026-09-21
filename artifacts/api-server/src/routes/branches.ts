@@ -32,9 +32,9 @@ router.get("/branches", async (req, res, next) => {
     }).map((item) => serializeBranch(item, origin));
     filtered.sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
     const regions = [...new Set(rows.map((item) => item.region))].sort();
-    res.json({ branches: filtered, total: filtered.length, regions, network: { claimed: "137+", regions: "9+", founded: 2015, certifications: ["GDP", "GPP"] } });
+    return res.json({ branches: filtered, total: filtered.length, regions, network: { claimed: "137+", regions: "9+", founded: 2015, certifications: ["GDP", "GPP"] } });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -43,9 +43,9 @@ router.get("/branches/:id", async (req, res, next) => {
     const id = Number(req.params.id);
     const rows = await db.select().from(branches).where(eq(branches.id, id)).limit(1);
     if (!rows[0]) return res.status(404).json({ message: "Filial topilmadi" });
-    res.json({ branch: serializeBranch(rows[0]) });
+    return res.json({ branch: serializeBranch(rows[0]) });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

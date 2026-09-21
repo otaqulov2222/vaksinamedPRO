@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     borderColor: '#5C328E',
   },
   screen: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
   },

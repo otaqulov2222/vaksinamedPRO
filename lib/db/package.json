@@ -8,8 +8,12 @@
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {
-    "push": "drizzle-kit push --config ./drizzle.config.ts",
-    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
+    "migrate": "tsx src/scripts/migrate.ts",
+    "migrate:status": "tsx src/scripts/migrate-status.ts",
+    "push": "node ./scripts/push-guard.mjs",
+    "push:force": "node ./scripts/push-guard.mjs --force",
+    "test": "tsx --test --test-concurrency=1 tests/**/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.15",
@@ -21,6 +25,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/pg": "^8.23.1",
-    "drizzle-kit": "^0.31.10"
+    "drizzle-kit": "^0.31.10",
+    "tsx": "catalog:"
   }
 }
