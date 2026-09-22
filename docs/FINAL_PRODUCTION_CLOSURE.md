@@ -7,6 +7,8 @@
 
 This document is the final gate assessment. Repository tests alone do **not** make production READY.
 
+**Operational procedures:** see `docs/PRODUCTION_OPS_RUNBOOK.md` (pre-prod gates, sandbox E2E, PSP/FOM/delivery cutover, HMAC, incidents, GO/NO-GO).
+
 ---
 
 ## Three decisions
