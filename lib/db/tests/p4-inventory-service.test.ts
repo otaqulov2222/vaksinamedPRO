@@ -122,7 +122,10 @@ describe("P4.3–P4.5 inventory service", () => {
     assert.equal(stock.reservedQuantity, 1);
   });
 
-  it("concurrent last-unit reservation: only one wins", async () => {
+  it("concurrent last-unit reservation: only one wins (checkout SoT path)", async () => {
+    // Batch 3E: checkout races share this FOR UPDATE reserveStock path.
+    // PGlite is single-connection — sequential contention still rejects the second reserve.
+    // Real multi-connection races are covered by p13 inventory_concurrency on PostgreSQL.
     await database.insert(schema.products).values({
       sku: "INV-C",
       nameUz: "C",

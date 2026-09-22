@@ -1,10 +1,14 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen, formatUzs } from '@/components/AppUI';
 import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
-import { api, API_URL } from '@/lib/api';
+import { api, API_URL, newIdempotencyKey, type ApiError } from '@/lib/api';
+
+/** Same key as cart.tsx — client price-change notice only, never financial SoT. */
+const PRICE_SNAP_KEY = 'vaksinamed-cart-price-snap';
 
 export default function CheckoutScreen() {
   const colors = useColors();
@@ -17,30 +21,56 @@ export default function CheckoutScreen() {
   const [useCashback, setUseCashback] = useState(false);
   const [cart, setCart] = useState<any>(null);
   const [rules, setRules] = useState<any>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const idempotencyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    void Promise.all([
-      api.branches(41.3111, 69.2797),
-      api.cart(),
-      api.cashbackRules().catch(() => null),
-    ]).then(([b, c, r]) => {
-      setBranches(b.branches.slice(0, 12));
-      setCart(c);
-      setBranchId(c.branch?.id || b.branches[0]?.id || null);
-      setRules(r);
-    });
+    void loadCheckout();
   }, []);
 
-  const deliveryFee = fulfillment === 'delivery' ? (rules?.deliveryFee ?? 15000) : 0;
+  async function loadCheckout() {
+    setLoadError(null);
+    try {
+      const [b, c, r] = await Promise.all([
+        api.branches(),
+        api.cart(),
+        api.cashbackRules().catch(() => null),
+      ]);
+      setBranches(b.branches || []);
+      setCart(c);
+      setBranchId(c.branch?.id ?? null);
+      setRules(r);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Yuklanmadi');
+    }
+  }
+
+  const deliveryFeeKnown = fulfillment !== 'delivery' || (rules != null && typeof rules.deliveryFee === 'number');
+  const deliveryFee = fulfillment === 'delivery' && deliveryFeeKnown ? Number(rules.deliveryFee) : 0;
   const goods = cart?.subtotal || 0;
-  const cashbackUsed = useCashback ? Math.min(balance, goods) : 0;
+  const maxSpendRatio =
+    typeof rules?.maxSpendRatio === 'number'
+      ? rules.maxSpendRatio
+      : typeof rules?.maxSpendPercent === 'number'
+        ? rules.maxSpendPercent / 100
+        : null;
+  const cashbackUsed =
+    useCashback && maxSpendRatio != null
+      ? Math.min(balance, Math.floor(goods * Math.max(0, Math.min(1, maxSpendRatio))))
+      : 0;
   const tierRate = useMemo(() => {
-    const tier = String(user?.tier || 'Gold').toLowerCase();
-    if (tier.includes('platinum')) return 0.07;
-    if (tier.includes('silver')) return 0.03;
-    return 0.05;
-  }, [user?.tier]);
-  const earnPreview = Math.floor(Math.max(0, goods - cashbackUsed) * tierRate);
+    const tiers = Array.isArray(rules?.tiers) ? rules.tiers : [];
+    const tier = String(user?.tier || '').toLowerCase();
+    const match = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes(tier.includes('plat') ? 'plat' : tier.includes('silver') ? 'silver' : 'gold'));
+    if (match?.rate != null) {
+      const raw = String(match.rate).replace('%', '');
+      const n = Number(raw);
+      if (Number.isFinite(n)) return n > 1 ? n / 100 : n;
+    }
+    return null;
+  }, [user?.tier, rules]);
+  const earnPreview = tierRate != null ? Math.floor(Math.max(0, goods - cashbackUsed) * tierRate) : null;
   const total = Math.max(0, goods + deliveryFee - cashbackUsed);
 
   const earnHint =
@@ -50,33 +80,139 @@ export default function CheckoutScreen() {
         ? 'Cashback filial kassasida (FOM) to‘lov/berishdan keyin tushadi'
         : 'Onlayn to‘lovdan keyin bron saqlanadi; cashback filialda berilganda tushadi';
 
+  const paymentOptions: Array<{ value: string; label: string; enabled: boolean }> = [
+    { value: 'pay_at_branch', label: 'Filialda (FOM: Click / Payme / naqd)', enabled: true },
+    { value: 'cod', label: t('payCod'), enabled: fulfillment === 'delivery' },
+    {
+      value: 'payme',
+      label: 'Payme (onlayn — production PSP o‘chirilgan)',
+      enabled: false,
+    },
+    {
+      value: 'click',
+      label: 'Click (onlayn — production PSP o‘chirilgan)',
+      enabled: false,
+    },
+  ];
+
   const submit = async () => {
+    if (submitting) return;
+    if (!cart?.items?.length) {
+      Alert.alert('Savat', 'Savat bo‘sh');
+      return;
+    }
+    if (!branchId) {
+      Alert.alert('Filial', 'Buyurtma uchun filialni tanlang');
+      return;
+    }
+    if (fulfillment === 'delivery' && !deliveryFeeKnown) {
+      Alert.alert('Yetkazish', 'Yetkazish narxi serverdan yuklanmadi. Qayta urinib ko‘ring.');
+      return;
+    }
+    if (fulfillment === 'delivery' && address.trim().length < 8) {
+      Alert.alert('Manzil', 'Yetkazib berish manzilini kiriting');
+      return;
+    }
+    if (!idempotencyRef.current) {
+      idempotencyRef.current = newIdempotencyKey('checkout');
+    }
+    setSubmitting(true);
     try {
-      if (branchId) await api.setCartBranch(branchId);
-      const result = await api.checkout({ branchId, fulfillment, paymentMethod, address, useCashback });
+      await api.setCartBranch(branchId);
+      const result = await api.checkout(
+        { branchId, fulfillment, paymentMethod, address, useCashback },
+        { idempotencyKey: idempotencyRef.current },
+      );
+      const orderId = result?.order?.id;
+      if (orderId == null) {
+        throw Object.assign(new Error('Buyurtma ID serverdan kelmadi'), { code: 'ORDER_ID_MISSING' });
+      }
+      // Cart cleared server-side on success; drop local price snap so it is never reused as truth.
+      try {
+        await AsyncStorage.removeItem(PRICE_SNAP_KEY);
+      } catch {
+        // ignore
+      }
       await refresh();
+      idempotencyRef.current = null;
       const checkoutUrl = result.payment?.checkoutUrl;
-      if (checkoutUrl) {
+      if (checkoutUrl && (paymentMethod === 'payme' || paymentMethod === 'click')) {
         await Linking.openURL(`${API_URL}${checkoutUrl}`);
       }
-      router.replace(`/order/${result.order.id}`);
+      // Order detail loads authoritative totals from GET /api/orders/:id — not checkout preview.
+      router.replace(`/order/${orderId}`);
     } catch (error) {
-      Alert.alert('Xatolik', error instanceof Error ? error.message : 'Buyurtma yuborilmadi');
+      const err = error as ApiError;
+      const code = err.code || '';
+      let title = 'Xatolik';
+      let message = err.message || 'Buyurtma yuborilmadi';
+      if (code === 'STOCK_UNAVAILABLE') {
+        title = 'Qoldiq o‘zgardi';
+        message = 'Mahsulot qoldig‘i yetarli emas. Savatni yangilab qayta urinib ko‘ring.';
+      } else if (code === 'BRANCH_REQUIRED' || code === 'BRANCH_NOT_FOUND' || code === 'BRANCH_CLOSED') {
+        title = 'Filial';
+      } else if (code === 'INSUFFICIENT_CASHBACK' || code === 'SPEND_CAP_ZERO') {
+        title = 'Cashback';
+      } else if (code === 'CART_EMPTY') {
+        title = 'Savat';
+      }
+      Alert.alert(title, message);
+      // Keep same idempotency key on retry for safe double-tap recovery.
+    } finally {
+      setSubmitting(false);
     }
   };
+
+  if (loadError) {
+    return (
+      <Screen>
+        <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{loadError}</Text>
+        <Pressable
+          onPress={() => void loadCheckout()}
+          style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: colors.primary }}
+        >
+          <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold', textAlign: 'center' }}>Qayta urinish</Text>
+        </Pressable>
+      </Screen>
+    );
+  }
+
+  if (!cart) {
+    return (
+      <Screen>
+        <Text style={{ color: colors.mutedForeground }}>Yuklanmoqda...</Text>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
       <Text style={[styles.title, { color: colors.foreground }]}>{t('checkout')}</Text>
       <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-        Dorixona FOMda skan/to‘lov qiladi. Ilova — bron, yetkazish va cashback.
+        Dorixona FOMda skan/to‘lov qiladi. Ilova — bron, yetkazish va cashback. Summalar taxminiy — yakuniy hisob serverda.
       </Text>
 
+      {!cart.items?.length ? (
+        <Text style={{ color: colors.mutedForeground, marginBottom: 12 }}>Savat bo‘sh</Text>
+      ) : null}
+
       <Text style={[styles.label, { color: colors.mutedForeground }]}>Filial</Text>
+      {!branchId ? (
+        <Text style={{ color: '#B45309', fontFamily: 'Inter_600SemiBold', marginBottom: 8, fontSize: 12 }}>
+          Filial tanlanmagan — qoldiq va bron uchun filial majburiy
+        </Text>
+      ) : null}
       {branches.map((branch) => (
-        <Pressable key={branch.id} onPress={() => setBranchId(branch.id)} style={[styles.option, { borderColor: branchId === branch.id ? colors.primary : colors.border }]}>
+        <Pressable
+          key={branch.id}
+          onPress={() => setBranchId(branch.id)}
+          style={[styles.option, { borderColor: branchId === branch.id ? colors.primary : colors.border }]}
+        >
           <Text style={{ fontFamily: 'Inter_700Bold', color: colors.foreground }}>{branch.name}</Text>
-          <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>{branch.address} · {branch.distanceKm ?? '—'} km</Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>
+            {branch.address}
+            {branch.distanceKm != null ? ` · ${branch.distanceKm} km` : ''}
+          </Text>
         </Pressable>
       ))}
 
@@ -88,6 +224,11 @@ export default function CheckoutScreen() {
           <Text style={{ color: fulfillment === 'delivery' ? '#fff' : colors.foreground }}>{t('delivery')}</Text>
         </Pressable>
       </View>
+      {fulfillment === 'delivery' ? (
+        <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 6 }}>
+          Ichki yetkazib berish. Tashqi kuryer shartnomasi hali yo‘q — ETA/narx inventar qilinmaydi.
+        </Text>
+      ) : null}
 
       {fulfillment === 'delivery' ? (
         <TextInput
@@ -100,37 +241,77 @@ export default function CheckoutScreen() {
       ) : null}
 
       <Text style={[styles.label, { color: colors.mutedForeground }]}>To‘lov</Text>
-      {[
-        ['pay_at_branch', 'Filialda (FOM: Click / Payme / naqd)'],
-        ['cod', t('payCod')],
-        ['payme', 'Payme (onlayn)'],
-        ['click', 'Click (onlayn)'],
-      ].map(([value, label]) => (
-        <Pressable key={value} onPress={() => setPaymentMethod(value)} style={[styles.option, { borderColor: paymentMethod === value ? colors.primary : colors.border }]}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.foreground }}>{label}</Text>
+      {paymentOptions.map((opt) => (
+        <Pressable
+          key={opt.value}
+          disabled={!opt.enabled}
+          onPress={() => {
+            if (!opt.enabled) return;
+            setPaymentMethod(opt.value);
+          }}
+          style={[
+            styles.option,
+            {
+              borderColor: paymentMethod === opt.value ? colors.primary : colors.border,
+              opacity: opt.enabled ? 1 : 0.45,
+            },
+          ]}
+        >
+          <Text style={{
+            fontFamily: 'Inter_600SemiBold',
+            color: opt.enabled ? colors.foreground : colors.mutedForeground,
+          }}
+          >
+            {opt.label}
+          </Text>
         </Pressable>
       ))}
 
-      <Pressable onPress={() => setUseCashback(!useCashback)} style={[styles.option, { borderColor: useCashback ? colors.primary : colors.border }]}>
+      <Pressable
+        onPress={() => setUseCashback(!useCashback)}
+        style={[styles.option, { borderColor: useCashback ? colors.primary : colors.border }]}
+      >
         <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
           Cashback ishlatish {useCashback ? '· yoqilgan' : ''}
         </Text>
         <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 4 }}>
-          Mavjud: {formatUzs(balance)} · ishlatiladi: {formatUzs(cashbackUsed)}
+          Mavjud: {formatUzs(balance)} · taxminiy: {formatUzs(cashbackUsed)}
+          {maxSpendRatio != null ? ` (max ${Math.round(maxSpendRatio * 100)}%)` : ' · limit serverdan'}
         </Text>
       </Pressable>
 
       <View style={[styles.summary, { borderColor: colors.border, backgroundColor: colors.card }]}>
-        <Row label="Tovarlar" value={formatUzs(goods)} />
-        {deliveryFee > 0 ? <Row label="Yetkazish" value={formatUzs(deliveryFee)} /> : null}
+        <Row label="Tovarlar (taxminiy)" value={formatUzs(goods)} />
+        {fulfillment === 'delivery' ? (
+          deliveryFeeKnown
+            ? <Row label="Yetkazish (server)" value={formatUzs(deliveryFee)} />
+            : <Row label="Yetkazish" value="Noma’lum — qayta yuklang" accent="#B45309" />
+        ) : null}
         {cashbackUsed > 0 ? <Row label="Cashback −" value={`−${formatUzs(cashbackUsed)}`} accent="#B45309" /> : null}
-        <Row label="Jami to‘lov" value={formatUzs(total)} bold />
-        <Row label={`Kutilayotgan cashback (${Math.round(tierRate * 100)}%)`} value={`+${formatUzs(earnPreview)}`} accent="#0D9488" />
+        <Row label="Jami (taxminiy)" value={formatUzs(total)} bold />
+        {earnPreview != null && tierRate != null ? (
+          <Row label={`Kutilayotgan cashback (~${Math.round(tierRate * 100)}%)`} value={`+${formatUzs(earnPreview)}`} accent="#0D9488" />
+        ) : (
+          <Row label="Kutilayotgan cashback" value="Server qoidalaridan" accent="#64748B" />
+        )}
         <Text style={[styles.earnHint, { color: colors.mutedForeground }]}>{earnHint}</Text>
+        <Text style={[styles.earnHint, { color: colors.mutedForeground }]}>
+          Buyurtma yaratilishi ≠ to‘lov. To‘lov holati alohida.
+        </Text>
       </View>
 
-      <Pressable onPress={submit} style={[styles.button, { backgroundColor: colors.primary }]}>
-        <Text style={styles.buttonText}>Buyurtmani tasdiqlash</Text>
+      <Pressable
+        disabled={submitting || !branchId || !cart.items?.length || (fulfillment === 'delivery' && !deliveryFeeKnown)}
+        onPress={submit}
+        style={[
+          styles.button,
+          {
+            backgroundColor: colors.primary,
+            opacity: submitting || !branchId || !cart.items?.length || (fulfillment === 'delivery' && !deliveryFeeKnown) ? 0.5 : 1,
+          },
+        ]}
+      >
+        <Text style={styles.buttonText}>{submitting ? 'Yuborilmoqda...' : 'Buyurtmani tasdiqlash'}</Text>
       </Pressable>
     </Screen>
   );

@@ -189,12 +189,15 @@ const statements = [
     id serial PRIMARY KEY,
     customer_id integer NOT NULL,
     branch_id integer NOT NULL,
+    order_id integer,
     employee_name text NOT NULL,
     rating integer NOT NULL,
     tags text NOT NULL DEFAULT '[]',
     comment text NOT NULL DEFAULT '',
     created_at timestamptz NOT NULL DEFAULT now()
   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS staff_ratings_order_id_uidx ON staff_ratings (order_id) WHERE order_id IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS staff_ratings_customer_idx ON staff_ratings (customer_id)`,
   `CREATE TABLE IF NOT EXISTS admin_users (
     id serial PRIMARY KEY,
     email text NOT NULL UNIQUE,

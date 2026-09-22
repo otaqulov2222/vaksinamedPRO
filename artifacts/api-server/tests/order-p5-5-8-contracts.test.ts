@@ -29,7 +29,8 @@ describe("P5.5–P5.8 staff endpoints + serializers + compatibility", () => {
     const orders = readFileSync(path.join(root, "src/routes/orders.ts"), "utf8");
     assert.match(orders, /fulfillment_status:\s*order\.fulfillmentStatus/);
     assert.match(orders, /payment_status:\s*order\.paymentStatus/);
-    assert.match(orders, /reservation_status:\s*order\.reservationStatus/);
+    // Live reservation row is authoritative when linked; mirror may heal (Batch 3F).
+    assert.match(orders, /reservation_status:\s*reservationStatus/);
     assert.match(orders, /status:\s*order\.status/);
     assert.match(orders, /publicBranch/);
   });

@@ -168,6 +168,12 @@ export const staffRatings = pgTable("staff_ratings", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").notNull(),
   branchId: integer("branch_id").notNull(),
+  /** Order-linked ratings only (Batch 3B). Null allowed for legacy rows. */
+  orderId: integer("order_id"),
+  /**
+   * Legacy column — no employee entity exists for order fulfillment.
+   * New ratings store a fixed branch-service label, not a person name.
+   */
   employeeName: text("employee_name").notNull(),
   rating: integer("rating").notNull(),
   tags: text("tags").notNull().default("[]"),

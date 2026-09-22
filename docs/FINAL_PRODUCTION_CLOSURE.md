@@ -26,7 +26,7 @@ This document is the final gate assessment. Repository tests alone do **not** ma
 | Area | Status | Evidence / gap |
 |------|--------|----------------|
 | CODE | **PASS** | P1–P13 implemented; typecheck/build/tests in CI |
-| DATABASE | **PASS** (migrations/concurrency) · **EXTERNAL_REQUIRED** (managed PITR) | Migrations 0000–0008; P13 real PG concurrency PASS; managed backup unproven |
+| DATABASE | **PASS** (migrations/concurrency) · **EXTERNAL_REQUIRED** (managed PITR) | Migrations **0000–0010** (incl. 0009 staff ratings, 0010 catalog indexes); P13 real PG concurrency PASS; managed backup unproven |
 | SECURITY | **PASS** | Security suite; RBAC; redaction; fail-closed PSP flags |
 | PAYMENTS | **PASS** (code) · **EXTERNAL_REQUIRED** (sandbox E2E) | Capture/idempotency/refund concurrency PASS ×3; live Payme/Click sandbox absent |
 | REFUNDS | **PASS** | Concurrent refund ≤ captured; provider outbound CONTRACT_PENDING |
@@ -79,7 +79,19 @@ This document is the final gate assessment. Repository tests alone do **not** ma
 
 ---
 
-## HMAC closure gate
+## Open business policies (Batch 3K — not decided)
+
+These remain **OPEN**. Current code preserves least-privilege / CONTRACT_PENDING safety. Do not enable production cutover by guessing:
+
+| ID | Question | Current safe behavior |
+|----|----------|------------------------|
+| A | Cashier `orders:cancel`? | Denied (RBAC seed + capabilities) |
+| B | PAID cancel → payment axis / PSP refund? | Cancel OK; payment unchanged; `paymentRefundRequired` + CONTRACT_PENDING |
+| C | Reservation expiry auto-cancel order? | Release + EXPIRED mirror only; fulfillment unchanged |
+| D | COMPLETED always require PAID? | Staff COMPLETED may dual-write PAID (existing); not a global rule lock |
+| E | Admin phone masking? | List omits phone; detail shows full phone |
+
+---
 
 1. Mobile stores only `s1.*` sessions
 2. Set `LEGACY_HMAC_DEADLINE`

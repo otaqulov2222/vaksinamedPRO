@@ -17,7 +17,8 @@ describe("Final production closure", () => {
     assert.ok(existsSync(path.join(apiRoot, "src/scripts/p13-http-load.ts")));
     const doc = readFileSync(path.join(repo, "docs/FINAL_PRODUCTION_CLOSURE.md"), "utf8");
     assert.match(doc, /PRODUCTION[\s\S]*NOT READY/);
-    assert.match(doc, /HTTP_LOAD_EXTERNAL_STAGING_REQUIRED/);
+    assert.match(doc, /HTTP_LOAD_LOCAL_P13_1_PASS|INFRA_METRICS_EXTERNAL_REQUIRED/);
+    assert.match(doc, /Migrations\s+\*\*0000–0010\*\*|0000–0010/);
     assert.match(doc, /NO PRODUCTION PROVIDER ENABLED/);
     const fom = readFileSync(path.join(apiRoot, "src/lib/fomAdapter.ts"), "utf8");
     assert.match(fom, /FOM_INVENTORY_WRITER_ENABLED\s*=\s*false/);

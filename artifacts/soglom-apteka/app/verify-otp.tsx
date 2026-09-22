@@ -27,7 +27,7 @@ export default function VerifyOtpScreen() {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [seconds, setSeconds] = useState(60);
-  const [hint, setHint] = useState(params.hint || '');
+  const [hint, setHint] = useState(__DEV__ ? String(params.hint || '') : '');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export default function VerifyOtpScreen() {
     setLoading(true);
     try {
       const data = await api.requestOtp(phone, purpose);
-      if (data.devCode) setHint(data.devCode);
+      if (__DEV__ && data.devCode) setHint(data.devCode);
       setSeconds(60);
       if (Platform.OS !== 'web') Alert.alert('SMS', 'Yangi kod yuborildi');
     } catch (err: any) {
@@ -110,7 +110,7 @@ export default function VerifyOtpScreen() {
               autoFocus
             />
 
-            {hint ? (
+            {__DEV__ && hint ? (
               <Text style={styles.devHint}>Dev kod: {hint}</Text>
             ) : null}
 

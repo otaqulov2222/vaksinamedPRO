@@ -211,7 +211,7 @@ export default function QrScreen() {
   const firstName = name.split(/\s+/)[0] || name;
   const cash = priceUz(card?.balance ?? balance);
   const tier = card?.tier || user.tier || 'Silver';
-  const rate = card?.cashbackRateLabel || '3%';
+  const rate = card?.cashbackRateLabel || '—';
 
   return (
     <View style={[styles.root, { paddingTop: Math.max(insets.top, 8) }]}>

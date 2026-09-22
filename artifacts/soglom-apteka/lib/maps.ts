@@ -5,22 +5,29 @@ export type LatLng = { lat: number; lng: number };
 
 export type RouteInfo = {
   distanceKm: number;
-  durationMin: number;
+  /** Only set when a routing provider returns duration — never invented from straight-line. */
+  durationMin?: number;
   coordinates: LatLng[];
+  source: 'osrm' | 'haversine';
 };
 
-const TASHKENT: LatLng = { lat: 41.3111, lng: 69.2797 };
+export function hasValidCoords(point: { lat?: unknown; lng?: unknown } | null | undefined): boolean {
+  const lat = Number(point?.lat);
+  const lng = Number(point?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+}
 
-export function defaultUserLocation(): LatLng {
-  return TASHKENT;
+export function yandexPointUrl(to: LatLng) {
+  return `https://yandex.ru/maps/?pt=${to.lng},${to.lat}&z=15&l=map`;
 }
 
 export function yandexRouteUrl(from: LatLng, to: LatLng) {
   return `https://yandex.ru/maps/?rtext=${from.lat},${from.lng}~${to.lat},${to.lng}&rtt=auto&z=14`;
 }
 
-export async function openYandexRoute(from: LatLng, to: LatLng) {
-  const url = yandexRouteUrl(from, to);
+/** Open external maps. Without a real user origin, open destination point only — never invent from. */
+export async function openYandexRoute(from: LatLng | null, to: LatLng) {
+  const url = from && hasValidCoords(from) ? yandexRouteUrl(from, to) : yandexPointUrl(to);
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     window.open(url, '_blank', 'noopener,noreferrer');
     return;
@@ -28,21 +35,24 @@ export async function openYandexRoute(from: LatLng, to: LatLng) {
   await Linking.openURL(url);
 }
 
-function straightFallback(from: LatLng, to: LatLng): RouteInfo {
+function haversineKm(from: LatLng, to: LatLng): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const R = 6371;
   const dLat = toRad(to.lat - from.lat);
   const dLng = toRad(to.lng - from.lng);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) * Math.sin(dLng / 2) ** 2;
-  const distanceKm = Number((2 * R * Math.asin(Math.sqrt(a))).toFixed(1));
-  return {
-    distanceKm,
-    durationMin: Math.max(1, Math.round((distanceKm / 25) * 60)),
-    coordinates: [from, to],
-  };
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) * Math.sin(dLng / 2) ** 2;
+  return Number((2 * R * Math.asin(Math.sqrt(a))).toFixed(1));
 }
 
-export async function fetchDrivingRoute(from: LatLng, to: LatLng): Promise<RouteInfo | null> {
+/**
+ * Prefer server OSRM proxy. Do not call public OSRM from the client (unbounded traffic).
+ * If routing fails but both points are real, return haversine distance only (no invented ETA).
+ */
+export async function fetchDrivingRoute(from: LatLng | null, to: LatLng): Promise<RouteInfo | null> {
+  if (!from || !hasValidCoords(from) || !hasValidCoords(to)) return null;
+
   try {
     const params = new URLSearchParams({
       fromLat: String(from.lat),
@@ -55,33 +65,20 @@ export async function fetchDrivingRoute(from: LatLng, to: LatLng): Promise<Route
       const data = await response.json();
       if (data?.coordinates?.length) {
         return {
-          distanceKm: data.distanceKm,
-          durationMin: data.durationMin,
+          distanceKm: Number(data.distanceKm),
+          durationMin: data.durationMin != null ? Number(data.durationMin) : undefined,
           coordinates: data.coordinates,
+          source: 'osrm',
         };
       }
     }
   } catch {
-    // fallback below
+    // fall through to haversine distance-only
   }
 
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
-    const response = await fetch(url);
-    if (response.ok) {
-      const data = await response.json();
-      const route = data?.routes?.[0];
-      if (route?.geometry?.coordinates?.length) {
-        return {
-          distanceKm: Number((route.distance / 1000).toFixed(1)),
-          durationMin: Math.max(1, Math.round(route.duration / 60)),
-          coordinates: route.geometry.coordinates.map(([lng, lat]: [number, number]) => ({ lat, lng })),
-        };
-      }
-    }
-  } catch {
-    // last resort
-  }
-
-  return straightFallback(from, to);
+  return {
+    distanceKm: haversineKm(from, to),
+    coordinates: [from, to],
+    source: 'haversine',
+  };
 }

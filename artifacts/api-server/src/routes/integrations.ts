@@ -115,17 +115,76 @@ router.get("/integrations/fom/status", async (_req, res, next) => {
 router.post("/ratings", async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
-    const created = await db.insert(staffRatings).values({
-      customerId: customer.id,
-      branchId: Number(req.body.branchId) || 12,
-      employeeName: String(req.body.employeeName || "Farmatsevt"),
-      rating: Number(req.body.rating) || 5,
-      tags: JSON.stringify(req.body.tags ?? []),
-      comment: String(req.body.comment || ""),
-    }).returning();
-    res.status(201).json({ rating: created[0] });
+    const body = req.body || {};
+
+    // Trust boundary: never accept client customerId / branchId / employeeId / employeeName.
+    const orderId = Number(body.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ message: "Baholash uchun buyurtma (orderId) majburiy" });
+    }
+
+    const rating = Number(body.rating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: "Baholash 1 dan 5 gacha bo‘lsin" });
+    }
+
+    const orderRows = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+    const order = orderRows[0];
+    if (!order || order.customerId !== customer.id) {
+      return res.status(404).json({ message: "Buyurtma topilmadi" });
+    }
+
+    const completed =
+      order.fulfillmentStatus === "COMPLETED" || String(order.status).toLowerCase() === "completed";
+    if (!completed) {
+      return res.status(400).json({ message: "Faqat yakunlangan buyurtmani baholash mumkin" });
+    }
+
+    const existing = await db
+      .select()
+      .from(staffRatings)
+      .where(eq(staffRatings.orderId, orderId))
+      .limit(1);
+    if (existing[0]) {
+      return res.status(409).json({
+        message: "Bu buyurtma allaqachon baholangan",
+        rating: existing[0],
+      });
+    }
+
+    // Branch derived from owned order — never from client body.
+    const branchId = order.branchId;
+    // No employee entity on orders — store honest branch-service label only.
+    const BRANCH_SERVICE_LABEL = "Filial xizmati";
+
+    const tags = Array.isArray(body.tags) ? body.tags.map(String).slice(0, 12) : [];
+    const comment = String(body.comment || "").slice(0, 2000);
+
+    const created = await db
+      .insert(staffRatings)
+      .values({
+        customerId: customer.id,
+        branchId,
+        orderId: order.id,
+        employeeName: BRANCH_SERVICE_LABEL,
+        rating,
+        tags: JSON.stringify(tags),
+        comment,
+      })
+      .returning();
+
+    return res.status(201).json({
+      rating: created[0],
+      // Echo ignored client forgeries so clients know they were not applied.
+      ignored: {
+        branchId: body.branchId != null,
+        employeeName: body.employeeName != null,
+        employeeId: body.employeeId != null,
+        customerId: body.customerId != null,
+      },
+    });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

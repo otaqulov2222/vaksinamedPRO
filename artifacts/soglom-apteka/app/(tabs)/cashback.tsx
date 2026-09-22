@@ -22,23 +22,28 @@ const BG = '#FFFFFF';
 const GOLD = '#C9A227';
 const GREEN = '#16A34A';
 
-const TIERS = [
-  { key: 'silver', label: 'Silver', rate: '3%', icon: 'medal-outline' as const, color: '#7C3AED', iconBg: '#EDE9FE' },
-  { key: 'gold', label: 'Gold', rate: '5%', icon: 'star-circle' as const, color: GOLD, iconBg: '#FFF4CC' },
-  { key: 'platinum', label: 'Platinum', rate: '7%', icon: 'diamond' as const, color: '#7C3AED', iconBg: '#EDE9FE' },
+const TIER_META = [
+  { key: 'silver', label: 'Silver', icon: 'medal-outline' as const, color: '#7C3AED', iconBg: '#EDE9FE' },
+  { key: 'gold', label: 'Gold', icon: 'star-circle' as const, color: GOLD, iconBg: '#FFF4CC' },
+  { key: 'platinum', label: 'Platinum', icon: 'diamond' as const, color: '#7C3AED', iconBg: '#EDE9FE' },
 ];
-
-const NEXT: Record<string, { label: string; target: number }> = {
-  silver: { label: 'Gold', target: 150000 },
-  gold: { label: 'Platinum', target: 500000 },
-  platinum: { label: 'Platinum', target: 500000 },
-};
 
 function tierKeyOf(tier?: string) {
   const t = String(tier || '').toLowerCase();
   if (t.includes('plat')) return 'platinum';
   if (t.includes('gold') || t.includes('oltin')) return 'gold';
   return 'silver';
+}
+
+function rateFromRules(tiers: any[], key: string): string | null {
+  const match = tiers.find((t: any) => {
+    const name = String(t.tier || '').toLowerCase();
+    if (key === 'platinum') return name.includes('plat');
+    if (key === 'gold') return name.includes('gold');
+    return name.includes('silver');
+  });
+  const rate = match?.rate != null ? String(match.rate) : '';
+  return rate.trim() ? rate : null;
 }
 
 function formatWhen(raw?: string) {
@@ -64,20 +69,41 @@ export default function CashbackScreen() {
   }, []);
 
   const tierKey = tierKeyOf(user?.tier);
-  const next = NEXT[tierKey];
+  const nextFromRules = useMemo(() => {
+    const tiers = Array.isArray(rules?.tiers) ? rules.tiers : [];
+    if (!tiers.length) return null;
+    const gold = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes('gold'));
+    const plat = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes('plat'));
+    const threshold = (t: any) => Number(t?.fromTotal ?? t?.minSpend);
+    if (tierKey === 'silver' && Number.isFinite(threshold(gold))) {
+      return { label: String(gold.tier || 'Gold'), target: threshold(gold) };
+    }
+    if (tierKey === 'gold' && Number.isFinite(threshold(plat))) {
+      return { label: String(plat.tier || 'Platinum'), target: threshold(plat) };
+    }
+    return null;
+  }, [rules, tierKey]);
+  const next = nextFromRules;
   const spent = Number(user?.total || 0);
-  const left = Math.max(0, next.target - spent);
-  const progress = Math.min(1, Math.max(0.08, spent / Math.max(1, next.target)));
+  const left = next != null ? Math.max(0, next.target - spent) : null;
+  const progress =
+    next != null ? Math.min(1, Math.max(0, spent / Math.max(1, next.target))) : null;
 
   const tiers = useMemo(() => {
-    if (Array.isArray(rules?.tiers) && rules.tiers.length >= 3) {
-      return TIERS.map((b, i) => ({
-        ...b,
-        label: String(rules.tiers[i]?.tier || b.label),
-        rate: String(rules.tiers[i]?.rate || b.rate),
-      }));
-    }
-    return TIERS;
+    const apiTiers = Array.isArray(rules?.tiers) ? rules.tiers : [];
+    return TIER_META.map((b) => ({
+      ...b,
+      label: (() => {
+        const match = apiTiers.find((t: any) => {
+          const name = String(t.tier || '').toLowerCase();
+          if (b.key === 'platinum') return name.includes('plat');
+          if (b.key === 'gold') return name.includes('gold');
+          return name.includes('silver');
+        });
+        return match?.tier ? String(match.tier) : b.label;
+      })(),
+      rate: rateFromRules(apiTiers, b.key),
+    }));
   }, [rules]);
 
   const list = showAll ? transactions : transactions.slice(0, 4);
@@ -135,13 +161,17 @@ export default function CashbackScreen() {
             </View>
           </View>
 
-          <View style={styles.barBg}>
-            <View style={[styles.barFg, { width: `${progress * 100}%` }]} />
-          </View>
+          {progress != null ? (
+            <View style={styles.barBg}>
+              <View style={[styles.barFg, { width: `${progress * 100}%` }]} />
+            </View>
+          ) : null}
           <Text style={styles.barHint}>
             {tierKey === 'platinum'
               ? 'Siz eng yuqori darajadasiz'
-              : `${next.label} darajagacha yana ${formatUzs(left)}`}
+              : next != null && left != null
+                ? `${next.label} darajagacha yana ${formatUzs(left)} (xaridlar)`
+                : 'Keyingi daraja chegarasi serverdan'}
           </Text>
         </LinearGradient>
 
@@ -155,7 +185,7 @@ export default function CashbackScreen() {
                   <MaterialCommunityIcons name={t.icon} size={20} color={t.color} />
                 </View>
                 <Text style={styles.tierName}>{t.label}</Text>
-                <Text style={[styles.tierRate, on && { color: GOLD }]}>{t.rate}</Text>
+                <Text style={[styles.tierRate, on && { color: GOLD }]}>{t.rate ?? '—'}</Text>
               </View>
             );
           })}

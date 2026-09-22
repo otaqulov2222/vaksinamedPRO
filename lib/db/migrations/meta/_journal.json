@@ -64,6 +64,20 @@
       "when": 1749000000000,
       "tag": "0008_delivery_fom_workers",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1750000000000,
+      "tag": "0009_staff_ratings_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1751000000000,
+      "tag": "0010_catalog_pagination_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -94,7 +94,7 @@ export default function ProfileScreen() {
       label: 'Daraja',
       value: levelFull,
       icon: { kind: 'mci', name: 'crown-outline', color: GOLD, bg: '#FFF7E6' },
-      onPress: () => router.push('/(tabs)/bonuses'),
+      onPress: () => router.push('/(tabs)/cashback'),
     },
     {
       key: 'branches',
@@ -104,7 +104,7 @@ export default function ProfileScreen() {
     },
     {
       key: 'rating',
-      label: 'Xodimni baholash',
+      label: 'Xizmatni baholash',
       icon: { kind: 'mci', name: 'star-box-outline', color: '#7C3AED', bg: '#F3E8FF' },
       onPress: () => router.push('/rating'),
     },
@@ -112,25 +112,24 @@ export default function ProfileScreen() {
       key: 'notif',
       label: 'Bildirishnomalar',
       icon: { kind: 'feather', name: 'bell', color: '#7C3AED', bg: '#F3E8FF' },
-      onPress: () =>
-        Alert.alert('Bildirishnomalar', 'Cashback, aksiyalar va bonuslar bildirishnomalari yoqilgan.'),
+      onPress: () => router.push('/notifications'),
     },
     {
       key: 'help',
       label: 'Yordam markazi',
       icon: { kind: 'feather', name: 'help-circle', color: '#7C3AED', bg: '#F3E8FF' },
-      onPress: () => Alert.alert('Yordam markazi', 'Savollaringiz bo‘lsa, 09:00–21:00 javob beramiz.'),
+      onPress: () => router.push('/help'),
     },
     {
       key: 'about',
       label: 'Ilova haqida',
       icon: { kind: 'feather', name: 'info', color: '#7C3AED', bg: '#F3E8FF' },
-      onPress: () => Alert.alert('Ilova haqida', 'Vaksina Med · GDP/GPP · 137+ filial'),
+      onPress: () => router.push('/about'),
     },
   ];
 
   const onEdit = () => {
-    Alert.alert('Profilni tahrirlash', 'Tez orada ishga tushadi.');
+    router.push('/edit-profile');
   };
 
   const onLogout = () => {
@@ -213,7 +212,7 @@ export default function ProfileScreen() {
               <Text style={styles.statLabel}>Cashback</Text>
             </Pressable>
             <View style={styles.statDivider} />
-            <Pressable style={styles.statCell} onPress={() => router.push('/(tabs)/bonuses')}>
+            <Pressable style={styles.statCell} onPress={() => router.push('/(tabs)/cashback')}>
               <MaterialCommunityIcons name="star-circle" size={18} color={GOLD} />
               <Text style={styles.statValue} numberOfLines={1}>
                 {levelName}
@@ -221,12 +220,12 @@ export default function ProfileScreen() {
               <Text style={styles.statLabel}>Mening darajam</Text>
             </Pressable>
             <View style={styles.statDivider} />
-            <Pressable style={styles.statCell} onPress={() => router.push('/(tabs)/bonuses')}>
-              <MaterialCommunityIcons name="gift-outline" size={18} color={PURPLE} />
+            <Pressable style={styles.statCell} onPress={() => router.push('/(tabs)/cashback')}>
+              <MaterialCommunityIcons name="wallet-outline" size={18} color={PURPLE} />
               <Text style={styles.statValue} numberOfLines={1}>
                 {bonusText}
               </Text>
-              <Text style={styles.statLabel}>Bonus ballarim</Text>
+              <Text style={styles.statLabel}>Mavjud balans</Text>
             </Pressable>
           </View>
         </View>

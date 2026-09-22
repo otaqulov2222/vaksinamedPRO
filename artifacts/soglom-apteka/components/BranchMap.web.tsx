@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { LatLng, RouteInfo } from '@/lib/maps';
+import { hasValidCoords } from '@/lib/maps';
 
 type Branch = {
   id: number;
@@ -14,7 +15,7 @@ type Branch = {
 type Props = {
   branches: Branch[];
   selectedId: number | null;
-  userLocation: LatLng;
+  userLocation: LatLng | null;
   route: RouteInfo | null;
   onSelect: (branch: Branch) => void;
   onRequestRoute: (branch: Branch) => void;
@@ -121,6 +122,8 @@ export default function BranchMap({
   const activeRef = useRef(false);
   activeRef.current = active;
 
+  const mappable = useMemo(() => branches.filter((b) => hasValidCoords(b)), [branches]);
+
   const activate = useCallback(() => {
     setActive(true);
     setMapInteractive(mapRef.current, true);
@@ -139,7 +142,11 @@ export default function BranchMap({
       const L = (await import('leaflet')).default;
       if (cancelled || !containerRef.current || mapRef.current) return;
 
-      const start = countryView ? UZ_CENTER : userLocation;
+      const start = countryView
+        ? UZ_CENTER
+        : userLocation && hasValidCoords(userLocation)
+          ? userLocation
+          : UZ_CENTER;
       const zoom = countryView ? UZ_ZOOM : 12;
 
       const map = L.map(containerRef.current, {
@@ -164,11 +171,6 @@ export default function BranchMap({
       layerRef.current = L.layerGroup().addTo(map);
       routeRef.current = L.layerGroup().addTo(map);
       setMapInteractive(map, false);
-
-      userRef.current = L.marker([userLocation.lat, userLocation.lng], {
-        icon: L.divIcon({ className: '', html: '<div class="vm-user"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }),
-        zIndexOffset: 1000,
-      }).addTo(map);
 
       const unlock = () => {
         if (activeRef.current) return;
@@ -223,7 +225,7 @@ export default function BranchMap({
       layer.clearLayers();
       markersRef.current.clear();
 
-      branches.forEach((branch) => {
+      mappable.forEach((branch) => {
         const selected = branch.id === selectedId;
         const size = selected ? 22 : 18;
         const marker = L.marker([branch.lat, branch.lng], {
@@ -252,12 +254,12 @@ export default function BranchMap({
         markersRef.current.set(branch.id, marker);
       });
 
-      if (!fittedRef.current && branches.length > 0 && countryView) {
-        const bounds = L.latLngBounds(branches.map((b) => [b.lat, b.lng] as [number, number]));
+      if (!fittedRef.current && mappable.length > 0 && countryView) {
+        const bounds = L.latLngBounds(mappable.map((b) => [b.lat, b.lng] as [number, number]));
         map.fitBounds(bounds.pad(0.18), { maxZoom: 7, animate: false });
         fittedRef.current = true;
       } else if (selectedId && markersRef.current.has(selectedId)) {
-        const selected = branches.find((item) => item.id === selectedId);
+        const selected = mappable.find((item) => item.id === selectedId);
         if (selected && !route?.coordinates?.length && map.getZoom() > 8) {
           map.panTo([selected.lat, selected.lng], { animate: true });
         }
@@ -265,11 +267,37 @@ export default function BranchMap({
     }
 
     void syncMarkers();
-  }, [branches, selectedId, countryView, route]);
+  }, [mappable, selectedId, countryView, route]);
 
   useEffect(() => {
-    if (!mapRef.current || !userRef.current) return;
-    userRef.current.setLatLng([userLocation.lat, userLocation.lng]);
+    async function syncUser() {
+      const L = (await import('leaflet')).default;
+      const map = mapRef.current;
+      if (!map) return;
+
+      if (!userLocation || !hasValidCoords(userLocation)) {
+        if (userRef.current) {
+          map.removeLayer(userRef.current);
+          userRef.current = null;
+        }
+        return;
+      }
+
+      if (!userRef.current) {
+        userRef.current = L.marker([userLocation.lat, userLocation.lng], {
+          icon: L.divIcon({
+            className: '',
+            html: '<div class="vm-user"></div>',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
+          }),
+          zIndexOffset: 1000,
+        }).addTo(map);
+      } else {
+        userRef.current.setLatLng([userLocation.lat, userLocation.lng]);
+      }
+    }
+    void syncUser();
   }, [userLocation]);
 
   useEffect(() => {
@@ -288,6 +316,14 @@ export default function BranchMap({
     }
     void syncRoute();
   }, [route]);
+
+  if (mappable.length === 0) {
+    return (
+      <View style={[styles.wrap, styles.emptyWrap, { height }]}>
+        <Text style={styles.emptyText}>Xaritada joylashuvi mavjud emas</Text>
+      </View>
+    );
+  }
 
   return (
     <View ref={wrapRef} style={[styles.wrap, { height }]}>
@@ -311,6 +347,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F0EA',
     position: 'relative',
   },
+  emptyWrap: { alignItems: 'center', justifyContent: 'center', padding: 16 },
+  emptyText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: '#64748B', textAlign: 'center' },
   lockOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'transparent',

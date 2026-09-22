@@ -26,3 +26,36 @@ describe("P4.5 checkout inventory contracts", () => {
     assert.match(src, /inventory:\s*"consume"/);
   });
 });
+
+describe("Batch 3E checkout integrity contracts", () => {
+  it("checkout requires explicit branch and ignores client money fields", () => {
+    const src = readFileSync(path.join(root, "src/routes/orders.ts"), "utf8");
+    assert.match(src, /BRANCH_REQUIRED/);
+    assert.match(src, /void req\.body\.total/);
+    assert.match(src, /void req\.body\.subtotal/);
+    assert.match(src, /void req\.body\.cashbackAmount/);
+    assert.match(src, /getAuthoritativeBalance/);
+    assert.match(src, /alreadyInTx:\s*true/);
+  });
+
+  it("checkout recalculates prices inside the reservation transaction", () => {
+    const src = readFileSync(path.join(root, "src/routes/orders.ts"), "utf8");
+    assert.match(src, /from\(products\)/);
+    assert.match(src, /getAuthoritativeBalance\(customer\.id/);
+    assert.match(src, /computeCashback/);
+    assert.match(src, /applyCashbackUse|useCashback as applyCashbackUse/);
+  });
+
+  it("cart branch set validates existence and soft-checks PATCH stock", () => {
+    const cart = readFileSync(path.join(root, "src/routes/cart.ts"), "utf8");
+    assert.match(cart, /BRANCH_NOT_FOUND/);
+    assert.match(cart, /BRANCH_CLOSED/);
+    assert.match(cart, /STOCK_UNAVAILABLE/);
+    assert.match(cart, /availabilityKnown/);
+  });
+
+  it("error handler surfaces machine codes for honest mobile UX", () => {
+    const app = readFileSync(path.join(root, "src/app.ts"), "utf8");
+    assert.match(app, /error\.code/);
+  });
+});

@@ -76,7 +76,7 @@ export default function RegisterScreen() {
           phone: local,
           purpose: 'register',
           firstName: firstName.trim(),
-          ...(data.devCode ? { hint: data.devCode } : {}),
+          ...( __DEV__ && data.devCode ? { hint: data.devCode } : {}),
         },
       });
     } catch (err: any) {

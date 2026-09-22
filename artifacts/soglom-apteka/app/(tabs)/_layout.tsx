@@ -13,7 +13,7 @@ function CenterQrButton() {
       style={({ pressed }) => [styles.centerQrButton, { opacity: pressed ? 0.88 : 1 }]}
     >
       <View style={styles.qrButtonInner}>
-        <MaterialCommunityIcons name="qrcode-scan" size={26} color="#120724" />
+        <MaterialCommunityIcons name="qrcode" size={26} color="#120724" />
       </View>
     </Pressable>
   );

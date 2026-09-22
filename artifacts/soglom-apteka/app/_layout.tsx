@@ -79,8 +79,12 @@ function RootLayoutNav() {
         <Stack.Screen name="qr" options={{ headerShown: false, title: 'Mening QR kodim' }} />
         <Stack.Screen name="branches" options={{ title: 'Dorixonalar' }} />
         <Stack.Screen name="promos" options={{ title: 'Aksiyalar' }} />
-        <Stack.Screen name="rating" options={{ title: 'Xodimni baholash' }} />
+        <Stack.Screen name="rating" options={{ title: 'Xizmatni baholash' }} />
         <Stack.Screen name="language" options={{ title: 'Til' }} />
+        <Stack.Screen name="edit-profile" options={{ title: 'Profilni tahrirlash' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Bildirishnomalar' }} />
+        <Stack.Screen name="help" options={{ title: 'Yordam markazi' }} />
+        <Stack.Screen name="about" options={{ title: 'Ilova haqida' }} />
         <Stack.Screen name="cart" options={{ title: 'Savat' }} />
         <Stack.Screen name="checkout" options={{ title: 'Buyurtma' }} />
         <Stack.Screen name="product/[id]" options={{ title: 'Mahsulot' }} />

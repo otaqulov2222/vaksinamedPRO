@@ -10,7 +10,7 @@ type Props = {
 };
 
 /** Barcha stack bo‘limlarda ko‘rinadigan orqaga tugmasi (web + mobile). */
-export function HeaderBackButton({ fallback = '/', label = 'Orqaga', tint = '#5C328E' }: Props) {
+export function HeaderBackButton({ fallback = '/(tabs)', label = 'Orqaga', tint = '#5C328E' }: Props) {
   const goBack = () => {
     if (router.canGoBack()) {
       router.back();

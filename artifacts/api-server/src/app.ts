@@ -32,9 +32,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  const error = err as { status?: number; message?: string };
+  const error = err as { status?: number; message?: string; code?: string };
   logger.error({ err }, "Request failed");
-  res.status(error.status || 500).json({ message: error.message || "Ichki xatolik" });
+  res.status(error.status || 500).json({
+    message: error.message || "Ichki xatolik",
+    ...(error.code ? { code: error.code } : {}),
+  });
 });
 
 export default app;

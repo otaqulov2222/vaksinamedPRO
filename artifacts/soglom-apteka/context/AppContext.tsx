@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { api, getAuthToken, setAuthToken } from '@/lib/api';
+import { clearRegisterDraft } from '@/lib/registerDraft';
 
 export type Language = 'uz' | 'ru' | 'en';
 export type Transaction = {
@@ -116,6 +117,12 @@ export function AppProvider({ children }: PropsWithChildren) {
 
   const logout = async () => {
     await api.logout();
+    clearRegisterDraft();
+    try {
+      await AsyncStorage.removeItem('vaksinamed-cart-price-snap');
+    } catch {
+      // ignore
+    }
     setIsAuthenticated(false);
     setProfile(null);
     setCartCount(0);
@@ -158,7 +165,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       purchases: profile?.purchasesCount || 0,
       total: profile?.totalPurchases || 0,
       saved: profile?.savedAmount || 0,
-      qrCode: profile?.qrCode || 'VAKSINA',
+      qrCode: profile?.qrCode || '',
     },
     transactions: profile?.transactions ?? [],
     rewards: profile?.rewards ?? [],

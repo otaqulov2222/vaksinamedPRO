@@ -1,17 +1,28 @@
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, lt, or, type SQL } from "drizzle-orm";
 import { auditLog, branches, customers, db, orders, payments, productStocks, products, promos, rewards, staffRatings } from "@workspace/db";
 import { loginAdmin, requireAdmin } from "../lib/auth";
 import { serializeOrder } from "./orders";
 import { rateLimit } from "../lib/rateLimit";
-import { isHqAdminRole, publicAdminCustomer } from "../lib/securityEnv";
+import { publicAdminCustomer } from "../lib/securityEnv";
 import { toAdminBranchPaymentDto } from "../lib/branchPaymentMerchant";
-import { assertBranchScope, requirePermission } from "../lib/rbac";
+import { adminHasPermission, assertBranchScope, requirePermission, resolveStaffBranchFilter } from "../lib/rbac";
 import { revokeSessionFromToken } from "../lib/sessions";
 import { recordAuthEvent } from "../lib/authEvents";
 import { adjustStock, expireDueReservations } from "../lib/inventory";
+import {
+  adminCustomerIdentity,
+  sanitizeAdminOrderSearch,
+  sanitizeAuditPayload,
+  tashkentBusinessDayUtcRange,
+} from "../lib/adminOrderOps";
 
 const router = Router();
+
+const ADMIN_ORDERS_DEFAULT_LIMIT = 25;
+const ADMIN_ORDERS_MAX_LIMIT = 50;
+const ADMIN_AUDIT_DEFAULT_LIMIT = 40;
+const ADMIN_AUDIT_MAX_LIMIT = 100;
 
 const adminLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -204,11 +215,162 @@ router.get("/admin/orders", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
     await requirePermission(user, "orders:read");
-    let rows = await db.select().from(orders);
-    if (!isHqAdminRole(user.role) && user.branchId) {
-      rows = rows.filter((o) => o.branchId === user.branchId);
+
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0
+      ? Math.min(ADMIN_ORDERS_MAX_LIMIT, Math.floor(limitRaw))
+      : ADMIN_ORDERS_DEFAULT_LIMIT;
+    const offsetRaw = Number(req.query.offset);
+    const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0;
+    const q = sanitizeAdminOrderSearch(typeof req.query.q === "string" ? req.query.q : "");
+    const fulfillmentStatus = typeof req.query.fulfillmentStatus === "string"
+      ? req.query.fulfillmentStatus.trim().toUpperCase()
+      : "";
+    const paymentStatus = typeof req.query.paymentStatus === "string"
+      ? req.query.paymentStatus.trim().toUpperCase()
+      : "";
+    const reservationStatus = typeof req.query.reservationStatus === "string"
+      ? req.query.reservationStatus.trim().toUpperCase()
+      : "";
+    const requestedBranch = req.query.branchId != null ? Number(req.query.branchId) : undefined;
+    const branchFilter = resolveStaffBranchFilter(
+      user,
+      Number.isFinite(requestedBranch as number) ? (requestedBranch as number) : undefined,
+    );
+    const fromRange = typeof req.query.createdFrom === "string"
+      ? tashkentBusinessDayUtcRange(req.query.createdFrom)
+      : null;
+    const toRange = typeof req.query.createdTo === "string"
+      ? tashkentBusinessDayUtcRange(req.query.createdTo)
+      : null;
+    if (
+      (typeof req.query.createdFrom === "string" && req.query.createdFrom.trim() && !fromRange)
+      || (typeof req.query.createdTo === "string" && req.query.createdTo.trim() && !toRange)
+    ) {
+      return res.status(400).json({
+        message: "createdFrom/createdTo YYYY-MM-DD (Asia/Tashkent business day) bo‘lishi kerak",
+        code: "INVALID_DATE_FILTER",
+      });
     }
-    return res.json({ orders: await Promise.all(rows.reverse().map(serializeOrder)) });
+
+    const filters: SQL[] = [];
+    if (branchFilter) filters.push(eq(orders.branchId, branchFilter));
+    if (fulfillmentStatus) filters.push(eq(orders.fulfillmentStatus, fulfillmentStatus));
+    if (paymentStatus) filters.push(eq(orders.paymentStatus, paymentStatus));
+    if (reservationStatus) filters.push(eq(orders.reservationStatus, reservationStatus));
+    if (fromRange) filters.push(gte(orders.createdAt, fromRange.start));
+    if (toRange) filters.push(lt(orders.createdAt, toRange.endExclusive));
+    if (q) {
+      const pattern = `%${q}%`;
+      filters.push(or(
+        ilike(orders.code, pattern),
+        ilike(customers.phone, pattern),
+        ilike(customers.firstName, pattern),
+        ilike(customers.lastName, pattern),
+      )!);
+    }
+    const whereClause = filters.length ? and(...filters) : undefined;
+
+    const totalRow = await db
+      .select({ value: count() })
+      .from(orders)
+      .leftJoin(customers, eq(orders.customerId, customers.id))
+      .where(whereClause);
+    const total = Number(totalRow[0]?.value || 0);
+    const joined = await db
+      .select({
+        order: orders,
+        customerId: customers.id,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
+        phone: customers.phone,
+      })
+      .from(orders)
+      .leftJoin(customers, eq(orders.customerId, customers.id))
+      .where(whereClause)
+      .orderBy(desc(orders.createdAt), desc(orders.id))
+      .limit(limit)
+      .offset(offset);
+
+    const serialized = await Promise.all(joined.map(async (row) => {
+      const base = await serializeOrder(row.order);
+      return {
+        ...base,
+        // List: name + id only. Phone OPEN for long-term masking policy — omitted from list rows.
+        customer: row.customerId != null
+          ? adminCustomerIdentity({
+            id: row.customerId,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            phone: row.phone,
+          }, { includePhone: false })
+          : null,
+      };
+    }));
+
+    const hasMore = offset + joined.length < total;
+    return res.json({
+      orders: serialized,
+      pagination: {
+        limit,
+        offset,
+        total,
+        hasMore,
+        nextOffset: hasMore ? offset + joined.length : null,
+        timezone: "Asia/Tashkent",
+      },
+      limit,
+      offset,
+      total,
+      hasMore,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get("/admin/orders/:id", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "orders:read");
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
+    }
+    const rows = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+    if (!rows[0]) {
+      return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
+    }
+    await assertBranchScope(user, rows[0].branchId);
+    const order = await serializeOrder(rows[0]);
+    const customerRow = (await db.select().from(customers).where(eq(customers.id, rows[0].customerId)).limit(1))[0];
+    const customer = customerRow
+      ? adminCustomerIdentity(customerRow, { includePhone: true })
+      : null;
+    const fulfillmentOpen =
+      rows[0].fulfillmentStatus !== "COMPLETED"
+      && rows[0].fulfillmentStatus !== "CANCELLED";
+    const mayCancel = await adminHasPermission(user, "orders:cancel");
+    const mayConfirmPos = await adminHasPermission(user, "orders:confirm_pos");
+    return res.json({
+      order: { ...order, customer },
+      capabilities: {
+        canCancel: fulfillmentOpen && mayCancel,
+        canConfirmPos: fulfillmentOpen && mayConfirmPos,
+        canTransitionFulfillment: fulfillmentOpen && mayConfirmPos,
+        paymentRefundsViaPsp: false,
+        reservationExpired: Boolean(order.reservationExpired),
+        note: "PSP refund CONTRACT_PENDING — admin cancel does not invent provider refund",
+        /** OPEN: cashier cancel / PAID cancel / expiry→order cancel — see Batch 3I report */
+        openPolicy: {
+          cashierCancel: "OPEN — seeded RBAC denies orders:cancel for cashier",
+          paidCancelRefund: "OPEN — cancel allowed by fulfillment; PSP refund not implemented",
+          reservationExpiryAutoCancel: "OPEN — expiry releases reservation only",
+          completedRequiresPaid: "OPEN — staff COMPLETED may dual-write PAID (existing)",
+          customerPhoneMasking: "OPEN — detail shows full phone; list omits phone",
+        },
+      },
+    });
   } catch (error) {
     return next(error);
   }
@@ -249,7 +411,46 @@ router.get("/admin/audit", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
     await requirePermission(user, "audit:read");
-    return res.json({ audit: await db.select().from(auditLog).orderBy(desc(auditLog.createdAt)) });
+
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0
+      ? Math.min(ADMIN_AUDIT_MAX_LIMIT, Math.floor(limitRaw))
+      : ADMIN_AUDIT_DEFAULT_LIMIT;
+    const offsetRaw = Number(req.query.offset);
+    const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0;
+    const action = typeof req.query.action === "string" ? req.query.action.trim().slice(0, 80) : "";
+    const entity = typeof req.query.entity === "string" ? req.query.entity.trim().slice(0, 80) : "";
+
+    const filters: SQL[] = [];
+    if (action) filters.push(ilike(auditLog.action, `%${action.replace(/[%_\\]/g, "")}%`));
+    if (entity) filters.push(eq(auditLog.entity, entity));
+    const whereClause = filters.length ? and(...filters) : undefined;
+
+    const totalRow = await db.select({ value: count() }).from(auditLog).where(whereClause);
+    const total = Number(totalRow[0]?.value || 0);
+    const rows = await db
+      .select()
+      .from(auditLog)
+      .where(whereClause)
+      .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+      .limit(limit)
+      .offset(offset);
+
+    const audit = rows.map((row) => ({
+      id: row.id,
+      actor: row.actor,
+      action: row.action,
+      entity: row.entity,
+      createdAt: row.createdAt,
+      metadata: sanitizeAuditPayload(row.payload),
+    }));
+
+    const hasMore = offset + rows.length < total;
+    return res.json({
+      audit,
+      pagination: { limit, offset, total, hasMore, nextOffset: hasMore ? offset + rows.length : null },
+      readOnly: true,
+    });
   } catch (error) {
     return next(error);
   }

@@ -17,11 +17,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BranchMap from '@/components/BranchMap';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
-import { defaultUserLocation, fetchDrivingRoute, openYandexRoute, type LatLng, type RouteInfo } from '@/lib/maps';
+import { fetchDrivingRoute, hasValidCoords, openYandexRoute, type LatLng, type RouteInfo } from '@/lib/maps';
 
 function shortName(name: string) {
   return String(name).replace(/^Vaksina Med\s*[·•]\s*/i, '').trim();
 }
+
+function formatDistance(km: number | null | undefined) {
+  if (km == null || !Number.isFinite(Number(km))) return null;
+  return `${Number(km)} km`;
+}
+
+type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable';
 
 export default function BranchesScreen() {
   const insets = useSafeAreaInsets();
@@ -30,15 +37,23 @@ export default function BranchesScreen() {
   const [region, setRegion] = useState('');
   const [branches, setBranches] = useState<any[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
-  const [networkTotal, setNetworkTotal] = useState(121);
-  const [userLocation, setUserLocation] = useState<LatLng>(defaultUserLocation());
+  const [networkTotal, setNetworkTotal] = useState(0);
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [locStatus, setLocStatus] = useState<LocStatus>('pending');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [route, setRoute] = useState<RouteInfo | null>(null);
   const [routing, setRouting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const selected = useMemo(
-    () => branches.find((item) => item.id === selectedId) || branches[0] || null,
+    () => branches.find((item) => item.id === selectedId) || null,
     [branches, selectedId],
+  );
+
+  const mappableCount = useMemo(
+    () => branches.filter((b) => hasValidCoords(b)).length,
+    [branches],
   );
 
   useEffect(() => {
@@ -46,50 +61,113 @@ export default function BranchesScreen() {
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
+        if (!alive) return;
         if (status === 'granted') {
           const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          if (alive) setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          if (!alive) return;
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setLocStatus('granted');
+        } else {
+          setUserLocation(null);
+          setLocStatus('denied');
         }
       } catch {
-        // Toshkent default
+        if (!alive) return;
+        setUserLocation(null);
+        setLocStatus('unavailable');
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  useEffect(() => {
-    void api.branches(userLocation.lat, userLocation.lng, query, region).then((data) => {
-      setBranches(data.branches || []);
-      setNetworkTotal(data.total || data.branches?.length || 0);
-      if (Array.isArray(data.regions) && data.regions.length) setRegions(data.regions);
-      const stillVisible = data.branches?.some((b: any) => b.id === selectedId);
-      if (!stillVisible && data.branches?.[0]) setSelectedId(data.branches[0].id);
-      else if (!selectedId && data.branches?.[0]) setSelectedId(data.branches[0].id);
-    });
-  }, [query, region, userLocation.lat, userLocation.lng]);
+  const loadBranches = useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
+    const lat = userLocation?.lat;
+    const lng = userLocation?.lng;
+    void api
+      .branches(lat, lng, query, region)
+      .then((data) => {
+        const list = data.branches || [];
+        setBranches(list);
+        setNetworkTotal(data.total || list.length || 0);
+        if (Array.isArray(data.regions) && data.regions.length) setRegions(data.regions);
+        setSelectedId((prev) => {
+          if (prev && list.some((b: any) => b.id === prev)) return prev;
+          return list[0]?.id ?? null;
+        });
+      })
+      .catch((err: Error) => {
+        setBranches([]);
+        setLoadError(err.message || 'Filiallarni yuklab bo‘lmadi');
+      })
+      .finally(() => setLoading(false));
+  }, [query, region, userLocation?.lat, userLocation?.lng]);
 
-  const drawRoute = useCallback(async (branch: any, openExternal = false) => {
-    setSelectedId(branch.id);
-    setRouting(true);
-    try {
-      const info = await fetchDrivingRoute(userLocation, { lat: branch.lat, lng: branch.lng });
-      setRoute(info);
-      if (openExternal) await openYandexRoute(userLocation, { lat: branch.lat, lng: branch.lng });
-    } finally {
-      setRouting(false);
-    }
-  }, [userLocation]);
+  useEffect(() => {
+    // Wait until location permission attempt finishes so we don't fetch twice with fake coords.
+    if (locStatus === 'pending') return;
+    loadBranches();
+  }, [locStatus, loadBranches]);
+
+  const drawRoute = useCallback(
+    async (branch: any, openExternal = false) => {
+      if (!branch?.id) return;
+      setSelectedId(branch.id);
+      setRoute(null);
+      if (!hasValidCoords(branch)) {
+        Alert.alert('Xarita', 'Bu filialning koordinatasi mavjud emas.');
+        return;
+      }
+      setRouting(true);
+      try {
+        if (userLocation) {
+          const info = await fetchDrivingRoute(userLocation, { lat: branch.lat, lng: branch.lng });
+          setRoute(info);
+        }
+        if (openExternal) {
+          await openYandexRoute(userLocation, { lat: branch.lat, lng: branch.lng });
+        }
+      } finally {
+        setRouting(false);
+      }
+    },
+    [userLocation],
+  );
 
   const goNearest = useCallback(async () => {
-    if (!branches[0]) return;
-    await drawRoute(branches[0], true);
-  }, [branches, drawRoute]);
+    if (!userLocation) {
+      Alert.alert(
+        'Joylashuv',
+        'Eng yaqin filialni aniqlash uchun joylashuv ruxsati kerak. Filiallar ro‘yxatidan tanlashingiz mumkin.',
+      );
+      return;
+    }
+    const nearest = branches.find((b) => b.distanceKm != null && hasValidCoords(b));
+    if (!nearest) {
+      Alert.alert('Filial', 'Yaqin filial topilmadi.');
+      return;
+    }
+    await drawRoute(nearest, true);
+  }, [branches, drawRoute, userLocation]);
 
-  const pickForCart = useCallback(async (branch: any) => {
-    await api.setCartBranch(branch.id);
-    await refresh();
-    Alert.alert('Filial tanlandi', `${shortName(branch.name)} savatga biriktirildi.`);
-  }, [refresh]);
+  const pickForCart = useCallback(
+    async (branch: any) => {
+      await api.setCartBranch(branch.id);
+      await refresh();
+      Alert.alert('Filial tanlandi', `${shortName(branch.name)} savatga biriktirildi.`);
+    },
+    [refresh],
+  );
+
+  const locBanner =
+    locStatus === 'denied'
+      ? 'Joylashuv ruxsati berilmagan — masofa ko‘rsatilmaydi. Filial tanlash ishlaydi.'
+      : locStatus === 'unavailable'
+        ? 'Joylashuvni aniqlab bo‘lmadi — masofa ko‘rsatilmaydi.'
+        : null;
 
   return (
     <ScrollView
@@ -97,7 +175,6 @@ export default function BranchesScreen() {
       contentContainerStyle={[styles.pageContent, { paddingBottom: Math.max(insets.bottom, 24) }]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Official site-style map card */}
       <LinearGradient colors={['#FFF9E6', '#FFFFFF', '#FFFFFF']} style={styles.heroCard}>
         <Text style={styles.heroTitle}>Har bir filial — o‘z nuqtasida</Text>
         <Pressable onPress={() => void goNearest()} style={styles.nearestBtn}>
@@ -106,8 +183,14 @@ export default function BranchesScreen() {
           ) : (
             <Feather name="navigation" size={16} color="#120724" />
           )}
-          <Text style={styles.nearestBtnText}>Eng yaqin filial</Text>
+          <Text style={styles.nearestBtnText}>
+            {userLocation ? 'Eng yaqin filial' : 'Filial tanlang'}
+          </Text>
         </Pressable>
+
+        {locBanner ? (
+          <Text style={styles.locBanner}>{locBanner}</Text>
+        ) : null}
 
         <View style={styles.mapFrame}>
           <BranchMap
@@ -121,6 +204,9 @@ export default function BranchesScreen() {
             countryView
           />
         </View>
+        {branches.length > 0 && mappableCount === 0 ? (
+          <Text style={styles.locBanner}>Xaritada joylashuvi mavjud emas</Text>
+        ) : null}
       </LinearGradient>
 
       <View style={styles.searchWrap}>
@@ -141,7 +227,9 @@ export default function BranchesScreen() {
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         <Pressable onPress={() => setRegion('')} style={[styles.chip, !region && styles.chipOn]}>
-          <Text style={[styles.chipText, !region && styles.chipTextOn]}>Barchasi · {networkTotal}</Text>
+          <Text style={[styles.chipText, !region && styles.chipTextOn]}>
+            Barchasi · {networkTotal}
+          </Text>
         </Pressable>
         {regions.map((item) => {
           const on = region === item;
@@ -153,6 +241,26 @@ export default function BranchesScreen() {
         })}
       </ScrollView>
 
+      {loading ? (
+        <View style={styles.stateBox}>
+          <ActivityIndicator color="#5C328E" />
+          <Text style={styles.stateText}>Yuklanmoqda...</Text>
+        </View>
+      ) : loadError ? (
+        <View style={styles.stateBox}>
+          <Feather name="cloud-off" size={28} color="#94A3B8" />
+          <Text style={styles.stateTitle}>{loadError}</Text>
+          <Pressable style={styles.retryBtn} onPress={loadBranches}>
+            <Text style={styles.retryBtnText}>Qayta urinish</Text>
+          </Pressable>
+        </View>
+      ) : branches.length === 0 ? (
+        <View style={styles.stateBox}>
+          <Feather name="map-pin" size={28} color="#94A3B8" />
+          <Text style={styles.stateTitle}>Filial topilmadi</Text>
+        </View>
+      ) : null}
+
       {selected ? (
         <View style={styles.selectedCard}>
           <View style={styles.selectedTop}>
@@ -161,18 +269,25 @@ export default function BranchesScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.selectedName}>{shortName(selected.name)}</Text>
-              <Text style={styles.selectedAddr} numberOfLines={2}>{selected.address}</Text>
+              <Text style={styles.selectedAddr} numberOfLines={2}>
+                {selected.address}
+              </Text>
             </View>
-            <Text style={styles.selectedKm}>{selected.distanceKm ?? '—'} km</Text>
+            {formatDistance(selected.distanceKm) ? (
+              <Text style={styles.selectedKm}>{formatDistance(selected.distanceKm)}</Text>
+            ) : null}
           </View>
-          {route ? (
-            <Text style={styles.routeHint}>Yo‘l: {route.distanceKm} km · ~{route.durationMin} daqiqa</Text>
+          {route?.distanceKm != null ? (
+            <Text style={styles.routeHint}>
+              {route.source === 'osrm' ? 'Yo‘l' : 'Masofa'}: {route.distanceKm} km
+              {route.durationMin != null ? ` · ~${route.durationMin} daqiqa` : ''}
+            </Text>
           ) : null}
           <View style={styles.ctaRow}>
             <Pressable
-              disabled={routing}
+              disabled={routing || !hasValidCoords(selected)}
               onPress={() => void drawRoute(selected, true)}
-              style={[styles.ctaYellow, { opacity: routing ? 0.75 : 1 }]}
+              style={[styles.ctaYellow, { opacity: routing || !hasValidCoords(selected) ? 0.55 : 1 }]}
             >
               <Feather name="navigation" size={15} color="#120724" />
               <Text style={styles.ctaYellowText}>Yo‘lni ko‘rsatish</Text>
@@ -182,7 +297,10 @@ export default function BranchesScreen() {
               <Text style={styles.ctaPurpleText}>Tanlash</Text>
             </Pressable>
             {selected.phone ? (
-              <Pressable onPress={() => void Linking.openURL(`tel:${String(selected.phone).replace(/[^\d+]/g, '')}`)} style={styles.ctaCall}>
+              <Pressable
+                onPress={() => void Linking.openURL(`tel:${String(selected.phone).replace(/[^\d+]/g, '')}`)}
+                style={styles.ctaCall}
+              >
                 <Feather name="phone" size={15} color="#5C328E" />
               </Pressable>
             ) : null}
@@ -194,7 +312,8 @@ export default function BranchesScreen() {
 
       {branches.map((branch, index) => {
         const active = branch.id === selected?.id;
-        const open24 = branch.is24h || String(branch.hours).includes('24');
+        const open24 = branch.is24h || String(branch.hours || '').includes('24');
+        const dist = formatDistance(branch.distanceKm);
         return (
           <Pressable
             key={branch.id}
@@ -206,16 +325,26 @@ export default function BranchesScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.rowTitle}>
-                <Text style={styles.rowName} numberOfLines={1}>{shortName(branch.name)}</Text>
-                {open24 ? <View style={styles.badge}><Text style={styles.badgeText}>24/7</Text></View> : null}
+                <Text style={styles.rowName} numberOfLines={1}>
+                  {shortName(branch.name)}
+                </Text>
+                {open24 ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>24/7</Text>
+                  </View>
+                ) : null}
               </View>
-              <Text style={styles.rowAddr} numberOfLines={2}>{branch.region} · {branch.address}</Text>
+              <Text style={styles.rowAddr} numberOfLines={2}>
+                {branch.region} · {branch.address}
+              </Text>
             </View>
             <View style={styles.rowSide}>
-              <Text style={styles.rowKm}>{branch.distanceKm ?? '—'} km</Text>
-              <Pressable onPress={() => void drawRoute(branch, true)} style={styles.miniNav}>
-                <Feather name="navigation" size={12} color="#120724" />
-              </Pressable>
+              {dist ? <Text style={styles.rowKm}>{dist}</Text> : null}
+              {hasValidCoords(branch) ? (
+                <Pressable onPress={() => void drawRoute(branch, true)} style={styles.miniNav}>
+                  <Feather name="navigation" size={12} color="#120724" />
+                </Pressable>
+              ) : null}
             </View>
           </Pressable>
         );
@@ -255,7 +384,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 13,
     borderRadius: 999,
-    marginBottom: 14,
+    marginBottom: 10,
     shadowColor: '#C9A000',
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -266,6 +395,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
     color: '#120724',
+  },
+  locBanner: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 10,
+    lineHeight: 16,
   },
   mapFrame: {
     borderRadius: 18,
@@ -304,6 +440,19 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: '#5C328E', borderColor: '#5C328E' },
   chipText: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#5C328E' },
   chipTextOn: { color: '#fff' },
+  stateBox: { alignItems: 'center', gap: 8, paddingVertical: 20 },
+  stateTitle: { fontFamily: 'Inter_700Bold', fontSize: 14, color: '#2A104E', textAlign: 'center' },
+  stateText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: '#64748B' },
+  retryBtn: {
+    marginTop: 4,
+    backgroundColor: '#5C328E',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryBtnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 13 },
   selectedCard: {
     backgroundColor: '#fff',
     borderRadius: 20,

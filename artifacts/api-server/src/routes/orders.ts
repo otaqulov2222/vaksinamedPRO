@@ -3,20 +3,24 @@ import { desc, eq } from "drizzle-orm";
 import {
   branches,
   cartItems,
+  carts,
   customers,
   db,
   deliveries,
   loyaltyLedger,
   orderItems,
   orders,
+  products,
   productStocks,
   reservations,
+  staffRatings,
+  auditLog,
 } from "@workspace/db";
 import { requireAdmin, requireCustomer } from "../lib/auth";
 import { DELIVERY_FEE, RESERVE_HOURS, formatDate, orderCode, computeCashback } from "../lib/money";
 import { createBranchPayment } from "../lib/payments";
 import { confirmFomSale } from "../lib/fom";
-import { cartPayload, getOrCreateCart } from "./cart";
+import { cartPayload } from "./cart";
 import { requirePermission, assertBranchScope } from "../lib/rbac";
 import { bindReservationOrder, reserveStock } from "../lib/inventory";
 import {
@@ -25,7 +29,14 @@ import {
   type OrderChannel,
 } from "../lib/orderTransitions";
 import { publicBranch } from "../lib/securityEnv";
-import { earnCashback, useCashback as applyCashbackUse, reverseOrderUseOnCancel, getMaxSpendRatio, refundOrderCashback } from "../lib/cashbackFinance";
+import {
+  earnCashback,
+  useCashback as applyCashbackUse,
+  reverseOrderUseOnCancel,
+  getMaxSpendRatio,
+  refundOrderCashback,
+  getAuthoritativeBalance,
+} from "../lib/cashbackFinance";
 
 const router = Router();
 
@@ -80,13 +91,42 @@ export async function serializeOrder(order: typeof orders.$inferSelect) {
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
   const branch = (await db.select().from(branches).where(eq(branches.id, order.branchId)).limit(1))[0];
   const delivery = (await db.select().from(deliveries).where(eq(deliveries.orderId, order.id)).limit(1))[0] ?? null;
+  const existingRating = (
+    await db.select().from(staffRatings).where(eq(staffRatings.orderId, order.id)).limit(1)
+  )[0];
+  const completed =
+    order.fulfillmentStatus === "COMPLETED" || String(order.status).toLowerCase() === "completed";
+
+  let reservationStatus = order.reservationStatus;
+  let reservedUntil = order.reservedUntil;
+  if (order.reservationId) {
+    const live = (await db.select().from(reservations).where(eq(reservations.id, order.reservationId)).limit(1))[0];
+    if (live) {
+      reservationStatus = live.status;
+      if (live.expiresAt) reservedUntil = live.expiresAt;
+      // Heal denormalized mirror when worker expiry drifted (Batch 3F).
+      if (live.status !== order.reservationStatus) {
+        await db.update(orders).set({ reservationStatus: live.status }).where(eq(orders.id, order.id));
+      }
+    }
+  }
+
+  const canCancel =
+    order.fulfillmentStatus !== "COMPLETED"
+    && order.fulfillmentStatus !== "CANCELLED";
+
+  const reservationActive = reservationStatus === "ACTIVE";
+  const reservationExpired =
+    reservationStatus === "EXPIRED"
+    || (reservationActive && reservedUntil != null && new Date(reservedUntil).getTime() <= Date.now());
+
   return {
     id: order.id,
     code: order.code,
     customerId: order.customerId,
     branchId: order.branchId,
     fulfillment: order.fulfillment,
-    /** Legacy compatibility — not long-term SoT. Expo still reads this. */
+    /** Legacy compatibility — not long-term SoT. Prefer P5 axes. */
     status: order.status,
     paymentMethod: order.paymentMethod,
     subtotal: order.subtotal,
@@ -96,27 +136,38 @@ export async function serializeOrder(order: typeof orders.$inferSelect) {
     total: order.total,
     address: order.address,
     comment: order.comment,
-    reservedUntil: order.reservedUntil,
+    reservedUntil,
     reservationId: order.reservationId,
     createdAt: order.createdAt,
     /** P5 axes — authoritative */
     fulfillmentStatus: order.fulfillmentStatus,
     paymentStatus: order.paymentStatus,
-    reservationStatus: order.reservationStatus,
+    reservationStatus,
     fulfillment_status: order.fulfillmentStatus,
     payment_status: order.paymentStatus,
-    reservation_status: order.reservationStatus,
+    reservation_status: reservationStatus,
+    /** Clock skew helper for countdown UX only — expiry remains server-authoritative. */
+    serverTime: new Date().toISOString(),
+    canCancel,
+    /** Customer cancel does not capture/refund PSP; do not promise money returned. */
+    cancelRefundsPayment: false,
+    reservationActive: reservationActive && !reservationExpired,
+    reservationExpired,
+    /** No customer payment-retry capture endpoint for production PSP in this build. */
+    canRetryPayment: false,
     items,
     branch: branch ? publicBranch(branch as unknown as Record<string, unknown>) : null,
     delivery,
     qrPayload: `VAKSINA-${order.code}`,
+    alreadyRated: Boolean(existingRating),
+    canRate: completed && !existingRating,
   };
 }
 
 async function staffTransition(
   req: Parameters<typeof requireAdmin>[0],
   orderId: number,
-  toFulfillment: "PREPARING" | "READY_FOR_PICKUP" | "OUT_FOR_DELIVERY" | "COMPLETED",
+  toFulfillment: "CONFIRMED" | "PREPARING" | "READY_FOR_PICKUP" | "OUT_FOR_DELIVERY" | "COMPLETED",
   reason: string,
 ) {
   const admin = await requireAdmin(req);
@@ -126,6 +177,7 @@ async function staffTransition(
   await assertBranchScope(admin, rows[0].branchId);
 
   const inventory = toFulfillment === "COMPLETED" ? "consume" as const : "none" as const;
+  // Existing policy: COMPLETED may dual-write payment PAID for branch/FOM flows — not a generic admin "mark paid" button.
   const transitioned = await applyOrderTransition({
     orderId,
     toFulfillment,
@@ -135,6 +187,25 @@ async function staffTransition(
     reason,
     inventory,
   });
+
+  try {
+    await db.insert(auditLog).values({
+      actor: admin.email,
+      action: `order.transition.${toFulfillment}`,
+      entity: "order",
+      payload: JSON.stringify({
+        orderId,
+        branchId: rows[0].branchId,
+        from: rows[0].fulfillmentStatus,
+        to: toFulfillment,
+        paymentStatus: transitioned.order.paymentStatus,
+        reason,
+        idempotent: transitioned.idempotent,
+      }),
+    });
+  } catch {
+    // audit must not block transition
+  }
 
   if (toFulfillment === "COMPLETED") {
     await completeOrderCashback(transitioned.order);
@@ -156,7 +227,9 @@ router.get("/orders/:id", async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
     const rows = await db.select().from(orders).where(eq(orders.id, Number(req.params.id))).limit(1);
-    if (!rows[0] || rows[0].customerId !== customer.id) return res.status(404).json({ message: "Buyurtma topilmadi" });
+    if (!rows[0] || rows[0].customerId !== customer.id) {
+      return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
+    }
     return res.json({ order: await serializeOrder(rows[0]) });
   } catch (error) {
     return next(error);
@@ -174,14 +247,39 @@ router.post("/orders", async (req, res, next) => {
     const comment = typeof req.body.comment === "string" ? req.body.comment.trim() : "";
     const useCashback = Boolean(req.body.useCashback);
     const idempotencyKey = String(req.header("idempotency-key") || req.body?.idempotencyKey || "").trim() || null;
+    // Client financial fields are never authoritative (ignored if present).
+    void req.body.total;
+    void req.body.subtotal;
+    void req.body.unitPrice;
+    void req.body.cashbackAmount;
+    void req.body.discount;
 
     const payload = await cartPayload(customer.id);
-    if (!payload.items.length) return res.status(400).json({ message: "Savat bo‘sh" });
-    const branchId = Number(req.body.branchId || payload.cart.branchId);
+    if (!payload.items.length) {
+      return res.status(400).json({ message: "Savat bo‘sh", code: "CART_EMPTY" });
+    }
+
+    const bodyBranchId = Number(req.body.branchId);
+    const cartBranchId = payload.cart.branchId != null ? Number(payload.cart.branchId) : NaN;
+    const branchId =
+      Number.isFinite(bodyBranchId) && bodyBranchId > 0
+        ? bodyBranchId
+        : Number.isFinite(cartBranchId) && cartBranchId > 0
+          ? cartBranchId
+          : NaN;
+    if (!Number.isFinite(branchId) || branchId <= 0) {
+      return res.status(400).json({ message: "Filial tanlang", code: "BRANCH_REQUIRED" });
+    }
+
     const branch = (await db.select().from(branches).where(eq(branches.id, branchId)).limit(1))[0];
-    if (!branch) return res.status(400).json({ message: "Filial tanlang" });
+    if (!branch) {
+      return res.status(400).json({ message: "Filial topilmadi", code: "BRANCH_NOT_FOUND" });
+    }
+    if (!branch.isOpen) {
+      return res.status(400).json({ message: "Filial hozir ochiq emas", code: "BRANCH_CLOSED" });
+    }
     if (fulfillment === "delivery" && address.length < 8) {
-      return res.status(400).json({ message: "Yetkazib berish manzili kiriting" });
+      return res.status(400).json({ message: "Yetkazib berish manzili kiriting", code: "ADDRESS_REQUIRED" });
     }
 
     // Strongest idempotency: order.checkout_idempotency_key, then reservation key
@@ -231,32 +329,70 @@ router.post("/orders", async (req, res, next) => {
 
     const deliveryFee = fulfillment === "delivery" ? DELIVERY_FEE : 0;
     const maxSpendRatio = await getMaxSpendRatio();
-    const calc = computeCashback({
-      goodsAmount: payload.subtotal,
-      cashbackToUse: useCashback ? customer.balance : 0,
-      balance: customer.balance,
-      tier: customer.tier,
-      deliveryFee,
-      maxSpendRatio,
-    });
-    const cashbackUsed = useCashback ? calc.cashbackUsed : 0;
-    const cashbackEarned = calc.cashbackEarned;
-    const total = calc.payableTotal;
     const expiresAt = new Date(Date.now() + RESERVE_HOURS * 60 * 60 * 1000);
     const reservedUntil = fulfillment === "pickup" ? expiresAt : null;
     const axes = initialAxesForCheckout({ fulfillment, paymentMethod });
 
-    const reserveItems = payload.items.map((item) => ({
-      productId: item.productId,
-      quantity: item.quantity,
-    }));
-
     const result = await db.transaction(async (tx) => {
+      const cart = (await tx.select().from(carts).where(eq(carts.customerId, customer.id)).limit(1))[0];
+      if (!cart) {
+        throw Object.assign(new Error("Savat topilmadi"), { status: 400, code: "CART_EMPTY" });
+      }
+
+      await tx.update(carts).set({ branchId: branch.id, updatedAt: new Date() }).where(eq(carts.id, cart.id));
+
+      const rawItems = await tx.select().from(cartItems).where(eq(cartItems.cartId, cart.id));
+      const pricedItems: Array<{
+        productId: number;
+        quantity: number;
+        title: string;
+        price: number;
+        lineTotal: number;
+      }> = [];
+      let subtotal = 0;
+      for (const item of rawItems) {
+        const qty = Math.floor(Number(item.quantity));
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+        const product = (await tx.select().from(products).where(eq(products.id, item.productId)).limit(1))[0];
+        if (!product) {
+          throw Object.assign(new Error("Savatdagi mahsulot topilmadi"), {
+            status: 400,
+            code: "PRODUCT_MISSING",
+          });
+        }
+        const price = Math.floor(Number(product.price));
+        const lineTotal = price * qty;
+        subtotal += lineTotal;
+        pricedItems.push({
+          productId: product.id,
+          quantity: qty,
+          title: product.nameUz,
+          price,
+          lineTotal,
+        });
+      }
+      if (!pricedItems.length) {
+        throw Object.assign(new Error("Savat bo‘sh"), { status: 400, code: "CART_EMPTY" });
+      }
+
+      const balance = await getAuthoritativeBalance(customer.id, tx as unknown as typeof db);
+      const calc = computeCashback({
+        goodsAmount: subtotal,
+        cashbackToUse: useCashback ? balance : 0,
+        balance,
+        tier: customer.tier,
+        deliveryFee,
+        maxSpendRatio,
+      });
+      let cashbackUsed = useCashback ? calc.cashbackUsed : 0;
+      let cashbackEarned = calc.cashbackEarned;
+      let total = calc.payableTotal;
+
       const reserved = await reserveStock(
         {
           branchId: branch.id,
           customerId: customer.id,
-          items: reserveItems,
+          items: pricedItems.map((item) => ({ productId: item.productId, quantity: item.quantity })),
           idempotencyKey,
           expiresAt,
           actor: `customer:${customer.id}`,
@@ -285,7 +421,7 @@ router.post("/orders", async (req, res, next) => {
         reservationStatus: axes.reservationStatus,
         checkoutIdempotencyKey: idempotencyKey,
         paymentMethod,
-        subtotal: payload.subtotal,
+        subtotal,
         deliveryFee,
         cashbackUsed,
         cashbackEarned,
@@ -295,15 +431,15 @@ router.post("/orders", async (req, res, next) => {
         reservedUntil,
         reservationId: reserved.reservation.id,
       }).returning();
-      const orderRow = created[0];
+      let orderRow = created[0];
 
       await bindReservationOrder(reserved.reservation.id, orderRow.id, tx as unknown as typeof db);
 
-      await tx.insert(orderItems).values(payload.items.map((item) => ({
+      await tx.insert(orderItems).values(pricedItems.map((item) => ({
         orderId: orderRow.id,
         productId: item.productId,
-        title: item.product.nameUz,
-        price: item.product.price,
+        title: item.title,
+        price: item.price,
         quantity: item.quantity,
       })));
 
@@ -317,18 +453,18 @@ router.post("/orders", async (req, res, next) => {
       }
 
       if (cashbackUsed > 0) {
-        await applyCashbackUse(
+        const used = await applyCashbackUse(
           {
             customerId: customer.id,
             amount: cashbackUsed,
-            eligibleGoodsAmount: payload.subtotal,
+            eligibleGoodsAmount: subtotal,
             maxSpendRatio,
             commercial: {
               sourceType: "ORDER",
               sourceKey: `order:${orderRow.id}`,
               customerId: customer.id,
               orderId: orderRow.id,
-              amount: orderRow.total,
+              amount: total,
               meta: { code: orderRow.code },
             },
             orderId: orderRow.id,
@@ -339,6 +475,26 @@ router.post("/orders", async (req, res, next) => {
           tx as unknown as typeof db,
           { alreadyInTx: true },
         );
+        const actualUsed = Math.floor(Number(used.entry.amount) || 0);
+        if (actualUsed !== cashbackUsed) {
+          const recalc = computeCashback({
+            goodsAmount: subtotal,
+            cashbackToUse: actualUsed,
+            balance,
+            tier: customer.tier,
+            deliveryFee,
+            maxSpendRatio,
+          });
+          cashbackUsed = actualUsed;
+          cashbackEarned = recalc.cashbackEarned;
+          total = recalc.payableTotal;
+          const updated = await tx.update(orders).set({
+            cashbackUsed,
+            cashbackEarned,
+            total,
+          }).where(eq(orders.id, orderRow.id)).returning();
+          orderRow = updated[0];
+        }
         try {
           await tx.insert(loyaltyLedger).values({
             customerId: customer.id,
@@ -356,7 +512,6 @@ router.post("/orders", async (req, res, next) => {
         }
       }
 
-      const cart = await getOrCreateCart(customer.id);
       await tx.delete(cartItems).where(eq(cartItems.cartId, cart.id));
 
       return { order: orderRow, idempotent: false as const };
@@ -417,6 +572,21 @@ router.post("/orders/:id/confirm-pos", async (req, res, next) => {
     });
 
     await completeOrderCashback(transitioned.order);
+    try {
+      await db.insert(auditLog).values({
+        actor: admin.email,
+        action: "order.confirm_pos",
+        entity: "order",
+        payload: JSON.stringify({
+          orderId: transitioned.order.id,
+          branchId: rows[0].branchId,
+          paymentStatus: transitioned.order.paymentStatus,
+          fulfillmentStatus: transitioned.order.fulfillmentStatus,
+        }),
+      });
+    } catch {
+      // non-blocking
+    }
     return res.json({ order: await serializeOrder(transitioned.order) });
   } catch (error) {
     return next(error);
@@ -427,13 +597,18 @@ router.post("/orders/:id/cancel", async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
     const rows = await db.select().from(orders).where(eq(orders.id, Number(req.params.id))).limit(1);
-    if (!rows[0] || rows[0].customerId !== customer.id) return res.status(404).json({ message: "Buyurtma topilmadi" });
+    if (!rows[0] || rows[0].customerId !== customer.id) {
+      return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
+    }
 
     if (rows[0].fulfillmentStatus === "COMPLETED" || rows[0].fulfillmentStatus === "CANCELLED") {
       if (rows[0].fulfillmentStatus === "CANCELLED") {
         return res.json({ ok: true, idempotent: true });
       }
-      return res.status(400).json({ message: "Bu buyurtmani bekor qilib bo‘lmaydi" });
+      return res.status(400).json({
+        message: "Bu buyurtmani bekor qilib bo‘lmaydi",
+        code: "CANCEL_NOT_ALLOWED",
+      });
     }
 
     await applyOrderTransition({
@@ -474,10 +649,106 @@ router.post("/orders/:id/cancel", async (req, res, next) => {
 });
 
 /**
+ * Staff/admin cancel — uses orders:cancel + branch scope.
+ * Releases reservation / reverses cashback USE via existing paths.
+ * Does NOT invent PSP refunds; PAID orders return paymentRefundRequired.
+ */
+router.post("/orders/:id/admin-cancel", async (req, res, next) => {
+  try {
+    const admin = await requireAdmin(req);
+    await requirePermission(admin, "orders:cancel");
+    const rows = await db.select().from(orders).where(eq(orders.id, Number(req.params.id))).limit(1);
+    if (!rows[0]) {
+      return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
+    }
+    await assertBranchScope(admin, rows[0].branchId);
+
+    if (rows[0].fulfillmentStatus === "COMPLETED" || rows[0].fulfillmentStatus === "CANCELLED") {
+      if (rows[0].fulfillmentStatus === "CANCELLED") {
+        return res.json({ ok: true, idempotent: true, paymentRefundRequired: false });
+      }
+      return res.status(400).json({
+        message: "Bu buyurtmani bekor qilib bo‘lmaydi",
+        code: "CANCEL_NOT_ALLOWED",
+      });
+    }
+
+    const wasPaid = rows[0].paymentStatus === "PAID" || rows[0].paymentStatus === "PARTIALLY_REFUNDED";
+
+    await applyOrderTransition({
+      orderId: rows[0].id,
+      toFulfillment: "CANCELLED",
+      actor: `staff:${admin.email}`,
+      actorType: "staff",
+      reason: "admin_order_cancel",
+      inventory: "release",
+    });
+
+    if (!rows[0].reservationId) {
+      const items = await db.select().from(orderItems).where(eq(orderItems.orderId, rows[0].id));
+      for (const item of items) {
+        const stock = (await db.select().from(productStocks).where(eq(productStocks.productId, item.productId)))
+          .find((row) => row.branchId === rows[0].branchId);
+        if (stock) {
+          await db.update(productStocks).set({
+            quantity: stock.quantity + item.quantity,
+            physicalQuantity: stock.physicalQuantity + item.quantity,
+          }).where(eq(productStocks.id, stock.id));
+        }
+      }
+    }
+
+    if (rows[0].cashbackUsed > 0) {
+      await reverseOrderUseOnCancel(rows[0].id, {
+        actor: `staff:${admin.email}`,
+        reason: "admin_order_cancel",
+      });
+    }
+
+    try {
+      await db.insert(auditLog).values({
+        actor: admin.email,
+        action: "order.cancel",
+        entity: "order",
+        payload: JSON.stringify({
+          orderId: rows[0].id,
+          branchId: rows[0].branchId,
+          wasPaid,
+          paymentRefundRequired: wasPaid,
+          paymentStatus: rows[0].paymentStatus,
+        }),
+      });
+    } catch {
+      // non-blocking
+    }
+
+    return res.json({
+      ok: true,
+      paymentRefundRequired: wasPaid,
+      paymentStatus: rows[0].paymentStatus,
+      note: wasPaid
+        ? "Buyurtma bekor qilindi. PSP refund CONTRACT_PENDING — pul avtomatik qaytarilmaydi."
+        : "Buyurtma bekor qilindi.",
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
  * P5.5 — staff fulfillment transitions (all via applyOrderTransition).
  * Permission: orders:confirm_pos + branch scope.
  * Channel rules enforced in transition service.
  */
+router.post("/orders/:id/confirm", async (req, res, next) => {
+  try {
+    const result = await staffTransition(req, Number(req.params.id), "CONFIRMED", "staff_confirm");
+    return res.json({ order: await serializeOrder(result.order), idempotent: result.idempotent });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post("/orders/:id/prepare", async (req, res, next) => {
   try {
     const result = await staffTransition(req, Number(req.params.id), "PREPARING", "staff_prepare");

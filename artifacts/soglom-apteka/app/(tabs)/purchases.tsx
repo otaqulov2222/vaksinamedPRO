@@ -15,6 +15,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '@/lib/api';
+import {
+  fulfillmentProgressStep,
+  isFulfillmentCancelled,
+  isFulfillmentDelivered,
+  fulfillmentLabel,
+  paymentLabel,
+} from '@/lib/orderLabels';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -36,23 +43,14 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'cancelled', label: 'Bekor qilingan' },
 ];
 
-const PROD_IMAGES = [
-  require('../../assets/images/cat-p1-d3.png'),
-  require('../../assets/images/cat-p2-c.png'),
-  require('../../assets/images/cat-p3-mg.png'),
-  require('../../assets/images/cat-p4-omega.png'),
-  require('../../assets/images/cat-p5-zn.png'),
-  require('../../assets/images/cat-p6-para.png'),
-];
-
-function isDelivered(status: string) {
-  return /completed|delivered|yetkaz/i.test(status);
+function isDelivered(order: any) {
+  return isFulfillmentDelivered(order.fulfillmentStatus, order.status);
 }
-function isCancelled(status: string) {
-  return /cancel|bekor/i.test(status);
+function isCancelled(order: any) {
+  return isFulfillmentCancelled(order.fulfillmentStatus, order.status);
 }
-function isProgress(status: string) {
-  return !isDelivered(status) && !isCancelled(status);
+function isProgress(order: any) {
+  return !isDelivered(order) && !isCancelled(order);
 }
 
 function formatWhen(raw?: string) {
@@ -78,12 +76,12 @@ function formatWhen(raw?: string) {
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
 }
 
-function progressStep(status: string) {
-  const s = String(status || '').toLowerCase();
-  if (isDelivered(status) || s.includes('completed')) return 3;
+function progressStep(order: any) {
+  if (order.fulfillmentStatus) return fulfillmentProgressStep(order.fulfillmentStatus);
+  const s = String(order.status || '').toLowerCase();
+  if (isDelivered(order) || s.includes('completed')) return 3;
   if (s.includes('awaiting_delivery') || s.includes('delivering') || s.includes('shipping')) return 2;
   if (s.includes('prepar') || s.includes('pack') || s.includes('ready') || s.includes('processing')) return 1;
-  // pending_payment, reserved, new, confirm...
   return 0;
 }
 
@@ -101,21 +99,30 @@ function OrdersEmptyHero() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  if (isDelivered(status)) {
+function StatusBadge({ order }: { order: any }) {
+  if (isDelivered(order)) {
     return (
       <View style={[styles.badge, styles.badgeDone]}>
         <MaterialCommunityIcons name="truck-delivery-outline" size={14} color="#15803D" />
-        <Text style={[styles.badgeText, { color: '#15803D' }]}>Yetkazilgan</Text>
+        <Text style={[styles.badgeText, { color: '#15803D' }]}>Yakunlangan</Text>
         <Feather name="chevron-right" size={14} color="#15803D" />
       </View>
     );
   }
-  if (isCancelled(status)) {
+  if (isCancelled(order)) {
     return (
       <View style={[styles.badge, styles.badgeCancel]}>
         <MaterialCommunityIcons name="close-circle-outline" size={14} color="#B91C1C" />
         <Text style={[styles.badgeText, { color: '#B91C1C' }]}>Bekor qilingan</Text>
+      </View>
+    );
+  }
+  if (String(order.paymentStatus || '').toUpperCase() === 'PENDING') {
+    return (
+      <View style={[styles.badge, styles.badgeProgress]}>
+        <MaterialCommunityIcons name="cash" size={14} color="#B45309" />
+        <Text style={[styles.badgeText, { color: '#B45309' }]}>To‘lov kutilmoqda</Text>
+        <Feather name="chevron-right" size={14} color="#B45309" />
       </View>
     );
   }
@@ -128,13 +135,17 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function ProgressTrack({ status }: { status: string }) {
-  const step = progressStep(status);
-  const labels = [
-    { icon: 'shopping-outline' as const, title: 'Buyurtma qabul qilindi' },
-    { icon: 'package-variant' as const, title: 'Tayyorlanmoqda' },
-    { icon: 'truck-delivery-outline' as const, title: 'Yetkazib berilmoqda' },
-    { icon: 'check-circle-outline' as const, title: 'Yetkaziladi' },
+function ProgressTrack({ order }: { order: any }) {
+  const step = progressStep(order);
+  const pickup = String(order.fulfillment || '').toLowerCase() === 'pickup';
+  const labels: Array<{ icon: keyof typeof MaterialCommunityIcons.glyphMap; title: string }> = [
+    { icon: 'shopping-outline', title: 'Buyurtma yaratildi' },
+    { icon: 'package-variant', title: 'Tayyorlanmoqda' },
+    {
+      icon: pickup ? 'storefront-outline' : 'truck-delivery-outline',
+      title: pickup ? 'Olishga tayyor' : 'Yetkazib berilmoqda',
+    },
+    { icon: 'check-circle-outline', title: 'Yakunlandi' },
   ];
   return (
     <View style={styles.track}>
@@ -171,7 +182,7 @@ function OrderCard({
   const count = items.reduce((s, it) => s + Number(it.quantity || 1), 0) || items.length;
   const preview = items.slice(0, 3);
   const more = Math.max(0, items.length - 3);
-  const done = isDelivered(order.status);
+  const done = isDelivered(order);
 
   return (
     <Pressable style={styles.card} onPress={() => router.push(`/order/${order.id}`)}>
@@ -181,16 +192,19 @@ function OrderCard({
             #{order.code || `VM-${order.id}`}
           </Text>
           <Text style={styles.orderWhen}>{formatWhen(order.createdAt)}</Text>
+          <Text style={[styles.orderWhen, { marginTop: 2 }]} numberOfLines={1}>
+            {fulfillmentLabel(order.fulfillmentStatus)} · {paymentLabel(order.paymentStatus)}
+          </Text>
         </View>
-        <StatusBadge status={order.status} />
+        <StatusBadge order={order} />
       </View>
 
-      {isProgress(order.status) ? <ProgressTrack status={order.status} /> : null}
+      {isProgress(order) ? <ProgressTrack order={order} /> : null}
 
       <View style={styles.previewRow}>
         {preview.map((it, idx) => (
           <View key={String(it.id || idx)} style={styles.previewThumb}>
-            <Image source={PROD_IMAGES[idx % PROD_IMAGES.length]} style={styles.previewImg} contentFit="contain" />
+            <MaterialCommunityIcons name="pill" size={22} color={PURPLE} />
           </View>
         ))}
         {more > 0 ? (
@@ -244,8 +258,8 @@ function OrderCard({
             router.push('/(tabs)/catalog');
           }}
         >
-          <Feather name="refresh-cw" size={15} color={PURPLE} />
-          <Text style={styles.reorderText}>Buyurtmani qayta buyurtma qilish</Text>
+          <Feather name="shopping-bag" size={15} color={PURPLE} />
+          <Text style={styles.reorderText}>Katalogga o‘tish</Text>
         </Pressable>
       ) : null}
     </Pressable>
@@ -256,6 +270,7 @@ export default function PurchasesScreen() {
   const insets = useSafeAreaInsets();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -264,10 +279,12 @@ export default function PurchasesScreen() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const data = await api.orders();
       setOrders(data.orders || []);
-    } catch {
+    } catch (e) {
       setOrders([]);
+      setLoadError(e instanceof Error ? e.message : 'Buyurtmalar yuklanmadi');
     } finally {
       setLoading(false);
     }
@@ -279,20 +296,20 @@ export default function PurchasesScreen() {
 
   const counts = useMemo(() => {
     const all = orders.length;
-    const progress = orders.filter((o) => isProgress(o.status)).length;
-    const delivered = orders.filter((o) => isDelivered(o.status)).length;
-    const cancelled = orders.filter((o) => isCancelled(o.status)).length;
+    const progress = orders.filter((o) => isProgress(o)).length;
+    const delivered = orders.filter((o) => isDelivered(o)).length;
+    const cancelled = orders.filter((o) => isCancelled(o)).length;
     return { all, progress, delivered, cancelled };
   }, [orders]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return orders.filter((o) => {
-      if (filter === 'progress' && !isProgress(o.status)) return false;
-      if (filter === 'delivered' && !isDelivered(o.status)) return false;
-      if (filter === 'cancelled' && !isCancelled(o.status)) return false;
+      if (filter === 'progress' && !isProgress(o)) return false;
+      if (filter === 'delivered' && !isDelivered(o)) return false;
+      if (filter === 'cancelled' && !isCancelled(o)) return false;
       if (!q) return true;
-      const hay = `${o.code || ''} ${o.branch?.name || ''} ${o.status || ''}`.toLowerCase();
+      const hay = `${o.code || ''} ${o.branch?.name || ''} ${o.status || ''} ${o.fulfillmentStatus || ''} ${o.paymentStatus || ''}`.toLowerCase();
       return hay.includes(q);
     });
   }, [orders, filter, query]);
@@ -319,6 +336,15 @@ export default function PurchasesScreen() {
           <View style={styles.centerBox}>
             <ActivityIndicator color={PURPLE} />
             <Text style={styles.loadingText}>Yuklanmoqda...</Text>
+          </View>
+        ) : loadError ? (
+          <View style={styles.centerBox}>
+            <Text style={styles.emptyTitle}>Xatolik</Text>
+            <Text style={styles.emptyText}>{loadError}</Text>
+            <Pressable onPress={() => void load()} style={[styles.reorderBtn, { marginTop: 16, width: '100%', maxWidth: 280 }]}>
+              <Feather name="refresh-cw" size={15} color={PURPLE} />
+              <Text style={styles.reorderText}>Qayta urinish</Text>
+            </Pressable>
           </View>
         ) : orders.length === 0 ? (
           <View style={styles.emptyWrap}>

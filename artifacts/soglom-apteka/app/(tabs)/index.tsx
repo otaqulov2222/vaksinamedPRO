@@ -1,7 +1,8 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   ScrollView,
@@ -10,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { useApp } from '@/context/AppContext';
 import { ProgressLine, Screen, formatUzs } from '@/components/AppUI';
 import { api } from '@/lib/api';
@@ -19,7 +21,7 @@ const PURPLE_DEEP = '#2A104E';
 const YELLOW = '#FFCC00';
 
 function shortBranch(name?: string) {
-  return String(name || '').replace(/^Vaksina Med\s*[·•]\s*/i, '').trim() || 'Chilonzor';
+  return String(name || '').replace(/^Vaksina Med\s*[·•]\s*/i, '').trim() || 'Filial';
 }
 
 const QUICK = [
@@ -30,47 +32,99 @@ const QUICK = [
   { icon: 'file-document-outline' as const, label: 'Retsept', to: '/(tabs)/catalog', bg: '#FFF8E0' },
 ];
 
-const FALLBACK_PRODUCTS = [
-  { id: 'p1', name: 'Paracetamol 500 mg', price: 12000, image: require('../../assets/images/home-prod-1.jpg') },
-  { id: 'p2', name: 'Vitamin D3 1000 IU', price: 85000, image: require('../../assets/images/home-prod-2.jpg') },
-  { id: 'p3', name: 'Omega 3', price: 110000, image: require('../../assets/images/home-prod-3.jpg') },
-];
-
 export default function HomeScreen() {
   const { t, balance, user, cartCount } = useApp();
   const [nearest, setNearest] = useState<any>(null);
+  const [nearestLocated, setNearestLocated] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsError, setProductsError] = useState(false);
   const [query, setQuery] = useState('');
-  const nextTier = 150000;
-  const left = Math.max(0, nextTier - balance);
+  const [nextTierTarget, setNextTierTarget] = useState<number | null>(null);
+  /** Tier thresholds use cumulative purchases (fromTotal), not cashback balance. */
+  const spentTowardTier = Number(user?.total || 0);
+  const left =
+    nextTierTarget != null ? Math.max(0, nextTierTarget - spentTowardTier) : null;
+  const tierProgress =
+    nextTierTarget != null
+      ? Math.min(1, Math.max(0, spentTowardTier / Math.max(1, nextTierTarget)))
+      : 0;
+
+  const loadProducts = useCallback(() => {
+    setProductsLoading(true);
+    setProductsError(false);
+    void api
+      .products('?limit=8&offset=0')
+      .then((data) => {
+        setProducts(data.products || []);
+        setProductsError(false);
+      })
+      .catch(() => {
+        setProducts([]);
+        setProductsError(true);
+      })
+      .finally(() => setProductsLoading(false));
+  }, []);
 
   useEffect(() => {
-    void api.branches(41.3111, 69.2797).then((data) => setNearest(data.branches?.[0] || null));
-    void api
-      .products()
-      .then((data) => setProducts(data.products?.slice(0, 8) || []))
-      .catch(() => setProducts([]));
-  }, []);
+    void (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const data = await api.branches(pos.coords.latitude, pos.coords.longitude);
+          setNearest(data.branches?.[0] || null);
+          setNearestLocated(Boolean(data.branches?.[0]?.distanceKm != null));
+          return;
+        }
+      } catch {
+        // fall through — list without invented proximity
+      }
+      try {
+        const data = await api.branches();
+        setNearest(data.branches?.[0] || null);
+        setNearestLocated(false);
+      } catch {
+        setNearest(null);
+        setNearestLocated(false);
+      }
+    })();
+    void api.cashbackRules().then((r) => {
+      const tiers = Array.isArray(r?.tiers) ? r.tiers : [];
+      const gold = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes('gold'));
+      const platinum = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes('plat'));
+      const userTier = String(user?.tier || '').toLowerCase();
+      const threshold = (t: any) => Number(t?.fromTotal ?? t?.minSpend);
+      if (userTier.includes('plat')) {
+        setNextTierTarget(null);
+      } else if (userTier.includes('gold') && Number.isFinite(threshold(platinum))) {
+        setNextTierTarget(threshold(platinum));
+      } else if (Number.isFinite(threshold(gold))) {
+        setNextTierTarget(threshold(gold));
+      } else if (Number.isFinite(threshold(platinum))) {
+        setNextTierTarget(threshold(platinum));
+      } else {
+        setNextTierTarget(null);
+      }
+    }).catch(() => setNextTierTarget(null));
+    loadProducts();
+  }, [loadProducts, user?.tier]);
 
   const onSearch = () => {
     const q = query.trim();
     router.push({ pathname: '/(tabs)/catalog', params: q ? { q } : {} } as any);
   };
 
-  const displayProducts =
-    products.length > 0
-      ? products.map((p) => ({
-          id: p.id,
-          name: p.name,
-          price: Number(p.price || 0),
-          imageUrl: p.imageUrl,
-          image: null as any,
-        }))
-      : FALLBACK_PRODUCTS.map((p) => ({ ...p, imageUrl: null }));
+  const displayProducts = products.map((p) => ({
+    id: p.id,
+    name: String(p.nameUz || p.nameRu || ''),
+    price: Number(p.price || 0),
+    imageUrl: p.imageUrl,
+  }));
 
   return (
     <Screen>
-      {/* HEADER — mockup */}
+      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.brandRow}>
           <Image
@@ -115,8 +169,8 @@ export default function HomeScreen() {
           returnKeyType="search"
           onSubmitEditing={onSearch}
         />
-        <Pressable onPress={() => router.push('/qr')} hitSlop={8}>
-          <MaterialCommunityIcons name="qrcode-scan" size={22} color={PURPLE} />
+        <Pressable onPress={() => router.push('/qr')} hitSlop={8} accessibilityLabel="Mening QR kodim">
+          <MaterialCommunityIcons name="qrcode" size={22} color={PURPLE} />
         </Pressable>
       </View>
 
@@ -163,17 +217,23 @@ export default function HomeScreen() {
               {user.tier} daraja
             </Text>
           </View>
-          <ProgressLine progress={balance / nextTier} />
+          {nextTierTarget != null ? (
+            <ProgressLine progress={tierProgress} />
+          ) : null}
           <Text style={styles.progressCaption} numberOfLines={2}>
-            {t('nextLevel')}: {formatUzs(left)}
+            {String(user?.tier || '').toLowerCase().includes('plat')
+              ? 'Eng yuqori daraja'
+              : left != null
+                ? `${t('nextLevel')}: ${formatUzs(left)} (xaridlar)`
+                : 'Keyingi daraja chegarasi serverdan'}
           </Text>
-          <Pressable onPress={() => router.push('/qr')} style={styles.cashbackBtn}>
-            <MaterialCommunityIcons name="qrcode-scan" size={14} color="#fff" />
+          <Pressable onPress={() => router.push('/qr')} style={styles.cashbackBtn} accessibilityLabel="Mening QR kodim">
+            <MaterialCommunityIcons name="qrcode" size={14} color="#fff" />
             <Text style={styles.cashbackBtnText} numberOfLines={1}>
               {t('spend')}
             </Text>
           </Pressable>
-          <Pressable onPress={() => router.push('/cashback')} style={styles.historyBtn}>
+          <Pressable onPress={() => router.push('/(tabs)/cashback')} style={styles.historyBtn}>
             <Text style={styles.historyBtnText} numberOfLines={1}>
               {t('history')}
             </Text>
@@ -182,7 +242,7 @@ export default function HomeScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardLabel} numberOfLines={1}>
-            {t('nearby')}
+            {nearestLocated ? t('nearby') : 'Filial'}
           </Text>
           <View style={styles.nearPhotoWrap}>
             <Image
@@ -192,21 +252,30 @@ export default function HomeScreen() {
             />
           </View>
           <Text style={styles.nearName} numberOfLines={2}>
-            VAKSINA MED — {shortBranch(nearest?.name)}
+            {nearest ? `VAKSINA MED — ${shortBranch(nearest.name)}` : 'Filiallar'}
           </Text>
           <View style={styles.openRow}>
-            <View style={styles.openDot} />
+            {nearest?.hours ? <View style={styles.openDot} /> : <View style={[styles.openDot, { backgroundColor: '#CBD5E1' }]} />}
             <Text style={styles.openText} numberOfLines={1}>
-              Ochiq · 24/7
+              {nearest?.hours
+                ? String(nearest.hours).includes('24')
+                  ? 'Ochiq · 24/7'
+                  : String(nearest.hours)
+                : 'Ish vaqti noma’lum'}
             </Text>
           </View>
-          <Text style={styles.nearMeta} numberOfLines={1}>
-            {nearest?.distanceKm != null ? `${nearest.distanceKm} km` : '1.2 km'} ·{' '}
-            {nearest?.distanceKm != null ? 'yaqin' : '6 daqiqa'}
-          </Text>
+          {nearestLocated && nearest?.distanceKm != null ? (
+            <Text style={styles.nearMeta} numberOfLines={1}>
+              {nearest.distanceKm} km · yaqin
+            </Text>
+          ) : (
+            <Text style={styles.nearMeta} numberOfLines={1}>
+              {nearest?.address || 'Filiallar ro‘yxatini oching'}
+            </Text>
+          )}
           <Pressable onPress={() => router.push('/branches')} style={styles.routeBtn}>
             <Text style={styles.routeBtnText} numberOfLines={1}>
-              Yo‘lni ko‘rsatish →
+              Filiallarni ko‘rish →
             </Text>
           </Pressable>
         </View>
@@ -220,43 +289,57 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productsRow}>
-        {displayProducts.map((p) => (
-          <Pressable
-            key={String(p.id)}
-            style={styles.productCard}
-            onPress={() => {
-              if (typeof p.id === 'number') router.push(`/product/${p.id}` as any);
-              else router.push('/(tabs)/catalog');
-            }}
-          >
-            <View style={styles.productImgWrap}>
-              {p.imageUrl ? (
-                <Image source={{ uri: p.imageUrl }} style={styles.productImg} resizeMode="contain" />
-              ) : p.image ? (
-                <Image source={p.image} style={styles.productImg} resizeMode="cover" />
-              ) : (
-                <MaterialCommunityIcons name="pill" size={36} color={PURPLE} />
-              )}
-            </View>
-            <Text style={styles.productName} numberOfLines={2}>
-              {p.name}
-            </Text>
-            <View style={styles.productBottom}>
-              <Text style={styles.productPrice}>{formatUzs(p.price)}</Text>
-              <Pressable
-                style={styles.addBtn}
-                onPress={() => {
-                  if (typeof p.id === 'number') void api.addToCart(p.id, 1);
-                  else router.push('/(tabs)/catalog');
-                }}
-              >
-                <Feather name="shopping-cart" size={12} color="#fff" />
-              </Pressable>
-            </View>
+      {productsLoading ? (
+        <View style={styles.productsState}>
+          <ActivityIndicator color={PURPLE} />
+          <Text style={styles.productsStateText}>Mahsulotlar yuklanmoqda...</Text>
+        </View>
+      ) : productsError ? (
+        <View style={styles.productsState}>
+          <MaterialCommunityIcons name="cloud-off-outline" size={36} color="#94A3B8" />
+          <Text style={styles.productsStateTitle}>Mahsulotlarni yuklab bo‘lmadi</Text>
+          <Text style={styles.productsStateText}>Internet aloqasini tekshiring va qayta urinib ko‘ring</Text>
+          <Pressable style={styles.retryBtn} onPress={loadProducts}>
+            <Text style={styles.retryBtnText}>Qayta urinish</Text>
           </Pressable>
-        ))}
-      </ScrollView>
+        </View>
+      ) : displayProducts.length === 0 ? (
+        <View style={styles.productsState}>
+          <MaterialCommunityIcons name="package-variant" size={36} color="#94A3B8" />
+          <Text style={styles.productsStateTitle}>Hozircha tavsiyalar yo‘q</Text>
+          <Text style={styles.productsStateText}>Katalogdan mahsulotlarni ko‘rib chiqing</Text>
+          <Pressable style={styles.retryBtn} onPress={() => router.push('/(tabs)/catalog')}>
+            <Text style={styles.retryBtnText}>Katalogga o‘tish</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productsRow}>
+          {displayProducts.map((p) => (
+            <Pressable
+              key={String(p.id)}
+              style={styles.productCard}
+              onPress={() => router.push(`/product/${p.id}` as any)}
+            >
+              <View style={styles.productImgWrap}>
+                {p.imageUrl ? (
+                  <Image source={{ uri: p.imageUrl }} style={styles.productImg} resizeMode="contain" />
+                ) : (
+                  <MaterialCommunityIcons name="pill" size={36} color={PURPLE} />
+                )}
+              </View>
+              <Text style={styles.productName} numberOfLines={2}>
+                {p.name}
+              </Text>
+              <View style={styles.productBottom}>
+                <Text style={styles.productPrice}>{formatUzs(p.price)}</Text>
+                <Pressable style={styles.addBtn} onPress={() => void api.addToCart(Number(p.id), 1)}>
+                  <Feather name="shopping-cart" size={12} color="#fff" />
+                </Pressable>
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
     </Screen>
   );
 }
@@ -471,6 +554,42 @@ const styles = StyleSheet.create({
   },
   section: { fontFamily: 'Inter_700Bold', fontSize: 17, color: PURPLE_DEEP },
   link: { fontFamily: 'Inter_600SemiBold', fontSize: 12, color: PURPLE },
+
+  productsState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    marginBottom: 28,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#EEEAF5',
+    gap: 8,
+  },
+  productsStateTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+    textAlign: 'center',
+  },
+  productsStateText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  retryBtn: {
+    marginTop: 8,
+    minHeight: 40,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryBtnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 13 },
 
   productsRow: { gap: 12, paddingBottom: 28 },
   productCard: {

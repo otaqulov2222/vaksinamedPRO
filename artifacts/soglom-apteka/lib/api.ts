@@ -29,6 +29,8 @@ function telegramId() {
   return process.env.EXPO_PUBLIC_TELEGRAM_ID || '';
 }
 
+export type ApiError = Error & { status?: number; code?: string };
+
 async function request<T>(path: string, init: RequestInit = {}, auth = true): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
@@ -52,11 +54,16 @@ async function request<T>(path: string, init: RequestInit = {}, auth = true): Pr
     data = null;
   }
   if (!response.ok) {
-    const err = new Error(data?.message || `HTTP ${response.status}`) as Error & { status?: number };
+    const err = new Error(data?.message || `HTTP ${response.status}`) as ApiError;
     err.status = response.status;
+    if (data?.code) err.code = String(data.code);
     throw err;
   }
   return data as T;
+}
+
+function newIdempotencyKey(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export const api = {
@@ -83,18 +90,36 @@ export const api = {
     await setAuthToken(null);
   },
   profile: () => request<any>('/api/loyalty/profile'),
+  updateProfile: (body: { firstName?: string; lastName?: string; language?: string }) =>
+    request<any>('/api/loyalty/profile', { method: 'PATCH', body: JSON.stringify(body) }),
   posCard: () => request<any>('/api/pos/card'),
   cashbackRules: () => request<any>('/api/cashback/rules', {}, false),
   setLanguage: (language: string) => request<any>('/api/loyalty/profile', { method: 'PATCH', body: JSON.stringify({ language }) }),
   redeem: (rewardId: string) => request<any>('/api/loyalty/redeem', { method: 'POST', body: JSON.stringify({ rewardId }) }),
   categories: () => request<{ categories: string[] }>('/api/catalog/categories'),
-  products: (query = '') => request<{ products: any[] }>(`/api/catalog/products${query}`),
-  product: (id: number) => request<any>(`/api/catalog/products/${id}`),
+  products: (query = '') =>
+    request<{
+      products: any[];
+      pagination?: { limit: number; offset: number; total: number; hasMore: boolean; nextOffset: number | null };
+      limit?: number;
+      offset?: number;
+      total?: number;
+      hasMore?: boolean;
+      branchId?: number | null;
+    }>(`/api/catalog/products${query}`),
+  product: (id: number, opts?: { branchId?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.branchId != null && Number.isFinite(opts.branchId) && opts.branchId > 0) {
+      params.set('branchId', String(opts.branchId));
+    }
+    const suffix = params.toString() ? `?${params}` : '';
+    return request<any>(`/api/catalog/products/${id}${suffix}`);
+  },
   promos: () => request<{ promos: any[] }>('/api/catalog/promos'),
   branches: (lat?: number, lng?: number, q = '', region = '') => {
     const params = new URLSearchParams();
-    if (lat) params.set('lat', String(lat));
-    if (lng) params.set('lng', String(lng));
+    if (lat != null && Number.isFinite(lat)) params.set('lat', String(lat));
+    if (lng != null && Number.isFinite(lng)) params.set('lng', String(lng));
     if (q) params.set('q', q);
     if (region) params.set('region', region);
     const suffix = params.toString() ? `?${params}` : '';
@@ -107,9 +132,18 @@ export const api = {
   removeCartItem: (id: number) => request<any>(`/api/cart/items/${id}`, { method: 'DELETE' }),
   orders: () => request<{ orders: any[] }>('/api/orders'),
   order: (id: number) => request<any>(`/api/orders/${id}`),
-  checkout: (body: Record<string, unknown>) => request<any>('/api/orders', { method: 'POST', body: JSON.stringify(body) }),
+  orderPayment: (orderId: number) => request<any>(`/api/orders/${orderId}/payment`),
+  checkout: (body: Record<string, unknown>, opts?: { idempotencyKey?: string }) => {
+    const key = opts?.idempotencyKey || newIdempotencyKey('checkout');
+    return request<any>('/api/orders', {
+      method: 'POST',
+      body: JSON.stringify({ ...body, idempotencyKey: key }),
+      headers: { 'idempotency-key': key },
+    });
+  },
   cancelOrder: (id: number) => request<any>(`/api/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({}) }),
-  rateStaff: (body: Record<string, unknown>) => request<any>('/api/ratings', { method: 'POST', body: JSON.stringify(body) }),
+  rateStaff: (body: { orderId: number; rating: number; tags?: string[]; comment?: string }) =>
+    request<any>('/api/ratings', { method: 'POST', body: JSON.stringify(body) }),
 };
 
-export { API_URL };
+export { API_URL, newIdempotencyKey };

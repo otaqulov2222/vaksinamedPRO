@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -31,20 +30,7 @@ const YELLOW = '#FFCC00';
 const priceUz = (n: number) =>
   `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')} so'm`;
 
-type CatId = 'all' | 'vitamins' | 'pain' | 'allergy' | 'skin';
-
-const CATEGORIES: {
-  id: CatId;
-  label: string;
-  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-  match: string | null;
-}[] = [
-  { id: 'all', label: 'Barchasi', icon: 'view-grid', match: null },
-  { id: 'vitamins', label: 'Vitaminlar', icon: 'leaf', match: 'Vitaminlar' },
-  { id: 'pain', label: "Og'riq va isitma", icon: 'stomach', match: 'Og‘riq va isitma' },
-  { id: 'allergy', label: 'Allergiya', icon: 'flower', match: 'Allergiya' },
-  { id: 'skin', label: 'Teri parvarishi', icon: 'face-woman-outline', match: 'Teri parvarishi' },
-];
+type CatId = string;
 
 type SortKey = 'default' | 'price_asc' | 'price_desc' | 'name';
 
@@ -55,89 +41,18 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Nom: A–Z' },
 ];
 
-const IMAGES: Record<string, any> = {
-  'Vitamin D3 2000 IU': require('../../assets/images/cat-p1-d3.png'),
-  'Askorbin kislotasi 1000 mg': require('../../assets/images/cat-p2-c.png'),
-  'Magniy + B6': require('../../assets/images/cat-p3-mg.png'),
-  'Omega-3 1000 mg': require('../../assets/images/cat-p4-omega.png'),
-  'Rux 25 mg': require('../../assets/images/cat-p5-zn.png'),
-  'Paratsetamol 500 mg': require('../../assets/images/cat-p6-para.png'),
-};
-
-const FALLBACK_IMAGE = require('../../assets/images/cat-p1-d3.png');
-
 type Product = {
   id: number | string;
   nameUz: string;
   manufacturer: string;
   category: string;
   price: number;
-  oldPrice?: number;
-  discount?: string;
-  imageUrl?: string | null;
-  localImage: any;
+  icon: string;
+  availableQuantity?: number | null;
+  availabilityKnown?: boolean;
 };
 
-const SEED_FALLBACK: Product[] = [
-  {
-    id: 'm1',
-    nameUz: 'Vitamin D3 2000 IU',
-    manufacturer: 'Solgar',
-    category: 'Vitaminlar',
-    price: 89000,
-    oldPrice: 99000,
-    discount: '-10%',
-    localImage: IMAGES['Vitamin D3 2000 IU'],
-  },
-  {
-    id: 'm2',
-    nameUz: 'Askorbin kislotasi 1000 mg',
-    manufacturer: 'Evalar',
-    category: 'Vitaminlar',
-    price: 42000,
-    localImage: IMAGES['Askorbin kislotasi 1000 mg'],
-  },
-  {
-    id: 'm3',
-    nameUz: 'Magniy + B6',
-    manufacturer: 'Now Foods',
-    category: 'Vitaminlar',
-    price: 76000,
-    localImage: IMAGES['Magniy + B6'],
-  },
-  {
-    id: 'm4',
-    nameUz: 'Omega-3 1000 mg',
-    manufacturer: 'Doppelherz',
-    category: 'Vitaminlar',
-    price: 118000,
-    localImage: IMAGES['Omega-3 1000 mg'],
-  },
-  {
-    id: 'm5',
-    nameUz: 'Rux 25 mg',
-    manufacturer: "Nature's Bounty",
-    category: 'Vitaminlar',
-    price: 39000,
-    localImage: IMAGES['Rux 25 mg'],
-  },
-  {
-    id: 'm6',
-    nameUz: 'Paratsetamol 500 mg',
-    manufacturer: 'Nika Pharm',
-    category: 'Og‘riq va isitma',
-    price: 8000,
-    localImage: IMAGES['Paratsetamol 500 mg'],
-  },
-];
-
-function norm(s: string) {
-  return s
-    .toLowerCase()
-    .replace(/[‘’ʻʼ`']/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const PAGE_SIZE = 20;
 
 function toast(title: string, msg: string) {
   if (Platform.OS === 'web') {
@@ -173,11 +88,6 @@ function ProductCard({
       accessibilityLabel={item.nameUz}
     >
       <View style={[styles.cardImageWrap, list && styles.cardImageWrapList]}>
-        {item.discount ? (
-          <View style={styles.discountBadge}>
-            <Text style={styles.discountText}>{item.discount}</Text>
-          </View>
-        ) : null}
         <Pressable
           style={styles.heartBtn}
           hitSlop={10}
@@ -193,10 +103,14 @@ function ProductCard({
             color={liked ? RED : MUTED}
           />
         </Pressable>
-        <Image
-          source={item.imageUrl ? { uri: item.imageUrl } : item.localImage}
-          style={styles.cardImage}
-          resizeMode="contain"
+        <MaterialCommunityIcons
+          name={
+            (item.icon in MaterialCommunityIcons.glyphMap
+              ? item.icon
+              : 'pill') as React.ComponentProps<typeof MaterialCommunityIcons>['name']
+          }
+          size={48}
+          color={PURPLE}
         />
       </View>
 
@@ -213,9 +127,9 @@ function ProductCard({
             <Text style={styles.cardPrice} numberOfLines={1}>
               {priceUz(item.price)}
             </Text>
-            {item.oldPrice ? (
-              <Text style={styles.cardOld} numberOfLines={1}>
-                {priceUz(item.oldPrice)}
+            {item.availabilityKnown ? (
+              <Text style={{ fontSize: 10, color: MUTED, marginTop: 2 }} numberOfLines={1}>
+                Filialda: {Math.max(0, Number(item.availableQuantity) || 0)}
               </Text>
             ) : null}
           </View>
@@ -292,16 +206,26 @@ export default function CatalogScreen() {
   const { refresh, cartCount } = useApp();
 
   const [query, setQuery] = useState(typeof params.q === 'string' ? params.q : '');
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
   const [cat, setCat] = useState<CatId>('all');
+  const [apiCategories, setApiCategories] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sort, setSort] = useState<SortKey>('default');
-  const [onlySale, setOnlySale] = useState(false);
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [apiProducts, setApiProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [pageError, setPageError] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [branchId, setBranchId] = useState<number | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [sortOpen, setSortOpen] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
+  const loadGenRef = React.useRef(0);
+  const nextOffsetRef = React.useRef(0);
+  const hasMoreRef = React.useRef(false);
+  const loadingMoreRef = React.useRef(false);
 
   const contentWidth = Math.min(width, 480);
   const gridGap = 12;
@@ -313,69 +237,122 @@ export default function CatalogScreen() {
   }, [params.q]);
 
   useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    void api
-      .products()
-      .then((data) => {
-        if (alive) setApiProducts(data.products || []);
-      })
-      .catch(() => {
-        if (alive) setApiProducts([]);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    void api.categories().then((data) => {
+      setApiCategories(Array.isArray(data.categories) ? data.categories.filter(Boolean) : []);
+    }).catch(() => setApiCategories([]));
   }, []);
 
+  useEffect(() => {
+    void api.cart().then((c) => {
+      const id = c?.branch?.id ?? c?.cart?.branchId ?? null;
+      setBranchId(id != null && Number.isFinite(Number(id)) ? Number(id) : null);
+    }).catch(() => setBranchId(null));
+  }, []);
+
+  const buildQuery = useCallback((offset: number) => {
+    const qs = new URLSearchParams();
+    if (debouncedQuery) qs.set('q', debouncedQuery);
+    if (cat && cat !== 'all') qs.set('category', cat);
+    if (sort && sort !== 'default') qs.set('sort', sort);
+    if (branchId) qs.set('branchId', String(branchId));
+    qs.set('limit', String(PAGE_SIZE));
+    qs.set('offset', String(offset));
+    return `?${qs}`;
+  }, [debouncedQuery, cat, sort, branchId]);
+
+  const loadProducts = useCallback((mode: 'reset' | 'more' = 'reset') => {
+    const gen = ++loadGenRef.current;
+    const offset = mode === 'more' ? nextOffsetRef.current : 0;
+    if (mode === 'reset') {
+      setLoading(true);
+      setLoadError(false);
+      setPageError(false);
+      hasMoreRef.current = false;
+      nextOffsetRef.current = 0;
+    } else {
+      if (loadingMoreRef.current || !hasMoreRef.current) return;
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+      setPageError(false);
+    }
+    void api
+      .products(buildQuery(offset))
+      .then((data) => {
+        if (gen !== loadGenRef.current) return;
+        const page = data.products || [];
+        const more = Boolean(data.hasMore ?? data.pagination?.hasMore);
+        const next = data.pagination?.nextOffset != null
+          ? data.pagination.nextOffset
+          : offset + page.length;
+        nextOffsetRef.current = next;
+        hasMoreRef.current = more;
+        setHasMore(more);
+        setTotal(Number(data.total ?? data.pagination?.total ?? page.length));
+        setApiProducts((prev) => {
+          if (mode === 'reset') return page;
+          const seen = new Set(prev.map((p) => String(p.id)));
+          const merged = [...prev];
+          for (const p of page) {
+            if (!seen.has(String(p.id))) merged.push(p);
+          }
+          return merged;
+        });
+        setLoadError(false);
+      })
+      .catch(() => {
+        if (gen !== loadGenRef.current) return;
+        if (mode === 'reset') {
+          setApiProducts([]);
+          setLoadError(true);
+          hasMoreRef.current = false;
+          setHasMore(false);
+        } else {
+          setPageError(true);
+        }
+      })
+      .finally(() => {
+        if (gen !== loadGenRef.current) return;
+        loadingMoreRef.current = false;
+        setLoading(false);
+        setLoadingMore(false);
+      });
+  }, [buildQuery]);
+
+  useEffect(() => {
+    nextOffsetRef.current = 0;
+    loadProducts('reset');
+    return () => {
+      loadGenRef.current += 1;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when filters change
+  }, [debouncedQuery, cat, sort, branchId]);
+
   const allProducts = useMemo((): Product[] => {
-    if (!apiProducts.length) return SEED_FALLBACK;
-    return apiProducts.map((p) => {
-      const name = String(p.nameUz || p.name || '');
-      const price = Number(p.price || 0);
-      const old = p.oldPrice != null ? Number(p.oldPrice) : name === 'Vitamin D3 2000 IU' ? 99000 : undefined;
-      const discount =
-        p.discountPercent != null
-          ? `-${p.discountPercent}%`
-          : old && old > price
-            ? `-${Math.round(((old - price) / old) * 100)}%`
-            : undefined;
-      return {
-        id: p.id,
-        nameUz: name,
-        manufacturer: String(p.manufacturer || ''),
-        category: String(p.category || ''),
-        price,
-        oldPrice: old && old > price ? old : undefined,
-        discount,
-        imageUrl: p.imageUrl || null,
-        localImage: IMAGES[name] || FALLBACK_IMAGE,
-      };
-    });
+    return apiProducts.map((p) => ({
+      id: p.id,
+      nameUz: String(p.nameUz || p.nameRu || ''),
+      manufacturer: String(p.manufacturer || ''),
+      category: String(p.category || ''),
+      price: Number(p.price || 0),
+      icon: String(p.icon || 'pill'),
+      availableQuantity: p.availableQuantity != null ? Number(p.availableQuantity) : null,
+      availabilityKnown: Boolean(p.availabilityKnown),
+    }));
   }, [apiProducts]);
 
-  const products = useMemo(() => {
-    const catDef = CATEGORIES.find((c) => c.id === cat);
-    let list = allProducts.filter((p) => {
-      if (catDef?.match) {
-        if (norm(p.category) !== norm(catDef.match)) return false;
-      }
-      if (onlySale && !p.discount && !p.oldPrice) return false;
-      const q = norm(query);
-      if (q && !norm(`${p.nameUz} ${p.manufacturer} ${p.category}`).includes(q)) return false;
-      return true;
-    });
+  const products = allProducts;
 
-    if (sort === 'price_asc') list = [...list].sort((a, b) => a.price - b.price);
-    else if (sort === 'price_desc') list = [...list].sort((a, b) => b.price - a.price);
-    else if (sort === 'name') list = [...list].sort((a, b) => a.nameUz.localeCompare(b.nameUz, 'uz'));
+  const categoryChips = useMemo(
+    () => [{ id: 'all', label: 'Barchasi' }, ...apiCategories.map((c) => ({ id: c, label: c }))],
+    [apiCategories],
+  );
 
-    return list;
-  }, [allProducts, cat, onlySale, query, sort]);
-
+  const hasActiveSearch = Boolean(debouncedQuery) || (cat !== 'all');
   const sortLabel = SORT_OPTIONS.find((s) => s.key === sort)?.label || 'Saralash';
 
   const goBack = () => {
@@ -429,6 +406,14 @@ export default function CatalogScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
+        onScroll={({ nativeEvent }) => {
+          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+          const nearBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 160;
+          if (nearBottom && hasMore && !loading && !loadingMore) {
+            loadProducts('more');
+          }
+        }}
+        scrollEventThrottle={200}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -470,24 +455,28 @@ export default function CatalogScreen() {
               <Feather name="x" size={18} color={MUTED} />
             </Pressable>
           ) : null}
-          <Pressable onPress={() => router.push('/qr')} hitSlop={6} accessibilityLabel="Skaner">
+          <Pressable onPress={() => router.push('/qr')} hitSlop={6} accessibilityLabel="Mening QR kodim">
             <MaterialCommunityIcons name="line-scan" size={22} color={PURPLE_DEEP} />
           </Pressable>
         </View>
 
-        {/* Categories */}
+        {/* Categories — from API */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.catsRow}
           style={styles.catsScroll}
         >
-          {CATEGORIES.map((c) => {
+          {categoryChips.map((c) => {
             const active = cat === c.id;
             return (
               <Pressable key={c.id} style={styles.catItem} onPress={() => setCat(c.id)}>
                 <View style={[styles.catIcon, active && styles.catIconActive]}>
-                  <MaterialCommunityIcons name={c.icon} size={22} color={active ? '#fff' : PURPLE} />
+                  <MaterialCommunityIcons
+                    name={c.id === 'all' ? 'view-grid' : 'tag-outline'}
+                    size={22}
+                    color={active ? '#fff' : PURPLE}
+                  />
                 </View>
                 <Text style={[styles.catLabel, active && styles.catLabelActive]} numberOfLines={2}>
                   {c.label}
@@ -505,16 +494,6 @@ export default function CatalogScreen() {
               {sort === 'default' ? 'Saralash' : sortLabel}
             </Text>
             <Feather name="chevron-down" size={14} color={MUTED} />
-          </Pressable>
-          <Pressable
-            style={[styles.toolChip, onlySale && styles.toolChipActive]}
-            onPress={() => setFilterOpen(true)}
-          >
-            <MaterialCommunityIcons name="tune-variant" size={16} color={onlySale ? '#fff' : PURPLE_DEEP} />
-            <Text style={[styles.toolText, onlySale && styles.toolTextActive]} numberOfLines={1}>
-              Filtrlar
-            </Text>
-            <Feather name="chevron-down" size={14} color={onlySale ? '#fff' : MUTED} />
           </Pressable>
           <View style={{ flex: 1, minWidth: 4 }} />
           <View style={styles.viewToggle}>
@@ -544,25 +523,60 @@ export default function CatalogScreen() {
             <ActivityIndicator color={PURPLE} />
             <Text style={styles.emptyText}>Yuklanmoqda...</Text>
           </View>
+        ) : loadError ? (
+          <View style={styles.empty}>
+            <MaterialCommunityIcons name="cloud-off-outline" size={40} color={MUTED} />
+            <Text style={styles.emptyTitle}>Mahsulotlarni yuklab bo‘lmadi</Text>
+            <Text style={styles.emptyText}>
+              {query.trim()
+                ? `Qidiruv saqlanadi: «${query.trim()}». Qayta urinib ko‘ring.`
+                : 'Internet aloqasini tekshiring va qayta urinib ko‘ring'}
+            </Text>
+            <Pressable style={styles.resetBtn} onPress={() => loadProducts('reset')}>
+              <Text style={styles.resetBtnText}>Qayta urinish</Text>
+            </Pressable>
+          </View>
         ) : products.length === 0 ? (
           <View style={styles.empty}>
             <MaterialCommunityIcons name="package-variant" size={40} color={MUTED} />
-            <Text style={styles.emptyTitle}>Mahsulot topilmadi</Text>
-            <Text style={styles.emptyText}>Boshqa kategoriya yoki qidiruvni sinab ko‘ring</Text>
-            <Pressable
-              style={styles.resetBtn}
-              onPress={() => {
-                setQuery('');
-                setCat('all');
-                setOnlySale(false);
-                setSort('default');
-              }}
-            >
-              <Text style={styles.resetBtnText}>Filtrlarni tozalash</Text>
-            </Pressable>
+            <Text style={styles.emptyTitle}>
+              {hasActiveSearch ? 'Mahsulot topilmadi' : 'Mahsulotlar topilmadi'}
+            </Text>
+            <Text style={styles.emptyText}>
+              {hasActiveSearch
+                ? debouncedQuery
+                  ? `«${debouncedQuery}» bo‘yicha natija yo‘q. Boshqa kategoriya yoki qidiruvni sinab ko‘ring.`
+                  : 'Tanlangan kategoriya bo‘yicha mahsulot yo‘q.'
+                : 'Katalog hozircha bo‘sh. Keyinroq qayta urinib ko‘ring.'}
+            </Text>
+            {hasActiveSearch ? (
+              <Pressable
+                style={styles.resetBtn}
+                onPress={() => {
+                  setQuery('');
+                  setCat('all');
+                  setSort('default');
+                }}
+              >
+                <Text style={styles.resetBtnText}>Filtrlarni tozalash</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={styles.resetBtn} onPress={() => loadProducts('reset')}>
+                <Text style={styles.resetBtnText}>Qayta urinish</Text>
+              </Pressable>
+            )}
           </View>
         ) : (
           <View style={[styles.grid, viewMode === 'list' && styles.list]}>
+            {!branchId ? (
+              <Text style={{ width: '100%', color: MUTED, fontSize: 11, marginBottom: 8 }}>
+                Filial tanlanmagan — qoldiq ko‘rsatilmaydi (savat/checkoutda tanlang)
+              </Text>
+            ) : (
+              <Text style={{ width: '100%', color: MUTED, fontSize: 11, marginBottom: 8 }}>
+                Mavjudlik savat filialiga bog‘langan · jami: {total}
+              </Text>
+            )}
             {products.map((p) => (
               <View
                 key={String(p.id)}
@@ -583,6 +597,24 @@ export default function CatalogScreen() {
                 />
               </View>
             ))}
+            {loadingMore ? (
+              <View style={{ width: '100%', paddingVertical: 16, alignItems: 'center' }}>
+                <ActivityIndicator color={PURPLE} />
+              </View>
+            ) : null}
+            {pageError ? (
+              <Pressable
+                style={[styles.resetBtn, { width: '100%', marginTop: 8 }]}
+                onPress={() => loadProducts('more')}
+              >
+                <Text style={styles.resetBtnText}>Keyingi sahifani qayta yuklash</Text>
+              </Pressable>
+            ) : null}
+            {!hasMore && products.length > 0 ? (
+              <Text style={{ width: '100%', textAlign: 'center', color: MUTED, fontSize: 12, marginTop: 12 }}>
+                Ro‘yxat tugadi
+              </Text>
+            ) : null}
           </View>
         )}
       </ScrollView>
@@ -594,18 +626,6 @@ export default function CatalogScreen() {
         selected={sort}
         onSelect={(k) => setSort(k as SortKey)}
         onClose={() => setSortOpen(false)}
-      />
-
-      <Sheet
-        visible={filterOpen}
-        title="Filtrlar"
-        options={[
-          { key: 'all', label: 'Barcha mahsulotlar' },
-          { key: 'sale', label: 'Faqat chegirmadagilar' },
-        ]}
-        selected={onlySale ? 'sale' : 'all'}
-        onSelect={(k) => setOnlySale(k === 'sale')}
-        onClose={() => setFilterOpen(false)}
       />
     </View>
   );

@@ -93,9 +93,39 @@ router.get("/loyalty/profile", async (req, res, next) => {
 router.patch("/loyalty/profile", async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
-    const language = req.body.language;
-    if (language && ["uz", "ru", "en"].includes(language)) {
-      await db.update(customers).set({ language }).where(eq(customers.id, customer.id));
+    const body = req.body || {};
+    const patch: { language?: string; firstName?: string; lastName?: string } = {};
+
+    if (body.language != null) {
+      const language = String(body.language);
+      if (!["uz", "ru", "en"].includes(language)) {
+        return res.status(400).json({ message: "Til noto‘g‘ri. Faqat uz, ru yoki en." });
+      }
+      patch.language = language;
+    }
+
+    if (body.firstName != null) {
+      const firstName = String(body.firstName).trim();
+      if (firstName.length < 2) {
+        return res.status(400).json({ message: "Ism kamida 2 ta belgidan iborat bo‘lsin" });
+      }
+      if (firstName.length > 80) {
+        return res.status(400).json({ message: "Ism juda uzun" });
+      }
+      patch.firstName = firstName;
+    }
+
+    if (body.lastName != null) {
+      const lastName = String(body.lastName).trim();
+      if (lastName.length > 80) {
+        return res.status(400).json({ message: "Familiya juda uzun" });
+      }
+      patch.lastName = lastName;
+    }
+
+    // Phone is identity-controlled — never accept phone changes here.
+    if (Object.keys(patch).length > 0) {
+      await db.update(customers).set(patch).where(eq(customers.id, customer.id));
     }
     return res.json(await profileFor(customer.telegramId));
   } catch (error) {

@@ -2,10 +2,24 @@ import { and, eq, sql } from "drizzle-orm";
 import {
   db,
   inventoryMovements,
+  orders,
   reservationItems,
   reservations,
   type Reservation,
 } from "@workspace/db";
+
+/** Keep orders.reservation_status mirror in sync when reservation leaves ACTIVE. */
+async function syncOrderReservationMirror(
+  tx: DbLike,
+  orderId: number | null | undefined,
+  reservationStatus: "EXPIRED" | "CANCELLED" | "FULFILLED",
+) {
+  if (orderId == null || !Number.isFinite(Number(orderId)) || Number(orderId) <= 0) return;
+  await tx
+    .update(orders)
+    .set({ reservationStatus })
+    .where(eq(orders.id, Number(orderId)));
+}
 
 type DbLike = typeof db;
 
@@ -253,6 +267,7 @@ export async function releaseReservation(
       const bundle = await loadReservationBundle(tx, reservationId);
       return { reservation: bundle!.reservation, released: false };
     }
+    await syncOrderReservationMirror(tx, row.order_id, toStatus);
     return { reservation: updated[0], released: true };
   });
 }
@@ -343,6 +358,7 @@ export async function consumeReservation(
       const bundle = await loadReservationBundle(tx, reservationId);
       return { reservation: bundle!.reservation, consumed: false };
     }
+    await syncOrderReservationMirror(tx, row.order_id, "FULFILLED");
     return { reservation: updated[0], consumed: true };
   });
 }
