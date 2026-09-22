@@ -14,6 +14,8 @@
     "backup:drill": "pnpm --filter @workspace/db exec tsx src/scripts/restore-drill.ts",
     "sandbox:e2e": "pnpm --filter @workspace/api-server exec tsx src/scripts/sandbox-e2e-harness.ts",
     "p13:load": "pnpm --filter @workspace/api-server run p13:load",
+    "p13:http": "pnpm --filter @workspace/api-server run p13:http",
+    "p13:1": "pnpm --filter @workspace/api-server run p13:1",
     "dev:api": "pnpm --filter @workspace/api-server run dev",
     "dev:admin": "pnpm --filter @workspace/admin-web run dev",
     "dev:app": "pnpm --filter @workspace/soglom-apteka run dev:web"
