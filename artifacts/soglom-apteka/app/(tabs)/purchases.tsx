@@ -1,8 +1,8 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -12,45 +12,51 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '@/lib/api';
 import {
-  fulfillmentProgressStep,
   isFulfillmentCancelled,
   isFulfillmentDelivered,
   fulfillmentLabel,
-  paymentLabel,
+  paymentLabelShort,
+  reservationLabelShort,
 } from '@/lib/orderLabels';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#FFFFFF';
+const BG = '#F5F4FA';
 const CARD = '#FFFFFF';
+const BORDER = '#E8E4F2';
+const LAVENDER = '#F6F2FC';
+const OK = '#3D7A55';
+const BAD = '#B91C1C';
+const WARN = '#B45309';
 
 const priceUz = (n: number) =>
   `${Math.round(Number(n) || 0)
     .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, ',')} so'm`;
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
 
-type FilterKey = 'all' | 'progress' | 'delivered' | 'cancelled';
+type FilterKey = 'all' | 'progress' | 'completed' | 'cancelled';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'Barchasi' },
   { key: 'progress', label: 'Jarayonda' },
-  { key: 'delivered', label: 'Yetkazilgan' },
+  { key: 'completed', label: 'Yakunlangan' },
   { key: 'cancelled', label: 'Bekor qilingan' },
 ];
 
-function isDelivered(order: any) {
+function isCompleted(order: any) {
   return isFulfillmentDelivered(order.fulfillmentStatus, order.status);
 }
 function isCancelled(order: any) {
   return isFulfillmentCancelled(order.fulfillmentStatus, order.status);
 }
 function isProgress(order: any) {
-  return !isDelivered(order) && !isCancelled(order);
+  return !isCompleted(order) && !isCancelled(order);
 }
 
 function formatWhen(raw?: string) {
@@ -76,16 +82,50 @@ function formatWhen(raw?: string) {
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
 }
 
-function progressStep(order: any) {
-  if (order.fulfillmentStatus) return fulfillmentProgressStep(order.fulfillmentStatus);
-  const s = String(order.status || '').toLowerCase();
-  if (isDelivered(order) || s.includes('completed')) return 3;
-  if (s.includes('awaiting_delivery') || s.includes('delivering') || s.includes('shipping')) return 2;
-  if (s.includes('prepar') || s.includes('pack') || s.includes('ready') || s.includes('processing')) return 1;
-  return 0;
+function AxisChip({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: 'neutral' | 'ok' | 'warn' | 'bad' | 'purple';
+}) {
+  const palette =
+    tone === 'ok'
+      ? { bg: '#E8F5EE', fg: OK }
+      : tone === 'warn'
+        ? { bg: '#FEF3C7', fg: WARN }
+        : tone === 'bad'
+          ? { bg: '#FEE2E2', fg: BAD }
+          : tone === 'purple'
+            ? { bg: LAVENDER, fg: PURPLE }
+            : { bg: '#F1EEF6', fg: MUTED };
+  return (
+    <View style={[styles.chipAxis, { backgroundColor: palette.bg }]}>
+      <Text style={[styles.chipAxisText, { color: palette.fg }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
 }
 
-/** Oddiy illustratsiya — animatsiya/fon yo‘q, faqat oq ekranga mos */
+function paymentTone(status?: string): 'ok' | 'warn' | 'bad' | 'neutral' {
+  const s = String(status || '').toUpperCase();
+  if (s === 'PAID') return 'ok';
+  if (s === 'PENDING') return 'warn';
+  if (s === 'FAILED') return 'bad';
+  return 'neutral';
+}
+
+function reservationTone(status?: string, expired?: boolean): 'ok' | 'warn' | 'bad' | 'neutral' | 'purple' {
+  if (expired) return 'warn';
+  const s = String(status || '').toUpperCase();
+  if (s === 'FULFILLED') return 'ok';
+  if (s === 'ACTIVE') return 'purple';
+  if (s === 'EXPIRED') return 'warn';
+  if (s === 'CANCELLED') return 'bad';
+  return 'neutral';
+}
+
 function OrdersEmptyHero() {
   return (
     <Image
@@ -94,180 +134,174 @@ function OrdersEmptyHero() {
       contentFit="contain"
       cachePolicy="none"
       transition={0}
-      accessibilityLabel="Buyurtmalar"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
     />
-  );
-}
-
-function StatusBadge({ order }: { order: any }) {
-  if (isDelivered(order)) {
-    return (
-      <View style={[styles.badge, styles.badgeDone]}>
-        <MaterialCommunityIcons name="truck-delivery-outline" size={14} color="#15803D" />
-        <Text style={[styles.badgeText, { color: '#15803D' }]}>Yakunlangan</Text>
-        <Feather name="chevron-right" size={14} color="#15803D" />
-      </View>
-    );
-  }
-  if (isCancelled(order)) {
-    return (
-      <View style={[styles.badge, styles.badgeCancel]}>
-        <MaterialCommunityIcons name="close-circle-outline" size={14} color="#B91C1C" />
-        <Text style={[styles.badgeText, { color: '#B91C1C' }]}>Bekor qilingan</Text>
-      </View>
-    );
-  }
-  if (String(order.paymentStatus || '').toUpperCase() === 'PENDING') {
-    return (
-      <View style={[styles.badge, styles.badgeProgress]}>
-        <MaterialCommunityIcons name="cash" size={14} color="#B45309" />
-        <Text style={[styles.badgeText, { color: '#B45309' }]}>To‘lov kutilmoqda</Text>
-        <Feather name="chevron-right" size={14} color="#B45309" />
-      </View>
-    );
-  }
-  return (
-    <View style={[styles.badge, styles.badgeProgress]}>
-      <MaterialCommunityIcons name="clock-outline" size={14} color="#B45309" />
-      <Text style={[styles.badgeText, { color: '#B45309' }]}>Jarayonda</Text>
-      <Feather name="chevron-right" size={14} color="#B45309" />
-    </View>
-  );
-}
-
-function ProgressTrack({ order }: { order: any }) {
-  const step = progressStep(order);
-  const pickup = String(order.fulfillment || '').toLowerCase() === 'pickup';
-  const labels: Array<{ icon: keyof typeof MaterialCommunityIcons.glyphMap; title: string }> = [
-    { icon: 'shopping-outline', title: 'Buyurtma yaratildi' },
-    { icon: 'package-variant', title: 'Tayyorlanmoqda' },
-    {
-      icon: pickup ? 'storefront-outline' : 'truck-delivery-outline',
-      title: pickup ? 'Olishga tayyor' : 'Yetkazib berilmoqda',
-    },
-    { icon: 'check-circle-outline', title: 'Yakunlandi' },
-  ];
-  return (
-    <View style={styles.track}>
-      {labels.map((l, i) => {
-        const on = i <= step;
-        return (
-          <React.Fragment key={l.title}>
-            {i > 0 ? <View style={[styles.trackLine, i <= step ? styles.trackLineOn : null]} /> : null}
-            <View style={styles.trackStep}>
-              <View style={[styles.trackDot, on && styles.trackDotOn]}>
-                <MaterialCommunityIcons name={l.icon} size={14} color={on ? '#fff' : '#C4B5D8'} />
-              </View>
-              <Text style={[styles.trackLabel, on && styles.trackLabelOn]} numberOfLines={2}>
-                {l.title}
-              </Text>
-            </View>
-          </React.Fragment>
-        );
-      })}
-    </View>
   );
 }
 
 function OrderCard({
   order,
   expanded,
-  onToggle,
+  onToggleExpand,
 }: {
   order: any;
   expanded: boolean;
-  onToggle: () => void;
+  onToggleExpand: () => void;
 }) {
-  const items: any[] = order.items || [];
+  const items: any[] = Array.isArray(order.items) ? order.items : [];
   const count = items.reduce((s, it) => s + Number(it.quantity || 1), 0) || items.length;
-  const preview = items.slice(0, 3);
-  const more = Math.max(0, items.length - 3);
-  const done = isDelivered(order);
+  const first = items[0];
+  const firstTitle = String(first?.title || first?.nameUz || '');
+  const more = Math.max(0, items.length - 1);
+  const pay = String(order.paymentStatus || '');
+  const payShort = paymentLabelShort(order.paymentStatus);
+  const resExpired = Boolean(order.reservationExpired);
+  const resShort = reservationLabelShort(order.reservationStatus, resExpired);
+  const fulfillLabel = fulfillmentLabel(order.fulfillmentStatus);
+  const isDelivery = String(order.fulfillment || '').toLowerCase() === 'delivery';
+  const usedCb = Number(order.cashbackUsed) || 0;
+  const code = String(order.code || '');
+  const totalLabel = priceUz(order.total);
+
+  const a11y = [
+    'Buyurtmani ko‘rish',
+    code ? code : null,
+    firstTitle || null,
+    totalLabel,
+    fulfillLabel,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   return (
-    <Pressable style={styles.card} onPress={() => router.push(`/order/${order.id}`)}>
-      <View style={styles.cardTop}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.orderCode} numberOfLines={1}>
-            #{order.code || `VM-${order.id}`}
-          </Text>
-          <Text style={styles.orderWhen}>{formatWhen(order.createdAt)}</Text>
-          <Text style={[styles.orderWhen, { marginTop: 2 }]} numberOfLines={1}>
-            {fulfillmentLabel(order.fulfillmentStatus)} · {paymentLabel(order.paymentStatus)}
+    <View style={styles.card}>
+      <Pressable
+        onPress={() => {
+          const id = Number(order.id);
+          if (!Number.isFinite(id) || id <= 0) return;
+          router.push(`/order/${id}`);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={a11y}
+        style={styles.cardMain}
+      >
+        <View style={styles.cardTop}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.orderCode} numberOfLines={1}>
+              {code ? `#${code}` : 'Buyurtma'}
+            </Text>
+            <Text style={styles.orderWhen} numberOfLines={1}>
+              {formatWhen(order.createdAt)}
+            </Text>
+          </View>
+          <Text style={styles.totalValue} numberOfLines={1}>
+            {totalLabel}
           </Text>
         </View>
-        <StatusBadge order={order} />
-      </View>
 
-      {isProgress(order) ? <ProgressTrack order={order} /> : null}
+        <Text style={styles.fulfillPrimary} numberOfLines={1}>
+          {fulfillLabel}
+        </Text>
 
-      <View style={styles.previewRow}>
-        {preview.map((it, idx) => (
-          <View key={String(it.id || idx)} style={styles.previewThumb}>
+        <View style={styles.axisRow}>
+          {payShort ? <AxisChip label={payShort} tone={paymentTone(pay)} /> : null}
+          {resShort ? (
+            <AxisChip
+              label={resShort}
+              tone={reservationTone(order.reservationStatus, resExpired)}
+            />
+          ) : null}
+        </View>
+
+        <View style={styles.previewBlock}>
+          <View style={styles.previewThumb}>
             <MaterialCommunityIcons name="pill" size={22} color={PURPLE} />
           </View>
-        ))}
-        {more > 0 ? (
-          <View style={[styles.previewThumb, styles.previewMore]}>
-            <Text style={styles.previewMoreText}>+{more} mahsulot</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.productName} numberOfLines={2}>
+              {firstTitle || `${count} ta mahsulot`}
+            </Text>
+            <Text style={styles.productMeta} numberOfLines={1}>
+              {count} ta · {isDelivery ? 'Yetkazib berish' : 'Filialdan olib ketish'}
+            </Text>
+            {order.branch?.name ? (
+              <Text style={styles.branchName} numberOfLines={2}>
+                {String(order.branch.name)}
+              </Text>
+            ) : null}
           </View>
-        ) : null}
-      </View>
+        </View>
 
-      <View style={styles.cardMid}>
-        <View style={styles.midLeft}>
-          <MaterialCommunityIcons name="shopping-outline" size={16} color={PURPLE} />
-          <Text style={styles.midCount}>{count} ta mahsulot</Text>
+        {usedCb > 0 ? (
+          <Text style={styles.cashbackUsed} numberOfLines={1}>
+            Cashback ishlatildi: −{priceUz(usedCb)}
+          </Text>
+        ) : null}
+      </Pressable>
+
+      {/* Sibling actions — not nested inside the main Pressable */}
+      <View style={styles.cardActions}>
+        <Pressable
+          onPress={onToggleExpand}
+          style={styles.actionLink}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Yopish' : 'Batafsil ma’lumot'}
+          accessibilityState={{ expanded }}
+        >
+          <Text style={styles.actionLinkText}>{expanded ? 'Yopish' : 'Batafsil'}</Text>
+          <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={PURPLE} />
+        </Pressable>
+        {isCompleted(order) ? (
           <Pressable
-            onPress={(e) => {
-              e.stopPropagation?.();
-              onToggle();
-            }}
-            hitSlop={8}
-            style={styles.detailLink}
+            onPress={() => router.push('/(tabs)/catalog')}
+            style={styles.actionLink}
+            accessibilityRole="button"
+            accessibilityLabel="Katalogga o‘tish"
           >
-            <Text style={styles.detailLinkText}>Batafsil ma'lumot</Text>
-            <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={PURPLE} />
+            <Feather name="shopping-bag" size={14} color={PURPLE} />
+            <Text style={styles.actionLinkText}>Katalog</Text>
           </Pressable>
-        </View>
-        <View style={styles.midRight}>
-          <Text style={styles.totalLabel}>Jami summa</Text>
-          <Text style={styles.totalValue}>{priceUz(order.total)}</Text>
-        </View>
+        ) : null}
       </View>
 
       {expanded ? (
         <View style={styles.expandBox}>
           {items.map((it: any, idx: number) => (
             <View key={String(it.id || idx)} style={styles.expandRow}>
-              <Text style={styles.expandTitle} numberOfLines={1}>
-                {it.title || it.nameUz || 'Mahsulot'} × {it.quantity || 1}
+              <Text style={styles.expandTitle} numberOfLines={2}>
+                {String(it.title || it.nameUz || 'Mahsulot')} × {Number(it.quantity) || 1}
               </Text>
-              <Text style={styles.expandPrice}>{priceUz(Number(it.price || 0) * Number(it.quantity || 1))}</Text>
+              <Text style={styles.expandPrice} numberOfLines={1}>
+                {priceUz(Number(it.price || 0) * Number(it.quantity || 1))}
+              </Text>
             </View>
           ))}
-          {order.branch?.name ? <Text style={styles.expandMeta}>Filial: {order.branch.name}</Text> : null}
+          {more > 0 && !items.length ? (
+            <Text style={styles.expandMeta}>+{more} mahsulot</Text>
+          ) : null}
+          {isDelivery && order.address ? (
+            <Text style={styles.expandMeta} numberOfLines={2}>
+              Manzil: {String(order.address)}
+            </Text>
+          ) : null}
+          {isDelivery ? (
+            <Text style={styles.expandMeta}>
+              Yetkazib berish tafsilotlari buyurtma sahifasida.
+            </Text>
+          ) : null}
         </View>
       ) : null}
-
-      {done ? (
-        <Pressable
-          style={styles.reorderBtn}
-          onPress={(e) => {
-            e.stopPropagation?.();
-            router.push('/(tabs)/catalog');
-          }}
-        >
-          <Feather name="shopping-bag" size={15} color={PURPLE} />
-          <Text style={styles.reorderText}>Katalogga o‘tish</Text>
-        </Pressable>
-      ) : null}
-    </Pressable>
+    </View>
   );
 }
 
 export default function PurchasesScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const narrow = width < 380;
+  const sidePad = narrow ? 14 : 16;
+
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -276,40 +310,62 @@ export default function PurchasesScreen() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
-    try {
+  const loadGen = useRef(0);
+  const loadingRef = useRef(false);
+  const ordersRef = useRef<any[]>([]);
+  ordersRef.current = orders;
+
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (loadingRef.current && opts?.silent) return;
+    const gen = ++loadGen.current;
+    loadingRef.current = true;
+    const silent = Boolean(opts?.silent && ordersRef.current.length > 0);
+    if (!silent) {
       setLoading(true);
       setLoadError(null);
+    }
+    try {
       const data = await api.orders();
-      setOrders(data.orders || []);
+      if (gen !== loadGen.current) return;
+      setOrders(Array.isArray(data.orders) ? data.orders : []);
+      setLoadError(null);
     } catch (e) {
-      setOrders([]);
-      setLoadError(e instanceof Error ? e.message : 'Buyurtmalar yuklanmadi');
+      if (gen !== loadGen.current) return;
+      if (!silent) setOrders([]);
+      setLoadError(e instanceof Error ? e.message : 'Buyurtmalarni yuklashda xatolik yuz berdi.');
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) {
+        setLoading(false);
+        loadingRef.current = false;
+      }
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load({ silent: true });
+      return () => {
+        loadGen.current += 1;
+      };
+    }, [load]),
+  );
 
   const counts = useMemo(() => {
     const all = orders.length;
     const progress = orders.filter((o) => isProgress(o)).length;
-    const delivered = orders.filter((o) => isDelivered(o)).length;
+    const completed = orders.filter((o) => isCompleted(o)).length;
     const cancelled = orders.filter((o) => isCancelled(o)).length;
-    return { all, progress, delivered, cancelled };
+    return { all, progress, completed, cancelled };
   }, [orders]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return orders.filter((o) => {
       if (filter === 'progress' && !isProgress(o)) return false;
-      if (filter === 'delivered' && !isDelivered(o)) return false;
+      if (filter === 'completed' && !isCompleted(o)) return false;
       if (filter === 'cancelled' && !isCancelled(o)) return false;
       if (!q) return true;
-      const hay = `${o.code || ''} ${o.branch?.name || ''} ${o.status || ''} ${o.fulfillmentStatus || ''} ${o.paymentStatus || ''}`.toLowerCase();
+      const hay = `${o.code || ''} ${o.branch?.name || ''} ${o.fulfillmentStatus || ''} ${o.paymentStatus || ''}`.toLowerCase();
       return hay.includes(q);
     });
   }, [orders, filter, query]);
@@ -317,33 +373,46 @@ export default function PurchasesScreen() {
   const countFor = (key: FilterKey) => {
     if (key === 'all') return counts.all;
     if (key === 'progress') return counts.progress;
-    if (key === 'delivered') return counts.delivered;
+    if (key === 'completed') return counts.completed;
     return counts.cancelled;
   };
 
+  const topPad = Platform.OS === 'web' ? Math.max(insets.top, 12) : Math.max(insets.top, 8);
+  const bottomPad = Math.max(insets.bottom, 16);
+
   return (
-    <View style={[styles.root, { paddingTop: Platform.OS === 'web' ? 12 : Math.max(insets.top, 8) }]}>
+    <View style={[styles.root, { paddingTop: topPad }]}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          orders.length === 0 && !loading ? styles.contentEmpty : null,
+          { paddingHorizontal: sidePad, paddingBottom: 28 + bottomPad },
+          orders.length === 0 && !loading && !loadError ? styles.contentEmpty : null,
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {loading ? (
+        {loading && orders.length === 0 ? (
           <View style={styles.centerBox}>
             <ActivityIndicator color={PURPLE} />
-            <Text style={styles.loadingText}>Yuklanmoqda...</Text>
+            <Text style={styles.loadingText}>Yuklanmoqda…</Text>
           </View>
-        ) : loadError ? (
+        ) : loadError && orders.length === 0 ? (
           <View style={styles.centerBox}>
+            <Feather name="cloud-off" size={36} color={MUTED} />
             <Text style={styles.emptyTitle}>Xatolik</Text>
-            <Text style={styles.emptyText}>{loadError}</Text>
-            <Pressable onPress={() => void load()} style={[styles.reorderBtn, { marginTop: 16, width: '100%', maxWidth: 280 }]}>
+            <Text style={styles.emptyText}>
+              Buyurtmalarni yuklashda xatolik yuz berdi.
+            </Text>
+            {loadError ? <Text style={[styles.emptyText, { marginTop: 4 }]}>{loadError}</Text> : null}
+            <Pressable
+              onPress={() => void load()}
+              style={styles.retryBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Qayta urinish"
+            >
               <Feather name="refresh-cw" size={15} color={PURPLE} />
-              <Text style={styles.reorderText}>Qayta urinish</Text>
+              <Text style={styles.retryText}>Qayta urinish</Text>
             </Pressable>
           </View>
         ) : orders.length === 0 ? (
@@ -354,7 +423,6 @@ export default function PurchasesScreen() {
                 Sizning barcha buyurtmalaringiz shu yerda ko‘rsatiladi
               </Text>
             </View>
-
             <View style={styles.emptyBody}>
               <OrdersEmptyHero />
               <Text style={styles.emptyMainTitle}>Hozircha buyurtma yo‘q</Text>
@@ -364,6 +432,7 @@ export default function PurchasesScreen() {
               <Pressable
                 onPress={() => router.push('/(tabs)/catalog')}
                 style={styles.emptyCtaPress}
+                accessibilityRole="button"
                 accessibilityLabel="Mahsulotlar tanlash"
               >
                 <LinearGradient
@@ -390,7 +459,12 @@ export default function PurchasesScreen() {
                   Barcha buyurtmalaringiz shu yerda
                 </Text>
               </View>
-              <Pressable style={styles.searchBtn} onPress={() => setSearchOpen((v) => !v)} accessibilityLabel="Qidiruv">
+              <Pressable
+                style={styles.searchBtn}
+                onPress={() => setSearchOpen((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel="Qidiruv"
+              >
                 <Feather name="search" size={18} color={PURPLE_DEEP} />
               </Pressable>
             </View>
@@ -401,13 +475,14 @@ export default function PurchasesScreen() {
                 <TextInput
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Buyurtma kodini qidirish..."
+                  placeholder="Buyurtma kodini qidirish…"
                   placeholderTextColor="#A8B0C0"
                   style={styles.searchInput}
                   autoFocus
+                  accessibilityLabel="Buyurtma qidiruvi"
                 />
                 {query ? (
-                  <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                  <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Tozalash">
                     <Feather name="x" size={16} color={MUTED} />
                   </Pressable>
                 ) : null}
@@ -417,8 +492,8 @@ export default function PurchasesScreen() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filters}
-              style={styles.filtersScroll}
+              contentContainerStyle={[styles.filters, { paddingHorizontal: sidePad }]}
+              style={[styles.filtersScroll, { marginHorizontal: -sidePad }]}
             >
               {FILTERS.map((f) => {
                 const active = filter === f.key;
@@ -428,10 +503,15 @@ export default function PurchasesScreen() {
                     key={f.key}
                     style={[styles.chip, active && styles.chipActive]}
                     onPress={() => setFilter(f.key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${f.label}, ${n} ta`}
                   >
                     <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
                     <View style={[styles.chipBadge, active && styles.chipBadgeActive]}>
-                      <Text style={[styles.chipBadgeText, active && styles.chipBadgeTextActive]}>{n}</Text>
+                      <Text style={[styles.chipBadgeText, active && styles.chipBadgeTextActive]}>
+                        {n}
+                      </Text>
                     </View>
                   </Pressable>
                 );
@@ -440,7 +520,7 @@ export default function PurchasesScreen() {
 
             {visible.length === 0 ? (
               <View style={styles.centerBox}>
-                <Text style={styles.emptyTitle}>Natija topilmadi</Text>
+                <Text style={styles.emptyTitle}>Buyurtmalar topilmadi</Text>
                 <Text style={styles.emptyText}>Boshqa filtr yoki qidiruvni sinab ko‘ring</Text>
               </View>
             ) : (
@@ -450,7 +530,9 @@ export default function PurchasesScreen() {
                     key={o.id}
                     order={o}
                     expanded={expandedId === o.id}
-                    onToggle={() => setExpandedId((cur) => (cur === o.id ? null : o.id))}
+                    onToggleExpand={() =>
+                      setExpandedId((cur) => (cur === o.id ? null : Number(o.id)))
+                    }
                   />
                 ))}
               </View>
@@ -466,101 +548,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: BG },
   scroll: { flex: 1 },
   content: {
-    paddingHorizontal: 16,
-    paddingBottom: 28,
     maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
     flexGrow: 1,
   },
-
   contentEmpty: {
-    paddingHorizontal: 20,
     justifyContent: 'flex-start',
-    flexGrow: 1,
-  },
-  emptyWrap: {
-    flexGrow: 1,
-    backgroundColor: '#FFFFFF',
-    paddingBottom: 12,
-  },
-  emptyHeader: {
-    marginBottom: 8,
-  },
-  emptyPageTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: PURPLE_DEEP,
-    letterSpacing: -0.3,
-  },
-  emptyPageSub: {
-    marginTop: 6,
-    fontSize: 14,
-    lineHeight: 20,
-    color: MUTED,
-  },
-  emptyBody: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 12,
-    paddingBottom: 20,
-  },
-  heroArt: {
-    width: '100%',
-    maxWidth: 300,
-    aspectRatio: 1770 / 1577,
-    backgroundColor: '#FFFFFF',
-    marginBottom: 8,
-  },
-  emptyMainTitle: {
-    marginTop: 10,
-    fontSize: 20,
-    fontWeight: '800',
-    color: PURPLE_DEEP,
-    textAlign: 'center',
-  },
-  emptyMainText: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 20,
-    color: MUTED,
-    textAlign: 'center',
-    paddingHorizontal: 12,
-    maxWidth: 320,
-  },
-  emptyCtaPress: {
-    marginTop: 28,
-    width: '100%',
-    maxWidth: 340,
-  },
-  emptyCta: {
-    height: 56,
-    borderRadius: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 18,
-    shadowColor: '#7C3AED',
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-  },
-  emptyCtaIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyCtaText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    flexShrink: 1,
   },
 
   header: {
@@ -573,7 +567,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 28,
     color: PURPLE_DEEP,
-    includeFontPadding: false,
   },
   subtitle: {
     marginTop: 4,
@@ -589,13 +582,9 @@ const styles = StyleSheet.create({
     backgroundColor: CARD,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#1A1040',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
   },
-
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -605,6 +594,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 44,
     marginBottom: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
   },
   searchInput: {
     flex: 1,
@@ -615,8 +606,8 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
   },
 
-  filtersScroll: { marginBottom: 14, marginHorizontal: -16, flexGrow: 0 },
-  filters: { paddingHorizontal: 16, gap: 8 },
+  filtersScroll: { marginBottom: 14, flexGrow: 0 },
+  filters: { gap: 8 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -626,58 +617,44 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#E5E1F0',
+    borderColor: BORDER,
   },
-  chipActive: {
-    backgroundColor: PURPLE,
-    borderColor: PURPLE,
-  },
-  chipText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: '#64748B',
-  },
+  chipActive: { backgroundColor: PURPLE, borderColor: PURPLE },
+  chipText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#64748B' },
   chipTextActive: { color: '#fff' },
   chipBadge: {
     minWidth: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
   chipBadgeActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  chipBadgeText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
-    color: PURPLE,
-  },
+  chipBadgeText: { fontFamily: 'Inter_700Bold', fontSize: 11, color: PURPLE },
   chipBadgeTextActive: { color: '#fff' },
 
   list: { gap: 12 },
 
   card: {
     backgroundColor: CARD,
-    borderRadius: 20,
-    padding: 14,
-    shadowColor: '#1A1040',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+    overflow: 'hidden',
   },
+  cardMain: { padding: 14, paddingBottom: 8 },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   orderCode: {
     fontFamily: 'Inter_700Bold',
     fontSize: 15,
     color: PURPLE_DEEP,
-    includeFontPadding: false,
   },
   orderWhen: {
     marginTop: 3,
@@ -685,131 +662,101 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: MUTED,
   },
-
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  badgeDone: { backgroundColor: '#DCFCE7' },
-  badgeProgress: { backgroundColor: '#FEF3C7' },
-  badgeCancel: { backgroundColor: '#FEE2E2' },
-  badgeText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-  },
-
-  track: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    paddingHorizontal: 2,
-  },
-  trackStep: { width: 64, alignItems: 'center' },
-  trackDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#EDE8F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  trackDotOn: { backgroundColor: PURPLE },
-  trackLine: {
-    flex: 1,
-    height: 3,
-    backgroundColor: '#E5E1F0',
-    marginTop: 12,
-    marginHorizontal: -4,
-    borderRadius: 2,
-  },
-  trackLineOn: { backgroundColor: PURPLE },
-  trackLabel: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 9,
-    lineHeight: 11,
-    color: MUTED,
-    textAlign: 'center',
-  },
-  trackLabelOn: {
-    fontFamily: 'Inter_500Medium',
-    color: PURPLE_DEEP,
-  },
-
-  previewRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  previewThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: '#FAFAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  previewImg: { width: '80%', height: '80%' },
-  previewMore: {
-    backgroundColor: '#EDE5FF',
-    paddingHorizontal: 6,
-  },
-  previewMoreText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    color: PURPLE,
-    textAlign: 'center',
-  },
-
-  cardMid: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  midLeft: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  midCount: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: PURPLE_DEEP,
-  },
-  detailLink: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  detailLinkText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: PURPLE,
-  },
-  midRight: { alignItems: 'flex-end' },
-  totalLabel: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: MUTED,
-  },
   totalValue: {
-    marginTop: 2,
     fontFamily: 'Inter_700Bold',
     fontSize: 15,
     color: PURPLE,
-    includeFontPadding: false,
+    flexShrink: 0,
+    maxWidth: '42%',
+    textAlign: 'right',
+  },
+  fulfillPrimary: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+    marginBottom: 8,
+  },
+  axisRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  chipAxis: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  chipAxisText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+  },
+
+  previewBlock: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  previewThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productName: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 19,
+    color: PURPLE_DEEP,
+  },
+  productMeta: {
+    marginTop: 3,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+  },
+  branchName: {
+    marginTop: 3,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+  },
+  cashbackUsed: {
+    marginTop: 10,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: WARN,
+  },
+
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    paddingTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F0ECF7',
+  },
+  actionLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 36,
+    paddingVertical: 4,
+  },
+  actionLinkText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: PURPLE,
   },
 
   expandBox: {
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F0ECF7',
+    paddingHorizontal: 14,
+    paddingBottom: 12,
     gap: 8,
   },
   expandRow: {
@@ -820,58 +767,89 @@ const styles = StyleSheet.create({
   expandTitle: {
     flex: 1,
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
+    fontSize: 13,
     color: PURPLE_DEEP,
   },
   expandPrice: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
+    fontSize: 13,
     color: PURPLE,
   },
   expandMeta: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    fontSize: 12,
     color: MUTED,
-    marginTop: 2,
+    lineHeight: 16,
   },
 
-  reorderBtn: {
-    marginTop: 12,
+  emptyWrap: { flexGrow: 1, backgroundColor: BG },
+  emptyHeader: { marginBottom: 8 },
+  emptyPageTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 28,
+    color: PURPLE_DEEP,
+  },
+  emptyPageSub: {
+    marginTop: 6,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED,
+  },
+  emptyBody: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 12,
+    paddingBottom: 20,
+  },
+  heroArt: {
+    width: '100%',
+    maxWidth: 300,
+    aspectRatio: 1770 / 1577,
+    backgroundColor: 'transparent',
+    marginBottom: 8,
+  },
+  emptyMainTitle: {
+    marginTop: 10,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    color: PURPLE_DEEP,
+    textAlign: 'center',
+  },
+  emptyMainText: {
+    marginTop: 8,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED,
+    textAlign: 'center',
+    paddingHorizontal: 12,
+    maxWidth: 320,
+  },
+  emptyCtaPress: { marginTop: 28, width: '100%', maxWidth: 340 },
+  emptyCta: {
+    height: 56,
+    borderRadius: 28,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#F0E9FF',
-    borderRadius: 14,
-    minHeight: 44,
+    gap: 10,
+    paddingHorizontal: 18,
   },
-  reorderText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: PURPLE,
-  },
-
-  empty: {
+  emptyCtaIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#fff',
     alignItems: 'center',
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
   },
-  emptyTitle: {
+  emptyCtaText: {
+    color: '#fff',
     fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    color: PURPLE_DEEP,
-    textAlign: 'center',
-    includeFontPadding: false,
-  },
-  emptyText: {
-    marginTop: 10,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 21,
-    color: MUTED,
-    textAlign: 'center',
-    maxWidth: 300,
+    fontSize: 16,
+    flexShrink: 1,
   },
 
   centerBox: {
@@ -883,5 +861,34 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
     color: MUTED,
+  },
+  emptyTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+    color: PURPLE_DEEP,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED,
+    textAlign: 'center',
+    maxWidth: 300,
+  },
+  retryBtn: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: LAVENDER,
+    borderRadius: 14,
+    minHeight: 44,
+    paddingHorizontal: 18,
+  },
+  retryText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: PURPLE,
   },
 });

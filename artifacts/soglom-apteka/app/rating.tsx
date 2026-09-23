@@ -142,6 +142,7 @@ export default function RatingScreen() {
       setSuccess(true);
       setAlreadyRated(true);
       setTimeout(() => {
+        // Prefer prior context (Profile or Order). Purchases only as cold-open fallback.
         if (router.canGoBack()) router.back();
         else router.replace('/(tabs)/purchases');
       }, 600);

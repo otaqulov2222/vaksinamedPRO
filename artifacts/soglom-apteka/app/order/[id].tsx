@@ -1,8 +1,19 @@
-import { useLocalSearchParams, router } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Screen, formatUzs } from '@/components/AppUI';
-import { useColors } from '@/hooks/useColors';
+import { Feather } from '@expo/vector-icons';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { api, type ApiError } from '@/lib/api';
 import {
@@ -12,19 +23,89 @@ import {
   reservationLabel,
 } from '@/lib/orderLabels';
 
+const PURPLE = '#6A22D6';
+const PURPLE_DEEP = '#1A1040';
+const MUTED = '#8B93A7';
+const BG = '#F5F4FA';
+const CARD = '#FFFFFF';
+const BORDER = '#E8E4F2';
+const LAVENDER = '#F6F2FC';
+const OK = '#3D7A55';
+const BAD = '#B91C1C';
+const WARN = '#B45309';
+
+const priceUz = (n: number) =>
+  `${Math.round(Number(n) || 0)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
+
+function toast(title: string, msg: string) {
+  if (Platform.OS === 'web') {
+    // eslint-disable-next-line no-alert
+    window.alert(`${title}\n${msg}`);
+  } else {
+    Alert.alert(title, msg);
+  }
+}
+
+function StatusRow({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: 'ok' | 'warn' | 'bad' | 'muted';
+}) {
+  const color =
+    tone === 'ok' ? OK : tone === 'warn' ? WARN : tone === 'bad' ? BAD : PURPLE_DEEP;
+  return (
+    <View style={styles.statusRow}>
+      <Text style={styles.statusLabel}>{label}</Text>
+      <Text style={[styles.statusValue, { color }]} numberOfLines={2}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { refresh } = useApp();
+  const narrow = width < 380;
+  const contentWidth = Math.min(width, 480);
+
   const [order, setOrder] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [msLeft, setMsLeft] = useState<number | null>(null);
-  const skewRef = useRef(0);
 
-  const load = useCallback(async () => {
+  const skewRef = useRef(0);
+  const loadGen = useRef(0);
+  const loadingRef = useRef(false);
+  const cancellingRef = useRef(false);
+  const orderRef = useRef<any>(null);
+  orderRef.current = order;
+
+  const load = useCallback(async (opts?: { forceSkeleton?: boolean }) => {
+    if (loadingRef.current && !opts?.forceSkeleton) return;
+    const orderId = Number(id);
+    if (!Number.isFinite(orderId) || orderId <= 0) {
+      setError('Buyurtma topilmadi');
+      setLoading(false);
+      return;
+    }
+    const gen = ++loadGen.current;
+    loadingRef.current = true;
+    if (opts?.forceSkeleton || !orderRef.current) setLoading(true);
+    else setRefreshing(true);
     try {
-      const data = await api.order(Number(id));
+      const data = await api.order(orderId);
+      if (gen !== loadGen.current) return;
       const o = data.order;
       setOrder(o);
       setError(null);
@@ -33,13 +114,26 @@ export default function OrderScreen() {
         if (Number.isFinite(serverMs)) skewRef.current = serverMs - Date.now();
       }
     } catch (e) {
+      if (gen !== loadGen.current) return;
       setError(e instanceof Error ? e.message : 'Buyurtma yuklanmadi');
+      if (!orderRef.current) setOrder(null);
+    } finally {
+      if (gen === loadGen.current) {
+        setLoading(false);
+        setRefreshing(false);
+        loadingRef.current = false;
+      }
     }
   }, [id]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load({ forceSkeleton: !orderRef.current });
+      return () => {
+        loadGen.current += 1;
+      };
+    }, [load]),
+  );
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -69,197 +163,624 @@ export default function OrderScreen() {
     return () => clearInterval(t);
   }, [order?.reservedUntil, order?.reservationActive, order?.id, load]);
 
-  const moneyRows = useMemo(() => {
-    if (!order) return [] as Array<{ label: string; value: string; bold?: boolean }>;
-    const rows: Array<{ label: string; value: string; bold?: boolean }> = [
-      { label: 'Tovarlar', value: formatUzs(order.subtotal) },
-    ];
-    if (order.deliveryFee > 0) rows.push({ label: 'Yetkazish', value: formatUzs(order.deliveryFee) });
-    if (order.cashbackUsed > 0) rows.push({ label: 'Cashback ishlatildi', value: `−${formatUzs(order.cashbackUsed)}` });
-    rows.push({ label: 'Jami', value: formatUzs(order.total), bold: true });
-    if (order.cashbackEarned > 0) {
-      rows.push({ label: 'Buyurtma cashback (tarixiy)', value: `+${formatUzs(order.cashbackEarned)}` });
-    }
-    return rows;
-  }, [order]);
-
-  const onCancel = async () => {
-    if (!order?.canCancel || cancelling) return;
-    Alert.alert(
-      'Bekor qilish',
-      order.paymentStatus === 'PAID'
-        ? 'Buyurtma bekor qilinadi. To‘lov avtomatik qaytarilmaydi (PSP refund alohida).'
-        : 'Buyurtmani bekor qilishni tasdiqlaysizmi?',
-      [
-        { text: 'Yo‘q', style: 'cancel' },
-        {
-          text: 'Bekor qilish',
-          style: 'destructive',
-          onPress: async () => {
-            setCancelling(true);
-            try {
-              await api.cancelOrder(order.id);
-              await refresh();
-              await load();
-            } catch (e) {
-              const err = e as ApiError;
-              Alert.alert('Xatolik', err.message || 'Bekor qilib bo‘lmadi');
-            } finally {
-              setCancelling(false);
-            }
-          },
-        },
-      ],
-    );
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/purchases');
   };
 
-  if (error && !order) {
+  const onCancel = () => {
+    if (!order?.canCancel || cancellingRef.current || cancelling) return;
+    const message =
+      order.paymentStatus === 'PAID'
+        ? 'Buyurtmani bekor qilasizmi?\n\nZaxira va cashback serverda qayta hisoblanadi. To‘lov avtomatik qaytarilmaydi (PSP refund alohida).'
+        : 'Buyurtmani bekor qilasizmi?\n\nZaxira va cashback o‘zgarishlari serverda bajariladi.';
+
+    const run = async () => {
+      cancellingRef.current = true;
+      setCancelling(true);
+      try {
+        await api.cancelOrder(order.id);
+        await refresh();
+        await load({ forceSkeleton: false });
+        toast('Bekor qilindi', 'Buyurtma holati serverdan yangilandi.');
+      } catch (e) {
+        const err = e as ApiError;
+        toast('Xatolik', err.message || 'Bekor qilib bo‘lmadi');
+        await load({ forceSkeleton: false });
+      } finally {
+        cancellingRef.current = false;
+        setCancelling(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-alert
+      if (window.confirm(message)) void run();
+      return;
+    }
+    Alert.alert('Bekor qilish', message, [
+      { text: 'Yo‘q', style: 'cancel' },
+      { text: 'Bekor qilish', style: 'destructive', onPress: () => void run() },
+    ]);
+  };
+
+  const topPad = Platform.OS === 'web' ? Math.max(insets.top, 12) : Math.max(insets.top, 8);
+  const bottomPad = Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 12);
+  const sidePad = narrow ? 14 : 20;
+
+  const header = (
+    <View style={[styles.header, { paddingHorizontal: sidePad, paddingTop: topPad }]}>
+      <Pressable
+        style={styles.iconBtn}
+        onPress={goBack}
+        accessibilityRole="button"
+        accessibilityLabel="Orqaga"
+      >
+        <Feather name="chevron-left" size={22} color={PURPLE_DEEP} />
+      </Pressable>
+      <View style={styles.headerCenter}>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          Buyurtma
+        </Text>
+        {order?.code ? (
+          <Text style={styles.headerSub} numberOfLines={1}>
+            {String(order.code)}
+          </Text>
+        ) : null}
+      </View>
+      <Pressable
+        style={styles.iconBtn}
+        onPress={() => void load()}
+        disabled={refreshing || loading}
+        accessibilityRole="button"
+        accessibilityLabel="Buyurtmani yangilash"
+        accessibilityState={{ disabled: refreshing || loading }}
+      >
+        {refreshing ? (
+          <ActivityIndicator color={PURPLE} size="small" />
+        ) : (
+          <Feather name="refresh-cw" size={18} color={PURPLE} />
+        )}
+      </Pressable>
+    </View>
+  );
+
+  if (loading && !order) {
     return (
-      <Screen>
-        <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{error}</Text>
-        <Pressable onPress={() => void load()} style={[styles.refresh, { borderColor: colors.border, marginTop: 12 }]}>
-          <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Qayta urinish</Text>
-        </Pressable>
-      </Screen>
+      <View style={styles.root}>
+        {header}
+        <View style={styles.state}>
+          <ActivityIndicator color={PURPLE} size="large" />
+          <Text style={styles.stateHint}>Buyurtma yuklanmoqda…</Text>
+        </View>
+      </View>
     );
   }
 
-  if (!order) return <Screen><Text>Yuklanmoqda...</Text></Screen>;
+  if (error && !order) {
+    return (
+      <View style={styles.root}>
+        {header}
+        <View style={styles.state}>
+          <Feather name="cloud-off" size={40} color={MUTED} />
+          <Text style={styles.stateTitle}>Buyurtma yuklanmadi</Text>
+          <Text style={styles.stateHint}>{error}</Text>
+          <Pressable
+            style={styles.primaryBtn}
+            onPress={() => void load({ forceSkeleton: true })}
+            accessibilityRole="button"
+            accessibilityLabel="Qayta urinish"
+          >
+            <Text style={styles.primaryBtnText}>Qayta urinish</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
-  const pay = String(order.paymentStatus || '');
-  const resExpired = Boolean(order.reservationExpired) || (msLeft != null && msLeft <= 0 && order.reservationStatus === 'ACTIVE');
+  if (!order) return null;
+
+  const pay = String(order.paymentStatus || '').toUpperCase();
+  const fulfill = String(order.fulfillmentStatus || '').toUpperCase();
+  const resExpired =
+    Boolean(order.reservationExpired)
+    || (msLeft != null && msLeft <= 0 && String(order.reservationStatus).toUpperCase() === 'ACTIVE');
+  const items = Array.isArray(order.items) ? order.items : [];
+  const isDelivery = order.fulfillment === 'delivery';
+  const showEarned =
+    fulfill === 'COMPLETED'
+    && Number(order.cashbackEarned) > 0;
+  const usedCashback = Number(order.cashbackUsed) > 0 ? Number(order.cashbackUsed) : 0;
+
+  const payTone: 'ok' | 'warn' | 'bad' | 'muted' =
+    pay === 'PAID' ? 'ok' : pay === 'FAILED' ? 'bad' : pay === 'PENDING' ? 'warn' : 'muted';
+  const resTone: 'ok' | 'warn' | 'bad' | 'muted' = resExpired
+    ? 'warn'
+    : String(order.reservationStatus).toUpperCase() === 'FULFILLED'
+      ? 'ok'
+      : String(order.reservationStatus).toUpperCase() === 'CANCELLED'
+        ? 'bad'
+        : 'muted';
 
   return (
-    <Screen>
-      <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: colors.foreground }]}>{order.code}</Text>
-        <Pressable onPress={() => void load()} hitSlop={8}>
-          <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Yangilash</Text>
-        </Pressable>
-      </View>
+    <View style={styles.root}>
+      {header}
 
-      <Text style={[styles.axis, { color: colors.foreground }]}>
-        {fulfillmentLabel(order.fulfillmentStatus)}
-      </Text>
-      <Text style={[styles.axisSub, { color: colors.mutedForeground }]}>
-        To‘lov: {paymentLabel(order.paymentStatus)}
-      </Text>
-      <Text style={[styles.axisSub, { color: resExpired ? '#B45309' : colors.mutedForeground }]}>
-        Bron: {reservationLabel(order.reservationStatus, resExpired)}
-      </Text>
-
-      {pay === 'PENDING' ? (
-        <Text style={[styles.note, { color: '#B45309' }]}>
-          Buyurtma yaratildi ≠ to‘lov amalga oshirilgan. To‘lov holati alohida.
-        </Text>
-      ) : null}
-      {pay === 'FAILED' ? (
-        <Text style={[styles.note, { color: '#B91C1C' }]}>
-          To‘lov muvaffaqiyatsiz. Production PSP retry o‘chirilgan — filialda to‘lang yoki qo‘llab-quvvatlashga murojaat qiling.
-        </Text>
-      ) : null}
-      {pay === 'REFUNDED' || pay === 'PARTIALLY_REFUNDED' ? (
-        <Text style={[styles.note, { color: colors.mutedForeground }]}>
-          Refund holati serverdan. Cashback avtomatik o‘zgarmaydi.
-        </Text>
-      ) : null}
-
-      {order.reservationActive && order.reservedUntil && msLeft != null && msLeft > 0 ? (
-        <View style={[styles.countdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Bron tugashiga (taxminiy)</Text>
-          <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 22, marginTop: 4 }}>
-            {formatCountdown(msLeft)}
-          </Text>
-          <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 4 }}>
-            Server muddati asosiy — qurilma taymeri faqat UX
-          </Text>
-        </View>
-      ) : null}
-
-      {resExpired && order.fulfillmentStatus !== 'CANCELLED' && order.fulfillmentStatus !== 'COMPLETED' ? (
-        <Text style={[styles.note, { color: '#B45309' }]}>
-          Bron muddati tugagan. Yangi buyurtma uchun katalog/savatga qayting.
-        </Text>
-      ) : null}
-
-      <Text style={{ color: colors.mutedForeground, marginTop: 8 }}>
-        {order.branch?.name} · {order.fulfillment === 'delivery' ? 'Yetkazib berish' : 'Filialdan olish'}
-      </Text>
-
-      {order.fulfillmentStatus !== 'CANCELLED' && order.reservationStatus !== 'EXPIRED' ? (
-        <View style={[styles.qr, { backgroundColor: colors.primary }]}>
-          <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 18 }}>{order.qrPayload}</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.8)', marginTop: 6 }}>Kassada shu kodni ko‘rsating</Text>
-        </View>
-      ) : null}
-
-      {order.items.map((item: any) => (
-        <View key={item.id} style={[styles.row, { borderColor: colors.border }]}>
-          <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', color: colors.foreground }}>
-            {item.title} × {item.quantity}
-          </Text>
-          <Text style={{ color: colors.primary }}>{formatUzs(item.price * item.quantity)}</Text>
-        </View>
-      ))}
-
-      <View style={{ marginTop: 12, gap: 6 }}>
-        {moneyRows.map((r) => (
-          <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ color: colors.mutedForeground, fontFamily: r.bold ? 'Inter_700Bold' : 'Inter_400Regular' }}>
-              {r.label}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          {
+            width: contentWidth,
+            paddingHorizontal: sidePad,
+            paddingBottom: 28 + bottomPad,
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Status axes */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Holat</Text>
+          <StatusRow label="Buyurtma" value={fulfillmentLabel(order.fulfillmentStatus)} />
+          <StatusRow label="To‘lov" value={paymentLabel(order.paymentStatus)} tone={payTone} />
+          <StatusRow
+            label="Zaxira"
+            value={reservationLabel(order.reservationStatus, resExpired)}
+            tone={resTone}
+          />
+          {pay === 'PENDING' ? (
+            <Text style={styles.noteWarn}>
+              Buyurtma yaratildi ≠ to‘lov amalga oshirilgan. To‘lov holati alohida.
             </Text>
-            <Text style={{ color: colors.foreground, fontFamily: r.bold ? 'Inter_700Bold' : 'Inter_600SemiBold' }}>
-              {r.value}
+          ) : null}
+          {pay === 'FAILED' ? (
+            <Text style={styles.noteBad}>
+              To‘lov amalga oshmadi. Online to‘lov hozircha mavjud emas — filialda to‘lang.
+            </Text>
+          ) : null}
+        </View>
+
+        {order.reservationActive && order.reservedUntil && msLeft != null && msLeft > 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Bron tugashiga (taxminiy)</Text>
+            <Text style={styles.countdown}>{formatCountdown(msLeft)}</Text>
+            <Text style={styles.meta}>Server muddati asosiy — qurilma taymeri faqat UX.</Text>
+          </View>
+        ) : null}
+
+        {resExpired && fulfill !== 'CANCELLED' && fulfill !== 'COMPLETED' ? (
+          <View style={styles.warnCard}>
+            <Text style={styles.warnText}>
+              Mahsulot band qilish muddati tugagan. Yangi buyurtma uchun katalogga qayting.
             </Text>
           </View>
-        ))}
-      </View>
+        ) : null}
 
-      {order.canCancel ? (
-        <Pressable
-          disabled={cancelling}
-          onPress={onCancel}
-          style={[styles.cancel, { borderColor: colors.destructive, opacity: cancelling ? 0.5 : 1 }]}
-        >
-          <Text style={{ color: colors.destructive, fontFamily: 'Inter_600SemiBold' }}>
-            {cancelling ? 'Bekor qilinmoqda...' : 'Bekor qilish'}
+        {/* Fulfillment */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Olish usuli</Text>
+          <Text style={styles.bodyStrong}>
+            {isDelivery ? 'Yetkazib berish' : 'Filialdan olib ketish'}
           </Text>
-        </Pressable>
-      ) : null}
+          {isDelivery ? (
+            <>
+              {order.address ? (
+                <Text style={styles.meta} numberOfLines={3}>
+                  Manzil: {String(order.address)}
+                </Text>
+              ) : null}
+              <Text style={styles.meta}>
+                Yetkazib berish tafsilotlari buyurtma jarayonida yangilanadi.
+              </Text>
+              {order.delivery?.status ? (
+                <Text style={styles.meta}>
+                  Holat: {String(order.delivery.status)}
+                  {order.delivery.timeWindow ? ` · ${String(order.delivery.timeWindow)}` : ''}
+                </Text>
+              ) : null}
+            </>
+          ) : null}
+        </View>
 
-      {order.canRate ? (
+        {/* Branch */}
+        {order.branch?.name ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Filial</Text>
+            <Text style={styles.bodyStrong} numberOfLines={2}>
+              {String(order.branch.name)}
+            </Text>
+            {order.branch.address ? (
+              <Text style={styles.meta} numberOfLines={2}>
+                {String(order.branch.address)}
+              </Text>
+            ) : null}
+            {order.branch.hours ? (
+              <Text style={styles.meta} numberOfLines={1}>
+                {String(order.branch.hours)}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* QR for pickup/active */}
+        {fulfill !== 'CANCELLED' && !resExpired && order.qrPayload ? (
+          <View style={styles.qrCard}>
+            <Text style={styles.qrCode} numberOfLines={1}>
+              {String(order.qrPayload)}
+            </Text>
+            <Text style={styles.qrHint}>Kassada shu kodni ko‘rsating</Text>
+          </View>
+        ) : null}
+
+        {/* Items */}
+        <Text style={styles.sectionTitle}>Mahsulotlar</Text>
+        {items.map((item: any) => {
+          const qty = Math.max(1, Number(item.quantity) || 1);
+          const unit = Number(item.price) || 0;
+          const line = unit * qty;
+          return (
+            <View key={item.id ?? `${item.productId}-${item.title}`} style={styles.lineCard}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.lineName} numberOfLines={2}>
+                  {String(item.title || 'Mahsulot')}
+                </Text>
+                <Text style={styles.lineMeta}>
+                  {qty} dona × {priceUz(unit)}
+                </Text>
+              </View>
+              <Text style={styles.lineTotal} numberOfLines={1}>
+                {priceUz(line)}
+              </Text>
+            </View>
+          );
+        })}
+
+        {/* Money + cashback */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Hisob</Text>
+          <View style={styles.moneyRow}>
+            <Text style={styles.moneyLabel}>Mahsulotlar</Text>
+            <Text style={styles.moneyValue}>{priceUz(order.subtotal)}</Text>
+          </View>
+          {Number(order.deliveryFee) > 0 ? (
+            <View style={styles.moneyRow}>
+              <Text style={styles.moneyLabel}>Yetkazib berish</Text>
+              <Text style={styles.moneyValue}>{priceUz(order.deliveryFee)}</Text>
+            </View>
+          ) : null}
+          {usedCashback > 0 ? (
+            <View style={styles.moneyRow}>
+              <Text style={styles.moneyLabel}>Cashback ishlatildi</Text>
+              <Text style={[styles.moneyValue, { color: WARN }]}>−{priceUz(usedCashback)}</Text>
+            </View>
+          ) : null}
+          <View style={styles.divider} />
+          <View style={styles.moneyRow}>
+            <Text style={styles.moneyTotalLabel}>Jami</Text>
+            <Text style={styles.moneyTotalValue}>{priceUz(order.total)}</Text>
+          </View>
+          {showEarned ? (
+            <Text style={styles.earnNote}>
+              Cashback olindi: +{priceUz(order.cashbackEarned)}
+            </Text>
+          ) : Number(order.cashbackEarned) > 0 && fulfill !== 'COMPLETED' ? (
+            <Text style={styles.meta}>
+              Kutilayotgan cashback buyurtma yakunlanganda (COMPLETED) hisobga o‘tadi.
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Actions */}
+        {order.canCancel ? (
+          <Pressable
+            style={[styles.cancelBtn, cancelling && { opacity: 0.55 }]}
+            disabled={cancelling}
+            onPress={onCancel}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: cancelling }}
+            accessibilityLabel="Buyurtmani bekor qilish"
+          >
+            {cancelling ? (
+              <ActivityIndicator color={BAD} />
+            ) : (
+              <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+            )}
+          </Pressable>
+        ) : null}
+
+        {order.canRate ? (
+          <Pressable
+            style={styles.primaryBtn}
+            onPress={() =>
+              router.push({ pathname: '/rating', params: { orderId: String(order.id) } })
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Filial xizmatini baholash"
+          >
+            <Text style={styles.primaryBtnText}>Filial xizmatini baholash</Text>
+          </Pressable>
+        ) : null}
+        {order.alreadyRated ? (
+          <Text style={[styles.meta, { textAlign: 'center', marginTop: 8 }]}>
+            Bu buyurtma baholangan
+          </Text>
+        ) : null}
+
         <Pressable
-          onPress={() => router.push({ pathname: '/rating', params: { orderId: String(order.id) } })}
-          style={[styles.rateBtn, { backgroundColor: colors.primary }]}
+          style={styles.linkBtn}
+          onPress={() => router.replace('/(tabs)/purchases')}
+          accessibilityRole="button"
+          accessibilityLabel="Buyurtmalar ro‘yxatiga qaytish"
         >
-          <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold' }}>Filial xizmatini baholash</Text>
+          <Text style={styles.linkBtnText}>Buyurtmalar ro‘yxati</Text>
         </Pressable>
-      ) : null}
-      {order.alreadyRated ? (
-        <Text style={{ marginTop: 12, color: colors.mutedForeground, fontFamily: 'Inter_500Medium', textAlign: 'center' }}>
-          Bu buyurtma baholangan
-        </Text>
-      ) : null}
-
-      <Pressable onPress={() => router.push('/(tabs)/catalog')} style={{ marginTop: 16, marginBottom: 24 }}>
-        <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', textAlign: 'center' }}>
-          Katalogga qaytish
-        </Text>
-      </Pressable>
-    </Screen>
+        <Pressable
+          style={[styles.linkBtn, { marginBottom: 8 }]}
+          onPress={() => router.replace('/(tabs)/catalog')}
+          accessibilityRole="button"
+          accessibilityLabel="Katalogga qaytish"
+        >
+          <Text style={styles.linkBtnText}>Katalogga qaytish</Text>
+        </Pressable>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 26 },
-  axis: { fontFamily: 'Inter_700Bold', fontSize: 16, marginBottom: 4 },
-  axisSub: { fontFamily: 'Inter_500Medium', fontSize: 13, marginBottom: 2 },
-  note: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17, marginTop: 8 },
-  countdown: { marginTop: 12, borderWidth: 1, borderRadius: 14, padding: 12 },
-  qr: { borderRadius: 20, padding: 18, marginVertical: 16 },
-  row: { borderBottomWidth: 1, paddingVertical: 10, flexDirection: 'row' },
-  cancel: { marginTop: 18, minHeight: 46, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  rateBtn: { marginTop: 14, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  refresh: { minHeight: 44, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  root: { flex: 1, backgroundColor: BG, alignItems: 'center' },
+  scroll: { flex: 1, width: '100%' },
+  content: { alignSelf: 'center', paddingTop: 10 },
+
+  header: {
+    width: '100%',
+    maxWidth: 480,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingBottom: 10,
+    backgroundColor: CARD,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+  },
+  headerCenter: { flex: 1, minWidth: 0, alignItems: 'center' },
+  headerTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    color: PURPLE_DEEP,
+  },
+  headerSub: {
+    marginTop: 2,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: MUTED,
+  },
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  card: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+    marginBottom: 10,
+  },
+  cardLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: MUTED,
+  },
+  bodyStrong: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+  },
+  meta: {
+    marginTop: 6,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    color: MUTED,
+  },
+
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 8,
+  },
+  statusLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+    flexShrink: 0,
+  },
+  statusValue: {
+    flex: 1,
+    textAlign: 'right',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+  noteWarn: {
+    marginTop: 6,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    color: WARN,
+  },
+  noteBad: {
+    marginTop: 6,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    color: BAD,
+  },
+
+  countdown: {
+    marginTop: 6,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 24,
+    color: PURPLE,
+  },
+  warnCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#FDE68A',
+  },
+  warnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: WARN,
+    lineHeight: 18,
+  },
+
+  qrCard: {
+    backgroundColor: PURPLE,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  qrCode: {
+    color: '#fff',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+  },
+  qrHint: {
+    marginTop: 6,
+    color: 'rgba(255,255,255,0.85)',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+  },
+
+  sectionTitle: {
+    marginBottom: 8,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    color: PURPLE_DEEP,
+  },
+  lineCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: CARD,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+  },
+  lineName: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    lineHeight: 19,
+    color: PURPLE_DEEP,
+  },
+  lineMeta: {
+    marginTop: 4,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+  },
+  lineTotal: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: PURPLE,
+    flexShrink: 0,
+  },
+
+  moneyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 8,
+  },
+  moneyLabel: { fontFamily: 'Inter_400Regular', fontSize: 13, color: MUTED, flex: 1 },
+  moneyValue: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: PURPLE_DEEP },
+  moneyTotalLabel: { fontFamily: 'Inter_700Bold', fontSize: 15, color: PURPLE_DEEP },
+  moneyTotalValue: { fontFamily: 'Inter_700Bold', fontSize: 16, color: PURPLE },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: BORDER,
+    marginVertical: 6,
+  },
+  earnNote: {
+    marginTop: 6,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: OK,
+  },
+
+  cancelBtn: {
+    marginTop: 4,
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: BAD,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CARD,
+  },
+  cancelBtnText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: BAD,
+  },
+  primaryBtn: {
+    marginTop: 12,
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  primaryBtnText: {
+    color: '#fff',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+  },
+  linkBtn: { marginTop: 14, alignItems: 'center', paddingVertical: 6 },
+  linkBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: PURPLE,
+  },
+
+  state: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    gap: 10,
+  },
+  stateTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    color: PURPLE_DEEP,
+    textAlign: 'center',
+  },
+  stateHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED,
+    textAlign: 'center',
+  },
 });

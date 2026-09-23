@@ -1,7 +1,7 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import React, { useMemo } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo } from 'react';
 import {
   Alert,
   Platform,
@@ -9,11 +9,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { formatUzs } from '@/components/AppUI';
+import { LanguageBadge } from '@/components/LanguageBadge';
+import { LanguageFlag } from '@/components/LanguageFlag';
+import { getLanguageMeta } from '@/lib/languages';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -30,8 +34,15 @@ type MenuRow = {
   key: string;
   label: string;
   value?: string;
+  a11y: string;
   icon: MenuIcon;
   onPress: () => void;
+};
+
+type MenuSection = {
+  key: string;
+  title: string;
+  rows: MenuRow[];
 };
 
 function formatPhone(phone: string) {
@@ -45,17 +56,9 @@ function formatPhone(phone: string) {
   return phone || '—';
 }
 
-function tierLabel(tier: string) {
-  const t = String(tier || '').toLowerCase();
-  if (t.includes('gold') || t.includes('oltin')) return 'Gold';
-  if (t.includes('silver') || t.includes('kumush')) return 'Silver';
-  if (t.includes('bronze') || t.includes('bronza')) return 'Bronze';
-  return tier || 'Silver';
-}
-
 function MenuIconBox({ icon }: { icon: MenuIcon }) {
   return (
-    <View style={[styles.iconBox, { backgroundColor: icon.bg }]}>
+    <View style={[styles.iconBox, { backgroundColor: icon.bg }]} importantForAccessibility="no-hide-descendants">
       {icon.kind === 'feather' ? (
         <Feather name={icon.name} size={18} color={icon.color} />
       ) : (
@@ -67,64 +70,160 @@ function MenuIconBox({ icon }: { icon: MenuIcon }) {
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { user, language, balance, logout } = useApp();
+  const { width } = useWindowDimensions();
+  const narrow = width < 390;
+  const { user, language, balance, logout, refresh, loading, isAuthenticated } = useApp();
+
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      void (async () => {
+        try {
+          await refresh();
+        } catch {
+          // Context refresh already handles auth failures; ignore for focus.
+        }
+        if (!alive) return;
+      })();
+      return () => {
+        alive = false;
+      };
+    }, [refresh]),
+  );
+
+  const ready = isAuthenticated && !loading;
 
   const initial = useMemo(() => {
-    const n = String(user.name || 'M').trim();
-    return (n[0] || 'M').toUpperCase();
+    const n = String(user.name || '').trim();
+    return n ? n[0].toUpperCase() : '—';
   }, [user.name]);
 
-  const levelName = tierLabel(user.tier);
-  const levelFull = `${levelName} daraja`;
-  const cashbackText = formatUzs(user.saved || 0);
-  const bonusText = String(Math.round(Number(balance) || 0));
+  // API: balance = spendable cashback (getAuthoritativeBalance). Not savedAmount.
+  const balanceText = ready
+    ? formatUzs(Math.max(0, Math.floor(Number(balance) || 0)))
+    : '—';
 
-  const langLabel = language === 'uz' ? "O'zbekcha" : language === 'ru' ? 'Русский' : 'English';
+  // API: tier from customer.tier — never invent Silver/Gold in UI.
+  const tierRaw = String(user.tier || '').trim();
+  const hasTier = Boolean(tierRaw);
+  const levelName = hasTier ? tierRaw : '';
+  const levelFull = hasTier ? `${tierRaw} daraja` : 'Daraja mavjud emas';
 
-  const infoRows: MenuRow[] = [
+  // API: purchasesCount — real counter; 0 is valid once profile is ready.
+  const purchasesText = ready
+    ? String(Math.max(0, Math.floor(Number(user.purchases) || 0)))
+    : '—';
+
+  const langMeta = getLanguageMeta(language);
+  const displayName = String(user.name || '').trim() || '—';
+
+  const sections: MenuSection[] = [
     {
-      key: 'cashback',
-      label: 'Cashback',
-      value: cashbackText,
-      icon: { kind: 'mci', name: 'wallet-outline', color: '#7C3AED', bg: '#F3E8FF' },
-      onPress: () => router.push('/(tabs)/cashback'),
+      key: 'account',
+      title: 'Hisob',
+      rows: [
+        {
+          key: 'edit',
+          label: 'Profilni tahrirlash',
+          a11y: 'Profilni tahrirlash',
+          icon: { kind: 'feather', name: 'edit-2', color: '#7C3AED', bg: '#F3E8FF' },
+          onPress: () => router.push('/edit-profile'),
+        },
+        {
+          key: 'language',
+          label: 'Til',
+          value: langMeta.shortCode,
+          a11y: `Til: ${langMeta.nativeName}`,
+          icon: { kind: 'feather', name: 'globe', color: '#7C3AED', bg: '#F3E8FF' },
+          onPress: () => router.push('/language'),
+        },
+      ],
     },
     {
-      key: 'level',
-      label: 'Daraja',
-      value: levelFull,
-      icon: { kind: 'mci', name: 'crown-outline', color: GOLD, bg: '#FFF7E6' },
-      onPress: () => router.push('/(tabs)/cashback'),
+      key: 'loyalty',
+      title: 'Cashback va daraja',
+      rows: [
+        {
+          key: 'cashback',
+          // Same spendable balance as top "Mavjud balans" — not savedAmount.
+          label: 'Mavjud balans',
+          value: balanceText,
+          a11y: `Mavjud cashback balansini ko‘rish, ${balanceText}`,
+          icon: { kind: 'mci', name: 'wallet-outline', color: '#7C3AED', bg: '#F3E8FF' },
+          // Stack child — not a tab switch (NAV 2).
+          onPress: () => router.push('/cashback'),
+        },
+        {
+          key: 'level',
+          label: 'Daraja',
+          value: levelFull,
+          a11y: `Darajani ko‘rish, ${levelFull}`,
+          icon: { kind: 'mci', name: 'crown-outline', color: GOLD, bg: '#FFF7E6' },
+          // No separate loyalty screen — Cashback stack shows tier cards; Back → Profile.
+          onPress: () => router.push({ pathname: '/cashback', params: { focus: 'tier' } }),
+        },
+      ],
     },
     {
-      key: 'branches',
-      label: 'Dorixonalar',
-      icon: { kind: 'feather', name: 'map-pin', color: '#7C3AED', bg: '#F3E8FF' },
-      onPress: () => router.push('/branches'),
+      key: 'orders',
+      title: 'Buyurtmalar',
+      rows: [
+        {
+          key: 'purchases',
+          label: 'Buyurtmalar',
+          value: ready ? purchasesText : undefined,
+          a11y: 'Buyurtmalar',
+          icon: { kind: 'feather', name: 'shopping-bag', color: '#7C3AED', bg: '#F3E8FF' },
+          onPress: () => router.push('/(tabs)/purchases'),
+        },
+      ],
     },
     {
-      key: 'rating',
-      label: 'Xizmatni baholash',
-      icon: { kind: 'mci', name: 'star-box-outline', color: '#7C3AED', bg: '#F3E8FF' },
-      onPress: () => router.push('/rating'),
-    },
-    {
-      key: 'notif',
-      label: 'Bildirishnomalar',
-      icon: { kind: 'feather', name: 'bell', color: '#7C3AED', bg: '#F3E8FF' },
-      onPress: () => router.push('/notifications'),
-    },
-    {
-      key: 'help',
-      label: 'Yordam markazi',
-      icon: { kind: 'feather', name: 'help-circle', color: '#7C3AED', bg: '#F3E8FF' },
-      onPress: () => router.push('/help'),
+      key: 'support',
+      title: 'Yordam',
+      rows: [
+        {
+          key: 'notif',
+          label: 'Bildirishnomalar',
+          a11y: 'Bildirishnomalar',
+          icon: { kind: 'feather', name: 'bell', color: '#7C3AED', bg: '#F3E8FF' },
+          onPress: () => router.push('/notifications'),
+        },
+        {
+          key: 'help',
+          label: 'Yordam markazi',
+          a11y: 'Yordam markazi',
+          icon: { kind: 'feather', name: 'help-circle', color: '#7C3AED', bg: '#F3E8FF' },
+          onPress: () => router.push('/help'),
+        },
+        {
+          key: 'branches',
+          label: 'Dorixonalar',
+          a11y: 'Dorixonalar',
+          icon: { kind: 'feather', name: 'map-pin', color: '#7C3AED', bg: '#F3E8FF' },
+          onPress: () => router.push('/branches'),
+        },
+        {
+          key: 'rating',
+          label: 'Xizmatni baholash',
+          a11y: 'Xizmatni baholash',
+          icon: { kind: 'mci', name: 'star-box-outline', color: '#7C3AED', bg: '#F3E8FF' },
+          onPress: () => router.push('/rating'),
+        },
+      ],
     },
     {
       key: 'about',
-      label: 'Ilova haqida',
-      icon: { kind: 'feather', name: 'info', color: '#7C3AED', bg: '#F3E8FF' },
-      onPress: () => router.push('/about'),
+      title: 'Ilova',
+      rows: [
+        {
+          key: 'about',
+          label: 'Ilova haqida',
+          a11y: 'Ilova haqida',
+          icon: { kind: 'feather', name: 'info', color: '#7C3AED', bg: '#F3E8FF' },
+          onPress: () => router.push('/about'),
+        },
+      ],
     },
   ];
 
@@ -146,11 +245,14 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const tabClearance = Platform.OS === 'web' ? 88 : 72;
+  const bottomPad = 24 + Math.max(insets.bottom, 8) + tabClearance;
+
   return (
     <View style={[styles.root, { paddingTop: Platform.OS === 'web' ? 12 : Math.max(insets.top, 8) }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -158,11 +260,7 @@ export default function ProfileScreen() {
             <Text style={styles.title}>Profil</Text>
             <Text style={styles.subtitle}>Shaxsiy ma’lumotlaringiz va sozlamalar</Text>
           </View>
-          <Pressable style={styles.langBadge} onPress={() => router.push('/language')}>
-            <Text style={styles.flag}>🇺🇿</Text>
-            <Text style={styles.langCode}>{language.toUpperCase()}</Text>
-            <Feather name="chevron-down" size={14} color={PURPLE} />
-          </Pressable>
+          <LanguageBadge language={language} onPress={() => router.push('/language')} />
         </View>
 
         <View style={styles.heroCard}>
@@ -172,104 +270,151 @@ export default function ProfileScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.heroTop}
           >
-            <View style={styles.heroWaveA} />
-            <View style={styles.heroWaveB} />
+            <View style={styles.heroWaveA} pointerEvents="none" />
+            <View style={styles.heroWaveB} pointerEvents="none" />
 
-            <View style={styles.heroRow}>
-              <View style={styles.avatarWrap}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarLetter}>{initial}</Text>
-                </View>
-                <Pressable style={styles.cameraBtn} onPress={onEdit} hitSlop={8}>
-                  <Feather name="camera" size={12} color={PURPLE} />
-                </Pressable>
+            <View style={[styles.heroRow, narrow && styles.heroRowNarrow]}>
+              <View style={styles.avatar} accessible accessibilityLabel="Profil avatari" accessibilityRole="image">
+                <Text style={styles.avatarLetter}>{initial}</Text>
               </View>
 
               <View style={styles.heroInfo}>
-                <Text style={styles.heroName} numberOfLines={1}>
-                  {user.name || 'Mijoz'}
+                <Text style={styles.heroName} numberOfLines={2}>
+                  {displayName}
                 </Text>
-                <Text style={styles.heroPhone}>{formatPhone(user.phone)}</Text>
-                <View style={styles.goldChip}>
-                  <MaterialCommunityIcons name="crown" size={12} color={GOLD} />
-                  <Text style={styles.goldChipText}>{levelFull}</Text>
-                </View>
+                <Text style={styles.heroPhone} numberOfLines={1}>
+                  {formatPhone(user.phone)}
+                </Text>
+                {hasTier ? (
+                  <View style={styles.goldChip}>
+                    <MaterialCommunityIcons name="crown" size={12} color={GOLD} />
+                    <Text style={styles.goldChipText} numberOfLines={1}>
+                      {levelFull}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.tierMissing}>{levelFull}</Text>
+                )}
               </View>
 
-              <Pressable style={styles.editBtn} onPress={onEdit}>
-                <Feather name="edit-2" size={12} color="#FFFFFF" />
-                <Text style={styles.editBtnText}>Profilni tahrirlash</Text>
-              </Pressable>
+              {!narrow ? (
+                <Pressable
+                  style={styles.editBtn}
+                  onPress={onEdit}
+                  accessibilityRole="button"
+                  accessibilityLabel="Profilni tahrirlash"
+                >
+                  <Feather name="edit-2" size={13} color="#FFFFFF" />
+                  <Text style={styles.editBtnText}>Tahrirlash</Text>
+                </Pressable>
+              ) : null}
             </View>
+
+            {narrow ? (
+              <Pressable
+                style={styles.editBtnWide}
+                onPress={onEdit}
+                accessibilityRole="button"
+                accessibilityLabel="Profilni tahrirlash"
+              >
+                <Feather name="edit-2" size={14} color="#FFFFFF" />
+                <Text style={styles.editBtnWideText}>Profilni tahrirlash</Text>
+              </Pressable>
+            ) : null}
           </LinearGradient>
 
           <View style={styles.statsBar}>
-            <Pressable style={styles.statCell} onPress={() => router.push('/(tabs)/cashback')}>
-              <MaterialCommunityIcons name="cash-multiple" size={18} color={PURPLE} />
-              <Text style={styles.statValue} numberOfLines={1}>
-                {cashbackText}
-              </Text>
-              <Text style={styles.statLabel}>Cashback</Text>
-            </Pressable>
-            <View style={styles.statDivider} />
-            <Pressable style={styles.statCell} onPress={() => router.push('/(tabs)/cashback')}>
-              <MaterialCommunityIcons name="star-circle" size={18} color={GOLD} />
-              <Text style={styles.statValue} numberOfLines={1}>
-                {levelName}
-              </Text>
-              <Text style={styles.statLabel}>Mening darajam</Text>
-            </Pressable>
-            <View style={styles.statDivider} />
-            <Pressable style={styles.statCell} onPress={() => router.push('/(tabs)/cashback')}>
+            <Pressable
+              style={styles.statCell}
+              onPress={() => router.push('/cashback')}
+              accessibilityRole="button"
+              accessibilityLabel={`Mavjud balans, ${balanceText}`}
+            >
               <MaterialCommunityIcons name="wallet-outline" size={18} color={PURPLE} />
-              <Text style={styles.statValue} numberOfLines={1}>
-                {bonusText}
+              <Text
+                style={styles.statValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {balanceText}
               </Text>
               <Text style={styles.statLabel}>Mavjud balans</Text>
+            </Pressable>
+            <View style={styles.statDivider} />
+            <Pressable
+              style={styles.statCell}
+              onPress={() => router.push({ pathname: '/cashback', params: { focus: 'tier' } })}
+              accessibilityRole="button"
+              accessibilityLabel={`Daraja, ${levelFull}`}
+            >
+              <MaterialCommunityIcons name="star-circle" size={18} color={GOLD} />
+              <Text style={styles.statValue} numberOfLines={1}>
+                {hasTier ? levelName : '—'}
+              </Text>
+              <Text style={styles.statLabel}>Daraja</Text>
+            </Pressable>
+            <View style={styles.statDivider} />
+            <Pressable
+              style={styles.statCell}
+              onPress={() => router.push('/(tabs)/purchases')}
+              accessibilityRole="button"
+              accessibilityLabel={`Xaridlar, ${purchasesText}`}
+            >
+              <MaterialCommunityIcons name="shopping-outline" size={18} color={PURPLE} />
+              <Text style={styles.statValue} numberOfLines={1}>
+                {purchasesText}
+              </Text>
+              <Text style={styles.statLabel}>Xaridlar</Text>
             </Pressable>
           </View>
         </View>
 
-        <View style={styles.sectionHead}>
-          <Text style={styles.sectionTitle}>Profil ma’lumotlari</Text>
-          <Text style={styles.sectionAction}>Hisobingizni boshqaring</Text>
-        </View>
-        <View style={styles.card}>
-          {infoRows.map((row, i) => (
-            <Pressable
-              key={row.key}
-              onPress={row.onPress}
-              style={({ pressed }) => [
-                styles.row,
-                i < infoRows.length - 1 && styles.rowBorder,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <MenuIconBox icon={row.icon} />
-              <Text style={styles.rowLabel}>{row.label}</Text>
-              {row.value ? <Text style={styles.rowValue}>{row.value}</Text> : null}
-              <Feather name="chevron-right" size={18} color="#C5CAD6" />
-            </Pressable>
-          ))}
-        </View>
+        {sections.map((section) => (
+          <View key={section.key}>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+            </View>
+            <View style={styles.card}>
+              {section.rows.map((row, i) => (
+                <Pressable
+                  key={row.key}
+                  onPress={row.onPress}
+                  accessibilityRole="button"
+                  accessibilityLabel={row.a11y}
+                  style={({ pressed }) => [
+                    styles.row,
+                    i < section.rows.length - 1 && styles.rowBorder,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <MenuIconBox icon={row.icon} />
+                  <Text style={styles.rowLabel}>{row.label}</Text>
+                  {row.key === 'language' ? (
+                    <View style={styles.langRowValue}>
+                      <LanguageFlag language={language} size={14} />
+                      <Text style={styles.rowValue} numberOfLines={1}>
+                        {langMeta.shortCode}
+                      </Text>
+                    </View>
+                  ) : row.value ? (
+                    <Text style={styles.rowValue} numberOfLines={1}>
+                      {row.value}
+                    </Text>
+                  ) : null}
+                  <Feather name="chevron-right" size={18} color="#C5CAD6" />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ))}
 
-        <View style={styles.sectionHead}>
-          <Text style={styles.sectionTitle}>Sozlamalar</Text>
-          <Text style={styles.sectionAction}>Ilova sozlamalari</Text>
-        </View>
-        <View style={styles.card}>
-          <Pressable
-            onPress={() => router.push('/language')}
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-          >
-            <MenuIconBox icon={{ kind: 'feather', name: 'globe', color: '#7C3AED', bg: '#F3E8FF' }} />
-            <Text style={styles.rowLabel}>Til</Text>
-            <Text style={styles.rowValue}>{langLabel}</Text>
-            <Feather name="chevron-right" size={18} color="#C5CAD6" />
-          </Pressable>
-        </View>
-
-        <Pressable onPress={onLogout} style={styles.logout}>
+        <Pressable
+          onPress={onLogout}
+          style={styles.logout}
+          accessibilityRole="button"
+          accessibilityLabel="Chiqish"
+        >
           <Feather name="log-out" size={18} color="#DC2626" />
           <Text style={styles.logoutText}>Chiqish</Text>
         </Pressable>
@@ -307,19 +452,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: MUTED,
   },
-  langBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: CARD,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#ECEEF5',
-  },
-  flag: { fontSize: 14 },
-  langCode: { fontSize: 12, fontWeight: '700', color: PURPLE_DEEP },
 
   heroCard: {
     borderRadius: 24,
@@ -334,8 +466,7 @@ const styles = StyleSheet.create({
   heroTop: {
     paddingHorizontal: 16,
     paddingTop: 18,
-    paddingBottom: 20,
-    minHeight: 132,
+    paddingBottom: 18,
     overflow: 'hidden',
   },
   heroWaveA: {
@@ -361,9 +492,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  avatarWrap: {
-    width: 64,
-    height: 64,
+  heroRowNarrow: {
+    alignItems: 'flex-start',
   },
   avatar: {
     width: 64,
@@ -378,19 +508,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1A1040',
   },
-  cameraBtn: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#F0E9FF',
-  },
   heroInfo: {
     flex: 1,
     minWidth: 0,
@@ -399,11 +516,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800',
+    lineHeight: 24,
   },
   heroPhone: {
     marginTop: 3,
     color: 'rgba(255,255,255,0.85)',
     fontSize: 13,
+  },
+  tierMissing: {
+    marginTop: 8,
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 12,
+    fontWeight: '600',
   },
   goldChip: {
     marginTop: 8,
@@ -428,15 +552,31 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.55)',
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    maxWidth: 118,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
   editBtnText: {
     color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '600',
-    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  editBtnWide: {
+    marginTop: 14,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.55)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  editBtnWideText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   statsBar: {
@@ -450,6 +590,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 4,
+    minWidth: 0,
   },
   statDivider: {
     width: 1,
@@ -461,9 +602,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: PURPLE_DEEP,
+    textAlign: 'center',
+    maxWidth: '100%',
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 11,
+    lineHeight: 14,
     color: MUTED,
     textAlign: 'center',
   },
@@ -471,19 +615,11 @@ const styles = StyleSheet.create({
   sectionHead: {
     marginTop: 22,
     marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: PURPLE_DEEP,
-  },
-  sectionAction: {
-    fontSize: 11,
-    color: MUTED,
   },
 
   card: {
@@ -520,6 +656,14 @@ const styles = StyleSheet.create({
   rowValue: {
     fontSize: 12,
     color: MUTED,
+    marginRight: 2,
+    maxWidth: '42%',
+    textAlign: 'right',
+  },
+  langRowValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginRight: 2,
   },
 

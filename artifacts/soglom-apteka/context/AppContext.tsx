@@ -2,8 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { api, getAuthToken, setAuthToken } from '@/lib/api';
 import { clearRegisterDraft } from '@/lib/registerDraft';
+import { isLanguage, type Language } from '@/lib/languages';
 
-export type Language = 'uz' | 'ru' | 'en';
+export type { Language };
 export type Transaction = {
   id: string;
   date: string;
@@ -11,7 +12,8 @@ export type Transaction = {
   branch: string;
   amount: number;
   cashback: number;
-  kind: 'earn' | 'use';
+  /** API loyalty_ledger kind — void = POS/cheque cancellation display row (not EARN). */
+  kind: 'earn' | 'use' | 'void';
 };
 export type Reward = {
   id: string;
@@ -74,6 +76,8 @@ type AppContextValue = {
   redeemedRewards: string[];
   cartCount: number;
   refresh: () => Promise<void>;
+  /** Update badge from an already-fetched cart payload (avoids a second GET). */
+  syncCartCount: (count: number) => void;
   logout: () => Promise<void>;
   redeemReward: (reward: Reward) => Promise<boolean>;
 };
@@ -104,7 +108,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       setProfile(nextProfile);
       setCartCount(cart.items?.length ?? 0);
       setIsAuthenticated(true);
-      if (nextProfile.language && ['uz', 'ru', 'en'].includes(nextProfile.language)) setLanguageState(nextProfile.language);
+      if (nextProfile.language && isLanguage(nextProfile.language)) setLanguageState(nextProfile.language);
     } catch {
       setIsAuthenticated(false);
       setProfile(null);
@@ -130,7 +134,7 @@ export function AppProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     void AsyncStorage.getItem('soglom-language').then((value) => {
-      if (value === 'uz' || value === 'ru' || value === 'en') setLanguageState(value);
+      if (isLanguage(value)) setLanguageState(value);
     });
     void refresh();
   }, []);
@@ -157,21 +161,43 @@ export function AppProvider({ children }: PropsWithChildren) {
     t: (key: string) => dictionary[language][key] ?? dictionary.uz[key] ?? key,
     loading,
     isAuthenticated,
-    balance: profile?.balance ?? 0,
+    // balance = getAuthoritativeBalance (spendable cashback). Never invent money.
+    balance: profile != null && Number.isFinite(Number(profile.balance)) ? Number(profile.balance) : 0,
     user: {
-      name: [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || 'Mijoz',
-      phone: profile?.phone || '',
-      tier: profile?.tier || 'Silver',
-      purchases: profile?.purchasesCount || 0,
-      total: profile?.totalPurchases || 0,
-      saved: profile?.savedAmount || 0,
-      qrCode: profile?.qrCode || '',
+      // Empty when unknown — screens must not invent demo names/tiers.
+      name: [profile?.firstName, profile?.lastName].filter(Boolean).join(' '),
+      phone: profile?.phone ? String(profile.phone) : '',
+      tier: profile?.tier != null && String(profile.tier).trim() ? String(profile.tier).trim() : '',
+      purchases: profile != null && Number.isFinite(Number(profile.purchasesCount))
+        ? Math.max(0, Math.floor(Number(profile.purchasesCount)))
+        : 0,
+      total: profile != null && Number.isFinite(Number(profile.totalPurchases))
+        ? Math.max(0, Math.floor(Number(profile.totalPurchases)))
+        : 0,
+      // savedAmount = cumulative saved field (NOT spendable balance). Do not treat as wallet.
+      saved: profile != null && Number.isFinite(Number(profile.savedAmount))
+        ? Math.max(0, Math.floor(Number(profile.savedAmount)))
+        : 0,
+      qrCode: profile?.qrCode ? String(profile.qrCode) : '',
     },
-    transactions: profile?.transactions ?? [],
+    transactions: Array.isArray(profile?.transactions)
+      ? profile.transactions.map((item: any) => ({
+          id: String(item?.id ?? ''),
+          date: item?.date != null ? String(item.date) : '',
+          title: item?.title != null ? String(item.title) : '',
+          branch: item?.branch != null ? String(item.branch) : '',
+          amount: Number(item?.amount) || 0,
+          cashback: Number(item?.cashback) || 0,
+          kind: item?.kind === 'use' ? 'use' : item?.kind === 'void' ? 'void' : 'earn',
+        }))
+      : [],
     rewards: profile?.rewards ?? [],
     redeemedRewards: profile?.redeemedRewards ?? [],
     cartCount,
     refresh,
+    syncCartCount: (count: number) => {
+      setCartCount(Math.max(0, Math.floor(Number(count) || 0)));
+    },
     logout,
     redeemReward,
   }), [profile?.balance, language, loading, cartCount, profile, isAuthenticated]);

@@ -1,11 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,10 +12,16 @@ import {
   Text,
   TextInput,
   View,
+  type TextInput as TextInputType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '@/lib/api';
-import { isValidLocalPhone, normalizeLocalPhone } from '@/lib/phone';
+import { api, type ApiError } from '@/lib/api';
+import {
+  formatLocalPhoneDisplay,
+  isValidLocalPhone,
+  normalizeLocalPhone,
+} from '@/lib/phone';
+import { setRegisterDraft } from '@/lib/registerDraft';
 
 /** Web autofill ko‘k fonini olib tashlash */
 const inputWebFix =
@@ -31,97 +35,170 @@ const inputWebFix =
       } as object)
     : ({ outlineStyle: 'none' } as object);
 
-/** Ro‘yxat: ism + telefon + parol → SMS tasdiq */
+const NAME_MAX = 80;
+const PASSWORD_MIN = 6;
+
+type FieldKey = 'name' | 'phone' | 'password';
+
+function mapRegisterError(err: ApiError): { message: string; alreadyRegistered: boolean } {
+  const status = err.status;
+  const raw = String(err.message || '');
+  if (status === 409 || /allaqachon|ro‘yxatdan o‘tgan|royxatdan otgan/i.test(raw)) {
+    return {
+      message: 'Bu raqam allaqachon ro‘yxatdan o‘tgan. Kirish qiling.',
+      alreadyRegistered: true,
+    };
+  }
+  if (status === 429 || /60 soniya|qayta urinib|rate/i.test(raw)) {
+    return {
+      message: 'Kod allaqachon yuborilgan. 60 soniyadan keyin qayta urinib ko‘ring.',
+      alreadyRegistered: false,
+    };
+  }
+  if (status === 503 || /sms|eskiz|yuborilmadi/i.test(raw)) {
+    return {
+      message: raw || 'SMS yuborib bo‘lmadi. Keyinroq qayta urinib ko‘ring.',
+      alreadyRegistered: false,
+    };
+  }
+  if (!status && /Serverga ulanib|network|Failed to fetch/i.test(raw)) {
+    return {
+      message: 'Serverga ulanib bo‘lmadi. Internet yoki API holatini tekshiring.',
+      alreadyRegistered: false,
+    };
+  }
+  return {
+    message: raw || 'Xatolik yuz berdi. Qayta urinib ko‘ring.',
+    alreadyRegistered: false,
+  };
+}
+
+/** Ro‘yxat: ism + telefon + parol → SMS tasdiq (OTP). Auth shartnomasi o‘zgarmaydi. */
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const phoneRef = useRef<TextInputType>(null);
+  const passwordRef = useRef<TextInputType>(null);
+  const submittingRef = useRef(false);
+
   const [firstName, setFirstName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
+  const [focused, setFocused] = useState<FieldKey | null>(null);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
 
-  const showError = (msg: string) => {
-    setError(msg);
-    if (Platform.OS !== 'web') Alert.alert('Ro‘yxatdan o‘tish', msg);
+  const nameOk = firstName.trim().length >= 2 && firstName.trim().length <= NAME_MAX;
+  const phoneOk = isValidLocalPhone(phone);
+  const passwordOk = password.length >= PASSWORD_MIN;
+  const formOk = nameOk && phoneOk && passwordOk;
+  const canSubmit = formOk && !loading;
+
+  const phoneDisplay = useMemo(() => formatLocalPhoneDisplay(phone), [phone]);
+
+  const fieldBorder = (key: FieldKey) => {
+    if (fieldErrors[key]) return '#F87171';
+    if (focused === key) return '#5C328E';
+    return '#EDE4F7';
+  };
+
+  const validateLocal = (): boolean => {
+    const next: Partial<Record<FieldKey, string>> = {};
+    const name = firstName.trim();
+    if (name.length < 2) next.name = 'Ismingizni kiriting (kamida 2 belgi)';
+    else if (name.length > NAME_MAX) next.name = `Ism ${NAME_MAX} belgidan oshmasin`;
+    if (!isValidLocalPhone(phone)) {
+      next.phone = 'Telefon raqamni to‘liq kiriting (9 raqam).';
+    }
+    if (password.length < PASSWORD_MIN) {
+      next.password = `Parol kamida ${PASSWORD_MIN} ta belgi bo‘lsin`;
+    }
+    setFieldErrors(next);
+    if (Object.keys(next).length) {
+      setError(null);
+      return false;
+    }
+    return true;
   };
 
   const submit = async () => {
+    if (submittingRef.current || loading) return;
     setError(null);
     setAlreadyRegistered(false);
+
     const local = normalizeLocalPhone(phone);
     if (local !== phone) setPhone(local);
 
-    if (firstName.trim().length < 2) {
-      showError('Ismingizni kiriting');
-      return;
-    }
-    if (!isValidLocalPhone(local)) {
-      showError('Telefon raqamni to‘liq kiriting (9 raqam). Masalan: 90 123 45 67');
-      return;
-    }
-    if (password.length < 6) {
-      showError('Parol kamida 6 ta belgi bo‘lsin');
-      return;
-    }
+    if (!validateLocal()) return;
+
+    submittingRef.current = true;
     setLoading(true);
     try {
-      const data = await api.requestOtp(local, 'register');
-      const { setRegisterDraft } = await import('@/lib/registerDraft');
-      setRegisterDraft({ phone: local, firstName: firstName.trim(), password });
+      await api.requestOtp(local, 'register');
+      // Draft holds password off the URL; OTP verify reads it.
+      setRegisterDraft({
+        phone: local,
+        firstName: firstName.trim(),
+        password,
+      });
       router.push({
         pathname: '/verify-otp',
         params: {
           phone: local,
           purpose: 'register',
           firstName: firstName.trim(),
-          ...( __DEV__ && data.devCode ? { hint: data.devCode } : {}),
         },
       });
-    } catch (err: any) {
-      const msg = err?.message || 'Xatolik yuz berdi';
-      if (err?.status === 409 || /allaqachon|ro‘yxatdan o‘tgan|royxatdan otgan/i.test(msg)) {
-        setAlreadyRegistered(true);
-        setError('Bu raqam allaqachon ro‘yxatdan o‘tgan. Kirish qiling.');
-      } else {
-        showError(msg);
-      }
+    } catch (err: unknown) {
+      const mapped = mapRegisterError(err as ApiError);
+      setAlreadyRegistered(mapped.alreadyRegistered);
+      setError(mapped.message);
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
+  };
+
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/welcome');
   };
 
   return (
     <View style={styles.root}>
       <LinearGradient colors={['#2A104E', '#4A2878', '#F7F5F2']} style={styles.hero} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top, 8) : 0}
+      >
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scroll,
-            { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 24 },
+            {
+              paddingTop: Math.max(insets.top, 8) + 4,
+              paddingBottom: Math.max(insets.bottom, 16) + 28,
+            },
           ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.topRow}>
             <Pressable
-              onPress={() => {
-                if (router.canGoBack()) router.back();
-                else router.replace('/welcome');
-              }}
+              onPress={goBack}
               style={styles.back}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Orqaga"
             >
               <Feather name="chevron-left" size={20} color="#FFCC00" />
             </Pressable>
-            <Image
-              source={require('../assets/images/vaksina-mark-clean.png')}
-              style={styles.logoMark}
-              resizeMode="contain"
-            />
-            <View style={styles.topSpacer} />
           </View>
 
           <Text style={styles.brand}>YANGI HISOB</Text>
@@ -131,105 +208,171 @@ export default function RegisterScreen() {
           </Text>
 
           <View style={styles.card}>
-            <Text style={styles.label}>Ismingiz</Text>
-            <View style={styles.field}>
+            <Text style={styles.label} accessibilityRole="text">
+              Ismingiz
+            </Text>
+            <View style={[styles.field, { borderColor: fieldBorder('name') }]}>
               <View style={styles.fieldIcon}>
                 <Feather name="user" size={16} color="#5C328E" />
               </View>
               <TextInput
                 value={firstName}
-                onChangeText={setFirstName}
-                placeholder="Firdavs"
+                onChangeText={(t) => {
+                  setFirstName(t);
+                  if (fieldErrors.name) setFieldErrors((e) => ({ ...e, name: undefined }));
+                }}
+                onFocus={() => setFocused('name')}
+                onBlur={() => setFocused(null)}
+                placeholder="Ismingiz"
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
                 autoComplete="given-name"
                 textContentType="givenName"
                 autoCapitalize="words"
                 returnKeyType="next"
+                maxLength={NAME_MAX}
+                editable={!loading}
+                accessibilityLabel="Ismingiz"
+                onSubmitEditing={() => phoneRef.current?.focus()}
               />
             </View>
+            {fieldErrors.name ? <Text style={styles.fieldError}>{fieldErrors.name}</Text> : null}
 
             <Text style={[styles.label, { marginTop: 14 }]}>Telefon</Text>
-            <View style={styles.field}>
+            <View style={[styles.field, { borderColor: fieldBorder('phone') }]}>
               <View style={styles.fieldIcon}>
                 <Feather name="smartphone" size={16} color="#5C328E" />
               </View>
-              <Text style={styles.prefix}>+998</Text>
+              <Text style={styles.prefix} accessibilityLabel="Mamlakat kodi plus 998">
+                +998
+              </Text>
               <TextInput
-                value={phone}
-                onChangeText={(t) => setPhone(normalizeLocalPhone(t))}
+                ref={phoneRef}
+                value={phoneDisplay}
+                onChangeText={(t) => {
+                  setPhone(normalizeLocalPhone(t));
+                  if (fieldErrors.phone) setFieldErrors((e) => ({ ...e, phone: undefined }));
+                }}
+                onFocus={() => setFocused('phone')}
+                onBlur={() => setFocused(null)}
                 keyboardType="number-pad"
-                placeholder="90 123 45 67"
+                placeholder="Telefon raqamingiz"
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
-                maxLength={9}
+                maxLength={13}
                 autoComplete="tel"
                 textContentType="telephoneNumber"
                 returnKeyType="next"
+                editable={!loading}
+                accessibilityLabel="Telefon raqam"
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
             </View>
+            {fieldErrors.phone ? <Text style={styles.fieldError}>{fieldErrors.phone}</Text> : null}
 
             <Text style={[styles.label, { marginTop: 14 }]}>Parol (keyin kirish uchun)</Text>
-            <View style={styles.field}>
+            <View style={[styles.field, { borderColor: fieldBorder('password') }]}>
               <View style={styles.fieldIcon}>
                 <Feather name="lock" size={16} color="#5C328E" />
               </View>
               <TextInput
+                ref={passwordRef}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  if (fieldErrors.password) setFieldErrors((e) => ({ ...e, password: undefined }));
+                }}
+                onFocus={() => {
+                  setFocused('password');
+                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+                }}
+                onBlur={() => setFocused(null)}
                 secureTextEntry={!showPass}
-                placeholder="Kamida 6 belgi"
+                placeholder="Parolni kiriting"
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
                 autoComplete="new-password"
                 textContentType="newPassword"
                 returnKeyType="done"
+                editable={!loading}
+                // Do not trim — backend counts raw length including spaces
+                accessibilityLabel="Parol"
                 onSubmitEditing={() => void submit()}
               />
-              <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={10}>
+              <Pressable
+                onPress={() => setShowPass((v) => !v)}
+                hitSlop={10}
+                style={styles.eyeBtn}
+                accessibilityRole="button"
+                accessibilityLabel={showPass ? 'Parolni yashirish' : 'Parolni ko‘rsatish'}
+              >
                 <Feather name={showPass ? 'eye-off' : 'eye'} size={18} color="#94A3B8" />
               </Pressable>
             </View>
+            <Text style={styles.hint}>Kamida {PASSWORD_MIN} belgi</Text>
+            {fieldErrors.password ? (
+              <Text style={styles.fieldError}>{fieldErrors.password}</Text>
+            ) : null}
 
             {error ? (
-              <View style={styles.errorBox}>
+              <View style={styles.errorBox} accessibilityLiveRegion="polite">
                 <Feather name="alert-circle" size={16} color="#B91C1C" />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
 
             {alreadyRegistered ? (
-              <Pressable onPress={() => router.push('/login')} style={styles.btnLoginAlt}>
+              <Pressable
+                onPress={() => router.push('/login')}
+                style={styles.btnLoginAlt}
+                accessibilityRole="button"
+                accessibilityLabel="Kirish sahifasiga o‘tish"
+              >
                 <Text style={styles.btnLoginAltText}>Kirish sahifasiga o‘tish</Text>
                 <Feather name="arrow-right" size={16} color="#5C328E" />
               </Pressable>
             ) : null}
 
             <Pressable
-              disabled={loading}
+              disabled={!canSubmit}
               onPress={() => void submit()}
-              style={[styles.btn, { opacity: loading ? 0.75 : 1 }]}
+              style={[styles.btn, !canSubmit && styles.btnDisabled]}
+              accessibilityRole="button"
+              accessibilityLabel="SMS kodni olish"
+              accessibilityState={{ disabled: !canSubmit, busy: loading }}
             >
-              <LinearGradient colors={['#FFCC00', '#F0B800']} style={styles.btnGrad}>
-                {loading ? (
-                  <ActivityIndicator color="#120724" />
-                ) : (
-                  <>
-                    <Text style={styles.btnText}>SMS kod olish</Text>
-                    <Feather name="arrow-right" size={18} color="#120724" />
-                  </>
-                )}
-              </LinearGradient>
+              {canSubmit ? (
+                <LinearGradient colors={['#FFCC00', '#F0B800']} style={styles.btnGrad}>
+                  {loading ? (
+                    <ActivityIndicator color="#120724" />
+                  ) : (
+                    <>
+                      <Text style={styles.btnText}>SMS kodni olish</Text>
+                      <Feather name="arrow-right" size={18} color="#120724" />
+                    </>
+                  )}
+                </LinearGradient>
+              ) : (
+                <View style={[styles.btnGrad, styles.btnGradDisabled]}>
+                  <Text style={styles.btnTextDisabled}>SMS kodni olish</Text>
+                  <Feather name="arrow-right" size={18} color="#A8B0C0" />
+                </View>
+              )}
             </Pressable>
           </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerMuted}>Allaqachon hisobingiz bormi?</Text>
-            <Pressable onPress={() => router.push('/login')}>
+            <Pressable
+              onPress={() => router.push('/login')}
+              accessibilityRole="button"
+              accessibilityLabel="Kirish"
+            >
               <Text style={styles.footerLink}> Kirish</Text>
             </Pressable>
           </View>
 
+          {/* No privacy/terms URLs configured in the app — text only, no fake links */}
           <Text style={styles.legal}>
             Davom etib, maxfiylik siyosati va foydalanish shartlariga rozilik bildirasiz.
           </Text>
@@ -241,6 +384,7 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, width: '100%', maxWidth: '100%', backgroundColor: '#F7F5F2', overflow: 'hidden' },
+  flex: { flex: 1 },
   hero: { position: 'absolute', top: 0, left: 0, right: 0, height: 240 },
   scrollView: { flex: 1, width: '100%' },
   scroll: {
@@ -251,8 +395,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   back: {
     width: 42,
@@ -262,11 +405,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoMark: {
-    width: 52,
-    height: 52,
-  },
-  topSpacer: { width: 42 },
   brand: {
     color: '#FFCC00',
     fontFamily: 'Inter_700Bold',
@@ -274,15 +412,15 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   hello: {
-    marginTop: 6,
+    marginTop: 8,
     color: '#fff',
     fontFamily: 'Inter_700Bold',
     fontSize: 26,
     lineHeight: 34,
   },
   lead: {
-    marginTop: 6,
-    marginBottom: 16,
+    marginTop: 8,
+    marginBottom: 18,
     color: 'rgba(255,255,255,0.72)',
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
@@ -312,8 +450,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     minHeight: 52,
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#EDE4F7',
+    borderWidth: 1.5,
   },
   fieldIcon: {
     width: 34,
@@ -335,8 +472,29 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: 'transparent',
   },
+  eyeBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  fieldError: {
+    marginTop: 6,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: '#B91C1C',
+    lineHeight: 16,
+  },
+  hint: {
+    marginTop: 6,
+    marginBottom: 2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#94A3B8',
+  },
   errorBox: {
-    marginTop: 14,
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
@@ -366,7 +524,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   btnLoginAltText: { fontFamily: 'Inter_700Bold', fontSize: 15, color: '#5C328E' },
-  btn: { marginTop: 14, borderRadius: 16, overflow: 'hidden' },
+  btn: { marginTop: 16, borderRadius: 16, overflow: 'hidden' },
+  btnDisabled: { opacity: 1 },
   btnGrad: {
     minHeight: 52,
     borderRadius: 16,
@@ -375,8 +534,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
+  btnGradDisabled: {
+    backgroundColor: '#E8E4F0',
+  },
   btnText: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#120724' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
+  btnTextDisabled: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#94A3B8' },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 18, flexWrap: 'wrap' },
   footerMuted: { fontFamily: 'Inter_400Regular', color: '#64748B', fontSize: 14 },
   footerLink: { fontFamily: 'Inter_700Bold', color: '#5C328E', fontSize: 14 },
   legal: {

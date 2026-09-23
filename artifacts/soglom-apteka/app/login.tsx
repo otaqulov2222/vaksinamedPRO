@@ -1,11 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,8 +15,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { api } from '@/lib/api';
-import { isValidLocalPhone, normalizeLocalPhone } from '@/lib/phone';
+import { api, type ApiError } from '@/lib/api';
+import {
+  formatLocalPhoneDisplay,
+  isValidLocalPhone,
+  normalizeLocalPhone,
+} from '@/lib/phone';
+
+const PASSWORD_MIN = 6;
 
 const inputWebFix =
   Platform.OS === 'web'
@@ -31,43 +35,66 @@ const inputWebFix =
       } as object)
     : ({ outlineStyle: 'none' } as object);
 
-/** Kirish: telefon + parol (SMS faqat ro‘yxatda) */
+function mapLoginError(err: ApiError): string {
+  const status = err.status;
+  const raw = String(err.message || '');
+  if (!status && /Serverga ulanib|network|Failed to fetch/i.test(raw)) {
+    return 'Serverga ulanib bo‘lmadi. Internet yoki API holatini tekshiring.';
+  }
+  if (status === 429) {
+    return 'Juda ko‘p urinish. Birozdan keyin qayta urinib ko‘ring.';
+  }
+  if (status === 401 || /noto‘g‘ri|parol|telefon/i.test(raw)) {
+    return 'Telefon yoki parol noto‘g‘ri';
+  }
+  return raw || 'Kirish amalga oshmadi. Qayta urinib ko‘ring.';
+}
+
+/** Kirish: telefon + parol (SMS faqat ro‘yxatda). Auth arxitekturasi o‘zgarmaydi. */
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { refresh } = useApp();
+  const submittingRef = useRef(false);
+
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const showError = (msg: string) => {
-    setError(msg);
-    if (Platform.OS !== 'web') Alert.alert('Kirish', msg);
-  };
+  const phoneDisplay = useMemo(() => formatLocalPhoneDisplay(phone), [phone]);
+  const phoneOk = isValidLocalPhone(phone);
+  const passwordOk = password.length >= PASSWORD_MIN;
+  const formOk = phoneOk && passwordOk;
+  const canSubmit = formOk && !loading;
 
   const submit = async () => {
+    if (submittingRef.current || loading) return;
     setError(null);
+
     const local = normalizeLocalPhone(phone);
     if (local !== phone) setPhone(local);
 
     if (!isValidLocalPhone(local)) {
-      showError('Telefon raqamni to‘liq kiriting (9 raqam). Masalan: 90 123 45 67');
+      setError('Telefon raqamni to‘liq kiriting (9 raqam).');
       return;
     }
-    if (password.length < 6) {
-      showError('Parol kamida 6 belgi');
+    if (password.length < PASSWORD_MIN) {
+      setError(`Parol kamida ${PASSWORD_MIN} belgi`);
       return;
     }
+
+    submittingRef.current = true;
     setLoading(true);
     try {
       await api.login({ phone: local, password });
       await refresh();
       router.replace('/(tabs)');
-    } catch (err: any) {
-      showError(err?.message || 'Telefon yoki parol noto‘g‘ri');
+    } catch (err: unknown) {
+      setError(mapLoginError(err as ApiError));
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 
@@ -78,15 +105,19 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.root}>
-      <LinearGradient colors={['#2A104E', '#3D1A66', '#F7F5F2']} style={styles.hero} />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <LinearGradient colors={['#2A104E', '#4A2878', '#F7F5F2']} style={styles.hero} />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top, 8) : 0}
+      >
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scroll,
             {
-              paddingTop: Math.max(insets.top, 12) + 6,
-              paddingBottom: Math.max(insets.bottom, 16) + 24,
+              paddingTop: Math.max(insets.top, 8) + 4,
+              paddingBottom: Math.max(insets.bottom, 16) + 28,
             },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -94,15 +125,15 @@ export default function LoginScreen() {
           showsHorizontalScrollIndicator={false}
         >
           <View style={styles.topRow}>
-            <Pressable onPress={goBack} style={styles.back} hitSlop={8}>
+            <Pressable
+              onPress={goBack}
+              style={styles.back}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Orqaga"
+            >
               <Feather name="chevron-left" size={20} color="#FFCC00" />
             </Pressable>
-            <Image
-              source={require('../assets/images/vaksina-mark-clean.png')}
-              style={styles.logoMark}
-              resizeMode="contain"
-            />
-            <View style={styles.topSpacer} />
           </View>
 
           <Text style={styles.brand}>VAKSINA MED</Text>
@@ -115,18 +146,22 @@ export default function LoginScreen() {
               <View style={styles.fieldIcon}>
                 <Feather name="smartphone" size={16} color="#5C328E" />
               </View>
-              <Text style={styles.prefix}>+998</Text>
+              <Text style={styles.prefix} accessibilityLabel="Mamlakat kodi plus 998">
+                +998
+              </Text>
               <TextInput
-                value={phone}
+                value={phoneDisplay}
                 onChangeText={(t) => setPhone(normalizeLocalPhone(t))}
                 keyboardType="number-pad"
-                placeholder="90 123 45 67"
+                placeholder="Telefon raqamingiz"
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
-                maxLength={9}
+                maxLength={13}
                 autoComplete="tel"
                 textContentType="telephoneNumber"
                 returnKeyType="next"
+                editable={!loading}
+                accessibilityLabel="Telefon raqam"
               />
             </View>
 
@@ -139,52 +174,70 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPass}
-                placeholder="••••••••"
+                placeholder="Parolni kiriting"
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
                 autoComplete="password"
                 textContentType="password"
                 returnKeyType="done"
+                editable={!loading}
+                accessibilityLabel="Parol"
                 onSubmitEditing={() => void submit()}
               />
-              <Pressable onPress={() => setShowPass((v) => !v)} hitSlop={10}>
+              <Pressable
+                onPress={() => setShowPass((v) => !v)}
+                hitSlop={10}
+                style={styles.eyeBtn}
+                accessibilityRole="button"
+                accessibilityLabel={showPass ? 'Parolni yashirish' : 'Parolni ko‘rsatish'}
+              >
                 <Feather name={showPass ? 'eye-off' : 'eye'} size={18} color="#94A3B8" />
               </Pressable>
             </View>
+            <Text style={styles.hint}>Kamida {PASSWORD_MIN} belgi</Text>
 
             {error ? (
-              <View style={styles.errorBox}>
+              <View style={styles.errorBox} accessibilityLiveRegion="polite">
                 <Feather name="alert-circle" size={16} color="#B91C1C" />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
 
             <Pressable
-              disabled={loading}
+              disabled={!canSubmit}
               onPress={() => void submit()}
-              style={[styles.btn, { opacity: loading ? 0.75 : 1 }]}
+              style={[styles.btn, !canSubmit && styles.btnDisabled]}
+              accessibilityRole="button"
+              accessibilityLabel="Kirish"
+              accessibilityState={{ disabled: !canSubmit, busy: loading }}
             >
-              <LinearGradient
-                colors={['#6B3AA8', '#5C328E', '#2A104E']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.btnGrad}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFCC00" />
-                ) : (
-                  <>
-                    <Text style={styles.btnText}>Kirish</Text>
-                    <Feather name="arrow-right" size={18} color="#FFCC00" />
-                  </>
-                )}
-              </LinearGradient>
+              {canSubmit || loading ? (
+                <LinearGradient colors={['#FFCC00', '#F0B800']} style={styles.btnGrad}>
+                  {loading ? (
+                    <ActivityIndicator color="#120724" />
+                  ) : (
+                    <>
+                      <Text style={styles.btnText}>Kirish</Text>
+                      <Feather name="arrow-right" size={18} color="#120724" />
+                    </>
+                  )}
+                </LinearGradient>
+              ) : (
+                <View style={[styles.btnGrad, styles.btnGradDisabled]}>
+                  <Text style={styles.btnTextDisabled}>Kirish</Text>
+                  <Feather name="arrow-right" size={18} color="#A8B0C0" />
+                </View>
+              )}
             </Pressable>
           </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerMuted}>Hisobingiz yo‘qmi?</Text>
-            <Pressable onPress={() => router.push('/register')}>
+            <Pressable
+              onPress={() => router.push('/register')}
+              accessibilityRole="button"
+              accessibilityLabel="Ro‘yxatdan o‘ting"
+            >
               <Text style={styles.footerLink}> Ro‘yxatdan o‘ting</Text>
             </Pressable>
           </View>
@@ -213,8 +266,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   back: {
     width: 42,
@@ -224,24 +276,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoMark: { width: 52, height: 52 },
-  topSpacer: { width: 42 },
   brand: {
     color: '#FFCC00',
     fontFamily: 'Inter_700Bold',
-    fontSize: 13,
+    fontSize: 12,
     letterSpacing: 1.2,
   },
   hello: {
-    marginTop: 6,
+    marginTop: 8,
     color: '#fff',
     fontFamily: 'Inter_700Bold',
     fontSize: 26,
     lineHeight: 34,
   },
   lead: {
-    marginTop: 6,
-    marginBottom: 16,
+    marginTop: 8,
+    marginBottom: 18,
     color: 'rgba(255,255,255,0.72)',
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
@@ -294,8 +344,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: 'transparent',
   },
+  eyeBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  hint: {
+    marginTop: 6,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#94A3B8',
+  },
   errorBox: {
-    marginTop: 14,
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
@@ -313,7 +376,8 @@ const styles = StyleSheet.create({
     color: '#B91C1C',
     lineHeight: 18,
   },
-  btn: { marginTop: 14, borderRadius: 16, overflow: 'hidden' },
+  btn: { marginTop: 16, borderRadius: 16, overflow: 'hidden' },
+  btnDisabled: { opacity: 1 },
   btnGrad: {
     minHeight: 52,
     borderRadius: 16,
@@ -322,7 +386,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  btnText: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#fff' },
+  btnGradDisabled: {
+    backgroundColor: '#E8E4F0',
+  },
+  btnText: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#120724' },
+  btnTextDisabled: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#94A3B8' },
   footer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginTop: 20 },
   footerMuted: { fontFamily: 'Inter_400Regular', color: '#64748B', fontSize: 14 },
   footerLink: { fontFamily: 'Inter_700Bold', color: '#5C328E', fontSize: 14 },

@@ -45,8 +45,8 @@ const FAQ: FaqItem[] = [
   {
     key: 'cashback',
     title: 'Cashback',
-    body: 'Cashback balansi va tarixini Cashback bo‘limida ko‘ring. Ballarni mukofotlarga almashtirish Bonuslar bo‘limida amalga oshiriladi.',
-    cta: { label: 'Cashbackni ochish', to: '/(tabs)/cashback' },
+    body: 'Cashback balansi, daraja va tarixni Cashback bo‘limida ko‘ring. Yakunlangan xaridlardan hisoblanadi.',
+    cta: { label: 'Cashbackni ochish', to: '/cashback' },
   },
   {
     key: 'branches',
@@ -69,6 +69,8 @@ function FaqRow({ item, open, onToggle }: { item: FaqItem; open: boolean; onTogg
         onPress={onToggle}
         style={({ pressed }) => [styles.faqHead, pressed && { opacity: 0.75 }]}
         accessibilityRole="button"
+        accessibilityLabel={item.title}
+        accessibilityState={{ expanded: open }}
       >
         <Text style={styles.faqTitle}>{item.title}</Text>
         <Feather name={open ? 'chevron-up' : 'chevron-down'} size={18} color={MUTED} />
@@ -77,9 +79,14 @@ function FaqRow({ item, open, onToggle }: { item: FaqItem; open: boolean; onTogg
         <View style={styles.faqBody}>
           <Text style={styles.faqText}>{item.body}</Text>
           {item.cta ? (
-            <Pressable style={styles.cta} onPress={() => router.push(item.cta!.to as any)}>
+            <Pressable
+              style={styles.cta}
+              onPress={() => router.push(item.cta!.to as any)}
+              accessibilityRole="button"
+              accessibilityLabel={item.cta.label}
+            >
               <Text style={styles.ctaText}>{item.cta.label}</Text>
-              <Feather name="arrow-right" size={14} color={PURPLE} />
+              <Feather name="arrow-right" size={14} color={PURPLE} importantForAccessibility="no" />
             </Pressable>
           ) : null}
         </View>

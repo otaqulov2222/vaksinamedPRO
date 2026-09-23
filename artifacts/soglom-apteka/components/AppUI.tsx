@@ -12,7 +12,12 @@ export function Screen({ children, scroll = true }: PropsWithChildren<{ scroll?:
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   const inTabs = segments[0] === '(tabs)';
-  const topPad = inTabs ? (Platform.OS === 'web' ? 67 : insets.top + 8) : 12;
+  // Tabs: safe-area only — avoid legacy oversized web top pad (was 67).
+  const topPad = inTabs
+    ? Platform.OS === 'web'
+      ? Math.max(insets.top, 12)
+      : Math.max(insets.top, 8)
+    : 12;
   const bottomPad = Platform.OS === 'web' ? 34 : 16;
 
   const padStyle = {

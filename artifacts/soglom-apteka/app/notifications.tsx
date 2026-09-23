@@ -57,7 +57,7 @@ export default function NotificationsScreen() {
           <Feather name="chevron-right" size={18} color="#C5CAD6" />
         </Pressable>
         <View style={styles.divider} />
-        <Pressable style={styles.linkRow} onPress={() => router.push('/(tabs)/cashback')}>
+        <Pressable style={styles.linkRow} onPress={() => router.push('/cashback')}>
           <MaterialCommunityIcons name="wallet-outline" size={20} color={PURPLE} />
           <Text style={styles.linkText}>Cashback tarixi</Text>
           <Feather name="chevron-right" size={18} color="#C5CAD6" />

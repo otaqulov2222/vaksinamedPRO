@@ -1,11 +1,13 @@
 import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,8 +18,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BranchMap from '@/components/BranchMap';
 import { useApp } from '@/context/AppContext';
-import { api } from '@/lib/api';
+import { api, type ApiError } from '@/lib/api';
 import { fetchDrivingRoute, hasValidCoords, openYandexRoute, type LatLng, type RouteInfo } from '@/lib/maps';
+
+function pickError(err: unknown) {
+  const e = err as ApiError;
+  return e?.message || (err instanceof Error ? err.message : 'Filial tanlanmadi');
+}
 
 function shortName(name: string) {
   return String(name).replace(/^Vaksina Med\s*[·•]\s*/i, '').trim();
@@ -31,6 +38,8 @@ function formatDistance(km: number | null | undefined) {
 type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable';
 
 export default function BranchesScreen() {
+  const params = useLocalSearchParams<{ from?: string }>();
+  const from = String(params.from || '').toLowerCase();
   const insets = useSafeAreaInsets();
   const { refresh } = useApp();
   const [query, setQuery] = useState('');
@@ -45,9 +54,11 @@ export default function BranchesScreen() {
   const [routing, setRouting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const pickingRef = useRef(false);
 
   const selected = useMemo(
-    () => branches.find((item) => item.id === selectedId) || null,
+    () => branches.find((item) => Number(item.id) === Number(selectedId)) || null,
     [branches, selectedId],
   );
 
@@ -95,8 +106,9 @@ export default function BranchesScreen() {
         setNetworkTotal(data.total || list.length || 0);
         if (Array.isArray(data.regions) && data.regions.length) setRegions(data.regions);
         setSelectedId((prev) => {
-          if (prev && list.some((b: any) => b.id === prev)) return prev;
-          return list[0]?.id ?? null;
+          if (prev != null && list.some((b: any) => Number(b.id) === Number(prev))) return prev;
+          const first = list[0]?.id;
+          return first != null && Number.isFinite(Number(first)) ? Number(first) : null;
         });
       })
       .catch((err: Error) => {
@@ -115,7 +127,7 @@ export default function BranchesScreen() {
   const drawRoute = useCallback(
     async (branch: any, openExternal = false) => {
       if (!branch?.id) return;
-      setSelectedId(branch.id);
+      setSelectedId(Number(branch.id));
       setRoute(null);
       if (!hasValidCoords(branch)) {
         Alert.alert('Xarita', 'Bu filialning koordinatasi mavjud emas.');
@@ -155,11 +167,41 @@ export default function BranchesScreen() {
 
   const pickForCart = useCallback(
     async (branch: any) => {
-      await api.setCartBranch(branch.id);
-      await refresh();
-      Alert.alert('Filial tanlandi', `${shortName(branch.name)} savatga biriktirildi.`);
+      const id = Number(branch?.id);
+      if (!Number.isFinite(id) || id <= 0) return;
+      if (pickingRef.current || picking) return;
+      pickingRef.current = true;
+      setPicking(true);
+      try {
+        await api.setCartBranch(id);
+        await refresh();
+        // Prefer real stack parent (Profile / Checkout / Cart / Home).
+        // Only when no history: return to cart/checkout if that was the caller; else Profile.
+        if (router.canGoBack()) {
+          router.back();
+        } else if (from === 'checkout') {
+          router.replace('/checkout');
+        } else if (from === 'cart') {
+          router.replace('/cart');
+        } else {
+          router.replace('/(tabs)/profile');
+        }
+      } catch (err) {
+        const e = err as ApiError;
+        const title = e?.code === 'BRANCH_CLOSED' ? 'Filial' : 'Xatolik';
+        const message = pickError(err);
+        if (Platform.OS === 'web') {
+          // eslint-disable-next-line no-alert
+          window.alert(`${title}\n${message}`);
+        } else {
+          Alert.alert(title, message);
+        }
+      } finally {
+        pickingRef.current = false;
+        setPicking(false);
+      }
     },
-    [refresh],
+    [picking, refresh, from],
   );
 
   const locBanner =
@@ -288,18 +330,36 @@ export default function BranchesScreen() {
               disabled={routing || !hasValidCoords(selected)}
               onPress={() => void drawRoute(selected, true)}
               style={[styles.ctaYellow, { opacity: routing || !hasValidCoords(selected) ? 0.55 : 1 }]}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: routing || !hasValidCoords(selected) }}
+              accessibilityLabel={`${shortName(selected.name)} — yo‘nalishni ko‘rsatish`}
             >
               <Feather name="navigation" size={15} color="#120724" />
               <Text style={styles.ctaYellowText}>Yo‘lni ko‘rsatish</Text>
             </Pressable>
-            <Pressable onPress={() => void pickForCart(selected)} style={styles.ctaPurple}>
-              <Feather name="check" size={15} color="#fff" />
-              <Text style={styles.ctaPurpleText}>Tanlash</Text>
+            <Pressable
+              onPress={() => void pickForCart(selected)}
+              disabled={picking}
+              style={[styles.ctaPurple, picking && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: picking }}
+              accessibilityLabel={`${shortName(selected.name)} filialini tanlash`}
+            >
+              {picking ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Feather name="check" size={15} color="#fff" />
+                  <Text style={styles.ctaPurpleText}>Tanlash</Text>
+                </>
+              )}
             </Pressable>
             {selected.phone ? (
               <Pressable
                 onPress={() => void Linking.openURL(`tel:${String(selected.phone).replace(/[^\d+]/g, '')}`)}
                 style={styles.ctaCall}
+                accessibilityRole="button"
+                accessibilityLabel={`${shortName(selected.name)} ga qo‘ng‘iroq qilish`}
               >
                 <Feather name="phone" size={15} color="#5C328E" />
               </Pressable>
@@ -311,42 +371,54 @@ export default function BranchesScreen() {
       <Text style={styles.listHeading}>Dorixonalar ro‘yxati</Text>
 
       {branches.map((branch, index) => {
-        const active = branch.id === selected?.id;
+        const active = Number(branch.id) === Number(selected?.id);
         const open24 = branch.is24h || String(branch.hours || '').includes('24');
         const dist = formatDistance(branch.distanceKm);
+        const name = shortName(branch.name);
         return (
-          <Pressable
+          <View
             key={branch.id}
-            onPress={() => void drawRoute(branch, false)}
             style={[styles.row, active && styles.rowActive]}
           >
-            <View style={[styles.rowNum, active && styles.rowNumOn]}>
-              <Text style={[styles.rowNumText, active && styles.rowNumTextOn]}>{index + 1}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.rowTitle}>
-                <Text style={styles.rowName} numberOfLines={1}>
-                  {shortName(branch.name)}
-                </Text>
-                {open24 ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>24/7</Text>
-                  </View>
-                ) : null}
+            <Pressable
+              onPress={() => void drawRoute(branch, false)}
+              style={styles.rowMain}
+              accessibilityRole="button"
+              accessibilityLabel={`${name} filialini tanlash${dist ? `, ${dist}` : ''}`}
+              accessibilityState={{ selected: active }}
+            >
+              <View style={[styles.rowNum, active && styles.rowNumOn]}>
+                <Text style={[styles.rowNumText, active && styles.rowNumTextOn]}>{index + 1}</Text>
               </View>
-              <Text style={styles.rowAddr} numberOfLines={2}>
-                {branch.region} · {branch.address}
-              </Text>
-            </View>
-            <View style={styles.rowSide}>
+              <View style={styles.rowBody}>
+                <View style={styles.rowTitle}>
+                  <Text style={styles.rowName} numberOfLines={1}>
+                    {name}
+                  </Text>
+                  {open24 ? (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>24/7</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={styles.rowAddr} numberOfLines={2}>
+                  {branch.region} · {branch.address}
+                </Text>
+              </View>
               {dist ? <Text style={styles.rowKm}>{dist}</Text> : null}
-              {hasValidCoords(branch) ? (
-                <Pressable onPress={() => void drawRoute(branch, true)} style={styles.miniNav}>
-                  <Feather name="navigation" size={12} color="#120724" />
-                </Pressable>
-              ) : null}
-            </View>
-          </Pressable>
+            </Pressable>
+            {hasValidCoords(branch) ? (
+              <Pressable
+                onPress={() => void drawRoute(branch, true)}
+                style={styles.miniNav}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`${name} — yo‘nalishni ko‘rsatish`}
+              >
+                <Feather name="navigation" size={12} color="#120724" />
+              </Pressable>
+            ) : null}
+          </View>
         );
       })}
     </ScrollView>
@@ -513,14 +585,26 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 12,
+    paddingVertical: 10,
+    paddingLeft: 10,
+    paddingRight: 10,
     borderWidth: 1,
     borderColor: '#EEEAF5',
+    minHeight: 56,
   },
   rowActive: { borderColor: '#5C328E', backgroundColor: '#FBF8FF' },
+  rowMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 2,
+  },
+  rowBody: { flex: 1, minWidth: 0 },
   rowNum: {
     width: 28,
     height: 28,
@@ -537,12 +621,11 @@ const styles = StyleSheet.create({
   badge: { backgroundColor: '#ECFDF5', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   badgeText: { fontFamily: 'Inter_700Bold', fontSize: 9, color: '#0D9488' },
   rowAddr: { fontFamily: 'Inter_400Regular', fontSize: 11, color: '#64748B', marginTop: 3, lineHeight: 15 },
-  rowSide: { alignItems: 'flex-end', gap: 6 },
-  rowKm: { fontFamily: 'Inter_700Bold', fontSize: 11, color: '#2A104E' },
+  rowKm: { fontFamily: 'Inter_700Bold', fontSize: 11, color: '#2A104E', marginLeft: 4 },
   miniNav: {
-    width: 28,
-    height: 28,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     backgroundColor: '#FFCC00',
     alignItems: 'center',
     justifyContent: 'center',

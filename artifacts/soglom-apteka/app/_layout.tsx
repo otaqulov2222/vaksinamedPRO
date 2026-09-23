@@ -77,18 +77,44 @@ function RootLayoutNav() {
         <Stack.Screen name="verify-otp" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, headerLeft: undefined }} />
         <Stack.Screen name="qr" options={{ headerShown: false, title: 'Mening QR kodim' }} />
-        <Stack.Screen name="branches" options={{ title: 'Dorixonalar' }} />
-        <Stack.Screen name="promos" options={{ title: 'Aksiyalar' }} />
-        <Stack.Screen name="rating" options={{ title: 'Xizmatni baholash' }} />
-        <Stack.Screen name="language" options={{ title: 'Til' }} />
-        <Stack.Screen name="edit-profile" options={{ title: 'Profilni tahrirlash' }} />
-        <Stack.Screen name="notifications" options={{ title: 'Bildirishnomalar' }} />
-        <Stack.Screen name="help" options={{ title: 'Yordam markazi' }} />
-        <Stack.Screen name="about" options={{ title: 'Ilova haqida' }} />
-        <Stack.Screen name="cart" options={{ title: 'Savat' }} />
-        <Stack.Screen name="checkout" options={{ title: 'Buyurtma' }} />
-        <Stack.Screen name="product/[id]" options={{ title: 'Mahsulot' }} />
-        <Stack.Screen name="order/[id]" options={{ title: 'Buyurtma holati' }} />
+        {/* Cashback is a stack child (not a tab) so Back preserves Profile/Help/Home origin. */}
+        <Stack.Screen name="cashback" options={{ headerShown: false, title: 'Cashback' }} />
+        <Stack.Screen
+          name="branches"
+          options={{ title: 'Dorixonalar', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+        />
+        <Stack.Screen
+          name="promos"
+          options={{ title: 'Aksiyalar', headerLeft: () => <HeaderBackButton fallback="/(tabs)" /> }}
+        />
+        <Stack.Screen
+          name="rating"
+          options={{ title: 'Xizmatni baholash', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+        />
+        <Stack.Screen
+          name="language"
+          options={{ title: 'Til', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+        />
+        <Stack.Screen
+          name="edit-profile"
+          options={{ title: 'Profilni tahrirlash', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+        />
+        <Stack.Screen
+          name="notifications"
+          options={{ title: 'Bildirishnomalar', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+        />
+        <Stack.Screen
+          name="help"
+          options={{ title: 'Yordam markazi', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+        />
+        <Stack.Screen
+          name="about"
+          options={{ title: 'Ilova haqida', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+        />
+        <Stack.Screen name="cart" options={{ headerShown: false, title: 'Savat' }} />
+        <Stack.Screen name="checkout" options={{ headerShown: false, title: 'Rasmiylashtirish' }} />
+        <Stack.Screen name="product/[id]" options={{ headerShown: false, title: 'Mahsulot' }} />
+        <Stack.Screen name="order/[id]" options={{ headerShown: false, title: 'Buyurtma holati' }} />
         <Stack.Screen name="+not-found" options={{ title: 'Sahifa topilmadi' }} />
       </Stack>
     </AuthGate>

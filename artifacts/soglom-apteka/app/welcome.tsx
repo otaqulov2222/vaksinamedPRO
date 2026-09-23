@@ -1,54 +1,105 @@
+import { Feather } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  Image,
   Platform,
   Pressable,
   StyleSheet,
+  Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const PURPLE = '#5C328E';
+const PURPLE_DEEP = '#2A104E';
+const YELLOW = '#FFCC00';
+const MAX_FRAME = 430;
+
 /**
- * Welcome = kirish rasmi / kiriish rasmi full.png (1:1)
+ * Auth entry.
+ * Background: welcome-bg-clean.png (derived from welcome-screen.png with baked CTAs cropped out).
+ * Exactly two RN CTAs — no UI controls inside the image.
+ * Session redirect remains in AuthGate (_layout).
  */
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
   const fade = useRef(new Animated.Value(0)).current;
+  const rise = useRef(new Animated.Value(10)).current;
 
   useEffect(() => {
-    Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-  }, [fade]);
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 1, duration: 280, useNativeDriver: true }),
+      Animated.timing(rise, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
+  }, [fade, rise]);
+
+  const bottomPad = Math.max(insets.bottom, 16) + 12;
+  const topPad = Platform.OS === 'web' ? 0 : Math.max(insets.top, 0);
+  const compact = winH < 680;
+  const btnMinH = compact ? 50 : 54;
 
   return (
-    <View
-      style={[
-        styles.root,
-        { paddingTop: Platform.OS === 'web' ? 0 : Math.max(0, insets.top - 2) },
-      ]}
-    >
-      <Animated.View style={[styles.frame, { opacity: fade }]}>
+    <View style={styles.root}>
+      <View style={[styles.frame, { maxWidth: MAX_FRAME }]}>
         <Image
-          source={require('../assets/images/welcome-screen.png')}
-          style={styles.screen}
-          resizeMode="stretch"
+          source={require('../assets/images/welcome-bg-clean.png')}
+          style={styles.bg}
+          contentFit="cover"
+          contentPosition="top center"
+          transition={0}
+          accessibilityIgnoresInvertColors
           accessibilityLabel="Vaksina Med"
         />
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Ro‘yxatdan o‘tish"
-          onPress={() => router.push('/register')}
-          style={({ pressed }) => [styles.hitRegister, pressed && styles.pressed]}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Kirish"
-          onPress={() => router.push('/login')}
-          style={({ pressed }) => [styles.hitLogin, pressed && styles.pressed]}
-        />
-      </Animated.View>
+        <View
+          style={[
+            styles.content,
+            { paddingTop: topPad, paddingBottom: bottomPad },
+          ]}
+        >
+          <View style={styles.flexGrow} />
+
+          <Animated.View
+            style={[
+              styles.actions,
+              { opacity: fade, transform: [{ translateY: rise }] },
+            ]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Ro‘yxatdan o‘tish"
+              accessibilityHint="Ro‘yxatdan o‘tish sahifasiga o‘tadi"
+              onPress={() => router.push('/register')}
+              style={({ pressed }) => [
+                styles.btnPrimary,
+                { minHeight: btnMinH },
+                pressed && styles.btnPrimaryPressed,
+              ]}
+            >
+              <Text style={styles.btnPrimaryText}>Ro‘yxatdan o‘tish</Text>
+              <Feather name="arrow-right" size={18} color={PURPLE_DEEP} />
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Kirish"
+              accessibilityHint="Kirish sahifasiga o‘tadi"
+              onPress={() => router.push('/login')}
+              style={({ pressed }) => [
+                styles.btnSecondary,
+                { minHeight: btnMinH },
+                pressed && styles.btnSecondaryPressed,
+              ]}
+            >
+              <Text style={styles.btnSecondaryText}>Kirish</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -62,34 +113,76 @@ const styles = StyleSheet.create({
   frame: {
     flex: 1,
     width: '100%',
-    maxWidth: 430,
     overflow: 'hidden',
     position: 'relative',
-    borderWidth: Platform.OS === 'web' ? 2 : 0,
-    borderColor: '#5C328E',
+    backgroundColor: '#F7F5FC',
+    ...(Platform.OS === 'web'
+      ? { borderWidth: 2, borderColor: PURPLE, borderRadius: 0 }
+      : null),
   },
-  screen: {
+  bg: {
     ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
   },
-  hitRegister: {
-    position: 'absolute',
-    left: '8%',
-    right: '8%',
-    top: '76.3%',
-    height: '5.8%',
-    borderRadius: 28,
+  content: {
+    flex: 1,
+    paddingHorizontal: 22,
+    justifyContent: 'flex-end',
   },
-  hitLogin: {
-    position: 'absolute',
-    left: '8%',
-    right: '8%',
-    top: '84.1%',
-    height: '5.5%',
-    borderRadius: 28,
+  flexGrow: {
+    flex: 1,
   },
-  pressed: {
-    backgroundColor: 'rgba(42, 16, 78, 0.08)',
+  actions: {
+    width: '100%',
+    gap: 12,
+  },
+  btnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: YELLOW,
+    borderRadius: 999,
+    paddingHorizontal: 20,
+    minHeight: 54,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#C9A000',
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 3 },
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
+  },
+  btnPrimaryPressed: {
+    opacity: 0.88,
+  },
+  btnPrimaryText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    color: PURPLE_DEEP,
+    letterSpacing: 0.2,
+  },
+  btnSecondary: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: PURPLE,
+    paddingHorizontal: 20,
+    minHeight: 54,
+  },
+  btnSecondaryPressed: {
+    backgroundColor: 'rgba(92,50,142,0.08)',
+  },
+  btnSecondaryText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    color: PURPLE_DEEP,
+    letterSpacing: 0.2,
   },
 });

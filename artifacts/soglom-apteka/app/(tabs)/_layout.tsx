@@ -7,15 +7,18 @@ import { router } from 'expo-router';
 
 function CenterQrButton() {
   return (
-    <Pressable
-      accessibilityLabel="Mening QR kodim"
-      onPress={() => router.push('/qr')}
-      style={({ pressed }) => [styles.centerQrButton, { opacity: pressed ? 0.88 : 1 }]}
-    >
-      <View style={styles.qrButtonInner}>
-        <MaterialCommunityIcons name="qrcode" size={26} color="#120724" />
-      </View>
-    </Pressable>
+    <View style={styles.centerQrSlot} pointerEvents="box-none">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="QR kod"
+        onPress={() => router.push('/qr')}
+        style={({ pressed }) => [styles.centerQrButton, { opacity: pressed ? 0.9 : 1 }]}
+      >
+        <View style={styles.qrButtonInner} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <MaterialCommunityIcons name="qrcode" size={24} color="#120724" />
+        </View>
+      </Pressable>
+    </View>
   );
 }
 
@@ -30,16 +33,22 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.mutedForeground,
         tabBarStyle: {
           backgroundColor: colors.card,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
+          borderTopColor: '#E8E4F0',
+          borderTopWidth: StyleSheet.hairlineWidth,
           elevation: 0,
-          height: isWeb ? 84 : 66,
-          paddingTop: 7,
+          shadowOpacity: 0,
+          height: isWeb ? 80 : 64,
+          paddingTop: 6,
+          paddingBottom: isWeb ? 12 : 4,
         },
         tabBarLabelStyle: {
           fontFamily: 'Inter_600SemiBold',
-          fontSize: 10,
-          marginBottom: isWeb ? 14 : 4,
+          fontSize: 11,
+          lineHeight: 14,
+          marginBottom: isWeb ? 8 : 2,
+        },
+        tabBarIconStyle: {
+          marginTop: 2,
         },
       }}
     >
@@ -47,17 +56,25 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Bosh sahifa',
-          tabBarIcon: ({ color }) => <Feather name="home" size={21} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="catalog"
         options={{
           title: 'Katalog',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="view-grid" size={21} color={color} />,
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="view-grid" size={22} color={color} />,
         }}
       />
-      <Tabs.Screen name="bonuses" options={{ title: 'QR kod', tabBarButton: () => <CenterQrButton /> }} />
+      <Tabs.Screen
+        name="bonuses"
+        options={{
+          title: 'QR kod',
+          tabBarLabel: () => null,
+          tabBarIcon: () => null,
+          tabBarButton: () => <CenterQrButton />,
+        }}
+      />
       <Tabs.Screen
         name="purchases"
         options={{
@@ -69,35 +86,34 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profil',
-          tabBarIcon: ({ color }) => <Feather name="user" size={21} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
         }}
       />
-      <Tabs.Screen name="cashback" options={{ href: null }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  centerQrButton: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+  centerQrSlot: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -19,
+  },
+  centerQrButton: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -16,
     backgroundColor: '#FFCC00',
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: '#fcfaff',
-    elevation: 8,
-    shadowColor: '#C9A000',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
   },
   qrButtonInner: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFCC00',

@@ -1,13 +1,13 @@
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,20 +15,79 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { api } from '@/lib/api';
+import { api, type ApiError } from '@/lib/api';
+import { formatLocalPhoneMasked, normalizeLocalPhone } from '@/lib/phone';
+import { clearRegisterDraft, peekRegisterDraft } from '@/lib/registerDraft';
 
+const OTP_LEN = 6;
+/** UI countdown aligned with existing server 60s recent-OTP gate — do not invent a new value. */
+const RESEND_COOLDOWN_SEC = 60;
+
+const inputWebFix =
+  Platform.OS === 'web'
+    ? ({ outlineStyle: 'none' } as object)
+    : ({ outlineStyle: 'none' } as object);
+
+function mapOtpError(err: ApiError, kind: 'verify' | 'resend'): string {
+  const status = err.status;
+  const raw = String(err.message || '');
+  if (status === 429 || /60 soniya|qayta urinib|rate/i.test(raw)) {
+    return 'Kod allaqachon yuborilgan. 60 soniyadan keyin qayta urinib ko‘ring.';
+  }
+  if (status === 503 || status === 502 || /sms|eskiz|yuborilmadi|provider/i.test(raw)) {
+    return 'SMS yuborib bo‘lmadi. Keyinroq qayta urinib ko‘ring.';
+  }
+  if (!status && /Serverga ulanib|network|Failed to fetch/i.test(raw)) {
+    return 'Serverga ulanib bo‘lmadi. Internet yoki API holatini tekshiring.';
+  }
+  if (kind === 'verify') {
+    if (status === 401 || /noto‘g‘ri|muddati|expired|invalid/i.test(raw)) {
+      return 'Kod noto‘g‘ri yoki muddati tugagan';
+    }
+    return 'Tasdiqlash amalga oshmadi. Qayta urinib ko‘ring.';
+  }
+  return 'Kodni qayta yuborib bo‘lmadi. Qayta urinib ko‘ring.';
+}
+
+/**
+ * OTP verify — visual/security polish only.
+ * Server remains authoritative; no TTL/hash/rate-limit changes.
+ */
 export default function VerifyOtpScreen() {
   const insets = useSafeAreaInsets();
   const { refresh } = useApp();
-  const params = useLocalSearchParams<{ phone?: string; purpose?: string; firstName?: string; hint?: string }>();
-  const phone = String(params.phone || '');
+  const params = useLocalSearchParams<{
+    phone?: string;
+    purpose?: string;
+    firstName?: string;
+  }>();
+
+  const phoneLocal = useMemo(
+    () => normalizeLocalPhone(String(params.phone || '')),
+    [params.phone],
+  );
+  const phoneLabel = useMemo(
+    () => (phoneLocal ? `+998 ${formatLocalPhoneMasked(phoneLocal)}` : '+998'),
+    [phoneLocal],
+  );
   const purpose = params.purpose === 'register' ? 'register' : 'login';
   const firstName = String(params.firstName || '');
+
   const [code, setCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [seconds, setSeconds] = useState(60);
-  const [hint, setHint] = useState(__DEV__ ? String(params.hint || '') : '');
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [seconds, setSeconds] = useState(RESEND_COOLDOWN_SEC);
   const [error, setError] = useState<string | null>(null);
+  const [resendOk, setResendOk] = useState(false);
+  const [focused, setFocused] = useState(false);
+
+  const verifyingRef = useRef(false);
+  const resendingRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const codeComplete = code.length === OTP_LEN;
+  const busy = verifying || resending;
+  const canVerify = codeComplete && !busy;
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -36,141 +95,313 @@ export default function VerifyOtpScreen() {
     return () => clearTimeout(id);
   }, [seconds]);
 
-  const showError = (msg: string) => {
-    setError(msg);
-    if (Platform.OS !== 'web') Alert.alert('Tasdiqlash', msg);
+  const onChangeCode = (raw: string) => {
+    const next = String(raw || '').replace(/\D/g, '').slice(0, OTP_LEN);
+    setCode(next);
+    setResendOk(false);
+    if (error) setError(null);
   };
 
   const verify = async () => {
+    if (verifyingRef.current || busy) return;
     setError(null);
-    if (code.length !== 6) {
-      showError('6 xonali kodni kiriting');
+    setResendOk(false);
+    if (!codeComplete) {
+      setError('6 xonali kodni kiriting');
       return;
     }
-    setLoading(true);
+    if (!phoneLocal) {
+      setError('Telefon raqam topilmadi. Orqaga qaytib qayta urinib ko‘ring.');
+      return;
+    }
+
+    verifyingRef.current = true;
+    setVerifying(true);
     try {
-      const { peekRegisterDraft, clearRegisterDraft } = await import('@/lib/registerDraft');
       const draft = purpose === 'register' ? peekRegisterDraft() : null;
       await api.verifyOtp({
-        phone,
+        phone: phoneLocal,
         code,
         purpose,
-        firstName: purpose === 'register' ? (firstName || draft?.firstName) : undefined,
+        firstName: purpose === 'register' ? firstName || draft?.firstName : undefined,
         password: purpose === 'register' ? draft?.password : undefined,
       });
       if (purpose === 'register') clearRegisterDraft();
       await refresh();
       router.replace('/(tabs)');
-    } catch (err: any) {
-      showError(err?.message || 'Kod noto‘g‘ri');
+    } catch (err: unknown) {
+      setError(mapOtpError(err as ApiError, 'verify'));
     } finally {
-      setLoading(false);
+      setVerifying(false);
+      verifyingRef.current = false;
     }
   };
 
   const resend = async () => {
-    if (seconds > 0) return;
-    setError(null);
-    setLoading(true);
-    try {
-      const data = await api.requestOtp(phone, purpose);
-      if (__DEV__ && data.devCode) setHint(data.devCode);
-      setSeconds(60);
-      if (Platform.OS !== 'web') Alert.alert('SMS', 'Yangi kod yuborildi');
-    } catch (err: any) {
-      showError(err?.message || 'Xatolik');
-    } finally {
-      setLoading(false);
+    if (seconds > 0 || resendingRef.current || busy) return;
+    if (!phoneLocal) {
+      setError('Telefon raqam topilmadi. Orqaga qaytib qayta urinib ko‘ring.');
+      return;
     }
+    setError(null);
+    setResendOk(false);
+    resendingRef.current = true;
+    setResending(true);
+    try {
+      await api.requestOtp(phoneLocal, purpose);
+      setSeconds(RESEND_COOLDOWN_SEC);
+      setResendOk(true);
+    } catch (err: unknown) {
+      setError(mapOtpError(err as ApiError, 'resend'));
+    } finally {
+      setResending(false);
+      resendingRef.current = false;
+    }
+  };
+
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace(purpose === 'register' ? '/register' : '/login');
   };
 
   return (
     <View style={styles.root}>
-      <LinearGradient colors={['#2A104E', '#5C328E', '#F7F5F2']} style={styles.hero} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={[styles.body, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 }]}>
-          <Pressable onPress={() => router.back()} style={styles.back}>
+      <LinearGradient colors={['#2A104E', '#4A2878', '#F7F5F2']} style={styles.hero} />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top, 8) : 0}
+      >
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scroll,
+            {
+              paddingTop: Math.max(insets.top, 8) + 4,
+              paddingBottom: Math.max(insets.bottom, 16) + 24,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          <Pressable
+            onPress={goBack}
+            style={styles.back}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Orqaga"
+          >
             <Feather name="chevron-left" size={20} color="#FFCC00" />
           </Pressable>
 
           <Text style={styles.title}>SMS kod</Text>
           <Text style={styles.sub}>
-            +998 {phone} raqamiga yuborilgan 6 xonali kodni kiriting
+            {phoneLabel} raqamiga yuborilgan {OTP_LEN} xonali kodni kiriting
           </Text>
 
-          <View style={styles.card}>
-            <TextInput
-              value={code}
-              onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
-              keyboardType="number-pad"
-              placeholder="• • • • • •"
-              placeholderTextColor="#C4B5D6"
-              style={styles.codeInput}
-              maxLength={6}
-              autoFocus
-            />
+          <View style={styles.cardWrap}>
+            <View style={styles.card}>
+              <TextInput
+                value={code}
+                onChangeText={onChangeCode}
+                onFocus={() => {
+                  setFocused(true);
+                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+                }}
+                onBlur={() => setFocused(false)}
+                keyboardType="number-pad"
+                placeholder="• • • • • •"
+                placeholderTextColor="#C4B5D6"
+                style={[
+                  styles.codeInput,
+                  inputWebFix,
+                  { borderColor: error ? '#F87171' : focused ? '#5C328E' : '#EDE4F7' },
+                ]}
+                maxLength={OTP_LEN}
+                autoFocus
+                editable={!verifying}
+                textContentType="oneTimeCode"
+                autoComplete="sms-otp"
+                importantForAutofill="yes"
+                accessibilityLabel={`${OTP_LEN} xonali SMS kod`}
+                onSubmitEditing={() => {
+                  if (canVerify) void verify();
+                }}
+              />
 
-            {__DEV__ && hint ? (
-              <Text style={styles.devHint}>Dev kod: {hint}</Text>
-            ) : null}
+              {error ? (
+                <View style={styles.errorBox} accessibilityLiveRegion="polite">
+                  <Feather name="alert-circle" size={16} color="#B91C1C" />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
 
-            {error ? (
-              <Text style={styles.errorText}>{error}</Text>
-            ) : null}
+              {resendOk && !error ? (
+                <Text style={styles.resendOk} accessibilityLiveRegion="polite">
+                  Yangi kod yuborildi
+                </Text>
+              ) : null}
 
-            <Pressable
-              disabled={loading || code.length !== 6}
-              onPress={() => void verify()}
-              style={[styles.btn, { opacity: code.length === 6 && !loading ? 1 : 0.55 }]}
-            >
-              <LinearGradient colors={['#FFCC00', '#F0B800']} style={styles.btnGrad}>
-                {loading ? <ActivityIndicator color="#120724" /> : <Text style={styles.btnText}>Tasdiqlash</Text>}
-              </LinearGradient>
-            </Pressable>
+              <Pressable
+                disabled={!canVerify}
+                onPress={() => void verify()}
+                style={[styles.btn, !canVerify && styles.btnDisabled]}
+                accessibilityRole="button"
+                accessibilityLabel="Tasdiqlash"
+                accessibilityState={{ disabled: !canVerify, busy: verifying }}
+              >
+                {canVerify || verifying ? (
+                  <LinearGradient colors={['#FFCC00', '#F0B800']} style={styles.btnGrad}>
+                    {verifying ? (
+                      <ActivityIndicator color="#120724" />
+                    ) : (
+                      <>
+                        <Text style={styles.btnText}>Tasdiqlash</Text>
+                        <Feather name="arrow-right" size={18} color="#120724" />
+                      </>
+                    )}
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.btnGrad, styles.btnGradDisabled]}>
+                    <Text style={styles.btnTextDisabled}>Tasdiqlash</Text>
+                    <Feather name="arrow-right" size={18} color="#A8B0C0" />
+                  </View>
+                )}
+              </Pressable>
 
-            <Pressable disabled={seconds > 0 || loading} onPress={() => void resend()} style={styles.resend}>
-              <Text style={[styles.resendText, seconds > 0 && { color: '#94A3B8' }]}>
-                {seconds > 0 ? `Qayta yuborish: ${seconds}s` : 'Kodni qayta yuborish'}
-              </Text>
-            </Pressable>
+              <Pressable
+                disabled={seconds > 0 || busy}
+                onPress={() => void resend()}
+                style={styles.resend}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  seconds > 0
+                    ? `Qayta yuborish ${seconds} soniyadan keyin`
+                    : 'Kodni qayta yuborish'
+                }
+                accessibilityState={{ disabled: seconds > 0 || busy, busy: resending }}
+              >
+                {resending ? (
+                  <ActivityIndicator color="#5C328E" />
+                ) : (
+                  <Text style={[styles.resendText, (seconds > 0 || busy) && styles.resendMuted]}>
+                    {seconds > 0 ? `Qayta yuborish: ${seconds}s` : 'Kodni qayta yuborish'}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F7F5F2' },
+  root: { flex: 1, width: '100%', backgroundColor: '#F7F5F2', overflow: 'hidden' },
+  flex: { flex: 1 },
   hero: { position: 'absolute', top: 0, left: 0, right: 0, height: 240 },
-  body: { flex: 1, paddingHorizontal: 20 },
-  back: {
-    width: 42, height: 42, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 18,
+  scrollView: { flex: 1, width: '100%' },
+  scroll: {
+    paddingHorizontal: 20,
+    flexGrow: 1,
   },
-  title: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 28 },
-  sub: { color: 'rgba(255,255,255,0.75)', fontFamily: 'Inter_400Regular', fontSize: 14, marginTop: 8, marginBottom: 22, lineHeight: 20 },
+  back: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  title: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 26 },
+  sub: {
+    color: 'rgba(255,255,255,0.75)',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    marginTop: 8,
+    marginBottom: 14,
+    lineHeight: 20,
+  },
+  cardWrap: {
+    flexGrow: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
   card: {
-    backgroundColor: '#fff', borderRadius: 28, padding: 22,
-    shadowColor: '#2A104E', shadowOpacity: 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 18,
+    shadowColor: '#2A104E',
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
   },
   codeInput: {
-    fontFamily: 'Inter_700Bold', fontSize: 28, letterSpacing: 10, textAlign: 'center',
-    color: '#2A104E', backgroundColor: '#F8F5FC', borderRadius: 16, minHeight: 64,
-    borderWidth: 1, borderColor: '#EDE4F7', outlineStyle: 'none' as any,
-  },
-  devHint: { textAlign: 'center', marginTop: 12, fontFamily: 'Inter_500Medium', fontSize: 12, color: '#0D9488' },
-  errorText: {
-    marginTop: 12,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 28,
+    letterSpacing: 10,
     textAlign: 'center',
+    color: '#2A104E',
+    backgroundColor: '#F8F5FC',
+    borderRadius: 16,
+    minHeight: 64,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+  },
+  errorBox: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+  },
+  errorText: {
+    flex: 1,
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
     color: '#B91C1C',
     lineHeight: 18,
+    textAlign: 'left',
   },
-  btn: { marginTop: 18, borderRadius: 18, overflow: 'hidden' },
-  btnGrad: { minHeight: 54, alignItems: 'center', justifyContent: 'center' },
+  resendOk: {
+    marginTop: 12,
+    textAlign: 'center',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: '#0D9488',
+  },
+  btn: { marginTop: 16, borderRadius: 16, overflow: 'hidden' },
+  btnDisabled: { opacity: 1 },
+  btnGrad: {
+    minHeight: 52,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  btnGradDisabled: {
+    backgroundColor: '#E8E4F0',
+  },
   btnText: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#120724' },
-  resend: { marginTop: 16, alignItems: 'center', paddingVertical: 8 },
+  btnTextDisabled: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#94A3B8' },
+  resend: {
+    marginTop: 12,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
   resendText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#5C328E' },
+  resendMuted: { color: '#94A3B8' },
 });

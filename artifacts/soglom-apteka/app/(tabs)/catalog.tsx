@@ -1,6 +1,6 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,14 +24,13 @@ const MUTED = '#8B93A7';
 const BG = '#F5F4FA';
 const CARD = '#FFFFFF';
 const CAT_BG = '#EDE8F8';
-const RED = '#FF3B30';
 const YELLOW = '#FFCC00';
+const BAD_RED = '#B91C1C';
 
 const priceUz = (n: number) =>
-  `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')} so'm`;
+  `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
 
 type CatId = string;
-
 type SortKey = 'default' | 'price_asc' | 'price_desc' | 'name';
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -41,6 +40,7 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Nom: A–Z' },
 ];
 
+/** Real list fields from GET /api/catalog/products (+ branch stock when scoped). */
 type Product = {
   id: number | string;
   nameUz: string;
@@ -48,6 +48,8 @@ type Product = {
   category: string;
   price: number;
   icon: string;
+  unit?: string;
+  requiresPrescription?: boolean;
   availableQuantity?: number | null;
   availabilityKnown?: boolean;
 };
@@ -63,94 +65,200 @@ function toast(title: string, msg: string) {
   }
 }
 
+function routeQueryValue(params: { q?: string | string[] }): string {
+  if (typeof params.q === 'string') return params.q;
+  if (Array.isArray(params.q) && typeof params.q[0] === 'string') return params.q[0];
+  return '';
+}
+
+/** Honest stock copy — never invents availability. */
+function stockPresentation(
+  item: Product,
+  hasBranch: boolean,
+): { text: string; tone: 'ok' | 'bad' | 'neutral'; canAdd: boolean } {
+  if (!hasBranch) {
+    return { text: 'Filial tanlanmagan', tone: 'neutral', canAdd: true };
+  }
+  if (!item.availabilityKnown) {
+    return { text: 'Mavjudlik tekshirilmoqda', tone: 'neutral', canAdd: true };
+  }
+  const qty = Math.max(0, Number(item.availableQuantity) || 0);
+  if (qty > 0) {
+    return { text: 'Filialda mavjud', tone: 'ok', canAdd: true };
+  }
+  return { text: 'Filialda mavjud emas', tone: 'bad', canAdd: false };
+}
+
+function productIconName(icon: string) {
+  return (
+    icon in MaterialCommunityIcons.glyphMap ? icon : 'pill'
+  ) as React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+}
+
 function ProductCard({
   item,
   list,
-  liked,
+  hasBranch,
   onOpen,
   onAdd,
-  onToggleLike,
   adding,
 }: {
   item: Product;
   list: boolean;
-  liked: boolean;
+  hasBranch: boolean;
   onOpen: () => void;
   onAdd: () => void;
-  onToggleLike: () => void;
   adding: boolean;
 }) {
-  return (
-    <Pressable
-      style={[styles.card, list && styles.cardList]}
-      onPress={onOpen}
-      accessibilityRole="button"
-      accessibilityLabel={item.nameUz}
-    >
-      <View style={[styles.cardImageWrap, list && styles.cardImageWrapList]}>
+  const stock = stockPresentation(item, hasBranch);
+  const addDisabled = adding || !stock.canAdd;
+  const showRx = Boolean(item.requiresPrescription);
+
+  if (list) {
+    return (
+      <View style={styles.cardList}>
         <Pressable
-          style={styles.heartBtn}
-          hitSlop={10}
-          onPress={(e) => {
-            e.stopPropagation?.();
-            onToggleLike();
-          }}
-          accessibilityLabel={liked ? 'Sevimlidan olib tashlash' : 'Sevimlilarga'}
+          style={styles.cardListMain}
+          onPress={onOpen}
+          accessibilityRole="button"
+          accessibilityLabel={item.nameUz}
         >
-          <MaterialCommunityIcons
-            name={liked ? 'heart' : 'heart-outline'}
-            size={18}
-            color={liked ? RED : MUTED}
-          />
+          <View style={styles.cardImageWrapList}>
+            <View style={styles.iconBubble}>
+              <MaterialCommunityIcons name={productIconName(item.icon)} size={28} color={PURPLE} />
+            </View>
+          </View>
+          <View style={styles.cardBodyList}>
+            <View style={styles.listTopRow}>
+              <Text style={styles.cardNameList} numberOfLines={2}>
+                {item.nameUz}
+              </Text>
+              {showRx ? (
+                <View style={styles.rxChip} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                  <Text style={styles.rxChipText}>Rx</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.cardBrand} numberOfLines={1}>
+              {item.manufacturer}
+            </Text>
+            <Text
+              style={[
+                styles.stockText,
+                stock.tone === 'ok' && styles.stockOk,
+                stock.tone === 'bad' && styles.stockBad,
+              ]}
+              numberOfLines={1}
+            >
+              {stock.text}
+            </Text>
+          </View>
         </Pressable>
-        <MaterialCommunityIcons
-          name={
-            (item.icon in MaterialCommunityIcons.glyphMap
-              ? item.icon
-              : 'pill') as React.ComponentProps<typeof MaterialCommunityIcons>['name']
-          }
-          size={48}
-          color={PURPLE}
-        />
-      </View>
-
-      <View style={[styles.cardBody, list && styles.cardBodyList]}>
-        <Text style={styles.cardName} numberOfLines={2}>
-          {item.nameUz}
-        </Text>
-        <Text style={styles.cardBrand} numberOfLines={1}>
-          {item.manufacturer}
-        </Text>
-
-        <View style={styles.cardFooter}>
-          <View style={styles.priceCol}>
+        <View style={styles.cardFooterList}>
+          <Pressable
+            style={styles.priceCol}
+            onPress={onOpen}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.nameUz}, ${priceUz(item.price)}`}
+          >
             <Text style={styles.cardPrice} numberOfLines={1}>
               {priceUz(item.price)}
             </Text>
-            {item.availabilityKnown ? (
-              <Text style={{ fontSize: 10, color: MUTED, marginTop: 2 }} numberOfLines={1}>
-                Filialda: {Math.max(0, Number(item.availableQuantity) || 0)}
-              </Text>
-            ) : null}
-          </View>
+          </Pressable>
           <Pressable
-            style={[styles.addBtn, adding && styles.addBtnBusy]}
-            disabled={adding}
-            onPress={(e) => {
-              e.stopPropagation?.();
-              onAdd();
-            }}
-            accessibilityLabel="Savatga qo‘shish"
+            style={[styles.addBtn, addDisabled && styles.addBtnDisabled, adding && styles.addBtnBusy]}
+            disabled={addDisabled}
+            onPress={onAdd}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: addDisabled }}
+            accessibilityLabel={
+              stock.canAdd ? 'Savatga qo‘shish' : 'Filialda mavjud emas — savatga qo‘shib bo‘lmaydi'
+            }
           >
             {adding ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Feather name="shopping-cart" size={15} color="#fff" />
+              <Feather name="shopping-cart" size={16} color="#fff" />
             )}
           </Pressable>
         </View>
       </View>
-    </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.card}>
+      <Pressable
+        style={styles.cardMain}
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={item.nameUz}
+      >
+        <View style={styles.cardMedia}>
+          <View style={styles.iconBubble}>
+            <MaterialCommunityIcons name={productIconName(item.icon)} size={44} color={PURPLE} />
+          </View>
+          {showRx ? (
+            <View style={styles.rxCorner} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Text style={styles.rxChipText}>Rx</Text>
+            </View>
+          ) : (
+            <View style={styles.mediaAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+          )}
+        </View>
+
+        <View style={styles.cardBody}>
+          <Text style={styles.cardName} numberOfLines={2}>
+            {item.nameUz}
+          </Text>
+          <Text style={styles.cardBrand} numberOfLines={1}>
+            {item.manufacturer}
+          </Text>
+
+          <View style={styles.cardSpacer} />
+
+          <Text
+            style={[
+              styles.stockText,
+              stock.tone === 'ok' && styles.stockOk,
+              stock.tone === 'bad' && styles.stockBad,
+            ]}
+            numberOfLines={1}
+          >
+            {stock.text}
+          </Text>
+        </View>
+      </Pressable>
+
+      <View style={styles.cardFooter}>
+        <Pressable
+          style={styles.priceCol}
+          onPress={onOpen}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.nameUz}, ${priceUz(item.price)}`}
+        >
+          <Text style={styles.cardPrice} numberOfLines={1}>
+            {priceUz(item.price)}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.addBtn, addDisabled && styles.addBtnDisabled, adding && styles.addBtnBusy]}
+          disabled={addDisabled}
+          onPress={onAdd}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: addDisabled }}
+          accessibilityLabel={
+            stock.canAdd ? 'Savatga qo‘shish' : 'Filialda mavjud emas — savatga qo‘shib bo‘lmaydi'
+          }
+        >
+          {adding ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Feather name="shopping-cart" size={16} color="#fff" />
+          )}
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -171,8 +279,14 @@ function Sheet({
 }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
-        <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation()}>
+      <View style={styles.sheetBackdrop}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Yopish"
+        />
+        <View style={styles.sheetCard}>
           <Text style={styles.sheetTitle}>{title}</Text>
           {options.map((o) => {
             const active = o.key === selected;
@@ -184,17 +298,19 @@ function Sheet({
                   onSelect(o.key);
                   onClose();
                 }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
               >
                 <Text style={[styles.sheetRowText, active && styles.sheetRowTextActive]}>{o.label}</Text>
                 {active ? <Feather name="check" size={18} color={PURPLE} /> : null}
               </Pressable>
             );
           })}
-          <Pressable style={styles.sheetCancel} onPress={onClose}>
+          <Pressable style={styles.sheetCancel} onPress={onClose} accessibilityRole="button" accessibilityLabel="Yopish">
             <Text style={styles.sheetCancelText}>Yopish</Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -202,16 +318,19 @@ function Sheet({
 export default function CatalogScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const params = useLocalSearchParams<{ q?: string }>();
+  const params = useLocalSearchParams<{ q?: string | string[] }>();
   const { refresh, cartCount } = useApp();
+  const narrow = width < 380;
 
-  const [query, setQuery] = useState(typeof params.q === 'string' ? params.q : '');
-  const [debouncedQuery, setDebouncedQuery] = useState(query);
+  const initialQ = routeQueryValue(params);
+  const [query, setQuery] = useState(initialQ);
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQ.trim());
   const [cat, setCat] = useState<CatId>('all');
   const [apiCategories, setApiCategories] = useState<string[]>([]);
+  const [catError, setCatError] = useState(false);
+  const [catLoading, setCatLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sort, setSort] = useState<SortKey>('default');
-  const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [apiProducts, setApiProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -219,109 +338,161 @@ export default function CatalogScreen() {
   const [pageError, setPageError] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
+  /** Branch context comes from cart API (`cart.branchId` / `branch.id`) — no second store. */
   const [branchId, setBranchId] = useState<number | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [sortOpen, setSortOpen] = useState(false);
-  const loadGenRef = React.useRef(0);
-  const nextOffsetRef = React.useRef(0);
-  const hasMoreRef = React.useRef(false);
-  const loadingMoreRef = React.useRef(false);
+
+  const loadGenRef = useRef(0);
+  const nextOffsetRef = useRef(0);
+  const hasMoreRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  /** Prevents route→local echo loops when we push q via setParams. */
+  const lastSyncedRouteQ = useRef<string>(initialQ);
 
   const contentWidth = Math.min(width, 480);
-  const gridGap = 12;
-  const sidePad = 16;
+  const gridGap = narrow ? 10 : 12;
+  const sidePad = narrow ? 12 : 16;
   const cardWidth = (contentWidth - sidePad * 2 - gridGap) / 2;
 
-  useEffect(() => {
-    if (typeof params.q === 'string' && params.q) setQuery(params.q);
-  }, [params.q]);
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300);
-    return () => clearTimeout(t);
-  }, [query]);
-
-  useEffect(() => {
-    void api.categories().then((data) => {
-      setApiCategories(Array.isArray(data.categories) ? data.categories.filter(Boolean) : []);
-    }).catch(() => setApiCategories([]));
+  const syncQueryToRoute = useCallback((raw: string) => {
+    const next = raw.trim();
+    lastSyncedRouteQ.current = next;
+    router.setParams({ q: next } as any);
   }, []);
 
+  // External navigation (Home search / clear) → local search field
   useEffect(() => {
-    void api.cart().then((c) => {
-      const id = c?.branch?.id ?? c?.cart?.branchId ?? null;
-      setBranchId(id != null && Number.isFinite(Number(id)) ? Number(id) : null);
-    }).catch(() => setBranchId(null));
-  }, []);
-
-  const buildQuery = useCallback((offset: number) => {
-    const qs = new URLSearchParams();
-    if (debouncedQuery) qs.set('q', debouncedQuery);
-    if (cat && cat !== 'all') qs.set('category', cat);
-    if (sort && sort !== 'default') qs.set('sort', sort);
-    if (branchId) qs.set('branchId', String(branchId));
-    qs.set('limit', String(PAGE_SIZE));
-    qs.set('offset', String(offset));
-    return `?${qs}`;
-  }, [debouncedQuery, cat, sort, branchId]);
-
-  const loadProducts = useCallback((mode: 'reset' | 'more' = 'reset') => {
-    const gen = ++loadGenRef.current;
-    const offset = mode === 'more' ? nextOffsetRef.current : 0;
-    if (mode === 'reset') {
-      setLoading(true);
-      setLoadError(false);
-      setPageError(false);
-      hasMoreRef.current = false;
-      nextOffsetRef.current = 0;
-    } else {
-      if (loadingMoreRef.current || !hasMoreRef.current) return;
-      loadingMoreRef.current = true;
-      setLoadingMore(true);
-      setPageError(false);
+    const routeQ = routeQueryValue(params);
+    if (routeQ !== lastSyncedRouteQ.current) {
+      lastSyncedRouteQ.current = routeQ;
+      setQuery(routeQ);
+      setDebouncedQuery(routeQ.trim());
     }
+  }, [params]);
+
+  // Debounce typing → products + route params
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const q = query.trim();
+      setDebouncedQuery(q);
+      if (q !== lastSyncedRouteQ.current) {
+        syncQueryToRoute(q);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query, syncQueryToRoute]);
+
+  const loadCategories = useCallback(() => {
+    setCatLoading(true);
+    setCatError(false);
     void api
-      .products(buildQuery(offset))
+      .categories()
       .then((data) => {
-        if (gen !== loadGenRef.current) return;
-        const page = data.products || [];
-        const more = Boolean(data.hasMore ?? data.pagination?.hasMore);
-        const next = data.pagination?.nextOffset != null
-          ? data.pagination.nextOffset
-          : offset + page.length;
-        nextOffsetRef.current = next;
-        hasMoreRef.current = more;
-        setHasMore(more);
-        setTotal(Number(data.total ?? data.pagination?.total ?? page.length));
-        setApiProducts((prev) => {
-          if (mode === 'reset') return page;
-          const seen = new Set(prev.map((p) => String(p.id)));
-          const merged = [...prev];
-          for (const p of page) {
-            if (!seen.has(String(p.id))) merged.push(p);
-          }
-          return merged;
-        });
-        setLoadError(false);
+        setApiCategories(Array.isArray(data.categories) ? data.categories.filter(Boolean) : []);
+        setCatError(false);
       })
       .catch(() => {
-        if (gen !== loadGenRef.current) return;
-        if (mode === 'reset') {
-          setApiProducts([]);
-          setLoadError(true);
-          hasMoreRef.current = false;
-          setHasMore(false);
-        } else {
-          setPageError(true);
-        }
+        setApiCategories([]);
+        setCatError(true);
       })
-      .finally(() => {
-        if (gen !== loadGenRef.current) return;
-        loadingMoreRef.current = false;
-        setLoading(false);
-        setLoadingMore(false);
-      });
-  }, [buildQuery]);
+      .finally(() => setCatLoading(false));
+  }, []);
+
+  const refreshBranchFromCart = useCallback(async () => {
+    try {
+      const c = await api.cart();
+      const id = c?.branch?.id ?? c?.cart?.branchId ?? null;
+      const next = id != null && Number.isFinite(Number(id)) ? Number(id) : null;
+      setBranchId((prev) => (prev === next ? prev : next));
+    } catch {
+      setBranchId(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshBranchFromCart();
+    }, [refreshBranchFromCart]),
+  );
+
+  const buildQuery = useCallback(
+    (offset: number) => {
+      const qs = new URLSearchParams();
+      if (debouncedQuery) qs.set('q', debouncedQuery);
+      if (cat && cat !== 'all') qs.set('category', cat);
+      if (sort && sort !== 'default') qs.set('sort', sort);
+      if (branchId) qs.set('branchId', String(branchId));
+      qs.set('limit', String(PAGE_SIZE));
+      qs.set('offset', String(offset));
+      return `?${qs}`;
+    },
+    [debouncedQuery, cat, sort, branchId],
+  );
+
+  const loadProducts = useCallback(
+    (mode: 'reset' | 'more' = 'reset') => {
+      const gen = ++loadGenRef.current;
+      const offset = mode === 'more' ? nextOffsetRef.current : 0;
+      if (mode === 'reset') {
+        setLoading(true);
+        setLoadError(false);
+        setPageError(false);
+        hasMoreRef.current = false;
+        nextOffsetRef.current = 0;
+      } else {
+        if (loadingMoreRef.current || !hasMoreRef.current) return;
+        loadingMoreRef.current = true;
+        setLoadingMore(true);
+        setPageError(false);
+      }
+      void api
+        .products(buildQuery(offset))
+        .then((data) => {
+          if (gen !== loadGenRef.current) return;
+          const page = data.products || [];
+          const more = Boolean(data.hasMore ?? data.pagination?.hasMore);
+          const next =
+            data.pagination?.nextOffset != null ? data.pagination.nextOffset : offset + page.length;
+          nextOffsetRef.current = next;
+          hasMoreRef.current = more;
+          setHasMore(more);
+          setTotal(Number(data.total ?? data.pagination?.total ?? page.length));
+          setApiProducts((prev) => {
+            if (mode === 'reset') return page;
+            const seen = new Set(prev.map((p) => String(p.id)));
+            const merged = [...prev];
+            for (const p of page) {
+              if (!seen.has(String(p.id))) merged.push(p);
+            }
+            return merged;
+          });
+          setLoadError(false);
+        })
+        .catch(() => {
+          if (gen !== loadGenRef.current) return;
+          if (mode === 'reset') {
+            setApiProducts([]);
+            setLoadError(true);
+            hasMoreRef.current = false;
+            setHasMore(false);
+          } else {
+            setPageError(true);
+          }
+        })
+        .finally(() => {
+          if (gen !== loadGenRef.current) return;
+          loadingMoreRef.current = false;
+          setLoading(false);
+          setLoadingMore(false);
+        });
+    },
+    [buildQuery],
+  );
 
   useEffect(() => {
     nextOffsetRef.current = 0;
@@ -340,6 +511,8 @@ export default function CatalogScreen() {
       category: String(p.category || ''),
       price: Number(p.price || 0),
       icon: String(p.icon || 'pill'),
+      unit: p.unit != null ? String(p.unit) : undefined,
+      requiresPrescription: Boolean(p.requiresPrescription),
       availableQuantity: p.availableQuantity != null ? Number(p.availableQuantity) : null,
       availabilityKnown: Boolean(p.availabilityKnown),
     }));
@@ -352,8 +525,9 @@ export default function CatalogScreen() {
     [apiCategories],
   );
 
-  const hasActiveSearch = Boolean(debouncedQuery) || (cat !== 'all');
+  const hasActiveSearch = Boolean(debouncedQuery) || cat !== 'all';
   const sortLabel = SORT_OPTIONS.find((s) => s.key === sort)?.label || 'Saralash';
+  const hasBranch = branchId != null;
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
@@ -375,6 +549,11 @@ export default function CatalogScreen() {
         toast('Savat', 'Mahsulotni savatga qo‘shish uchun tizimga kiring yoki API ishlashi kerak.');
         return;
       }
+      const stock = stockPresentation(p, hasBranch);
+      if (!stock.canAdd) {
+        toast('Savat', 'Bu filialda mahsulot mavjud emas.');
+        return;
+      }
       setAddingId(key);
       try {
         await api.addToCart(Number(p.id));
@@ -386,23 +565,39 @@ export default function CatalogScreen() {
         setAddingId(null);
       }
     },
-    [refresh],
+    [hasBranch, refresh],
   );
 
-  const toggleLike = (p: Product) => {
-    const key = String(p.id);
-    setLiked((prev) => {
-      const next = !prev[key];
-      toast(next ? 'Sevimlilar' : 'Olib tashlandi', p.nameUz);
-      return { ...prev, [key]: next };
-    });
+  const clearSearch = () => {
+    setQuery('');
+    setDebouncedQuery('');
+    syncQueryToRoute('');
+  };
+
+  const onSearchSubmit = () => {
+    const q = query.trim();
+    setDebouncedQuery(q);
+    syncQueryToRoute(q);
+  };
+
+  const clearFilters = () => {
+    clearSearch();
+    setCat('all');
+    setSort('default');
   };
 
   return (
     <View style={[styles.root, { paddingTop: Platform.OS === 'web' ? 12 : Math.max(insets.top, 8) }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { width: contentWidth, paddingBottom: 32 + (Platform.OS === 'web' ? 20 : 8) }]}
+        contentContainerStyle={[
+          styles.content,
+          {
+            width: contentWidth,
+            paddingHorizontal: sidePad,
+            paddingBottom: 32 + (Platform.OS === 'web' ? 20 : 8),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
@@ -415,7 +610,6 @@ export default function CatalogScreen() {
         }}
         scrollEventThrottle={200}
       >
-        {/* Header */}
         <View style={styles.header}>
           <Pressable style={styles.iconBtn} onPress={goBack} accessibilityLabel="Orqaga">
             <Feather name="chevron-left" size={22} color={PURPLE_DEEP} />
@@ -438,8 +632,7 @@ export default function CatalogScreen() {
           </Pressable>
         </View>
 
-        {/* Search */}
-        <View style={styles.searchBar}>
+        <View style={[styles.searchBar, narrow && styles.searchBarNarrow]}>
           <Feather name="search" size={18} color={PURPLE_DEEP} />
           <TextInput
             value={query}
@@ -448,29 +641,56 @@ export default function CatalogScreen() {
             placeholderTextColor="#A8B0C0"
             style={styles.searchInput}
             returnKeyType="search"
+            onSubmitEditing={onSearchSubmit}
             clearButtonMode="while-editing"
+            accessibilityLabel="Dori yoki mahsulot qidirish"
           />
           {query ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Tozalash">
+            <Pressable onPress={clearSearch} hitSlop={8} accessibilityLabel="Tozalash">
               <Feather name="x" size={18} color={MUTED} />
             </Pressable>
           ) : null}
-          <Pressable onPress={() => router.push('/qr')} hitSlop={6} accessibilityLabel="Mening QR kodim">
+          <Pressable
+            onPress={() => router.push('/qr')}
+            hitSlop={6}
+            accessibilityLabel="Mening QR kodim"
+            style={styles.searchQrBtn}
+          >
             <MaterialCommunityIcons name="line-scan" size={22} color={PURPLE_DEEP} />
           </Pressable>
         </View>
 
-        {/* Categories — from API */}
+        {catError ? (
+          <View style={styles.catErrorRow}>
+            <Text style={styles.catErrorText}>Kategoriyalarni yuklab bo‘lmadi</Text>
+            <Pressable onPress={loadCategories} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.catErrorRetry}>Qayta urinish</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.catsRow}
-          style={styles.catsScroll}
+          contentContainerStyle={[styles.catsRow, { paddingHorizontal: sidePad }]}
+          style={[styles.catsScroll, { marginHorizontal: -sidePad }]}
         >
+          {catLoading && !catError && categoryChips.length <= 1 ? (
+            <View style={styles.catLoadingChip}>
+              <ActivityIndicator size="small" color={PURPLE} />
+            </View>
+          ) : null}
           {categoryChips.map((c) => {
             const active = cat === c.id;
             return (
-              <Pressable key={c.id} style={styles.catItem} onPress={() => setCat(c.id)}>
+              <Pressable
+                key={c.id}
+                style={styles.catItem}
+                onPress={() => setCat(c.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={c.label}
+              >
                 <View style={[styles.catIcon, active && styles.catIconActive]}>
                   <MaterialCommunityIcons
                     name={c.id === 'all' ? 'view-grid' : 'tag-outline'}
@@ -486,9 +706,13 @@ export default function CatalogScreen() {
           })}
         </ScrollView>
 
-        {/* Tools */}
         <View style={styles.toolsRow}>
-          <Pressable style={styles.toolChip} onPress={() => setSortOpen(true)}>
+          <Pressable
+            style={[styles.toolChip, narrow && styles.toolChipNarrow]}
+            onPress={() => setSortOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Saralash: ${sort === 'default' ? 'Odatiy' : sortLabel}`}
+          >
             <MaterialCommunityIcons name="swap-vertical" size={16} color={PURPLE_DEEP} />
             <Text style={styles.toolText} numberOfLines={1}>
               {sort === 'default' ? 'Saralash' : sortLabel}
@@ -500,6 +724,8 @@ export default function CatalogScreen() {
             <Pressable
               style={[styles.viewBtn, viewMode === 'grid' && styles.viewBtnActive]}
               onPress={() => setViewMode('grid')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: viewMode === 'grid' }}
               accessibilityLabel="Katak ko‘rinish"
             >
               <MaterialCommunityIcons name="view-grid" size={16} color={viewMode === 'grid' ? '#fff' : PURPLE_DEEP} />
@@ -507,6 +733,8 @@ export default function CatalogScreen() {
             <Pressable
               style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
               onPress={() => setViewMode('list')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: viewMode === 'list' }}
               accessibilityLabel="Ro‘yxat ko‘rinish"
             >
               <MaterialCommunityIcons
@@ -550,14 +778,7 @@ export default function CatalogScreen() {
                 : 'Katalog hozircha bo‘sh. Keyinroq qayta urinib ko‘ring.'}
             </Text>
             {hasActiveSearch ? (
-              <Pressable
-                style={styles.resetBtn}
-                onPress={() => {
-                  setQuery('');
-                  setCat('all');
-                  setSort('default');
-                }}
-              >
+              <Pressable style={styles.resetBtn} onPress={clearFilters}>
                 <Text style={styles.resetBtnText}>Filtrlarni tozalash</Text>
               </Pressable>
             ) : (
@@ -567,33 +788,24 @@ export default function CatalogScreen() {
             )}
           </View>
         ) : (
-          <View style={[styles.grid, viewMode === 'list' && styles.list]}>
-            {!branchId ? (
-              <Text style={{ width: '100%', color: MUTED, fontSize: 11, marginBottom: 8 }}>
-                Filial tanlanmagan — qoldiq ko‘rsatilmaydi (savat/checkoutda tanlang)
-              </Text>
-            ) : (
-              <Text style={{ width: '100%', color: MUTED, fontSize: 11, marginBottom: 8 }}>
-                Mavjudlik savat filialiga bog‘langan · jami: {total}
-              </Text>
-            )}
+          <View style={[styles.grid, viewMode === 'list' && styles.list, { rowGap: gridGap }]}>
+            <Text style={styles.branchHint}>
+              {hasBranch
+                ? `Mavjudlik savat filialiga bog‘langan · jami: ${total}`
+                : 'Filial tanlanmagan — qoldiq ko‘rsatilmaydi (savat/checkoutda tanlang)'}
+            </Text>
             {products.map((p) => (
               <View
                 key={String(p.id)}
-                style={
-                  viewMode === 'grid'
-                    ? [styles.gridItem, { width: cardWidth }]
-                    : styles.listItem
-                }
+                style={viewMode === 'grid' ? [styles.gridItem, { width: cardWidth }] : styles.listItem}
               >
                 <ProductCard
                   item={p}
                   list={viewMode === 'list'}
-                  liked={!!liked[String(p.id)]}
+                  hasBranch={hasBranch}
                   adding={addingId === String(p.id)}
                   onOpen={() => openProduct(p)}
                   onAdd={() => void addToCart(p)}
-                  onToggleLike={() => toggleLike(p)}
                 />
               </View>
             ))}
@@ -611,9 +823,7 @@ export default function CatalogScreen() {
               </Pressable>
             ) : null}
             {!hasMore && products.length > 0 ? (
-              <Text style={{ width: '100%', textAlign: 'center', color: MUTED, fontSize: 12, marginTop: 12 }}>
-                Ro‘yxat tugadi
-              </Text>
+              <Text style={styles.endList}>Ro‘yxat tugadi</Text>
             ) : null}
           </View>
         )}
@@ -635,7 +845,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: BG, alignItems: 'center' },
   scroll: { flex: 1, width: '100%' },
   content: {
-    paddingHorizontal: 16,
     alignSelf: 'center',
   },
 
@@ -700,14 +909,18 @@ const styles = StyleSheet.create({
     backgroundColor: CARD,
     borderRadius: 16,
     paddingHorizontal: 14,
-    height: 48,
-    gap: 10,
+    minHeight: 48,
+    gap: 8,
     shadowColor: '#1A1040',
     shadowOpacity: 0.05,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  searchBarNarrow: {
+    paddingHorizontal: 10,
+    gap: 6,
   },
   searchInput: {
     flex: 1,
@@ -718,10 +931,50 @@ const styles = StyleSheet.create({
     padding: 0,
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
   },
+  searchQrBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
 
-  catsScroll: { marginBottom: 12, marginHorizontal: -16, flexGrow: 0 },
-  catsRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
-  catItem: { width: 76, alignItems: 'center' },
+  catErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  catErrorText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: BAD_RED,
+  },
+  catErrorRetry: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    color: PURPLE,
+  },
+  catLoadingChip: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: CAT_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+
+  catsScroll: { marginBottom: 12, flexGrow: 0 },
+  catsRow: { gap: 10, paddingBottom: 4, alignItems: 'flex-start' },
+  catItem: { width: 78, alignItems: 'center', minHeight: 88 },
   catIcon: {
     width: 56,
     height: 56,
@@ -730,13 +983,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
-  catIconActive: { backgroundColor: PURPLE },
+  catIconActive: {
+    backgroundColor: PURPLE,
+    borderColor: PURPLE,
+  },
   catLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
     lineHeight: 13,
-    height: 26,
+    minHeight: 26,
     color: PURPLE_DEEP,
     textAlign: 'center',
     includeFontPadding: false,
@@ -761,35 +1019,56 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    maxWidth: '42%',
+    maxWidth: '48%',
     flexShrink: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E8E4F2',
   },
-  toolChipActive: { backgroundColor: PURPLE },
+  toolChipNarrow: {
+    maxWidth: '55%',
+    paddingHorizontal: 8,
+  },
   toolText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     color: PURPLE_DEEP,
     flexShrink: 1,
   },
-  toolTextActive: { color: '#fff' },
   viewToggle: { flexDirection: 'row', gap: 6, flexShrink: 0 },
   viewBtn: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     borderRadius: 10,
     backgroundColor: CARD,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E8E4F2',
   },
-  viewBtnActive: { backgroundColor: PURPLE },
+  viewBtnActive: { backgroundColor: PURPLE, borderColor: PURPLE },
+
+  branchHint: {
+    width: '100%',
+    color: MUTED,
+    fontSize: 11,
+    lineHeight: 15,
+    marginBottom: 8,
+    fontFamily: 'Inter_400Regular',
+  },
+  endList: {
+    width: '100%',
+    textAlign: 'center',
+    color: MUTED,
+    fontSize: 12,
+    marginTop: 12,
+  },
 
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 12,
   },
-  list: { flexDirection: 'column', rowGap: 12 },
+  list: { flexDirection: 'column', gap: 10 },
   gridItem: {},
   listItem: { width: '100%' },
 
@@ -797,111 +1076,194 @@ const styles = StyleSheet.create({
     backgroundColor: CARD,
     borderRadius: 18,
     padding: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E8E4F2',
     shadowColor: '#1A1040',
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
     width: '100%',
+    minHeight: 236,
+    flexDirection: 'column',
+  },
+  cardMain: {
+    flex: 1,
+    minWidth: 0,
   },
   cardList: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    backgroundColor: CARD,
+    borderRadius: 18,
+    padding: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E8E4F2',
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+    flexDirection: 'column',
+    gap: 10,
+    width: '100%',
   },
-  cardImageWrap: {
-    height: 118,
-    borderRadius: 12,
-    backgroundColor: '#FAFAFC',
+  cardListMain: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+    minWidth: 0,
+  },
+  cardMedia: {
+    height: 88,
+    borderRadius: 14,
+    backgroundColor: '#F6F2FC',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
     overflow: 'hidden',
+    position: 'relative',
   },
-  cardImageWrapList: {
-    width: 100,
-    height: 100,
-    marginBottom: 0,
-    flexShrink: 0,
-  },
-  cardImage: { width: '88%', height: '88%' },
-  discountBadge: {
-    position: 'absolute',
-    left: 8,
-    top: 8,
-    zIndex: 2,
-    backgroundColor: RED,
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  discountText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
-    color: '#fff',
-    includeFontPadding: false,
-  },
-  heartBtn: {
-    position: 'absolute',
-    right: 6,
-    top: 6,
-    zIndex: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  iconBubble: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#EEE7FA',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.85)',
   },
-  cardBody: { minWidth: 0 },
-  cardBodyList: { flex: 1, minWidth: 0 },
+  mediaAccent: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D9D0EF',
+  },
+  rxCorner: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    minWidth: 26,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: '#F3EAFB',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#DCCEF2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  rxChip: {
+    minWidth: 26,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: '#F3EAFB',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#DCCEF2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    flexShrink: 0,
+    marginLeft: 6,
+  },
+  rxChipText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    color: PURPLE,
+    includeFontPadding: false,
+  },
+  cardImageWrapList: {
+    width: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardBody: {
+    minWidth: 0,
+    flex: 1,
+  },
+  cardBodyList: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'flex-start',
+  },
+  listTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
   cardName: {
     fontFamily: 'Inter_700Bold',
     fontSize: 13,
-    lineHeight: 17,
+    lineHeight: 18,
     color: PURPLE_DEEP,
-    minHeight: 34,
+    minHeight: 36,
+    includeFontPadding: false,
+  },
+  cardNameList: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    lineHeight: 19,
+    color: PURPLE_DEEP,
+    flex: 1,
+    minWidth: 0,
     includeFontPadding: false,
   },
   cardBrand: {
     marginTop: 2,
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 15,
+    height: 15,
     color: MUTED,
     includeFontPadding: false,
+  },
+  stockText: {
+    marginTop: 6,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    lineHeight: 14,
+    height: 14,
+    color: MUTED,
+    includeFontPadding: false,
+  },
+  stockOk: { color: '#3D7A55' },
+  stockBad: { color: BAD_RED },
+  cardSpacer: {
+    flex: 1,
+    minHeight: 8,
   },
   cardFooter: {
     marginTop: 10,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 8,
+  },
+  cardFooterList: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   priceCol: { flex: 1, minWidth: 0, paddingRight: 4 },
   cardPrice: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 13,
+    fontSize: 15,
+    lineHeight: 19,
     color: PURPLE,
     includeFontPadding: false,
   },
-  cardOld: {
-    marginTop: 2,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: MUTED,
-    textDecorationLine: 'line-through',
-    includeFontPadding: false,
-  },
   addBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 42,
+    height: 42,
+    borderRadius: 13,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   addBtnBusy: { opacity: 0.75 },
+  addBtnDisabled: { backgroundColor: '#C4B5D8', opacity: 1 },
 
   empty: {
     alignItems: 'center',

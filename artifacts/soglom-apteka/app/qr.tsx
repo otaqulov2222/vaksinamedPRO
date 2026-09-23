@@ -207,10 +207,10 @@ export default function QrScreen() {
     }
   };
 
-  const name = card?.name || user.name || 'Mijoz';
+  const name = card?.name || user.name?.trim() || '—';
   const firstName = name.split(/\s+/)[0] || name;
   const cash = priceUz(card?.balance ?? balance);
-  const tier = card?.tier || user.tier || 'Silver';
+  const tier = card?.tier || user.tier?.trim() || '—';
   const rate = card?.cashbackRateLabel || '—';
 
   return (
