@@ -46,8 +46,16 @@ describe("P2 security source contracts", () => {
 
   it("admin customers strip passwordHash", () => {
     const src = readFileSync(path.join(root, "src/routes/admin.ts"), "utf8");
-    assert.match(src, /publicAdminCustomer/);
+    // List/detail DTOs go through toAdminCustomerListItem (masks phone, no passwordHash).
+    assert.match(src, /toAdminCustomerListItem/);
     assert.match(src, /customers:read|requirePermission/);
+    assert.doesNotMatch(src, /passwordHash:\s*row\.|passwordHash:\s*customers\./);
+    const dto = readFileSync(path.join(root, "src/lib/securityEnv.ts"), "utf8");
+    assert.match(dto, /export function toAdminCustomerListItem/);
+    assert.doesNotMatch(
+      dto.slice(dto.indexOf("export function toAdminCustomerListItem"), dto.indexOf("export function toAdminCustomerListItem") + 800),
+      /passwordHash/,
+    );
   });
 
   it("POS secret uses fail-closed helper", () => {
