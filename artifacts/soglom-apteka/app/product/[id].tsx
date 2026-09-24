@@ -378,12 +378,19 @@ export default function ProductScreen() {
           {stock.kind === 'no_branch' ? (
             <>
               <Text style={styles.stockLabel}>Filial tanlanmagan</Text>
-              <Text style={styles.stockHint}>Qoldiqni ko‘rish uchun filialni tanlang.</Text>
+              <Text style={styles.stockHint}>
+                Qoldiqni ko‘rish uchun filialni tanlang. Filial tanlanmaguncha mavjudlik ko‘rsatilmaydi.
+              </Text>
               <Pressable
                 style={styles.branchBtn}
-                onPress={() => router.push('/branches')}
+                onPress={() =>
+                  router.push({
+                    pathname: '/branches',
+                    params: { from: 'product', productId: String(id) },
+                  })
+                }
                 accessibilityRole="button"
-                accessibilityLabel="Filial tanlash"
+                accessibilityLabel="Filial tanlash — qoldiqni ko‘rish uchun"
               >
                 <Feather name="map-pin" size={14} color={PURPLE} />
                 <Text style={styles.branchBtnText}>Filial tanlash</Text>
@@ -415,7 +422,12 @@ export default function ProductScreen() {
               )}
               <Pressable
                 style={styles.branchBtnGhost}
-                onPress={() => router.push('/branches')}
+                onPress={() =>
+                  router.push({
+                    pathname: '/branches',
+                    params: { from: 'product', productId: String(id) },
+                  })
+                }
                 accessibilityRole="button"
                 accessibilityLabel="Filialni o‘zgartirish"
               >

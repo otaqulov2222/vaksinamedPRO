@@ -82,7 +82,10 @@ export default function PromosScreen() {
     <Screen>
       <View style={styles.heading}>
         <Text style={styles.title}>Maxsus takliflar</Text>
-        <Text style={styles.subtitle}>Faqat faol aksiyalar ko‘rsatiladi</Text>
+        <Text style={styles.subtitle}>
+          Marketing takliflari — yakuniy narx katalogda. Chegirma yoki cashback avtomatik
+          qo‘llanilmaydi.
+        </Text>
       </View>
 
       {loading ? (
@@ -121,7 +124,7 @@ export default function PromosScreen() {
                   { backgroundColor: promo.background || FALLBACK_BG, opacity: pressed ? 0.78 : 1 },
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel={promo.title}
+                accessibilityLabel={`${promo.title}. Marketing taklifi — narx katalogda`}
               >
                 <View style={styles.promoCopy}>
                   {promo.tag ? (
@@ -131,6 +134,7 @@ export default function PromosScreen() {
                   ) : null}
                   <Text style={styles.promoTitle}>{promo.title}</Text>
                   {promo.subtitle ? <Text style={styles.promoSubtitle}>{promo.subtitle}</Text> : null}
+                  <Text style={styles.promoHonest}>Marketing taklifi — narx katalogda</Text>
                   <Text style={styles.open}>
                     Katalogga o‘tish <Feather name="arrow-right" size={13} color={PURPLE} />
                   </Text>
@@ -182,7 +186,15 @@ const styles = StyleSheet.create({
     maxWidth: 200,
     color: MUTED,
   },
-  open: { fontFamily: 'Inter_700Bold', fontSize: 11, marginTop: 17, color: PURPLE },
+  promoHonest: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    marginTop: 8,
+    maxWidth: 220,
+    color: PURPLE,
+    lineHeight: 14,
+  },
+  open: { fontFamily: 'Inter_700Bold', fontSize: 11, marginTop: 12, color: PURPLE },
   promoArt: { width: 78, alignItems: 'center', justifyContent: 'center' },
   state: {
     alignItems: 'center',

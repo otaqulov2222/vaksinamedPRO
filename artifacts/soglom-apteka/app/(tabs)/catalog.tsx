@@ -77,7 +77,7 @@ function stockPresentation(
   hasBranch: boolean,
 ): { text: string; tone: 'ok' | 'bad' | 'neutral'; canAdd: boolean } {
   if (!hasBranch) {
-    return { text: 'Filial tanlanmagan', tone: 'neutral', canAdd: true };
+    return { text: 'Filial tanlanmagan — qoldiq ko‘rsatilmaydi', tone: 'neutral', canAdd: true };
   }
   if (!item.availabilityKnown) {
     return { text: 'Mavjudlik tekshirilmoqda', tone: 'neutral', canAdd: true };
@@ -792,7 +792,7 @@ export default function CatalogScreen() {
             <Text style={styles.branchHint}>
               {hasBranch
                 ? `Mavjudlik savat filialiga bog‘langan · jami: ${total}`
-                : 'Filial tanlanmagan — qoldiq ko‘rsatilmaydi (savat/checkoutda tanlang)'}
+                : 'Filial tanlanmagan — qoldiqni ko‘rish uchun filialni tanlang (savat yoki mahsulot sahifasidan)'}
             </Text>
             {products.map((p) => (
               <View

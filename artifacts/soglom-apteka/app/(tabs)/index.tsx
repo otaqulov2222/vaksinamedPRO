@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -31,6 +32,15 @@ const SCREEN_PAD = 20;
 /** Vertical rhythm between major Home sections */
 const SPACE = 16;
 
+function toast(title: string, msg: string) {
+  if (Platform.OS === 'web') {
+    // eslint-disable-next-line no-alert
+    window.alert(`${title}\n${msg}`);
+  } else {
+    Alert.alert(title, msg);
+  }
+}
+
 function shortBranch(name?: string) {
   return String(name || '').replace(/^Vaksina Med\s*[·•]\s*/i, '').trim() || 'Filial';
 }
@@ -56,7 +66,7 @@ const QUICK = [
   { icon: 'pill' as const, label: 'Dori qidirish', to: '/(tabs)/catalog', clearQ: true, bg: '#FFF4CC' },
   { icon: 'map-marker-outline' as const, label: 'Dorixonalar', to: '/branches', bg: '#F3EAFB' },
   { icon: 'qrcode-scan' as const, label: 'Mening QR kodim', to: '/qr', bg: '#F3EAFB' },
-  { icon: 'truck-delivery-outline' as const, label: 'Yetkazib berish', to: '/checkout', bg: '#F3EAFB' },
+  { icon: 'truck-delivery-outline' as const, label: 'Yetkazib berish', to: '/cart', bg: '#F3EAFB' },
 ];
 
 export default function HomeScreen() {
@@ -157,15 +167,17 @@ export default function HomeScreen() {
   };
 
   const addToCart = useCallback(
-    async (productId: number) => {
+    async (productId: number, productName?: string) => {
       const key = String(productId);
       if (addingId) return;
       setAddingId(key);
       try {
         await api.addToCart(productId, 1);
         await refresh();
-      } catch {
-        // leave badge unchanged on failure
+        toast('Savat', `${productName || 'Mahsulot'} qo‘shildi`);
+      } catch (e) {
+        // Badge unchanged — refresh only ran on success above.
+        toast('Xatolik', e instanceof Error ? e.message : 'Savatga qo‘shilmadi');
       } finally {
         setAddingId(null);
       }
@@ -277,6 +289,12 @@ export default function HomeScreen() {
               router.push(item.to as any);
             }}
             style={({ pressed }) => [styles.quickItem, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={
+              item.to === '/cart'
+                ? 'Yetkazib berish — avval savatni ochish'
+                : item.label
+            }
           >
             <View style={[styles.quickIcon, { backgroundColor: item.bg }]}>
               <MaterialCommunityIcons name={item.icon} size={24} color={PURPLE} />
@@ -337,7 +355,7 @@ export default function HomeScreen() {
           </Text>
           <View
             style={styles.nearPhotoWrap}
-            accessibilityLabel="Dorixona umumiy ko‘rinishi (filial fotosurati emas)"
+            accessibilityLabel="Dorixona umumiy ko‘rinishi — aniq filial fotosurati emas"
           >
             <Image
               source={require('../../assets/images/home-near-photo.jpg')}
@@ -346,6 +364,9 @@ export default function HomeScreen() {
               fadeDuration={0}
               resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
             />
+            <View style={styles.nearPhotoCaption} pointerEvents="none">
+              <Text style={styles.nearPhotoCaptionText}>Umumiy ko‘rinish</Text>
+            </View>
           </View>
           {nearestLoading ? (
             <View style={styles.nearLoadingRow}>
@@ -376,6 +397,11 @@ export default function HomeScreen() {
                   Filiallar ro‘yxatini oching
                 </Text>
               )}
+              {!nearestLocated && nearest ? (
+                <Text style={styles.nearDisclaimer} numberOfLines={2}>
+                  Masofa faqat joylashuv ruxsati berilganda ko‘rsatiladi.
+                </Text>
+              ) : null}
             </>
           )}
           <View style={styles.cardFooter}>
@@ -485,10 +511,10 @@ export default function HomeScreen() {
                 <Pressable
                   style={[styles.addBtn, addingId === String(p.id) ? { opacity: 0.55 } : null]}
                   disabled={addingId != null}
-                  onPress={() => void addToCart(Number(p.id))}
+                  onPress={() => void addToCart(Number(p.id), p.name)}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel="Savatga qo‘shish"
+                  accessibilityLabel={`${p.name} ni savatga qo‘shish`}
                 >
                   {addingId === String(p.id) ? (
                     <ActivityIndicator size="small" color="#fff" />
@@ -726,6 +752,21 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  nearPhotoCaption: {
+    position: 'absolute',
+    left: 8,
+    bottom: 8,
+    backgroundColor: 'rgba(26, 10, 46, 0.72)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  nearPhotoCaptionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    lineHeight: 13,
+    color: '#FFFFFF',
+  },
   nearName: {
     fontFamily: 'Inter_700Bold',
     fontSize: 13,
@@ -748,8 +789,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     color: MUTED,
+    marginTop: 4,
+  },
+  nearDisclaimer: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 14,
+    color: MUTED,
     marginTop: 6,
-    minHeight: 15,
   },
 
   sectionRow: {

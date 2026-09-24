@@ -38,8 +38,9 @@ function formatDistance(km: number | null | undefined) {
 type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable';
 
 export default function BranchesScreen() {
-  const params = useLocalSearchParams<{ from?: string }>();
+  const params = useLocalSearchParams<{ from?: string; productId?: string }>();
   const from = String(params.from || '').toLowerCase();
+  const productIdParam = String(params.productId || '');
   const insets = useSafeAreaInsets();
   const { refresh } = useApp();
   const [query, setQuery] = useState('');
@@ -175,14 +176,16 @@ export default function BranchesScreen() {
       try {
         await api.setCartBranch(id);
         await refresh();
-        // Prefer real stack parent (Profile / Checkout / Cart / Home).
-        // Only when no history: return to cart/checkout if that was the caller; else Profile.
+        // Prefer real stack parent (Product / Checkout / Cart / Profile / Home).
+        // Cold open: honor from=product|cart|checkout; else Profile.
         if (router.canGoBack()) {
           router.back();
         } else if (from === 'checkout') {
           router.replace('/checkout');
         } else if (from === 'cart') {
           router.replace('/cart');
+        } else if (from === 'product' && /^\d+$/.test(productIdParam)) {
+          router.replace(`/product/${productIdParam}`);
         } else {
           router.replace('/(tabs)/profile');
         }
@@ -201,7 +204,7 @@ export default function BranchesScreen() {
         setPicking(false);
       }
     },
-    [picking, refresh, from],
+    [picking, refresh, from, productIdParam],
   );
 
   const locBanner =
