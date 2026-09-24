@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
+import { formatUzs } from '@/components/AppUI';
 import { api, type ApiError } from '@/lib/api';
 import {
   formatCountdown,
@@ -26,18 +27,13 @@ import {
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F5F4FA';
+const BG = '#F3F1F7';
 const CARD = '#FFFFFF';
-const BORDER = '#E8E4F2';
-const LAVENDER = '#F6F2FC';
+const BORDER = '#E9E6F0';
+const LAVENDER = '#F1EBFF';
 const OK = '#3D7A55';
 const BAD = '#B91C1C';
 const WARN = '#B45309';
-
-const priceUz = (n: number) =>
-  `${Math.round(Number(n) || 0)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
 
 function toast(title: string, msg: string) {
   if (Platform.OS === 'web') {
@@ -55,10 +51,18 @@ function StatusRow({
 }: {
   label: string;
   value: string;
-  tone?: 'ok' | 'warn' | 'bad' | 'muted';
+  tone?: 'ok' | 'warn' | 'bad' | 'muted' | 'purple';
 }) {
   const color =
-    tone === 'ok' ? OK : tone === 'warn' ? WARN : tone === 'bad' ? BAD : PURPLE_DEEP;
+    tone === 'ok'
+      ? OK
+      : tone === 'warn'
+        ? WARN
+        : tone === 'bad'
+          ? BAD
+          : tone === 'purple'
+            ? PURPLE
+            : PURPLE_DEEP;
   return (
     <View style={styles.statusRow}>
       <Text style={styles.statusLabel}>{label}</Text>
@@ -74,8 +78,8 @@ export default function OrderScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { refresh } = useApp();
-  const narrow = width < 380;
-  const contentWidth = Math.min(width, 480);
+  const narrow = width < 390;
+  const contentWidth = Math.min(width, 440);
 
   const [order, setOrder] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -262,9 +266,11 @@ export default function OrderScreen() {
       <View style={styles.root}>
         {header}
         <View style={styles.state}>
-          <Feather name="cloud-off" size={40} color={MUTED} />
-          <Text style={styles.stateTitle}>Buyurtma yuklanmadi</Text>
-          <Text style={styles.stateHint}>{error}</Text>
+          <Feather name="cloud-off" size={36} color={MUTED} />
+          <Text style={styles.stateTitle}>Buyurtmani yuklab bo‘lmadi</Text>
+          <Text style={styles.stateHint}>
+            Internetni tekshirib, qayta urinib ko‘ring.
+          </Text>
           <Pressable
             style={styles.primaryBtn}
             onPress={() => void load({ forceSkeleton: true })}
@@ -292,15 +298,33 @@ export default function OrderScreen() {
     && Number(order.cashbackEarned) > 0;
   const usedCashback = Number(order.cashbackUsed) > 0 ? Number(order.cashbackUsed) : 0;
 
-  const payTone: 'ok' | 'warn' | 'bad' | 'muted' =
+  const payTone: 'ok' | 'warn' | 'bad' | 'muted' | 'purple' =
     pay === 'PAID' ? 'ok' : pay === 'FAILED' ? 'bad' : pay === 'PENDING' ? 'warn' : 'muted';
-  const resTone: 'ok' | 'warn' | 'bad' | 'muted' = resExpired
+  const fulfillTone: 'ok' | 'warn' | 'bad' | 'muted' | 'purple' =
+    fulfill === 'COMPLETED'
+      ? 'ok'
+      : fulfill === 'CANCELLED'
+        ? 'bad'
+        : fulfill === 'OUT_FOR_DELIVERY' || fulfill === 'READY_FOR_PICKUP'
+          ? 'purple'
+          : fulfill === 'PREPARING' || fulfill === 'CONFIRMED' || fulfill === 'CREATED'
+            ? 'warn'
+            : 'muted';
+  const resTone: 'ok' | 'warn' | 'bad' | 'muted' | 'purple' = resExpired
     ? 'warn'
     : String(order.reservationStatus).toUpperCase() === 'FULFILLED'
       ? 'ok'
       : String(order.reservationStatus).toUpperCase() === 'CANCELLED'
         ? 'bad'
-        : 'muted';
+        : String(order.reservationStatus).toUpperCase() === 'ACTIVE'
+          ? 'purple'
+          : 'muted';
+
+  const showReservation =
+    resExpired
+    || ['ACTIVE', 'EXPIRED', 'CANCELLED', 'FULFILLED'].includes(
+      String(order.reservationStatus || '').toUpperCase(),
+    );
 
   return (
     <View style={styles.root}>
@@ -318,19 +342,25 @@ export default function OrderScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Status axes */}
+        {/* Current status — honest single card, no fake timeline */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Holat</Text>
-          <StatusRow label="Buyurtma" value={fulfillmentLabel(order.fulfillmentStatus)} />
-          <StatusRow label="To‘lov" value={paymentLabel(order.paymentStatus)} tone={payTone} />
+          <Text style={styles.cardTitle}>Buyurtma holati</Text>
           <StatusRow
-            label="Zaxira"
-            value={reservationLabel(order.reservationStatus, resExpired)}
-            tone={resTone}
+            label="Holat"
+            value={fulfillmentLabel(order.fulfillmentStatus)}
+            tone={fulfillTone}
           />
+          <StatusRow label="To‘lov" value={paymentLabel(order.paymentStatus)} tone={payTone} />
+          {showReservation ? (
+            <StatusRow
+              label="Zaxira"
+              value={reservationLabel(order.reservationStatus, resExpired)}
+              tone={resTone}
+            />
+          ) : null}
           {pay === 'PENDING' ? (
             <Text style={styles.noteWarn}>
-              Buyurtma yaratildi ≠ to‘lov amalga oshirilgan. To‘lov holati alohida.
+              Buyurtma qabul qilingani to‘lov amalga oshganini anglatmaydi.
             </Text>
           ) : null}
           {pay === 'FAILED' ? (
@@ -370,7 +400,7 @@ export default function OrderScreen() {
                 </Text>
               ) : null}
               <Text style={styles.meta}>
-                Yetkazib berish tafsilotlari buyurtma jarayonida yangilanadi.
+                Yetkazib berish holati buyurtma jarayonida yangilanadi.
               </Text>
               {order.delivery?.status ? (
                 <Text style={styles.meta}>
@@ -425,11 +455,11 @@ export default function OrderScreen() {
                   {String(item.title || 'Mahsulot')}
                 </Text>
                 <Text style={styles.lineMeta}>
-                  {qty} dona × {priceUz(unit)}
+                  {qty} dona × {formatUzs(unit)}
                 </Text>
               </View>
               <Text style={styles.lineTotal} numberOfLines={1}>
-                {priceUz(line)}
+                {formatUzs(line)}
               </Text>
             </View>
           );
@@ -440,32 +470,32 @@ export default function OrderScreen() {
           <Text style={styles.cardTitle}>Hisob</Text>
           <View style={styles.moneyRow}>
             <Text style={styles.moneyLabel}>Mahsulotlar</Text>
-            <Text style={styles.moneyValue}>{priceUz(order.subtotal)}</Text>
+            <Text style={styles.moneyValue}>{formatUzs(Number(order.subtotal) || 0)}</Text>
           </View>
           {Number(order.deliveryFee) > 0 ? (
             <View style={styles.moneyRow}>
               <Text style={styles.moneyLabel}>Yetkazib berish</Text>
-              <Text style={styles.moneyValue}>{priceUz(order.deliveryFee)}</Text>
+              <Text style={styles.moneyValue}>{formatUzs(Number(order.deliveryFee) || 0)}</Text>
             </View>
           ) : null}
           {usedCashback > 0 ? (
             <View style={styles.moneyRow}>
               <Text style={styles.moneyLabel}>Cashback ishlatildi</Text>
-              <Text style={[styles.moneyValue, { color: WARN }]}>−{priceUz(usedCashback)}</Text>
+              <Text style={[styles.moneyValue, { color: WARN }]}>−{formatUzs(usedCashback)}</Text>
             </View>
           ) : null}
           <View style={styles.divider} />
           <View style={styles.moneyRow}>
             <Text style={styles.moneyTotalLabel}>Jami</Text>
-            <Text style={styles.moneyTotalValue}>{priceUz(order.total)}</Text>
+            <Text style={styles.moneyTotalValue}>{formatUzs(Number(order.total) || 0)}</Text>
           </View>
           {showEarned ? (
             <Text style={styles.earnNote}>
-              Cashback olindi: +{priceUz(order.cashbackEarned)}
+              Cashback olindi: +{formatUzs(Number(order.cashbackEarned) || 0)}
             </Text>
           ) : Number(order.cashbackEarned) > 0 && fulfill !== 'COMPLETED' ? (
             <Text style={styles.meta}>
-              Kutilayotgan cashback buyurtma yakunlanganda (COMPLETED) hisobga o‘tadi.
+              Cashback buyurtma yakunlangach hisoblanadi
             </Text>
           ) : null}
         </View>
@@ -534,7 +564,7 @@ const styles = StyleSheet.create({
 
   header: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 440,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -547,17 +577,19 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 17,
+    lineHeight: 22,
     color: PURPLE_DEEP,
   },
   headerSub: {
     marginTop: 2,
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
+    lineHeight: 16,
     color: MUTED,
   },
   iconBtn: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     backgroundColor: LAVENDER,
     alignItems: 'center',
@@ -568,13 +600,14 @@ const styles = StyleSheet.create({
     backgroundColor: CARD,
     borderRadius: 16,
     padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: BORDER,
     marginBottom: 12,
   },
   cardTitle: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
+    lineHeight: 20,
     color: PURPLE_DEEP,
     marginBottom: 10,
   },
@@ -584,8 +617,9 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
   bodyStrong: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
+    lineHeight: 20,
     color: PURPLE_DEEP,
   },
   meta: {
@@ -605,6 +639,7 @@ const styles = StyleSheet.create({
   statusLabel: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
+    lineHeight: 18,
     color: MUTED,
     flexShrink: 0,
   },
@@ -613,6 +648,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
+    lineHeight: 18,
   },
   noteWarn: {
     marginTop: 6,
@@ -671,8 +707,9 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     marginBottom: 8,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    lineHeight: 20,
     color: PURPLE_DEEP,
   },
   lineCard: {
@@ -683,11 +720,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     marginBottom: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: BORDER,
   },
   lineName: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     lineHeight: 19,
     color: PURPLE_DEEP,
@@ -701,7 +738,7 @@ const styles = StyleSheet.create({
   lineTotal: {
     fontFamily: 'Inter_700Bold',
     fontSize: 13,
-    color: PURPLE,
+    color: PURPLE_DEEP,
     flexShrink: 0,
   },
 
@@ -714,7 +751,7 @@ const styles = StyleSheet.create({
   moneyLabel: { fontFamily: 'Inter_400Regular', fontSize: 13, color: MUTED, flex: 1 },
   moneyValue: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: PURPLE_DEEP },
   moneyTotalLabel: { fontFamily: 'Inter_700Bold', fontSize: 15, color: PURPLE_DEEP },
-  moneyTotalValue: { fontFamily: 'Inter_700Bold', fontSize: 16, color: PURPLE },
+  moneyTotalValue: { fontFamily: 'Inter_700Bold', fontSize: 16, color: PURPLE_DEEP },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: BORDER,
@@ -730,7 +767,7 @@ const styles = StyleSheet.create({
   cancelBtn: {
     marginTop: 4,
     minHeight: 48,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: BAD,
     alignItems: 'center',
@@ -738,14 +775,14 @@ const styles = StyleSheet.create({
     backgroundColor: CARD,
   },
   cancelBtnText: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     color: BAD,
   },
   primaryBtn: {
     marginTop: 12,
     minHeight: 48,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
@@ -753,7 +790,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: '#fff',
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
   },
   linkBtn: { marginTop: 14, alignItems: 'center', paddingVertical: 6 },

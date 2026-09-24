@@ -35,21 +35,22 @@ describe("Batch 3H admin order operations contracts", () => {
     assert.match(admin, /revokeSessionFromToken/);
     const ui = readFileSync(path.join(root, "../admin-web/src/App.tsx"), "utf8");
     assert.match(ui, /\/api\/admin\/logout/);
-    assert.match(ui, /async function logout/);
+    assert.match(ui, /async function logout|void logout/);
   });
 
   it("admin UI shows P5 axes and does not invent PSP refund success", () => {
-    const ui = readFileSync(path.join(root, "../admin-web/src/App.tsx"), "utf8");
+    const ui = readFileSync(path.join(root, "../admin-web/src/pages/OrdersPage.tsx"), "utf8");
+    const app = readFileSync(path.join(root, "../admin-web/src/App.tsx"), "utf8");
     assert.match(ui, /fulfillmentStatus/);
     assert.match(ui, /paymentStatus/);
     assert.match(ui, /reservationStatus/);
     assert.match(ui, /CONTRACT_PENDING/);
-    assert.match(ui, /softRequest/);
+    assert.match(app, /softRequest/);
     assert.doesNotMatch(ui, /Pul qaytarildi/);
   });
 
   it("payment remains separate from generic mark-paid button", () => {
-    const ui = readFileSync(path.join(root, "../admin-web/src/App.tsx"), "utf8");
+    const ui = readFileSync(path.join(root, "../admin-web/src/pages/OrdersPage.tsx"), "utf8");
     assert.doesNotMatch(ui, /\/api\/orders\/[^"'`]*\/mark-paid/);
     assert.doesNotMatch(ui, /\bMark paid\b/);
     assert.doesNotMatch(ui, /orderAction\([^)]*["']PAID["']/);

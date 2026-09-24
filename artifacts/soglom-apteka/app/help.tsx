@@ -45,7 +45,7 @@ const FAQ: FaqItem[] = [
   {
     key: 'cashback',
     title: 'Cashback',
-    body: 'Cashback balansi, daraja va tarixni Cashback bo‘limida ko‘ring. Yakunlangan xaridlardan hisoblanadi.',
+    body: 'Cashback balansi, daraja va tarixni Cashback bo‘limida ko‘ring. Bitta balans — yakunlangan xaridlardan (ilova yoki kassa); to‘lov usuli emas.',
     cta: { label: 'Cashbackni ochish', to: '/cashback' },
   },
   {

@@ -19,10 +19,10 @@ import { api } from '@/lib/api';
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F5F4FA';
+const BG = '#F3F1F7';
 const CARD = '#FFFFFF';
-const BORDER = '#E8E4F2';
-const LAVENDER = '#F6F2FC';
+const BORDER = '#E9E6F0';
+const LAVENDER = '#F1EBFF';
 const YELLOW = '#FFCC00';
 const OK = '#3D7A55';
 const BAD = '#B91C1C';
@@ -250,7 +250,7 @@ export default function ProductScreen() {
         style={styles.iconBtn}
         onPress={() => router.push('/cart')}
         accessibilityRole="button"
-        accessibilityLabel="Savat"
+        accessibilityLabel={cartCount > 0 ? `Savat, ${cartCount} ta tur` : 'Savat'}
       >
         <Feather name="shopping-cart" size={18} color={PURPLE_DEEP} />
         {cartCount > 0 ? (
@@ -379,7 +379,7 @@ export default function ProductScreen() {
             <>
               <Text style={styles.stockLabel}>Filial tanlanmagan</Text>
               <Text style={styles.stockHint}>
-                Qoldiqni ko‘rish uchun filialni tanlang. Filial tanlanmaguncha mavjudlik ko‘rsatilmaydi.
+                Qoldiq filial tanlangandan keyin aniqlanadi.
               </Text>
               <Pressable
                 style={styles.branchBtn}
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontFamily: 'Inter_700Bold',
-    fontSize: 17,
+    fontSize: 18,
     color: PURPLE_DEEP,
     includeFontPadding: false,
   },
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
   },
   cartBadgeText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 10,
+    fontSize: 11,
     color: PURPLE_DEEP,
     includeFontPadding: false,
   },
@@ -768,7 +768,7 @@ const styles = StyleSheet.create({
   analogBody: { flex: 1, minWidth: 0 },
   analogName: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontSize: 14,
     color: PURPLE_DEEP,
   },
   analogMeta: {
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
   },
   analogPrice: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 13,
+    fontSize: 14,
     color: PURPLE,
     flexShrink: 0,
     maxWidth: '34%',

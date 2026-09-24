@@ -24,6 +24,7 @@
 | `docs/PHASE_3_3_P12_1_SECRETS_HMAC_FOLLOWUP.md` | Secrets + HMAC follow-up |
 | `docs/GITHUB_REQUIRED_CHECKS.md` | Branch protection UI steps |
 | `docs/PHASE_3_3_P13_1_HTTP_REAL_PG.md` | Local HTTP + real PG load evidence |
+| `docs/CASHBACK_PRODUCTION_INCIDENT_RUNBOOK.md` | Cashback SoT incidents (drift, duplicates, isolation, Redis≠money) |
 | `.env.example` | Env variable names only (no values) |
 
 ### Evidence template (use for every gate)

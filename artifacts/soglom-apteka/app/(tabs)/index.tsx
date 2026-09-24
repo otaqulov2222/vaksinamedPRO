@@ -19,12 +19,13 @@ import { useApp } from '@/context/AppContext';
 import { ProgressLine, Screen, formatUzs } from '@/components/AppUI';
 import { api } from '@/lib/api';
 
-const PURPLE = '#5C328E';
-const PURPLE_DEEP = '#2A104E';
+const PURPLE = '#6A22D6';
+const PURPLE_DEEP = '#1A1040';
 const YELLOW = '#FFCC00';
-const MUTED = '#64748B';
-const BORDER = '#E8E4F0';
+const MUTED = '#8B93A7';
+const BORDER = '#E9E6F0';
 const CARD_BG = '#FFFFFF';
+const LAVENDER = '#F1EBFF';
 
 /** Approved user banner: home-hero-final.png (1825×862). Full visual — no text overlay. */
 const HERO_AR = 1825 / 862;
@@ -64,9 +65,9 @@ function branchHoursLabel(branch: { hours?: string; is24h?: boolean } | null): s
 
 const QUICK = [
   { icon: 'pill' as const, label: 'Dori qidirish', to: '/(tabs)/catalog', clearQ: true, bg: '#FFF4CC' },
-  { icon: 'map-marker-outline' as const, label: 'Dorixonalar', to: '/branches', bg: '#F3EAFB' },
-  { icon: 'qrcode-scan' as const, label: 'Mening QR kodim', to: '/qr', bg: '#F3EAFB' },
-  { icon: 'truck-delivery-outline' as const, label: 'Yetkazib berish', to: '/cart', bg: '#F3EAFB' },
+  { icon: 'map-marker-outline' as const, label: 'Dorixonalar', to: '/branches', bg: LAVENDER },
+  { icon: 'qrcode-scan' as const, label: 'Mening QR kodim', to: '/qr', bg: LAVENDER },
+  { icon: 'truck-delivery-outline' as const, label: 'Yetkazib berish', to: '/cart', bg: LAVENDER },
 ];
 
 export default function HomeScreen() {
@@ -208,6 +209,7 @@ export default function HomeScreen() {
           <Pressable
             style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
             onPress={() => router.push('/notifications')}
+            accessibilityRole="button"
             accessibilityLabel="Bildirishnomalar"
             hitSlop={4}
           >
@@ -216,11 +218,16 @@ export default function HomeScreen() {
           <Pressable
             style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
             onPress={() => router.push('/cart')}
-            accessibilityLabel="Savat"
+            accessibilityRole="button"
+            accessibilityLabel={cartCount > 0 ? `Savat, ${cartCount} ta tur` : 'Savat'}
             hitSlop={4}
           >
             <Feather name="shopping-cart" size={20} color={PURPLE_DEEP} />
-            {cartCount > 0 ? <View style={styles.cartDot} /> : null}
+            {cartCount > 0 ? (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{cartCount > 9 ? '9+' : String(cartCount)}</Text>
+              </View>
+            ) : null}
           </Pressable>
         </View>
       </View>
@@ -232,12 +239,12 @@ export default function HomeScreen() {
 
       {/* SEARCH */}
       <View style={styles.searchBox}>
-        <Feather name="search" size={20} color="#94A3B8" />
+        <Feather name="search" size={20} color={MUTED} />
         <TextInput
           value={query}
           onChangeText={setQuery}
           placeholder="Dori yoki mahsulot qidirish..."
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={MUTED}
           style={styles.searchInput}
           returnKeyType="search"
           onSubmitEditing={onSearch}
@@ -247,6 +254,7 @@ export default function HomeScreen() {
         <Pressable
           onPress={() => router.push('/qr')}
           hitSlop={10}
+          accessibilityRole="button"
           accessibilityLabel="Mening QR kodim"
           style={({ pressed }) => [styles.searchQrBtn, pressed && styles.pressed]}
         >
@@ -335,7 +343,7 @@ export default function HomeScreen() {
             <Pressable
               onPress={() => router.push('/checkout')}
               style={({ pressed }) => [styles.primaryCardBtn, pressed && styles.pressed]}
-              accessibilityLabel="Cashback ishlatish — buyurtma"
+              accessibilityLabel="Cashbackni xaridlarda ishlatish"
             >
               <Text style={styles.primaryCardBtnText}>{t('spend')}</Text>
             </Pressable>
@@ -555,20 +563,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cartDot: {
+  cartBadge: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: YELLOW,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: CARD_BG,
+  },
+  cartBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    lineHeight: 12,
+    color: PURPLE_DEEP,
+    includeFontPadding: false,
   },
 
   greet: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 26,
+    lineHeight: 32,
     color: PURPLE_DEEP,
     letterSpacing: -0.2,
     marginTop: 0,
@@ -643,8 +663,8 @@ const styles = StyleSheet.create({
   },
   quickLabel: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 15,
     color: PURPLE_DEEP,
     textAlign: 'center',
   },
@@ -875,23 +895,23 @@ const styles = StyleSheet.create({
   productImgWrap: {
     height: 96,
     borderRadius: 14,
-    backgroundColor: '#F3ECFA',
+    backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
   },
   productName: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 14,
+    lineHeight: 18,
     color: PURPLE_DEEP,
-    minHeight: 34,
+    minHeight: 36,
   },
   productMeta: {
     marginTop: 4,
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 15,
     color: MUTED,
   },
   productBottom: {
@@ -907,15 +927,15 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 16,
+    lineHeight: 20,
     color: PURPLE,
     flexShrink: 1,
   },
   addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',

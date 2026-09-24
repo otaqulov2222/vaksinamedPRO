@@ -1,36 +1,36 @@
 /**
- * Official Vaksina Med brand tokens from vaksinamed.uz
- * Purple #5C328E / #2A104E + Yellow #FFCC00 + Teal #0D9488
+ * VaksinaMed customer app tokens — aligned with Profile / Cart / Checkout.
+ * Primary purple #6A22D6 · deep #1A1040 · yellow accent #FFCC00 · lavender #F1EBFF
  */
 
 const colors = {
   light: {
-    text: '#2A104E',
-    tint: '#5C328E',
+    text: '#1A1040',
+    tint: '#6A22D6',
 
-    background: '#F8FAFC',
-    foreground: '#2A104E',
+    background: '#F3F1F7',
+    foreground: '#1A1040',
 
     card: '#ffffff',
-    cardForeground: '#2A104E',
+    cardForeground: '#1A1040',
 
-    primary: '#5C328E',
+    primary: '#6A22D6',
     primaryForeground: '#ffffff',
 
-    secondary: '#F3EAFB',
-    secondaryForeground: '#5C328E',
+    secondary: '#F1EBFF',
+    secondaryForeground: '#6A22D6',
 
     muted: '#F1F5F9',
-    mutedForeground: '#64748B',
+    mutedForeground: '#8B93A7',
 
     accent: '#FFF9CC',
-    accentForeground: '#2A104E',
+    accentForeground: '#1A1040',
 
-    destructive: '#d94d4d',
+    destructive: '#B91C1C',
     destructiveForeground: '#ffffff',
 
-    border: '#E2E8F0',
-    input: '#E2E8F0',
+    border: '#E9E6F0',
+    input: '#E9E6F0',
   },
 
   radius: 20,

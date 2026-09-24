@@ -20,20 +20,21 @@ import { api, type ApiError } from '@/lib/api';
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F5F4FA';
+const BG = '#F3F1F7';
 const CARD = '#FFFFFF';
-const BORDER = '#E8E4F2';
-const LAVENDER = '#F6F2FC';
+const BORDER = '#E9E6F0';
+const LAVENDER = '#F1EBFF';
 const OK = '#3D7A55';
 const BAD = '#B91C1C';
 const WARN = '#B45309';
+const YELLOW = '#FFCC00';
 
 const PRICE_SNAP_KEY = 'vaksinamed-cart-price-snap';
 const FOCUS_FRESH_MS = 400;
 
 type PriceSnap = Record<string, number>;
 type BusyAction = 'inc' | 'dec' | 'remove';
-type PreflightChoice = 'continue' | 'branch' | 'cancel';
+type PreflightChoice = 'continue' | 'cancel';
 
 const priceUz = (n: number) =>
   `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
@@ -47,32 +48,60 @@ function toast(title: string, msg: string) {
   }
 }
 
-function askPreflight(opts: {
+/**
+ * Binary confirm with identical semantics on web and native:
+ * - Confirm / OK → true
+ * - Cancel → false
+ * Never map Cancel to a destructive or “continue” action.
+ */
+function askConfirm(opts: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+}): Promise<boolean> {
+  const cancelLabel = opts.cancelLabel ?? 'Bekor qilish';
+  if (Platform.OS === 'web') {
+    // window.confirm: OK=true, Cancel=false — labels must match that mapping.
+    // eslint-disable-next-line no-alert
+    const ok = window.confirm(
+      `${opts.title}\n\n${opts.message}\n\nOK — ${opts.confirmLabel}\nCancel — ${cancelLabel}`,
+    );
+    return Promise.resolve(Boolean(ok));
+  }
+  return new Promise((resolve) => {
+    Alert.alert(opts.title, opts.message, [
+      { text: cancelLabel, style: 'cancel', onPress: () => resolve(false) },
+      {
+        text: opts.confirmLabel,
+        style: opts.destructive ? 'destructive' : 'default',
+        onPress: () => resolve(true),
+      },
+    ]);
+  });
+}
+
+/** Stock warning before checkout: Continue vs Cancel (same OK/Cancel mapping on web). */
+function askContinueOrCancel(opts: {
   title: string;
   message: string;
   continueLabel: string;
-  branchLabel?: string;
+  cancelLabel?: string;
 }): Promise<PreflightChoice> {
-  const { title, message, continueLabel, branchLabel } = opts;
+  const cancelLabel = opts.cancelLabel ?? 'Bekor qilish';
   if (Platform.OS === 'web') {
-    if (branchLabel) {
-      // eslint-disable-next-line no-alert
-      const goBranch = window.confirm(`${title}\n\n${message}\n\nOK — ${branchLabel}\nCancel — ${continueLabel}`);
-      return Promise.resolve(goBranch ? 'branch' : 'continue');
-    }
     // eslint-disable-next-line no-alert
-    const ok = window.confirm(`${title}\n\n${message}\n\nOK — ${continueLabel}\nCancel — Bekor`);
+    const ok = window.confirm(
+      `${opts.title}\n\n${opts.message}\n\nOK — ${opts.continueLabel}\nCancel — ${cancelLabel}`,
+    );
     return Promise.resolve(ok ? 'continue' : 'cancel');
   }
   return new Promise((resolve) => {
-    const buttons: Array<{ text: string; style?: 'cancel' | 'destructive' | 'default'; onPress: () => void }> = [
-      { text: 'Bekor', style: 'cancel', onPress: () => resolve('cancel') },
-    ];
-    if (branchLabel) {
-      buttons.push({ text: branchLabel, onPress: () => resolve('branch') });
-    }
-    buttons.push({ text: continueLabel, onPress: () => resolve('continue') });
-    Alert.alert(title, message, buttons);
+    Alert.alert(opts.title, opts.message, [
+      { text: cancelLabel, style: 'cancel', onPress: () => resolve('cancel') },
+      { text: opts.continueLabel, onPress: () => resolve('continue') },
+    ]);
   });
 }
 
@@ -119,6 +148,7 @@ export default function CartScreen() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [priceFlags, setPriceFlags] = useState<Record<string, { previous: number; current: number }>>({});
   const [notices, setNotices] = useState<Array<{ code: string; message: string }>>([]);
+  const [footerHeight, setFooterHeight] = useState(0); // sticky footer clearance
 
   const loadGen = useRef(0);
   const busyItemsRef = useRef<Set<number>>(new Set());
@@ -214,10 +244,12 @@ export default function CartScreen() {
 
   const changeQty = async (item: any, nextQty: number, action: 'inc' | 'dec') => {
     const id = Number(item.id);
-    if (!Number.isFinite(id) || nextQty < 1) return;
+    const safeQty = Math.floor(Number(nextQty));
+    // Item stays in cart at min 1; remove uses confirmed trash action only.
+    if (!Number.isFinite(id) || !Number.isFinite(safeQty) || safeQty < 1) return;
     if (!beginItemBusy(id, action)) return;
     try {
-      const data = await api.updateCartItem(id, nextQty);
+      const data = await api.updateCartItem(id, safeQty);
       await applyPayload(data);
     } catch (e) {
       const err = e as ApiError;
@@ -225,13 +257,14 @@ export default function CartScreen() {
         err.code === 'STOCK_UNAVAILABLE' ? 'Qoldiq' : 'Xatolik',
         err.message || 'Miqdor yangilanmadi',
       );
+      // Keep prior UI until server refresh — do not pretend success.
       await load({ forceSkeleton: false, force: true });
     } finally {
       endItemBusy(id);
     }
   };
 
-  const removeItem = async (item: any) => {
+  const executeRemove = async (item: any) => {
     const id = Number(item.id);
     if (!Number.isFinite(id)) return;
     if (!beginItemBusy(id, 'remove')) return;
@@ -245,6 +278,22 @@ export default function CartScreen() {
     } finally {
       endItemBusy(id);
     }
+  };
+
+  const requestRemove = async (item: any) => {
+    const id = Number(item.id);
+    if (!Number.isFinite(id)) return;
+    if (busyItemsRef.current.has(id)) return;
+
+    const confirmed = await askConfirm({
+      title: 'Mahsulotni o‘chirish',
+      message: 'Bu mahsulotni savatdan o‘chirmoqchimisiz?',
+      confirmLabel: 'O‘chirish',
+      cancelLabel: 'Bekor qilish',
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await executeRemove(item);
   };
 
   const openProduct = (product: any) => {
@@ -263,26 +312,27 @@ export default function CartScreen() {
     try {
       const hasBranch = Boolean(cart?.branch?.id ?? cart?.cart?.branchId);
       if (!hasBranch) {
-        const choice = await askPreflight({
+        // Cancel stays on cart; Confirm opens branch picker — never continue without branch.
+        const goBranch = await askConfirm({
           title: 'Filial',
           message:
             'Filial tanlanmagan. Buyurtmani rasmiylashtirishdan oldin filialni tanlang.',
-          continueLabel: 'Davom etish',
-          branchLabel: 'Filial tanlash',
+          confirmLabel: 'Filial tanlash',
+          cancelLabel: 'Bekor qilish',
         });
-        if (choice === 'cancel') return;
-        if (choice === 'branch') {
+        if (goBranch) {
           router.push({ pathname: '/branches', params: { from: 'cart' } });
-          return;
         }
+        return;
       }
 
       const stockIssue = items.some((item: any) => Boolean(item.stockInsufficient));
       if (stockIssue) {
-        const choice = await askPreflight({
+        const choice = await askContinueOrCancel({
           title: 'Qoldiq',
           message: 'Ba’zi mahsulotlar tanlangan filialda yetarli emas.',
           continueLabel: 'Davom etish',
+          cancelLabel: 'Bekor qilish',
         });
         if (choice === 'cancel') return;
       }
@@ -308,8 +358,20 @@ export default function CartScreen() {
   const sidePad = narrow ? 14 : 20;
   const items = Array.isArray(cart?.items) ? cart.items : [];
   const hasItems = items.length > 0;
-  const footerReserve = hasItems ? 24 + 100 + bottomPad : 24 + bottomPad;
-  const subtotalLabel = priceUz(Number(cart?.subtotal) || 0);
+  const footerFallback = 12 + 22 + 8 + 52 + bottomPad;
+  const footerReserve = hasItems
+    ? (footerHeight > 0 ? footerHeight : footerFallback) + 20
+    : 24 + bottomPad;
+  const subtotalNum = Number(cart?.subtotal);
+  const subtotalKnown = Number.isFinite(subtotalNum) && subtotalNum >= 0;
+  const subtotalLabel = subtotalKnown ? priceUz(subtotalNum) : '—';
+  const headerSubtitle = hasItems
+    ? `Tanlagan mahsulotlaringiz · ${items.length} ta tur`
+    : 'Savatda hozircha mahsulot yo‘q';
+
+  const openBranches = () => {
+    router.push({ pathname: '/branches', params: { from: 'cart' } });
+  };
 
   const header = (
     <View style={[styles.header, { paddingHorizontal: sidePad, paddingTop: topPad }]}>
@@ -325,11 +387,9 @@ export default function CartScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           Savat
         </Text>
-        {hasItems ? (
-          <Text style={styles.headerSub} numberOfLines={1}>
-            {items.length} ta tur
-          </Text>
-        ) : null}
+        <Text style={styles.headerSub} numberOfLines={2}>
+          {headerSubtitle}
+        </Text>
       </View>
       <View style={styles.iconBtnGhost} />
     </View>
@@ -346,10 +406,10 @@ export default function CartScreen() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <SkeletonBlock style={{ height: 72, borderRadius: 16, width: '100%' }} />
-          <SkeletonBlock style={{ height: 110, borderRadius: 16, width: '100%', marginTop: 12 }} />
-          <SkeletonBlock style={{ height: 110, borderRadius: 16, width: '100%', marginTop: 12 }} />
-          <SkeletonBlock style={{ height: 64, borderRadius: 16, width: '100%', marginTop: 16 }} />
+          <SkeletonBlock style={{ height: 64, borderRadius: 16, width: '100%' }} />
+          <SkeletonBlock style={{ height: 120, borderRadius: 18, width: '100%', marginTop: 10 }} />
+          <SkeletonBlock style={{ height: 120, borderRadius: 18, width: '100%', marginTop: 10 }} />
+          <SkeletonBlock style={{ height: 72, borderRadius: 16, width: '100%', marginTop: 14 }} />
         </ScrollView>
       </View>
     );
@@ -360,7 +420,9 @@ export default function CartScreen() {
       <View style={styles.root}>
         {header}
         <View style={styles.state}>
-          <MaterialCommunityIcons name="cloud-off-outline" size={44} color={MUTED} />
+          <View style={styles.stateIcon}>
+            <MaterialCommunityIcons name="cloud-off-outline" size={32} color={MUTED} />
+          </View>
           <Text style={styles.stateTitle}>Savatni yuklab bo‘lmadi</Text>
           <Text style={styles.stateHint}>{error}</Text>
           <Pressable
@@ -393,46 +455,50 @@ export default function CartScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.branchCard}>
-          <Text style={styles.branchLabel}>Filial</Text>
-          {cart?.branch?.name ? (
-            <>
-              <Text style={styles.branchName} numberOfLines={2}>
-                {String(cart.branch.name)}
+        {/* Branch — compact strip */}
+        <View style={[styles.branchCard, !cart?.branch?.name && styles.branchCardWarn]}>
+          <View style={styles.branchRow}>
+            <View style={styles.branchIconWrap}>
+              <Feather name="map-pin" size={16} color={cart?.branch?.name ? PURPLE : WARN} />
+            </View>
+            <View style={styles.branchBody}>
+              {cart?.branch?.name ? (
+                <>
+                  <Text style={styles.branchLabel}>Filial</Text>
+                  <Text style={styles.branchName} numberOfLines={2}>
+                    {String(cart.branch.name)}
+                  </Text>
+                  {cart.branch.address ? (
+                    <Text style={styles.branchAddress} numberOfLines={1}>
+                      {String(cart.branch.address)}
+                    </Text>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.branchWarn}>Filial tanlanmagan</Text>
+                  <Text style={styles.branchHint} numberOfLines={2}>
+                    Qoldiq filial tanlangandan keyin aniqlanadi.
+                  </Text>
+                </>
+              )}
+            </View>
+            <Pressable
+              style={styles.branchAction}
+              onPress={openBranches}
+              accessibilityRole="button"
+              accessibilityLabel={cart?.branch?.name ? 'Filialni o‘zgartirish' : 'Filial tanlash'}
+            >
+              <Text style={styles.branchActionText} numberOfLines={1}>
+                {cart?.branch?.name ? 'O‘zgartirish' : 'Tanlash'}
               </Text>
-              {cart.branch.address ? (
-                <Text style={styles.branchAddress} numberOfLines={2}>
-                  {String(cart.branch.address)}
-                </Text>
-              ) : null}
-              <Pressable
-                style={styles.branchLink}
-                onPress={() => router.push({ pathname: '/branches', params: { from: 'cart' } })}
-                accessibilityRole="button"
-                accessibilityLabel="Filial tanlash"
-              >
-                <Text style={styles.branchLinkText}>Filialni o‘zgartirish</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Text style={styles.branchWarn}>Filial tanlanmagan</Text>
-              <Text style={styles.branchHint}>Qoldiq filial tanlangandan keyin ko‘rsatiladi.</Text>
-              <Pressable
-                style={styles.branchBtn}
-                onPress={() => router.push({ pathname: '/branches', params: { from: 'cart' } })}
-                accessibilityRole="button"
-                accessibilityLabel="Filial tanlash"
-              >
-                <Feather name="map-pin" size={14} color={PURPLE} />
-                <Text style={styles.branchBtnText}>Filial tanlash</Text>
-              </Pressable>
-            </>
-          )}
+            </Pressable>
+          </View>
         </View>
 
         {notices.map((n, i) => (
           <View key={`${n.code}-${i}`} style={styles.notice}>
+            <Feather name="info" size={14} color={WARN} />
             <Text style={styles.noticeText}>{n.message}</Text>
           </View>
         ))}
@@ -440,168 +506,207 @@ export default function CartScreen() {
         {!hasItems ? (
           <View style={styles.empty}>
             <View style={styles.emptyIcon}>
-              <Feather name="shopping-cart" size={28} color={PURPLE} />
+              <Feather name="shopping-cart" size={26} color={PURPLE} />
             </View>
-            <Text style={styles.emptyTitle}>Savatingiz bo‘sh</Text>
-            <Text style={styles.emptyHint}>Kerakli dorilarni toping va savatingizga qo‘shing.</Text>
+            <Text style={styles.emptyTitle}>Savat bo‘sh</Text>
+            <Text style={styles.emptyHint}>
+              Mahsulot tanlang va buyurtmangizni shu yerda rasmiylashtiring.
+            </Text>
             <Pressable
               style={styles.primaryBtn}
               onPress={() => router.replace({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
               accessibilityRole="button"
-              accessibilityLabel="Katalogga o‘tish"
+              accessibilityLabel="Mahsulot tanlash"
             >
-              <Text style={styles.primaryBtnText}>Katalogga o‘tish</Text>
+              <Text style={styles.primaryBtnText}>Mahsulot tanlash</Text>
             </Pressable>
           </View>
         ) : (
-          items.map((item: any) => {
-            const product = item.product || {};
-            const name = String(product.nameUz || product.nameRu || 'Mahsulot');
-            const manufacturer = String(product.manufacturer || '').trim();
-            const unit = String(product.unit || '').trim();
-            const unitPrice = Number(item.unitPrice ?? product.price ?? 0);
-            const lineTotal = Number(item.lineTotal ?? unitPrice * Number(item.quantity || 0));
-            const qty = Math.max(1, Number(item.quantity) || 1);
-            const flag = priceFlags[String(item.id)];
-            const itemId = Number(item.id);
-            const busyAction = busyMap[itemId] ?? null;
-            const itemBusy = busyAction != null;
-            const known = Boolean(item.availabilityKnown);
-            const availableRaw = item.available;
-            const availableKnownQty =
-              known && availableRaw != null && Number.isFinite(Number(availableRaw))
-                ? Math.max(0, Number(availableRaw))
-                : null;
-            const plusDisabled =
-              itemBusy || (availableKnownQty != null && qty >= availableKnownQty);
+          <View style={styles.list}>
+            {items.map((item: any) => {
+              const product = item.product || {};
+              const name = String(product.nameUz || product.nameRu || 'Mahsulot');
+              const manufacturer = String(product.manufacturer || '').trim();
+              const unit = String(product.unit || '').trim();
+              const metaLine = [manufacturer, unit].filter(Boolean).join(' · ');
+              const unitPrice = Number(item.unitPrice ?? product.price ?? 0);
+              const lineTotal = Number(item.lineTotal ?? unitPrice * Number(item.quantity || 0));
+              const qty = Math.max(1, Math.floor(Number(item.quantity) || 1));
+              const flag = priceFlags[String(item.id)];
+              const itemId = Number(item.id);
+              const busyAction = busyMap[itemId] ?? null;
+              const itemBusy = busyAction != null;
+              const known = Boolean(item.availabilityKnown);
+              const availableRaw = item.available;
+              const availableKnownQty =
+                known && availableRaw != null && Number.isFinite(Number(availableRaw))
+                  ? Math.max(0, Number(availableRaw))
+                  : null;
+              const minusDisabled = qty <= 1 || itemBusy;
+              const plusDisabled =
+                itemBusy || (availableKnownQty != null && qty >= availableKnownQty);
 
-            return (
-              <View key={item.id} style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Pressable
-                    style={styles.productHit}
-                    onPress={() => openProduct(product)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Mahsulotni ko‘rish"
-                  >
-                    <View
-                      style={styles.itemIcon}
-                      accessibilityElementsHidden
-                      importantForAccessibility="no-hide-descendants"
-                    >
-                      <MaterialCommunityIcons
-                        name={productIconName(product.icon)}
-                        size={28}
-                        color={PURPLE}
-                      />
-                    </View>
-                    <View style={styles.itemBody}>
-                      <Text style={styles.itemName} numberOfLines={2}>
-                        {name}
-                      </Text>
-                      {manufacturer ? (
-                        <Text style={styles.itemMeta} numberOfLines={1}>
-                          {manufacturer}
-                        </Text>
-                      ) : null}
-                      {unit ? (
-                        <Text style={styles.itemUnit} numberOfLines={1}>
-                          {unit}
-                        </Text>
-                      ) : null}
-                      <Text style={styles.itemUnitPrice}>{priceUz(unitPrice)}</Text>
-                    </View>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.removeBtn, itemBusy && styles.controlDisabled]}
-                    onPress={() => void removeItem(item)}
-                    disabled={itemBusy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Mahsulotni savatdan o‘chirish"
-                  >
-                    {busyAction === 'remove' ? (
-                      <ActivityIndicator size="small" color={BAD} />
-                    ) : (
-                      <Feather name="trash-2" size={16} color={BAD} />
-                    )}
-                  </Pressable>
-                </View>
-
-                {flag ? (
-                  <Text style={styles.priceFlag}>
-                    Narx o‘zgargan: {priceUz(flag.previous)} → {priceUz(flag.current)}
-                  </Text>
-                ) : null}
-
-                {item.stockInsufficient ? (
-                  <Text style={styles.stockBad}>
-                    Mavjud miqdor o‘zgargan
-                    {availableKnownQty != null ? ` (mavjud: ${availableKnownQty} dona)` : ''}
-                  </Text>
-                ) : availableKnownQty != null ? (
-                  <Text style={styles.stockOk}>Mavjud: {availableKnownQty} dona</Text>
-                ) : !known ? (
-                  <Text style={styles.stockWarn}>Filial tanlanmagan</Text>
-                ) : null}
-
-                <View style={styles.cardFooter}>
-                  <View style={styles.qtyWrap}>
+              return (
+                <View key={item.id} style={styles.card}>
+                  <View style={styles.cardTop}>
                     <Pressable
-                      style={[styles.qtyBtn, (qty <= 1 || itemBusy) && styles.controlDisabled]}
-                      onPress={() => void changeQty(item, qty - 1, 'dec')}
-                      disabled={qty <= 1 || itemBusy}
+                      style={styles.productHit}
+                      onPress={() => openProduct(product)}
                       accessibilityRole="button"
-                      accessibilityLabel="Mahsulot sonini kamaytirish"
+                      accessibilityLabel={`${name} — mahsulotni ko‘rish`}
                     >
-                      {busyAction === 'dec' ? (
-                        <ActivityIndicator size="small" color={PURPLE_DEEP} />
-                      ) : (
-                        <Feather name="minus" size={16} color={PURPLE_DEEP} />
-                      )}
+                      <View
+                        style={styles.itemIcon}
+                        accessibilityElementsHidden
+                        importantForAccessibility="no-hide-descendants"
+                      >
+                        <MaterialCommunityIcons
+                          name={productIconName(product.icon)}
+                          size={26}
+                          color={PURPLE}
+                        />
+                      </View>
+                      <View style={styles.itemBody}>
+                        <Text style={styles.itemName} numberOfLines={2}>
+                          {name}
+                        </Text>
+                        {metaLine ? (
+                          <Text style={styles.itemMeta} numberOfLines={1}>
+                            {metaLine}
+                          </Text>
+                        ) : null}
+                        <Text style={styles.itemUnitPrice} numberOfLines={1}>
+                          {priceUz(unitPrice)}
+                        </Text>
+                      </View>
                     </Pressable>
-                    <Text style={styles.qtyValue} accessibilityLabel={`Miqdor ${qty}`}>
-                      {qty}
-                    </Text>
                     <Pressable
-                      style={[styles.qtyBtn, plusDisabled && styles.controlDisabled]}
-                      onPress={() => void changeQty(item, qty + 1, 'inc')}
-                      disabled={plusDisabled}
+                      style={[styles.removeBtn, itemBusy && styles.controlDisabled]}
+                      onPress={() => void requestRemove(item)}
+                      disabled={itemBusy}
                       accessibilityRole="button"
-                      accessibilityLabel="Mahsulot sonini oshirish"
+                      accessibilityState={{ disabled: itemBusy }}
+                      accessibilityLabel="Mahsulotni savatdan o‘chirish"
                     >
-                      {busyAction === 'inc' ? (
-                        <ActivityIndicator size="small" color={PURPLE_DEEP} />
+                      {busyAction === 'remove' ? (
+                        <ActivityIndicator size="small" color={BAD} />
                       ) : (
-                        <Feather name="plus" size={16} color={PURPLE_DEEP} />
+                        <Feather name="trash-2" size={16} color={BAD} />
                       )}
                     </Pressable>
                   </View>
-                  <Text style={styles.lineTotal} numberOfLines={1}>
-                    {priceUz(lineTotal)}
-                  </Text>
+
+                  {flag ? (
+                    <Text style={styles.priceFlag} accessibilityLiveRegion="polite">
+                      Narx o‘zgargan: {priceUz(flag.previous)} → {priceUz(flag.current)}
+                    </Text>
+                  ) : null}
+
+                  {item.stockInsufficient && known ? (
+                    <Text style={styles.stockBad} accessibilityLiveRegion="polite">
+                      Mavjud miqdor o‘zgargan
+                      {availableKnownQty != null ? ` (mavjud: ${availableKnownQty} dona)` : ''}
+                    </Text>
+                  ) : availableKnownQty != null ? (
+                    <Text style={styles.stockOk}>Mavjud: {availableKnownQty} dona</Text>
+                  ) : !known ? (
+                    <View style={styles.stockWarnBlock} accessibilityLiveRegion="polite">
+                      <Text style={styles.stockWarn}>Filial tanlanmagan</Text>
+                      <Text style={styles.stockWarnHint}>
+                        Qoldiq filial tanlangandan keyin aniqlanadi.
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.cardFooter}>
+                    <View style={styles.qtyWrap}>
+                      <Pressable
+                        style={[styles.qtyBtn, minusDisabled && styles.controlDisabled]}
+                        onPress={() => void changeQty(item, qty - 1, 'dec')}
+                        disabled={minusDisabled}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: minusDisabled }}
+                        accessibilityLabel="Mahsulot sonini kamaytirish"
+                        hitSlop={4}
+                      >
+                        {busyAction === 'dec' ? (
+                          <ActivityIndicator size="small" color={PURPLE_DEEP} />
+                        ) : (
+                          <Feather
+                            name="minus"
+                            size={16}
+                            color={minusDisabled ? MUTED : PURPLE_DEEP}
+                          />
+                        )}
+                      </Pressable>
+                      <Text
+                        style={styles.qtyValue}
+                        accessibilityLabel={`Miqdor ${qty}`}
+                        accessibilityRole="text"
+                      >
+                        {qty}
+                      </Text>
+                      <Pressable
+                        style={[styles.qtyBtn, plusDisabled && styles.controlDisabled]}
+                        onPress={() => void changeQty(item, qty + 1, 'inc')}
+                        disabled={plusDisabled}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: plusDisabled }}
+                        accessibilityLabel="Mahsulot sonini oshirish"
+                        hitSlop={4}
+                      >
+                        {busyAction === 'inc' ? (
+                          <ActivityIndicator size="small" color={PURPLE_DEEP} />
+                        ) : (
+                          <Feather
+                            name="plus"
+                            size={16}
+                            color={plusDisabled ? MUTED : PURPLE_DEEP}
+                          />
+                        )}
+                      </Pressable>
+                    </View>
+                    <Text style={styles.lineTotal} numberOfLines={1}>
+                      {priceUz(lineTotal)}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            );
-          })
+              );
+            })}
+          </View>
         )}
 
         {hasItems ? (
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Savat xulosasi</Text>
+            <Text style={styles.summaryTitle}>Hisob (taxminiy)</Text>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Mahsulot turlari</Text>
-              <Text style={styles.summaryValue}>{items.length} ta</Text>
+              <Text style={styles.summaryLabel}>Mahsulotlar</Text>
+              <Text style={styles.summaryValue} numberOfLines={1}>
+                {subtotalLabel}
+              </Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryTotalLabel}>Jami</Text>
+              <Text style={styles.summaryTotalValue} numberOfLines={1}>
+                {subtotalLabel}
+              </Text>
             </View>
             <Text style={styles.summaryNote}>
-              Oraliq jami sticky pastda. Cashback va yetkazish — rasmiylashtirishda. Yakuniy hisob
-              serverda.
+              Cashback va yetkazish — rasmiylashtirishda. Yakuniy summa serverda hisoblanadi.
             </Text>
           </View>
         ) : null}
       </ScrollView>
 
       {hasItems ? (
-        <View style={[styles.footer, { paddingBottom: bottomPad, paddingHorizontal: sidePad }]}>
+        <View
+          style={[styles.footer, { paddingBottom: bottomPad, paddingHorizontal: sidePad }]}
+          onLayout={(e) => {
+            const h = Math.round(e.nativeEvent.layout.height);
+            if (h > 0 && Math.abs(h - footerHeight) > 1) setFooterHeight(h);
+          }}
+        >
           <View style={[styles.footerInner, { maxWidth: contentWidth - sidePad * 2, width: '100%' }]}>
             <View style={styles.footerSum}>
               <Text style={styles.footerSumLabel}>Oraliq jami</Text>
@@ -615,13 +720,13 @@ export default function CartScreen() {
               disabled={checkoutBusy}
               accessibilityRole="button"
               accessibilityState={{ disabled: checkoutBusy }}
-              accessibilityLabel="Savatni rasmiylashtirish"
+              accessibilityLabel="Rasmiylashtirish"
             >
               {checkoutBusy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.ctaText} numberOfLines={1}>
-                  Savatni rasmiylashtirish
+                  Rasmiylashtirish
                 </Text>
               )}
             </Pressable>
@@ -650,7 +755,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingBottom: 10,
+    paddingBottom: 12,
     backgroundColor: CARD,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
@@ -658,15 +763,18 @@ const styles = StyleSheet.create({
   headerCenter: { flex: 1, minWidth: 0, alignItems: 'center' },
   headerTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 17,
+    fontSize: 20,
+    lineHeight: 24,
     color: PURPLE_DEEP,
     includeFontPadding: false,
   },
   headerSub: {
-    marginTop: 1,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
+    marginTop: 2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
     color: MUTED,
+    textAlign: 'center',
   },
   iconBtn: {
     width: 42,
@@ -681,94 +789,118 @@ const styles = StyleSheet.create({
   branchCard: {
     backgroundColor: CARD,
     borderRadius: 16,
-    padding: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
-    marginBottom: 12,
+    marginBottom: 10,
   },
+  branchCardWarn: {
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFEF8',
+  },
+  branchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  branchIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  branchBody: { flex: 1, minWidth: 0 },
   branchLabel: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 14,
     color: MUTED,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   branchName: {
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
+    lineHeight: 18,
     color: PURPLE_DEEP,
   },
   branchAddress: {
-    marginTop: 4,
+    marginTop: 2,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
+    lineHeight: 16,
     color: MUTED,
   },
   branchWarn: {
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
+    lineHeight: 18,
     color: WARN,
   },
   branchHint: {
-    marginTop: 4,
+    marginTop: 2,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
+    lineHeight: 16,
     color: MUTED,
   },
-  branchBtn: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: LAVENDER,
+  branchAction: {
+    flexShrink: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    backgroundColor: LAVENDER,
   },
-  branchBtnText: {
+  branchActionText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: PURPLE,
-  },
-  branchLink: { marginTop: 8, alignSelf: 'flex-start' },
-  branchLinkText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontSize: 12,
     color: PURPLE,
   },
 
   notice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
     backgroundColor: '#FFFBEB',
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
     marginBottom: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#FDE68A',
   },
   noticeText: {
+    flex: 1,
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
+    lineHeight: 17,
     color: WARN,
   },
 
   empty: {
     alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 16,
+    paddingTop: 36,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
   },
   emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
   },
   emptyTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 20,
+    fontSize: 22,
+    lineHeight: 28,
     color: PURPLE_DEEP,
   },
   emptyHint: {
@@ -778,13 +910,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: MUTED,
     textAlign: 'center',
+    maxWidth: 300,
   },
 
+  list: { gap: 8 },
   card: {
     backgroundColor: CARD,
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 12,
-    marginBottom: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
   },
@@ -807,31 +940,28 @@ const styles = StyleSheet.create({
     backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
   },
-  itemBody: { flex: 1, minWidth: 0 },
+  itemBody: { flex: 1, minWidth: 0, paddingTop: 1 },
   itemName: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 19,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    lineHeight: 20,
     color: PURPLE_DEEP,
-    minHeight: 38,
   },
   itemMeta: {
-    marginTop: 2,
+    marginTop: 3,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    color: MUTED,
-  },
-  itemUnit: {
-    marginTop: 2,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    lineHeight: 16,
     color: MUTED,
   },
   itemUnitPrice: {
     marginTop: 6,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    lineHeight: 19,
     color: PURPLE,
   },
   removeBtn: {
@@ -839,6 +969,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 12,
     backgroundColor: '#FEF2F2',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#FECACA',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -846,70 +978,96 @@ const styles = StyleSheet.create({
   priceFlag: {
     marginTop: 8,
     fontFamily: 'Inter_500Medium',
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 16,
     color: WARN,
   },
   stockOk: {
     marginTop: 8,
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
+    lineHeight: 16,
     color: OK,
   },
   stockBad: {
     marginTop: 8,
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
+    lineHeight: 16,
     color: BAD,
   },
-  stockWarn: {
+  stockWarnBlock: {
     marginTop: 8,
-    fontFamily: 'Inter_500Medium',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#FFFBEB',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#FDE68A',
+  },
+  stockWarn: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
+    lineHeight: 16,
     color: WARN,
+  },
+  stockWarnHint: {
+    marginTop: 2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: MUTED,
   },
   cardFooter: {
     marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: BORDER,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+    minHeight: 48,
   },
   qtyWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: LAVENDER,
-    borderRadius: 14,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    borderRadius: 12,
+    paddingHorizontal: 3,
+    paddingVertical: 3,
     gap: 2,
+    flexShrink: 0,
   },
   qtyBtn: {
     width: 40,
     height: 40,
-    borderRadius: 11,
+    borderRadius: 10,
     backgroundColor: CARD,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyValue: {
-    minWidth: 28,
+    minWidth: 30,
     textAlign: 'center',
     fontFamily: 'Inter_700Bold',
     fontSize: 16,
+    lineHeight: 20,
     color: PURPLE_DEEP,
   },
   lineTotal: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    fontSize: 16,
+    lineHeight: 20,
     color: PURPLE_DEEP,
     flexShrink: 1,
-    maxWidth: '48%',
+    maxWidth: '46%',
     textAlign: 'right',
   },
-  controlDisabled: { opacity: 0.45 },
+  controlDisabled: { opacity: 0.42 },
 
   summaryCard: {
-    marginTop: 6,
+    marginTop: 12,
     backgroundColor: CARD,
     borderRadius: 16,
     padding: 14,
@@ -918,32 +1076,56 @@ const styles = StyleSheet.create({
   },
   summaryTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
+    fontSize: 15,
+    lineHeight: 20,
     color: PURPLE_DEEP,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    gap: 8,
+    gap: 10,
   },
   summaryLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
+    lineHeight: 18,
     color: MUTED,
+    flexShrink: 0,
   },
   summaryValue: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  summaryDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: BORDER,
+    marginVertical: 10,
+  },
+  summaryTotalLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    lineHeight: 18,
     color: PURPLE_DEEP,
   },
+  summaryTotalValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    lineHeight: 20,
+    color: PURPLE,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
   summaryNote: {
-    marginTop: 4,
+    marginTop: 10,
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 17,
     color: MUTED,
   },
 
@@ -957,18 +1139,13 @@ const styles = StyleSheet.create({
     borderTopColor: BORDER,
     alignItems: 'center',
     paddingTop: 12,
-    shadowColor: '#1A1040',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 8,
   },
   footerInner: { gap: 10 },
   footerSum: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 10,
   },
   footerSumLabel: {
     fontFamily: 'Inter_500Medium',
@@ -977,23 +1154,31 @@ const styles = StyleSheet.create({
   },
   footerSumValue: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-    color: PURPLE,
+    fontSize: 20,
+    lineHeight: 24,
+    color: PURPLE_DEEP,
     flexShrink: 1,
+    textAlign: 'right',
   },
   cta: {
-    minHeight: 48,
-    borderRadius: 16,
+    minHeight: 52,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 3,
+    borderBottomColor: YELLOW,
   },
-  ctaBusy: { opacity: 0.75 },
+  ctaBusy: {
+    opacity: 0.72,
+    borderBottomColor: 'transparent',
+  },
   ctaText: {
     color: '#fff',
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    fontSize: 16,
+    letterSpacing: 0.2,
   },
 
   state: {
@@ -1003,31 +1188,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     gap: 8,
   },
+  stateIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   stateTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
+    fontSize: 17,
     color: PURPLE_DEEP,
     textAlign: 'center',
   },
   stateHint: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
+    lineHeight: 18,
     color: MUTED,
     textAlign: 'center',
   },
   primaryBtn: {
     marginTop: 14,
     minHeight: 48,
-    paddingHorizontal: 20,
-    borderRadius: 16,
+    minWidth: 180,
+    paddingHorizontal: 22,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
+    borderBottomWidth: 3,
+    borderBottomColor: YELLOW,
   },
   primaryBtnText: {
     color: '#fff',
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
+    fontSize: 15,
   },
 
   skel: {

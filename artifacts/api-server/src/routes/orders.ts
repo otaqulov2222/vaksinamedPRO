@@ -37,8 +37,16 @@ import {
   refundOrderCashback,
   getAuthoritativeBalance,
 } from "../lib/cashbackFinance";
+import { rateLimit } from "../lib/rateLimit";
 
 const router = Router();
+
+/** Order create spam protection — Redis in production; memory fallback in dev. */
+const orderCreateLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  key: (req) => `order-create:${req.ip}:${String(req.header("authorization") || "").slice(0, 24)}`,
+});
 
 /**
  * P6.4/P6.7 — shared earn path (commercial_tx + unique EARN).
@@ -236,7 +244,7 @@ router.get("/orders/:id", async (req, res, next) => {
   }
 });
 
-router.post("/orders", async (req, res, next) => {
+router.post("/orders", orderCreateLimiter, async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
     const fulfillment = (req.body.fulfillment === "delivery" ? "delivery" : "pickup") as OrderChannel;
@@ -827,6 +835,27 @@ router.post("/orders/:id/refund-cashback", async (req, res, next) => {
       actor: `staff:${admin.email}`,
       reason: `cashback_${mode}_refund`,
     });
+
+    try {
+      await db.insert(auditLog).values({
+        actor: admin.email,
+        action: `order.refund_cashback.${mode}`,
+        entity: "order",
+        payload: JSON.stringify({
+          orderId,
+          customerId: rows[0].customerId,
+          branchId: rows[0].branchId,
+          mode,
+          earnReversalAmount: earnReversalAmount ?? null,
+          reversalAmount: cashback.earnReversal?.amount ?? 0,
+          idempotent: cashback.idempotent,
+          openPolicy: cashback.openPolicy ?? null,
+          reason: `cashback_${mode}_refund`,
+        }),
+      });
+    } catch {
+      // audit must not block refund
+    }
 
     const fresh = (await db.select().from(orders).where(eq(orders.id, orderId)).limit(1))[0];
     return res.json({

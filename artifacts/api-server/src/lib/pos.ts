@@ -11,7 +11,7 @@ import {
 } from "./cashback";
 import { logger } from "./logger";
 import { isHqAdminRole, requireConfiguredSecret } from "./securityEnv";
-import { earnCashback, useCashback, reverseCashbackEntry, ensureCashbackAccount, getMaxSpendRatio } from "./cashbackFinance";
+import { earnCashback, useCashback, reverseCashbackEntry, ensureCashbackAccount, getMaxSpendRatio, getAuthoritativeBalance } from "./cashbackFinance";
 
 const POS_SECRET = requireConfiguredSecret(
   "POS_SECRET",
@@ -20,10 +20,15 @@ const POS_SECRET = requireConfiguredSecret(
 const QR_TTL_MS = 90_000;
 const VOID_WINDOW_MS = 15 * 60 * 1000;
 
+/** Stable member display number — NOT a rotating scan token. */
 export function loyaltyCardNumber(customerId: number) {
   return `VM-${String(customerId).padStart(8, "0")}`;
 }
 
+/**
+ * LEGACY_STATIC_CODE — long-lived identifier accepted by POS lookup/FOM bridges.
+ * Prefer signed VM1… tokens for cashier scan. Static codes do not expire.
+ */
 export function publicQrCode(customerId: number) {
   return `VAKSINA-${customerId}`;
 }
@@ -70,6 +75,8 @@ export function verifyPosToken(raw: string): { customerId: number } | null {
 }
 
 async function findCustomerByStaticCode(raw: string) {
+  // LEGACY_STATIC_CODE path — retained for POS Terminal / FOM customerQr compatibility.
+  // These identifiers never expire; signed VM1… tokens remain the preferred scan form.
   const text = String(raw || "").trim().toUpperCase();
 
   // VAKSINA-123 or VAKSINA-APP:998...
@@ -110,7 +117,7 @@ export async function resolveCustomerFromScan(raw: string) {
   throw Object.assign(new Error("QR yoki karta kodi noto‘g‘ri / muddati tugagan"), { status: 404 });
 }
 
-function customerPosView(customer: typeof customers.$inferSelect) {
+function customerPosView(customer: typeof customers.$inferSelect, authoritativeBalance?: number) {
   const bps = cashbackRateBps(customer.tier);
   return {
     id: customer.id,
@@ -119,7 +126,8 @@ function customerPosView(customer: typeof customers.$inferSelect) {
     name: `${customer.firstName} ${customer.lastName}`.trim(),
     phoneMasked: maskPhone(customer.phone),
     tier: customer.tier,
-    balance: customer.balance,
+    // Prefer cashback_accounts SoT; customers.balance is mirror-only.
+    balance: authoritativeBalance != null ? authoritativeBalance : customer.balance,
     purchasesCount: customer.purchasesCount,
     cardNumber: loyaltyCardNumber(customer.id),
     displayCode: publicQrCode(customer.id),
@@ -161,17 +169,19 @@ export function computePosPreview(input: {
 
 export async function lookupPosCustomer(qrRaw: string) {
   const { customer, source } = await resolveCustomerFromScan(qrRaw);
-  return { customer: customerPosView(customer), scanSource: source };
+  const balance = await getAuthoritativeBalance(customer.id);
+  return { customer: customerPosView(customer, balance), scanSource: source };
 }
 
 export async function previewPosSale(input: { qr: string; amount: number; cashbackToUse?: number }) {
   const { customer, source } = await resolveCustomerFromScan(input.qr);
-  const view = customerPosView(customer);
+  const balance = await getAuthoritativeBalance(customer.id);
+  const view = customerPosView(customer, balance);
   const maxSpendRatio = await getMaxSpendRatio();
   const preview = computePosPreview({
     amount: input.amount,
     cashbackToUse: input.cashbackToUse ?? 0,
-    balance: customer.balance,
+    balance,
     rateBps: view.rateBps,
     tier: customer.tier,
     maxSpendRatio,
@@ -207,16 +217,18 @@ export async function confirmPosSale(input: {
   const existing = await db.select().from(posSales).where(eq(posSales.receiptId, receiptId)).limit(1);
   if (existing[0]) {
     const cust = (await db.select().from(customers).where(eq(customers.id, existing[0].customerId)).limit(1))[0];
+    const bal = cust ? await getAuthoritativeBalance(cust.id) : undefined;
     return {
       idempotent: true,
       sale: existing[0],
-      customer: cust ? customerPosView(cust) : null,
-      receipt: serializeReceipt(existing[0], cust, branch),
+      customer: cust ? customerPosView(cust, bal) : null,
+      receipt: serializeReceipt(existing[0], cust, branch, bal),
     };
   }
 
   const { customer } = await resolveCustomerFromScan(input.qr);
-  const view = customerPosView(customer);
+  const balance = await getAuthoritativeBalance(customer.id);
+  const view = customerPosView(customer, balance);
   await ensureCashbackAccount(customer.id);
   const fresh = (await db.select().from(customers).where(eq(customers.id, customer.id)).limit(1))[0];
   if (!fresh) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
@@ -224,13 +236,13 @@ export async function confirmPosSale(input: {
   const preview = computePosPreview({
     amount: input.amount,
     cashbackToUse: input.cashbackToUse ?? 0,
-    balance: fresh.balance,
+    balance,
     rateBps: view.rateBps,
     tier: customer.tier,
     maxSpendRatio: await getMaxSpendRatio(),
   });
 
-  if (fresh.balance < preview.cashbackUsed) {
+  if (balance < preview.cashbackUsed) {
     throw Object.assign(new Error("Cashback balansi yetarli emas"), { status: 409 });
   }
 
@@ -359,11 +371,12 @@ export async function confirmPosSale(input: {
       const raced = await db.select().from(posSales).where(eq(posSales.receiptId, receiptId)).limit(1);
       if (raced[0]) {
         const cust = (await db.select().from(customers).where(eq(customers.id, raced[0].customerId)).limit(1))[0];
+        const bal = cust ? await getAuthoritativeBalance(cust.id) : undefined;
         return {
           idempotent: true,
           sale: raced[0],
-          customer: cust ? customerPosView(cust) : null,
-          receipt: serializeReceipt(raced[0], cust, branch),
+          customer: cust ? customerPosView(cust, bal) : null,
+          receipt: serializeReceipt(raced[0], cust, branch, bal),
         };
       }
     }
@@ -372,13 +385,14 @@ export async function confirmPosSale(input: {
 
   const sale = (await db.select().from(posSales).where(eq(posSales.receiptId, receiptId)).limit(1))[0];
   const updated = (await db.select().from(customers).where(eq(customers.id, fresh.id)).limit(1))[0];
+  const afterBal = updated ? await getAuthoritativeBalance(updated.id) : balance;
   logger.info({ receiptId, customerId: fresh.id, amount: preview.amount }, "POS sale confirmed");
 
   return {
     idempotent: false,
     sale,
-    customer: customerPosView(updated),
-    receipt: serializeReceipt(sale, updated, branch),
+    customer: updated ? customerPosView(updated, afterBal) : view,
+    receipt: serializeReceipt(sale, updated, branch, afterBal),
   };
 }
 
@@ -391,6 +405,7 @@ function serializeReceipt(
   sale: typeof posSales.$inferSelect,
   customer: typeof customers.$inferSelect | null | undefined,
   branch: typeof branches.$inferSelect,
+  authoritativeBalance?: number,
 ) {
   return {
     receiptId: sale.receiptId,
@@ -403,7 +418,8 @@ function serializeReceipt(
           cardNumber: loyaltyCardNumber(customer.id),
           phoneMasked: maskPhone(customer.phone),
           tier: customer.tier,
-          balance: customer.balance,
+          // Prefer SoT when provided; customers.balance is mirror-only.
+          balance: authoritativeBalance ?? customer.balance,
         }
       : null,
     amount: sale.amount,
@@ -528,13 +544,21 @@ export async function issueCustomerPosCard(customerId: number) {
   const customer = (await db.select().from(customers).where(eq(customers.id, customerId)).limit(1))[0];
   if (!customer) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
   const token = issuePosToken(customer.id);
-  const view = customerPosView(customer);
+  const balance = await getAuthoritativeBalance(customer.id);
+  const view = customerPosView(customer, balance);
   return {
     ...token,
     balance: view.balance,
     tier: view.tier,
     name: view.name,
     cashbackRateLabel: view.cashbackRateLabel,
+    /** Preferred cashier scan material — signed, TTL-bound. */
+    scanMode: "signed_qr" as const,
+    /** LEGACY_STATIC_CODE still accepted by POS lookup; not equivalent to rotating QR. */
+    legacyStaticCode: view.displayCode,
+    cardNumber: view.cardNumber,
+    displayCode: view.displayCode,
+    ttlSeconds: token.expiresIn,
   };
 }
 

@@ -18,7 +18,7 @@ import { api } from '@/lib/api';
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F7F8FC';
+const BG = '#F3F1F7';
 const GOLD = '#C9A227';
 const GREEN = '#16A34A';
 const USE_AMBER = '#D97706';
@@ -44,24 +44,24 @@ function ledgerKindOf(raw?: string): LedgerKind {
 /**
  * Display-only mapping from server kind + signed cashback field.
  * Does not recalculate balance; preserves server amount magnitude.
+ * Prefer server sourceLabel when present — never invent channel from branch alone.
  */
-function ledgerPresentation(item: { kind?: string; title?: string; cashback?: number }) {
+function ledgerPresentation(item: {
+  kind?: string;
+  title?: string;
+  cashback?: number;
+  sourceLabel?: string;
+}) {
   const kind = ledgerKindOf(item.kind);
   const raw = Number(item.cashback);
   const amount = Number.isFinite(raw) ? raw : 0;
   const abs = Math.abs(amount);
-  const title =
-    String(item.title || '').trim() ||
-    (kind === 'use'
-      ? 'Cashback ishlatildi'
-      : kind === 'void'
-        ? 'Cashback bekor qilindi'
-        : 'Cashback tushdi');
+  const sourceLabel = String(item.sourceLabel || '').trim();
 
   if (kind === 'earn') {
     return {
       kind,
-      title,
+      title: sourceLabel || String(item.title || '').trim() || 'Cashback tushdi',
       abs,
       prefix: '+' as const,
       color: GREEN,
@@ -73,21 +73,20 @@ function ledgerPresentation(item: { kind?: string; title?: string; cashback?: nu
   if (kind === 'use') {
     return {
       kind,
-      title,
+      title: 'Cashback ishlatildi',
       abs,
       prefix: '−' as const,
       color: USE_AMBER,
       iconBg: '#FFF7ED',
       icon: 'credit-card-outline' as const,
       a11yVerb: 'Cashback ishlatildi',
+      sourceLine: sourceLabel,
     };
   }
-  // void: POS cheque cancelled — signed net effect from server (used − earned).
-  // Never style as a normal positive earn credit.
   const prefix = amount > 0 ? ('+' as const) : amount < 0 ? ('−' as const) : ('' as const);
   return {
     kind,
-    title,
+    title: sourceLabel || String(item.title || '').trim() || 'Cashback bekor qilindi',
     abs,
     prefix,
     color: VOID_SLATE,
@@ -274,7 +273,8 @@ export default function CashbackScreen() {
         </View>
 
         <Text style={styles.title}>Cashback</Text>
-        <Text style={styles.subtitle}>Mavjud balans va daraja</Text>
+        <Text style={styles.subtitle}>Yagona balans</Text>
+        <Text style={styles.subtitleMuted}>Barcha qo‘llab-quvvatlanadigan xarid kanallari</Text>
 
         <LinearGradient
           colors={['#5C2AD6', '#4520B0', '#32168A']}
@@ -294,7 +294,7 @@ export default function CashbackScreen() {
               style={styles.useBtn}
               onPress={() => router.push('/(tabs)/catalog')}
               accessibilityRole="button"
-              accessibilityLabel="Cashbackni to‘lovda ishlatish"
+              accessibilityLabel="Cashbackni xaridlarda ishlatish"
             >
               <MaterialCommunityIcons
                 name="credit-card-outline"
@@ -302,7 +302,7 @@ export default function CashbackScreen() {
                 color="#fff"
                 importantForAccessibility="no"
               />
-              <Text style={styles.useBtnText}>To‘lovda ishlatish</Text>
+              <Text style={styles.useBtnText}>Xaridlarda ishlatish</Text>
               <Feather name="chevron-right" size={13} color="#fff" importantForAccessibility="no" />
             </Pressable>
           </View>
@@ -396,11 +396,11 @@ export default function CashbackScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.infoTitle}>
-              Cashback yakunlangan xaridlardan balansingizga tushadi.
+              Bitta balans — ilova, kassa va boshqa ruxsat etilgan xaridlar.
             </Text>
             <Text style={styles.infoSub}>
-              Ilova buyurtmalari va dorixona kassasidagi yakunlangan xaridlardan hisoblanadi. Balans
-              serverdagi cashback hisobidan olinadi.
+              Cashback yakunlangan tijorat xaridlaridan hisoblanadi (to‘lov usuli emas). Ishlatish —
+              rasmiylashtirishda yoki kassada QR orqali. Balans faqat server hisobidan.
             </Text>
           </View>
         </View>
@@ -424,11 +424,11 @@ export default function CashbackScreen() {
                 ? showAll
                   ? 'Tarixni yopish'
                   : 'Barcha cashbacklarni ko‘rish'
-                : 'Buyurtma berish'
+                : 'Xarid qilish'
             }
           >
             <Text style={styles.seeAllText}>
-              {transactions.length ? (showAll ? 'Yopish' : 'Barchasini ko‘rish') : 'Buyurtma berish'}
+              {transactions.length ? (showAll ? 'Yopish' : 'Barchasini ko‘rish') : 'Xarid qilish'}
             </Text>
             <Feather name="chevron-right" size={14} color={PURPLE} importantForAccessibility="no" />
           </Pressable>
@@ -441,7 +441,8 @@ export default function CashbackScreen() {
             </View>
             <Text style={styles.emptyTitle}>Hali cashback yo‘q</Text>
             <Text style={styles.emptyText}>
-              Yakunlangan xaridlar cashbacki shu yerda ko‘rinadi. Namuna yozuvlar yo‘q.
+              Yakunlangan xaridlar (ilova yoki kassa) cashbacki shu yerda ko‘rinadi. Namuna yozuvlar
+              yo‘q.
             </Text>
           </View>
         ) : (
@@ -449,13 +450,33 @@ export default function CashbackScreen() {
             const row = ledgerPresentation(item);
             const amt = formatUzs(row.abs);
             const signed = row.prefix ? `${row.prefix}${amt}` : amt;
+            const branch = String(item.branchName || item.branch || '').trim();
+            const when = formatWhen(item.createdAt || item.date);
+            const orderBit = item.orderCode ? `Buyurtma ${item.orderCode}` : '';
+            const receiptBit = item.receiptId ? `Chek ${item.receiptId}` : '';
+            const sourceBit =
+              row.kind === 'use' && 'sourceLine' in row && row.sourceLine
+                ? String(row.sourceLine)
+                : row.kind !== 'use' && item.sourceLabel && item.sourceLabel !== row.title
+                  ? String(item.sourceLabel)
+                  : '';
+            // Real metadata only — never invent FOM/POS from branch presence.
+            const metaParts = [
+              sourceBit || null,
+              branch || null,
+              orderBit || null,
+              receiptBit || null,
+              when || null,
+            ].filter(Boolean);
             return (
-              <Pressable
+              <View
                 key={item.id}
                 style={styles.tx}
-                onPress={() => router.push('/(tabs)/purchases')}
-                accessibilityRole="button"
-                accessibilityLabel={`${row.a11yVerb}, ${row.title}, ${signed}`}
+                accessible
+                accessibilityRole="text"
+                accessibilityLabel={`${row.a11yVerb}, ${row.title}, ${signed}${
+                  branch ? `, ${branch}` : ''
+                }`}
               >
                 <View
                   style={[styles.txIcon, { backgroundColor: row.iconBg }]}
@@ -467,19 +488,14 @@ export default function CashbackScreen() {
                   <Text style={styles.txTitle} numberOfLines={1}>
                     {row.title}
                   </Text>
-                  <Text style={styles.txMeta} numberOfLines={1}>
-                    {row.kind === 'void'
-                      ? `Bekor qilindi · ${formatWhen(item.date)}`
-                      : row.kind === 'use'
-                        ? `Ishlatildi · ${formatWhen(item.date)}`
-                        : formatWhen(item.date)}
+                  <Text style={styles.txMeta} numberOfLines={2}>
+                    {metaParts.join(' · ') || when}
                   </Text>
                 </View>
                 <Text style={[styles.txAmt, { color: row.color }]} numberOfLines={1}>
                   {signed}
                 </Text>
-                <Feather name="chevron-right" size={16} color="#C5CAD6" importantForAccessibility="no" />
-              </Pressable>
+              </View>
             );
           })
         )}
@@ -488,14 +504,14 @@ export default function CashbackScreen() {
           style={styles.promo}
           onPress={() => router.push('/(tabs)/catalog')}
           accessibilityRole="button"
-          accessibilityLabel="Katalogga o‘tish"
+          accessibilityLabel="Katalogda xarid qilish"
         >
           <View style={styles.promoGift} importantForAccessibility="no-hide-descendants">
             <MaterialCommunityIcons name="gift" size={28} color={PURPLE} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.promoKicker}>KATALOG</Text>
-            <Text style={styles.promoTitle}>Mahsulotlarni ko‘rish va buyurtma berish</Text>
+            <Text style={styles.promoKicker}>XARID</Text>
+            <Text style={styles.promoTitle}>Mahsulot tanlang — cashback xaridlaringizdan</Text>
           </View>
           <View style={styles.promoArrow} importantForAccessibility="no-hide-descendants">
             <Feather name="arrow-right" size={18} color={PURPLE} />
@@ -540,8 +556,14 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     marginTop: 4,
-    marginBottom: 16,
     fontSize: 14,
+    fontWeight: '600',
+    color: PURPLE_DEEP,
+  },
+  subtitleMuted: {
+    marginTop: 2,
+    marginBottom: 16,
+    fontSize: 13,
     color: MUTED,
   },
 

@@ -3,15 +3,15 @@
 export function fulfillmentLabel(status?: string | null): string {
   switch (String(status || '').toUpperCase()) {
     case 'CREATED':
-      return 'Yaratildi';
+      return 'Qabul qilindi';
     case 'CONFIRMED':
-      return 'Tasdiqlangan';
+      return 'Tasdiqlandi';
     case 'PREPARING':
       return 'Tayyorlanmoqda';
     case 'READY_FOR_PICKUP':
       return 'Olib ketishga tayyor';
     case 'OUT_FOR_DELIVERY':
-      return 'Yetkazib berilmoqda';
+      return 'Yetkazilmoqda';
     case 'COMPLETED':
       return 'Yakunlangan';
     case 'CANCELLED':
@@ -26,24 +26,6 @@ export function paymentLabel(status?: string | null): string {
     case 'PENDING':
       return 'To‘lov kutilmoqda';
     case 'PAID':
-      return 'To‘lov amalga oshirildi';
-    case 'FAILED':
-      return 'To‘lov amalga oshmadi';
-    case 'REFUNDED':
-      return 'To‘lov qaytarildi';
-    case 'PARTIALLY_REFUNDED':
-      return 'To‘lov qisman qaytarildi';
-    default:
-      return status ? String(status) : 'To‘lov holati noma’lum';
-  }
-}
-
-/** Compact payment chip for Purchases list. */
-export function paymentLabelShort(status?: string | null): string {
-  switch (String(status || '').toUpperCase()) {
-    case 'PENDING':
-      return 'Kutilmoqda';
-    case 'PAID':
       return 'To‘langan';
     case 'FAILED':
       return 'To‘lov amalga oshmadi';
@@ -52,8 +34,18 @@ export function paymentLabelShort(status?: string | null): string {
     case 'PARTIALLY_REFUNDED':
       return 'Qisman qaytarilgan';
     default:
-      return status ? String(status) : '';
+      return status ? String(status) : 'To‘lov holati noma’lum';
   }
+}
+
+/** Compact payment chip for Purchases list — same wording as paymentLabel. */
+export function paymentLabelShort(status?: string | null): string {
+  const s = String(status || '').toUpperCase();
+  if (!s) return '';
+  if (!['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED'].includes(s)) {
+    return status ? String(status) : '';
+  }
+  return paymentLabel(status);
 }
 
 export function reservationLabel(status?: string | null, expiredHint?: boolean): string {
@@ -74,7 +66,7 @@ export function reservationLabel(status?: string | null, expiredHint?: boolean):
   }
 }
 
-/** Compact reservation chip for Purchases list — omit NONE. */
+/** Compact reservation chip for Purchases list — omit NONE and FULFILLED (noise). */
 export function reservationLabelShort(
   status?: string | null,
   expiredHint?: boolean,
@@ -88,7 +80,6 @@ export function reservationLabelShort(
     case 'CANCELLED':
       return 'Band bekor';
     case 'FULFILLED':
-      return 'Berilgan';
     case 'NONE':
     case '':
       return null;

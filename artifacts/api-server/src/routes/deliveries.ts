@@ -3,10 +3,10 @@
  * (workers returns fixed elsewhere)
  */
 import { Router } from "express";
-import { eq } from "drizzle-orm";
-import { db, orders } from "@workspace/db";
+import { and, count, desc, eq, type SQL } from "drizzle-orm";
+import { db, deliveries, orders } from "@workspace/db";
 import { requireAdmin, requireCustomer } from "../lib/auth";
-import { requirePermission, assertBranchScope } from "../lib/rbac";
+import { requirePermission, assertBranchScope, resolveStaffBranchFilter } from "../lib/rbac";
 import {
   assignCourier,
   getDeliveryByOrderId,
@@ -17,6 +17,75 @@ import { DELIVERY_STATUSES } from "../lib/deliveryLifecycle";
 import { getDeliveryAdapter } from "../lib/deliveryAdapters";
 
 const router = Router();
+
+/**
+ * Admin delivery list — branch-scoped via order.branchId.
+ * Read-only listing; transitions stay on POST /deliveries/:orderId/*.
+ */
+router.get("/admin/deliveries", async (req, res, next) => {
+  try {
+    const admin = await requireAdmin(req);
+    await requirePermission(admin, "delivery:update");
+
+    const requested = req.query.branchId != null ? Number(req.query.branchId) : undefined;
+    const branchFilter = resolveStaffBranchFilter(
+      admin,
+      Number.isFinite(requested as number) ? (requested as number) : undefined,
+    );
+    const status = typeof req.query.status === "string" ? req.query.status.trim() : "";
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(100, Math.floor(limitRaw)) : 40;
+    const offsetRaw = Number(req.query.offset);
+    const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0;
+
+    const filters: SQL[] = [];
+    if (branchFilter != null) filters.push(eq(orders.branchId, branchFilter));
+    if (status) filters.push(eq(deliveries.status, status));
+    const whereClause = filters.length ? and(...filters) : undefined;
+
+    const totalRow = await db
+      .select({ value: count() })
+      .from(deliveries)
+      .innerJoin(orders, eq(deliveries.orderId, orders.id))
+      .where(whereClause);
+    const total = Number(totalRow[0]?.value || 0);
+
+    const rows = await db
+      .select({
+        delivery: deliveries,
+        orderCode: orders.code,
+        orderBranchId: orders.branchId,
+        deliveryFee: orders.deliveryFee,
+        fulfillmentStatus: orders.fulfillmentStatus,
+        customerId: orders.customerId,
+      })
+      .from(deliveries)
+      .innerJoin(orders, eq(deliveries.orderId, orders.id))
+      .where(whereClause)
+      .orderBy(desc(deliveries.updatedAt), desc(deliveries.id))
+      .limit(limit)
+      .offset(offset);
+
+    return res.json({
+      deliveries: rows.map((row) => ({
+        ...serializeDeliveryPublic(row.delivery),
+        orderCode: row.orderCode,
+        branchId: row.orderBranchId,
+        deliveryFee: row.deliveryFee,
+        fulfillmentStatus: row.fulfillmentStatus,
+        customerId: row.customerId,
+        providerStatus: row.delivery.provider === "external" ? "CONTRACT_PENDING" : row.delivery.status,
+      })),
+      total,
+      hasMore: offset + rows.length < total,
+      branchFilter: branchFilter ?? null,
+      pagination: { limit, offset, total },
+      externalProvider: "CONTRACT_PENDING",
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 /** Customer: own order delivery status */
 router.get("/deliveries/order/:orderId", async (req, res, next) => {

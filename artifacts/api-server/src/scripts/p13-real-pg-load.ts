@@ -12,7 +12,7 @@
  *   REAL_POSTGRES_LOAD_TEST=1 TEST_DATABASE_URL=postgresql://... pnpm p13:load
  */
 
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -90,6 +90,10 @@ async function bootstrapPostgres(): Promise<Bootstrap | null> {
     }
 
     const dataDir = path.join(outDir, "embedded-pg");
+    // Fresh cluster each run — stale non-empty dir causes initdb failure (prior PENDING).
+    if (existsSync(dataDir)) {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
     mkdirSync(dataDir, { recursive: true });
     const port = Number(process.env.P13_EMBEDDED_PG_PORT || 55433);
     const password = "p13_load_only";

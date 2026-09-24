@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api, getAuthToken, setAuthToken } from '@/lib/api';
 import { clearRegisterDraft } from '@/lib/registerDraft';
 import { isLanguage, type Language } from '@/lib/languages';
@@ -12,8 +12,21 @@ export type Transaction = {
   branch: string;
   amount: number;
   cashback: number;
-  /** API loyalty_ledger kind — void = POS/cheque cancellation display row (not EARN). */
+  /** Display kind — void = REVERSAL / cheque cancel (not EARN). */
   kind: 'earn' | 'use' | 'void';
+  /** SoT fields (optional — present when history is source-aware). */
+  entryType?: string;
+  createdAt?: string;
+  sourceType?: 'ORDER' | 'POS' | 'SYSTEM' | 'FOM_POS' | null;
+  sourceKey?: string | null;
+  sourceLabel?: string;
+  sourceContract?: 'CONTRACT_PENDING';
+  orderId?: number | null;
+  orderCode?: string | null;
+  receiptId?: string | null;
+  branchId?: number | null;
+  branchName?: string | null;
+  commercialTransactionId?: number | null;
 };
 export type Reward = {
   id: string;
@@ -91,7 +104,7 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [profile, setProfile] = useState<any>(null);
   const [cartCount, setCartCount] = useState(0);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
       const token = await getAuthToken();
       const tg = typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id;
@@ -117,9 +130,9 @@ export function AppProvider({ children }: PropsWithChildren) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await api.logout();
     clearRegisterDraft();
     try {
@@ -130,22 +143,22 @@ export function AppProvider({ children }: PropsWithChildren) {
     setIsAuthenticated(false);
     setProfile(null);
     setCartCount(0);
-  };
+  }, []);
 
   useEffect(() => {
     void AsyncStorage.getItem('soglom-language').then((value) => {
       if (isLanguage(value)) setLanguageState(value);
     });
     void refresh();
-  }, []);
+  }, [refresh]);
 
-  const setLanguage = (nextLanguage: Language) => {
+  const setLanguage = useCallback((nextLanguage: Language) => {
     setLanguageState(nextLanguage);
     void AsyncStorage.setItem('soglom-language', nextLanguage);
     if (isAuthenticated) void api.setLanguage(nextLanguage);
-  };
+  }, [isAuthenticated]);
 
-  const redeemReward = async (reward: Reward) => {
+  const redeemReward = useCallback(async (reward: Reward) => {
     try {
       await api.redeem(reward.id);
       await refresh();
@@ -153,7 +166,11 @@ export function AppProvider({ children }: PropsWithChildren) {
     } catch {
       return false;
     }
-  };
+  }, [refresh]);
+
+  const syncCartCount = useCallback((count: number) => {
+    setCartCount(Math.max(0, Math.floor(Number(count) || 0)));
+  }, []);
 
   const value = useMemo<AppContextValue>(() => ({
     language,
@@ -181,26 +198,69 @@ export function AppProvider({ children }: PropsWithChildren) {
       qrCode: profile?.qrCode ? String(profile.qrCode) : '',
     },
     transactions: Array.isArray(profile?.transactions)
-      ? profile.transactions.map((item: any) => ({
-          id: String(item?.id ?? ''),
-          date: item?.date != null ? String(item.date) : '',
-          title: item?.title != null ? String(item.title) : '',
-          branch: item?.branch != null ? String(item.branch) : '',
-          amount: Number(item?.amount) || 0,
-          cashback: Number(item?.cashback) || 0,
-          kind: item?.kind === 'use' ? 'use' : item?.kind === 'void' ? 'void' : 'earn',
-        }))
+      ? profile.transactions.map((item: any) => {
+          const sourceTypeRaw = item?.sourceType != null ? String(item.sourceType).toUpperCase() : '';
+          const sourceType =
+            sourceTypeRaw === 'ORDER' ||
+            sourceTypeRaw === 'POS' ||
+            sourceTypeRaw === 'SYSTEM' ||
+            sourceTypeRaw === 'FOM_POS'
+              ? (sourceTypeRaw as Transaction['sourceType'])
+              : item?.sourceType === null
+                ? null
+                : undefined;
+          const branchName =
+            item?.branchName != null && String(item.branchName).trim()
+              ? String(item.branchName).trim()
+              : item?.branch != null && String(item.branch).trim()
+                ? String(item.branch).trim()
+                : '';
+          return {
+            id: String(item?.id ?? item?.ledgerId ?? ''),
+            date: item?.date != null ? String(item.date) : item?.createdAt != null ? String(item.createdAt).slice(0, 10) : '',
+            title: item?.title != null ? String(item.title) : '',
+            branch: branchName,
+            amount: Number(item?.amount) || 0,
+            cashback: Number(item?.cashback) || 0,
+            kind: item?.kind === 'use' ? 'use' : item?.kind === 'void' ? 'void' : 'earn',
+            entryType: item?.entryType != null ? String(item.entryType) : undefined,
+            createdAt: item?.createdAt != null ? String(item.createdAt) : undefined,
+            sourceType,
+            sourceKey: item?.sourceKey != null ? String(item.sourceKey) : item?.sourceKey === null ? null : undefined,
+            sourceLabel: item?.sourceLabel != null ? String(item.sourceLabel) : undefined,
+            sourceContract: item?.sourceContract === 'CONTRACT_PENDING' ? 'CONTRACT_PENDING' : undefined,
+            orderId:
+              item?.orderId != null && Number.isFinite(Number(item.orderId))
+                ? Number(item.orderId)
+                : item?.orderId === null
+                  ? null
+                  : undefined,
+            orderCode: item?.orderCode != null ? String(item.orderCode) : item?.orderCode === null ? null : undefined,
+            receiptId: item?.receiptId != null ? String(item.receiptId) : item?.receiptId === null ? null : undefined,
+            branchId:
+              item?.branchId != null && Number.isFinite(Number(item.branchId))
+                ? Number(item.branchId)
+                : item?.branchId === null
+                  ? null
+                  : undefined,
+            branchName: branchName || null,
+            commercialTransactionId:
+              item?.commercialTransactionId != null && Number.isFinite(Number(item.commercialTransactionId))
+                ? Number(item.commercialTransactionId)
+                : item?.commercialTransactionId === null
+                  ? null
+                  : undefined,
+          } satisfies Transaction;
+        })
       : [],
     rewards: profile?.rewards ?? [],
     redeemedRewards: profile?.redeemedRewards ?? [],
     cartCount,
     refresh,
-    syncCartCount: (count: number) => {
-      setCartCount(Math.max(0, Math.floor(Number(count) || 0)));
-    },
+    syncCartCount,
     logout,
     redeemReward,
-  }), [profile?.balance, language, loading, cartCount, profile, isAuthenticated]);
+  }), [profile, language, loading, cartCount, isAuthenticated, refresh, setLanguage, syncCartCount, logout, redeemReward]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

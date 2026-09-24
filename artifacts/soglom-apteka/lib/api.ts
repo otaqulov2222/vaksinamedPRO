@@ -93,6 +93,16 @@ export const api = {
   updateProfile: (body: { firstName?: string; lastName?: string; language?: string }) =>
     request<any>('/api/loyalty/profile', { method: 'PATCH', body: JSON.stringify(body) }),
   posCard: () => request<any>('/api/pos/card'),
+  /** SoT cashback history (source-aware). Auth = session customer only. */
+  cashbackHistory: (opts?: { limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.limit != null) params.set('limit', String(opts.limit));
+    if (opts?.offset != null) params.set('offset', String(opts.offset));
+    const q = params.toString();
+    return request<{ items: any[]; limit: number; offset: number }>(
+      `/api/loyalty/cashback-history${q ? `?${q}` : ''}`,
+    );
+  },
   cashbackRules: () => request<any>('/api/cashback/rules', {}, false),
   setLanguage: (language: string) => request<any>('/api/loyalty/profile', { method: 'PATCH', body: JSON.stringify({ language }) }),
   redeem: (rewardId: string) => request<any>('/api/loyalty/redeem', { method: 'POST', body: JSON.stringify({ rewardId }) }),

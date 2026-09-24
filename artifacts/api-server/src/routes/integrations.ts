@@ -5,7 +5,7 @@ import { publicCashbackRules } from "../lib/cashback";
 import { getMaxSpendRatio } from "../lib/cashbackFinance";
 import { db, orders, staffRatings } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { requireCustomer } from "../lib/auth";
+import { requireAdmin, requireCustomer } from "../lib/auth";
 import { assertFomWebhookAuthorized } from "../lib/securityEnv";
 
 const router = Router();
@@ -81,14 +81,27 @@ router.post("/integrations/fom/sale", async (req, res, next) => {
   }
 });
 
-router.get("/integrations/fom/status", async (_req, res, next) => {
+router.get("/integrations/fom/status", async (req, res, next) => {
   try {
+    // Admin-authenticated only — do not expose integration topology anonymously.
+    await requireAdmin(req);
+
     const ratio = await getMaxSpendRatio();
     const rules = publicCashbackRules(ratio);
     res.json({
       provider: "F-Apteka / DMED / F-Kassa",
-      ready: true,
+      /** Honest: bridge exists; FOM_POS external receipt contract is NOT ready. */
+      ready: false,
       mode: "bridge",
+      status: "CONTRACT_PENDING",
+      inventoryWriter: "OFF",
+      fomInventoryWriterEnabled: false,
+      fomPosContract: "CONTRACT_PENDING",
+      commercialIdentity: {
+        confirmPos: "ORDER",
+        sourceKeyPattern: "order:{orders.id}",
+        note: "Do not invent FOM_POS receipt IDs until vendor contract is stable",
+      },
       auth: "x-fom-secret or Bearer FOM_WEBHOOK_SECRET (required in production)",
       role: {
         fom: "Skan, narx, ombor, Click/Payme/naqd, chek",
@@ -104,8 +117,7 @@ router.get("/integrations/fom/status", async (_req, res, next) => {
       },
       cashback: rules,
       openDependency: "FOM vendor receipt identity beyond receiptId/orderCode aliases is not invented",
-      inventoryWriter: "DISABLED",
-      fomInventoryWriterEnabled: false,
+      note: "Inventory writer DISABLED. FOM_POS CONTRACT_PENDING. confirm-pos maps to ORDER commercial identity.",
     });
   } catch (error) {
     next(error);

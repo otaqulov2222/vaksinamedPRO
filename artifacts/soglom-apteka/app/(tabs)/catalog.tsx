@@ -21,9 +21,11 @@ import { api } from '@/lib/api';
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F5F4FA';
+const BG = '#F3F1F7';
 const CARD = '#FFFFFF';
-const CAT_BG = '#EDE8F8';
+const BORDER = '#E9E6F0';
+const LAVENDER = '#F1EBFF';
+const CAT_BG = '#F1EBFF';
 const YELLOW = '#FFCC00';
 const BAD_RED = '#B91C1C';
 
@@ -77,7 +79,7 @@ function stockPresentation(
   hasBranch: boolean,
 ): { text: string; tone: 'ok' | 'bad' | 'neutral'; canAdd: boolean } {
   if (!hasBranch) {
-    return { text: 'Filial tanlanmagan — qoldiq ko‘rsatilmaydi', tone: 'neutral', canAdd: true };
+    return { text: 'Filial tanlanmagan', tone: 'neutral', canAdd: true };
   }
   if (!item.availabilityKnown) {
     return { text: 'Mavjudlik tekshirilmoqda', tone: 'neutral', canAdd: true };
@@ -148,9 +150,10 @@ function ProductCard({
                 stock.tone === 'ok' && styles.stockOk,
                 stock.tone === 'bad' && styles.stockBad,
               ]}
-              numberOfLines={1}
+              numberOfLines={2}
             >
               {stock.text}
+              {!hasBranch ? '\nQoldiq filial tanlangandan keyin aniqlanadi.' : ''}
             </Text>
           </View>
         </Pressable>
@@ -223,9 +226,10 @@ function ProductCard({
               stock.tone === 'ok' && styles.stockOk,
               stock.tone === 'bad' && styles.stockBad,
             ]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {stock.text}
+            {!hasBranch ? '\nQoldiq filial tanlangandan keyin aniqlanadi.' : ''}
           </Text>
         </View>
       </Pressable>
@@ -622,7 +626,11 @@ export default function CatalogScreen() {
               Kerakli dori — bir zumda
             </Text>
           </View>
-          <Pressable style={styles.iconBtn} onPress={() => router.push('/cart')} accessibilityLabel="Savat">
+          <Pressable
+            style={styles.iconBtn}
+            onPress={() => router.push('/cart')}
+            accessibilityLabel={cartCount > 0 ? `Savat, ${cartCount} ta tur` : 'Savat'}
+          >
             <Feather name="shopping-cart" size={18} color={PURPLE_DEEP} />
             {cartCount > 0 ? (
               <View style={styles.cartBadge}>
@@ -792,7 +800,7 @@ export default function CatalogScreen() {
             <Text style={styles.branchHint}>
               {hasBranch
                 ? `Mavjudlik savat filialiga bog‘langan · jami: ${total}`
-                : 'Filial tanlanmagan — qoldiqni ko‘rish uchun filialni tanlang (savat yoki mahsulot sahifasidan)'}
+                : 'Filial tanlanmagan. Qoldiq filial tanlangandan keyin aniqlanadi.'}
             </Text>
             {products.map((p) => (
               <View
@@ -878,7 +886,7 @@ const styles = StyleSheet.create({
   subtitle: {
     marginTop: 2,
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
+    fontSize: 13,
     color: MUTED,
     includeFontPadding: false,
   },
@@ -898,7 +906,7 @@ const styles = StyleSheet.create({
   },
   cartBadgeText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 10,
+    fontSize: 11,
     color: PURPLE_DEEP,
     includeFontPadding: false,
   },
@@ -1043,15 +1051,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E8E4F2',
+    borderColor: BORDER,
   },
   viewBtnActive: { backgroundColor: PURPLE, borderColor: PURPLE },
 
   branchHint: {
     width: '100%',
     color: MUTED,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12,
+    lineHeight: 17,
     marginBottom: 8,
     fontFamily: 'Inter_400Regular',
   },
@@ -1193,16 +1201,16 @@ const styles = StyleSheet.create({
   },
   cardName: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 19,
     color: PURPLE_DEEP,
-    minHeight: 36,
+    minHeight: 38,
     includeFontPadding: false,
   },
   cardNameList: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 19,
+    fontSize: 15,
+    lineHeight: 20,
     color: PURPLE_DEEP,
     flex: 1,
     minWidth: 0,
@@ -1220,9 +1228,8 @@ const styles = StyleSheet.create({
   stockText: {
     marginTop: 6,
     fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    lineHeight: 14,
-    height: 14,
+    fontSize: 12,
+    lineHeight: 16,
     color: MUTED,
     includeFontPadding: false,
   },
@@ -1248,8 +1255,8 @@ const styles = StyleSheet.create({
   priceCol: { flex: 1, minWidth: 0, paddingRight: 4 },
   cardPrice: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-    lineHeight: 19,
+    fontSize: 16,
+    lineHeight: 20,
     color: PURPLE,
     includeFontPadding: false,
   },

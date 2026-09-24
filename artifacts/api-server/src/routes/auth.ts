@@ -11,10 +11,13 @@ import { rateLimit } from "../lib/rateLimit";
 import { loyaltyCardNumber, publicQrCode } from "../lib/pos";
 import { revokeSessionFromToken } from "../lib/sessions";
 import { recordAuthEvent } from "../lib/authEvents";
+import { getAuthoritativeBalance } from "../lib/cashbackFinance";
 
 const router = Router();
 
-function publicCustomer(user: typeof customers.$inferSelect) {
+async function publicCustomer(user: typeof customers.$inferSelect) {
+  // Authoritative spendable cashback — not customers.balance mirror alone.
+  const balance = await getAuthoritativeBalance(user.id);
   return {
     id: user.id,
     firstName: user.firstName,
@@ -22,7 +25,7 @@ function publicCustomer(user: typeof customers.$inferSelect) {
     phone: user.phone,
     language: user.language,
     tier: user.tier,
-    balance: user.balance,
+    balance,
     purchasesCount: user.purchasesCount,
     totalPurchases: user.totalPurchases,
     savedAmount: user.savedAmount,
@@ -47,7 +50,7 @@ router.post("/auth/register", authLimiter, async (req, res, next) => {
   try {
     const { phone, password, firstName, lastName } = req.body || {};
     const result = await registerCustomer({ phone, password, firstName, lastName }, req);
-    res.status(201).json({ token: result.token, customer: publicCustomer(result.user) });
+    res.status(201).json({ token: result.token, customer: await publicCustomer(result.user) });
   } catch (error) {
     next(error);
   }
@@ -57,7 +60,7 @@ router.post("/auth/login", authLimiter, async (req, res, next) => {
   try {
     const { phone, password } = req.body || {};
     const result = await loginCustomer(phone, password, req);
-    res.json({ token: result.token, customer: publicCustomer(result.user) });
+    res.json({ token: result.token, customer: await publicCustomer(result.user) });
   } catch (error) {
     next(error);
   }
@@ -87,7 +90,7 @@ router.post("/auth/otp/verify", authLimiter, async (req, res, next) => {
       firstName: req.body?.firstName,
       password: req.body?.password,
     }, req);
-    res.json({ token: result.token, customer: publicCustomer(result.user) });
+    res.json({ token: result.token, customer: await publicCustomer(result.user) });
   } catch (error) {
     next(error);
   }
@@ -96,7 +99,7 @@ router.post("/auth/otp/verify", authLimiter, async (req, res, next) => {
 router.get("/auth/me", async (req, res, next) => {
   try {
     const user = await requireCustomer(req);
-    res.json({ customer: publicCustomer(user) });
+    res.json({ customer: await publicCustomer(user) });
   } catch (error) {
     next(error);
   }

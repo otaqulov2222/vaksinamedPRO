@@ -29,6 +29,15 @@ export function allowOtpDevBypass(): boolean {
   return flagEnabled("ALLOW_OTP_DEV_BYPASS");
 }
 
+/**
+ * Demo / Firdavs welcome cashback and similar fixtures — never production/staging.
+ * Development/test may still use intentional demo paths.
+ */
+export function allowDemoCashbackSeed(): boolean {
+  if (isProductionLike()) return false;
+  return true;
+}
+
 /** Return plaintext OTP as `devCode` in API — never production-like; requires explicit flag. */
 export function allowOtpDevCodeInResponse(): boolean {
   if (isProductionLike()) return false;
@@ -143,6 +152,50 @@ export function publicAdminCustomer<T extends Record<string, unknown>>(row: T) {
     password_hash?: unknown;
   };
   return rest;
+}
+
+/**
+ * Admin customer list DTO — least privilege.
+ * Full phone omitted; cashbackBalance is SoT (cashback_accounts), not customers.balance.
+ */
+export function maskAdminPhone(phone: string): string {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length < 9) return "***";
+  const local = digits.startsWith("998") ? digits.slice(3) : digits;
+  if (local.length < 9) return "+998 *** ** **";
+  // +998 90 *** ** 45 style (same spirit as POS maskPhone)
+  return `+998 ${local.slice(0, 2)} *** ** ${local.slice(-2)}`;
+}
+
+export type AdminCustomerListItem = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  phoneMasked: string;
+  tier: string;
+  purchasesCount: number;
+  /** Authoritative spendable cashback (cashback_accounts). */
+  cashbackBalance: number;
+};
+
+export function toAdminCustomerListItem(input: {
+  id: number;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  tier: string;
+  purchasesCount: number;
+  cashbackBalance: number | null | undefined;
+}): AdminCustomerListItem {
+  return {
+    id: input.id,
+    firstName: input.firstName || "",
+    lastName: input.lastName || "",
+    phoneMasked: maskAdminPhone(input.phone),
+    tier: input.tier || "Silver",
+    purchasesCount: Number(input.purchasesCount) || 0,
+    cashbackBalance: Math.max(0, Math.floor(Number(input.cashbackBalance) || 0)),
+  };
 }
 
 export function maskBranchSecrets<T extends Record<string, unknown>>(branch: T) {

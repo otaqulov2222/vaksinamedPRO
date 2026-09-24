@@ -149,7 +149,7 @@ export function earnTriggerLabel(trigger: EarnTrigger) {
 export function publicCashbackRules(maxSpendRatio: number = DEFAULT_MAX_SPEND_RATIO) {
   const ratio = normalizeSpendRatio(maxSpendRatio);
   return {
-    title: "Vaksina Med Cashback qoidalari",
+    title: "Vaksina Med — Universal Cashback",
     ttlDays: CASHBACK_TTL_DAYS,
     minPurchase: MIN_PURCHASE_UZS,
     maxSpendRatio: ratio,
@@ -161,15 +161,16 @@ export function publicCashbackRules(maxSpendRatio: number = DEFAULT_MAX_SPEND_RA
       { tier: "Platinum", rate: "7%", fromTotal: 5_000_000 },
     ],
     earnWhen: [
-      "Dorixonada (FOM): QR ko‘rsatib xarid — chek yopilishi bilan",
-      "Ilovadan bron: filialda olib ketish + to‘lovdan keyin FOM tasdiq",
-      "Yetkazib berish: buyurtma yetkazilganda",
+      "Yakunlangan xaridlar (tijorat tranzaksiyasi) — to‘lov usuli emas, yakunlanish muhim",
+      "Dorixona kassasi (POS/FOM): QR bilan xarid tasdiqlanganda",
+      "Ilova buyurtmasi: fulfillment COMPLETED (PAID o‘zi earn bermaydi)",
     ],
     spendWhen: [
-      "Ilovada buyurtma berishda (balansdan, max 30% tovar summasidan)",
-      "Kassada QR skanlanganda (FOM / Kassa POS)",
+      "Ilovada rasmiylashtirishda (max foiz — server; yetkazish haqidan emas)",
+      "Kassada QR skanlanganda (POS)",
     ],
-    note: "FOM — dorixona kassasi (skaner, ombor, Click/Payme/naqd). Ilova loyalty va onlayn bron/yetkazish uchun. Mijoz balansi/limit/earn server tomonidan hisoblanadi.",
+    note:
+      "Bitta mijoz — bitta cashback balansi. Kanal (ilova / kassa / tizim) faqat manba o‘lchovi. Balans va limit serverda.",
     fom: {
       saleEndpoint: "POST /api/integrations/fom/sale",
       fields: {

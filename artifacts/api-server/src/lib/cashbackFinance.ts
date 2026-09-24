@@ -1,16 +1,27 @@
 /**
- * P6.3–P6.4 — single authoritative cashback financial writer.
+ * UNIVERSAL CASHBACK 2.0 — single authoritative cashback financial writer.
+ *
+ * Architecture (LOCKED — see docs/UNIVERSAL_CASHBACK_2_0_ARCHITECTURE_LOCK.md):
+ *
+ *   CUSTOMER → COMMERCIAL TRANSACTION → ENGINE (EARN|USE|REVERSAL)
+ *            → CASHBACK LEDGER → cashback_accounts BALANCE → UI / TIER
+ *
  * SoT: cashback_accounts + cashback_ledger (+ commercial_transactions).
  * customers.balance is mirrored for compatibility only — never independent SoT.
  *
- * Commercial identity (P6.4):
- * - App order: sourceType ORDER, sourceKey `order:{orders.id}` (also used by FOM confirm-pos → completeOrderCashback).
- * - POS walk-in: sourceType POS, sourceKey `receipt:{receiptId}` (existing repo field).
- * - FOM_POS reserved for future walk-in with a real external receipt identity.
+ * Commercial identity (channel ≠ balance):
+ * - ORDER:   sourceKey `order:{orders.id}` — app checkout; FOM confirm-pos earn uses SAME key.
+ * - POS:     sourceKey `receipt:{receiptId}` — walk-in kassa.
+ * - FOM_POS: reserved until stable external receipt identity exists (do not invent).
+ * - SYSTEM:  registration / system grants — not a fake commercial sale.
+ *
+ * Payment method is NOT a cashback partition. PAID alone does NOT earn.
  *
  * OPEN dependency (not invented): stable FOM vendor payload field for external receipt ID
  * beyond current bridge aliases (`receiptId` / orderCode). Until guaranteed, FOM order-linked
  * earn must continue resolving through ORDER commercial identity — never a fabricated second key.
+ *
+ * OPEN (Q3): exact FOM pickup earn moment — do not guess.
  */
 
 import { and, eq, sql } from "drizzle-orm";
@@ -27,6 +38,7 @@ import {
   type CommercialTransaction,
 } from "@workspace/db";
 import { clampCashbackSpend, DEFAULT_MAX_SPEND_RATIO, normalizeSpendRatio } from "./cashback";
+import { emitAlert, ALERT } from "./alerts";
 
 type DbLike = typeof db;
 
@@ -286,9 +298,22 @@ export async function earnCashback(
         )
         .limit(1);
       if (raced[0]) {
+        emitAlert(ALERT.CASHBACK_DUPLICATE_EARN_ATTEMPT, {
+          customerId: input.customerId,
+          commercialTransactionId: commercial.id,
+          ledgerEntryId: raced[0].id,
+          operation: "EARN",
+          source: "unique_race",
+        });
         const again = await lockAccount(tx, account.id);
         return { account: again, entry: raced[0], commercial, idempotent: true };
       }
+      emitAlert(ALERT.CASHBACK_OPERATION_FAILURE, {
+        customerId: input.customerId,
+        commercialTransactionId: commercial.id,
+        operation: "EARN",
+        reason: "unique_violation_without_row",
+      });
       throw error;
     }
 
@@ -401,6 +426,13 @@ export async function useCashback(
     }
 
     if (locked.balance < amount) {
+      emitAlert(ALERT.CASHBACK_NEGATIVE_BALANCE_ATTEMPT, {
+        customerId: input.customerId,
+        commercialTransactionId: commercial.id,
+        operation: "USE",
+        requested: amount,
+        balance: locked.balance,
+      });
       throw badRequest("Cashback balansi yetarli emas", 400, "INSUFFICIENT_CASHBACK");
     }
     const nextBalance = locked.balance - amount;
@@ -441,9 +473,22 @@ export async function useCashback(
         )
         .limit(1);
       if (raced[0]) {
+        emitAlert(ALERT.CASHBACK_OPERATION_FAILURE, {
+          customerId: input.customerId,
+          commercialTransactionId: commercial.id,
+          ledgerEntryId: raced[0].id,
+          operation: "USE",
+          source: "unique_race",
+        });
         const again = await lockAccount(tx, account.id);
         return { account: again, entry: raced[0], commercial, idempotent: true };
       }
+      emitAlert(ALERT.CASHBACK_OPERATION_FAILURE, {
+        customerId: input.customerId,
+        commercialTransactionId: commercial.id,
+        operation: "USE",
+        reason: "unique_violation_without_row",
+      });
       throw error;
     }
 
@@ -483,6 +528,14 @@ export async function reverseCashbackEntry(
       )
       .limit(1);
     if (existing[0]) {
+      emitAlert(ALERT.CASHBACK_DUPLICATE_REVERSAL_ATTEMPT, {
+        customerId: original.customerId,
+        commercialTransactionId: original.commercialTransactionId,
+        ledgerEntryId: existing[0].id,
+        reversesEntryId: entryId,
+        operation: "REVERSAL",
+        source: "idempotent_existing",
+      });
       const account = await lockAccount(tx, original.accountId);
       return { account, entry: existing[0], idempotent: true };
     }
@@ -502,6 +555,14 @@ export async function reverseCashbackEntry(
     if (original.entryType === "EARN" || original.entryType === "ADJUSTMENT") {
       if (locked.balance < reverseAmount) {
         // Q5 OPEN: debt / block / clawback — refuse unsafe negative rather than invent policy
+        emitAlert(ALERT.CASHBACK_NEGATIVE_BALANCE_ATTEMPT, {
+          customerId: original.customerId,
+          commercialTransactionId: original.commercialTransactionId,
+          ledgerEntryId: original.id,
+          operation: "REVERSAL",
+          requested: reverseAmount,
+          balance: locked.balance,
+        });
         throw badRequest("Reverse uchun balans yetarli emas", 409, "INSUFFICIENT_FOR_REVERSAL");
       }
       nextBalance = locked.balance - reverseAmount;
@@ -542,9 +603,24 @@ export async function reverseCashbackEntry(
         )
         .limit(1);
       if (raced[0]) {
+        emitAlert(ALERT.CASHBACK_DUPLICATE_REVERSAL_ATTEMPT, {
+          customerId: original.customerId,
+          commercialTransactionId: original.commercialTransactionId,
+          ledgerEntryId: raced[0].id,
+          reversesEntryId: entryId,
+          operation: "REVERSAL",
+          source: "unique_race",
+        });
         const again = await lockAccount(tx, original.accountId);
         return { account: again, entry: raced[0], idempotent: true };
       }
+      emitAlert(ALERT.CASHBACK_OPERATION_FAILURE, {
+        customerId: original.customerId,
+        commercialTransactionId: original.commercialTransactionId,
+        reversesEntryId: entryId,
+        operation: "REVERSAL",
+        reason: "unique_violation_without_row",
+      });
       throw error;
     }
 

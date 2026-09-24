@@ -29,14 +29,20 @@ const saleLimiter = rateLimit({
   key: (req) => `pos-sale:${req.ip}`,
 });
 
+const cardLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  key: (req) => `pos-card:${req.ip}`,
+});
+
 /** Mijoz: yangilanadigan imzolangan QR */
-router.get("/pos/card", async (req, res, next) => {
+router.get("/pos/card", cardLimiter, async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
     const card = await issueCustomerPosCard(customer.id);
     return res.json({
       ...card,
-      instructions: "Kassada QR kodni skaner qiling. Kod har 90 soniyada yangilanadi.",
+      instructions: "Kassada dinamik QR kodni skaner qiling. Kod taxminan 90 soniyada yangilanadi.",
     });
   } catch (error) {
     return next(error);

@@ -1,10 +1,23 @@
 import { Router } from "express";
-import { and, count, desc, eq, gte, ilike, lt, or, type SQL } from "drizzle-orm";
-import { auditLog, branches, customers, db, orders, payments, productStocks, products, promos, rewards, staffRatings } from "@workspace/db";
+import { and, count, desc, eq, gte, ilike, lt, or, sql, type SQL } from "drizzle-orm";
+import {
+  auditLog,
+  branches,
+  cashbackAccounts,
+  customers,
+  db,
+  orders,
+  payments,
+  productStocks,
+  products,
+  promos,
+  rewards,
+  staffRatings,
+} from "@workspace/db";
 import { loginAdmin, requireAdmin } from "../lib/auth";
 import { serializeOrder } from "./orders";
 import { rateLimit } from "../lib/rateLimit";
-import { publicAdminCustomer } from "../lib/securityEnv";
+import { toAdminCustomerListItem } from "../lib/securityEnv";
 import { toAdminBranchPaymentDto } from "../lib/branchPaymentMerchant";
 import { adminHasPermission, assertBranchScope, requirePermission, resolveStaffBranchFilter } from "../lib/rbac";
 import { revokeSessionFromToken } from "../lib/sessions";
@@ -23,6 +36,8 @@ const ADMIN_ORDERS_DEFAULT_LIMIT = 25;
 const ADMIN_ORDERS_MAX_LIMIT = 50;
 const ADMIN_AUDIT_DEFAULT_LIMIT = 40;
 const ADMIN_AUDIT_MAX_LIMIT = 100;
+const ADMIN_CUSTOMERS_DEFAULT_LIMIT = 25;
+const ADMIN_CUSTOMERS_MAX_LIMIT = 50;
 
 const adminLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -63,7 +78,12 @@ router.post("/admin/logout", async (req, res, next) => {
 router.get("/admin/me", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
-    return res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role, branchId: user.branchId } });
+    const { getPermissionsForRole } = await import("../lib/rbac");
+    const perms = await getPermissionsForRole(user.role);
+    return res.json({
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, branchId: user.branchId },
+      permissions: Array.from(perms).sort(),
+    });
   } catch (error) {
     return next(error);
   }
@@ -73,25 +93,47 @@ router.get("/admin/dashboard", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
     await requirePermission(user, "dashboard:read");
-    const allOrders = await db.select().from(orders);
-    const allCustomers = await db.select().from(customers);
-    const allBranches = await db.select().from(branches);
-    const completed = allOrders.filter((item) => item.status === "completed");
-    const revenue = completed.reduce((sum, item) => sum + item.total, 0);
-    const reserved = allOrders.filter((item) => item.status === "reserved").length;
-    const delivering = allOrders.filter((item) => ["awaiting_delivery", "paid"].includes(item.status)).length;
+
+    // Bounded aggregates — never load full tables into memory.
+    const [orderKpis] = await db
+      .select({
+        orders: count(),
+        completed: sql<number>`count(*) filter (where ${orders.status} = 'completed')`.mapWith(Number),
+        reserved: sql<number>`count(*) filter (where ${orders.status} = 'reserved')`.mapWith(Number),
+        delivering: sql<number>`count(*) filter (where ${orders.status} in ('awaiting_delivery', 'paid'))`.mapWith(Number),
+        revenue: sql<number>`coalesce(sum(${orders.total}) filter (where ${orders.status} = 'completed'), 0)`.mapWith(Number),
+      })
+      .from(orders);
+
+    const [customerCount] = await db.select({ value: count() }).from(customers);
+    const [branchCount] = await db.select({ value: count() }).from(branches);
+    // Authoritative cashback SoT — not customers.balance mirror.
+    const [cashbackSum] = await db
+      .select({
+        value: sql<number>`coalesce(sum(${cashbackAccounts.balance}), 0)`.mapWith(Number),
+      })
+      .from(cashbackAccounts);
+
+    const recentRows = await db
+      .select()
+      .from(orders)
+      .orderBy(desc(orders.createdAt), desc(orders.id))
+      .limit(8);
+
     return res.json({
       kpis: {
-        revenue,
-        orders: allOrders.length,
-        completed: completed.length,
-        reserved,
-        delivering,
-        customers: allCustomers.length,
-        branches: allBranches.length,
-        cashback: allCustomers.reduce((sum, item) => sum + item.balance, 0),
+        revenue: Number(orderKpis?.revenue || 0),
+        orders: Number(orderKpis?.orders || 0),
+        completed: Number(orderKpis?.completed || 0),
+        reserved: Number(orderKpis?.reserved || 0),
+        delivering: Number(orderKpis?.delivering || 0),
+        customers: Number(customerCount?.value || 0),
+        branches: Number(branchCount?.value || 0),
+        /** Sum of cashback_accounts.balance (SoT), not customers.balance. */
+        cashback: Number(cashbackSum?.value || 0),
+        cashbackSource: "cashback_accounts",
       },
-      recentOrders: await Promise.all(allOrders.slice(-8).reverse().map(serializeOrder)),
+      recentOrders: await Promise.all(recentRows.map(serializeOrder)),
     });
   } catch (error) {
     return next(error);
@@ -152,7 +194,72 @@ router.get("/admin/products", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
     await requirePermission(user, "products:read");
-    return res.json({ products: await db.select().from(products) });
+
+    const requested = req.query.branchId != null ? Number(req.query.branchId) : undefined;
+    // Cashiers forced to own branch; HQ may omit branchId (catalog only, no invented stock).
+    let stockBranchId: number | undefined;
+    try {
+      stockBranchId = resolveStaffBranchFilter(
+        user,
+        Number.isFinite(requested as number) ? (requested as number) : undefined,
+      );
+    } catch (error) {
+      return next(error);
+    }
+
+    const productRows = await db.select().from(products).orderBy(desc(products.id));
+
+    if (stockBranchId == null) {
+      return res.json({
+        products: productRows.map((p) => ({
+          id: p.id,
+          sku: p.sku,
+          nameUz: p.nameUz,
+          nameRu: p.nameRu,
+          category: p.category,
+          price: p.price,
+          requiresPrescription: p.requiresPrescription,
+          stock: null,
+        })),
+        stockBranchId: null,
+        stockAxes: ["physical", "reserved", "available"],
+        note: "Pass branchId to include authoritative product_stocks axes",
+      });
+    }
+
+    const stocks = await db
+      .select()
+      .from(productStocks)
+      .where(eq(productStocks.branchId, stockBranchId));
+    const byProduct = new Map(stocks.map((s) => [s.productId, s]));
+
+    return res.json({
+      products: productRows.map((p) => {
+        const s = byProduct.get(p.id);
+        const physical = s ? Number(s.physicalQuantity) || 0 : 0;
+        const reserved = s ? Number(s.reservedQuantity) || 0 : 0;
+        const available = s?.availableQuantity != null
+          ? Number(s.availableQuantity)
+          : physical - reserved;
+        return {
+          id: p.id,
+          sku: p.sku,
+          nameUz: p.nameUz,
+          nameRu: p.nameRu,
+          category: p.category,
+          price: p.price,
+          requiresPrescription: p.requiresPrescription,
+          stock: {
+            branchId: stockBranchId,
+            physical,
+            reserved,
+            available,
+          },
+        };
+      }),
+      stockBranchId,
+      stockAxes: ["physical", "reserved", "available"],
+    });
   } catch (error) {
     return next(error);
   }
@@ -183,6 +290,16 @@ router.post("/admin/products", async (req, res, next) => {
         quantity: Number(body.quantity) || 10,
       })));
     }
+    try {
+      await db.insert(auditLog).values({
+        actor: user.email,
+        action: "product.create",
+        entity: "product",
+        payload: JSON.stringify({ productId: created[0].id, sku: created[0].sku }),
+      });
+    } catch {
+      // audit must not block create
+    }
     return res.status(201).json({ product: created[0] });
   } catch (error) {
     return next(error);
@@ -205,6 +322,16 @@ router.patch("/admin/products/:id", async (req, res, next) => {
       description: typeof body.description === "string" ? body.description : current.description,
       requiresPrescription: typeof body.requiresPrescription === "boolean" ? body.requiresPrescription : current.requiresPrescription,
     }).where(eq(products.id, id)).returning();
+    try {
+      await db.insert(auditLog).values({
+        actor: user.email,
+        action: "product.update",
+        entity: "product",
+        payload: JSON.stringify({ productId: id }),
+      });
+    } catch {
+      // audit must not block update
+    }
     return res.json({ product: updated[0] });
   } catch (error) {
     return next(error);
@@ -380,8 +507,136 @@ router.get("/admin/customers", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
     await requirePermission(user, "customers:read");
-    const rows = await db.select().from(customers);
-    return res.json({ customers: rows.map((row) => publicAdminCustomer(row as unknown as Record<string, unknown>)) });
+
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0
+      ? Math.min(ADMIN_CUSTOMERS_MAX_LIMIT, Math.floor(limitRaw))
+      : ADMIN_CUSTOMERS_DEFAULT_LIMIT;
+    const offsetRaw = Number(req.query.offset);
+    const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0;
+    const q = sanitizeAdminOrderSearch(typeof req.query.q === "string" ? req.query.q : "");
+
+    const filters: SQL[] = [];
+    if (q) {
+      const pattern = `%${q}%`;
+      filters.push(
+        or(
+          ilike(customers.firstName, pattern),
+          ilike(customers.lastName, pattern),
+          ilike(customers.phone, pattern),
+          ilike(customers.telegramId, pattern),
+        )!,
+      );
+    }
+    const whereClause = filters.length ? and(...filters) : undefined;
+
+    const totalRow = await db.select({ value: count() }).from(customers).where(whereClause);
+    const total = Number(totalRow[0]?.value || 0);
+
+    const rows = await db
+      .select({
+        id: customers.id,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
+        phone: customers.phone,
+        tier: customers.tier,
+        purchasesCount: customers.purchasesCount,
+        cashbackBalance: cashbackAccounts.balance,
+      })
+      .from(customers)
+      .leftJoin(cashbackAccounts, eq(cashbackAccounts.customerId, customers.id))
+      .where(whereClause)
+      .orderBy(desc(customers.id))
+      .limit(limit)
+      .offset(offset);
+
+    const list = rows.map((row) =>
+      toAdminCustomerListItem({
+        id: row.id,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        phone: row.phone,
+        tier: row.tier,
+        purchasesCount: row.purchasesCount,
+        cashbackBalance: row.cashbackBalance,
+      }),
+    );
+
+    const hasMore = offset + rows.length < total;
+    return res.json({
+      customers: list,
+      total,
+      hasMore,
+      pagination: { limit, offset, total, hasMore },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/** Read-only customer detail — cashback from SoT, not customers.balance. */
+router.get("/admin/customers/:id", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "customers:read");
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(404).json({ message: "Mijoz topilmadi", code: "CUSTOMER_NOT_FOUND" });
+    }
+    const row = (await db.select().from(customers).where(eq(customers.id, id)).limit(1))[0];
+    if (!row) return res.status(404).json({ message: "Mijoz topilmadi", code: "CUSTOMER_NOT_FOUND" });
+    const [acct] = await db
+      .select({ balance: cashbackAccounts.balance })
+      .from(cashbackAccounts)
+      .where(eq(cashbackAccounts.customerId, id))
+      .limit(1);
+    const listItem = toAdminCustomerListItem({
+      id: row.id,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      phone: row.phone,
+      tier: row.tier,
+      purchasesCount: row.purchasesCount,
+      cashbackBalance: acct?.balance ?? 0,
+    });
+    return res.json({
+      customer: {
+        ...listItem,
+        language: row.language,
+        totalPurchases: row.totalPurchases,
+        savedAmount: row.savedAmount,
+        createdAt: row.createdAt,
+        cashbackSource: "cashback_accounts",
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/** Read-only cashback history via existing SoT projection (no engine change). */
+router.get("/admin/customers/:id/cashback-history", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "customers:read");
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(404).json({ message: "Mijoz topilmadi", code: "CUSTOMER_NOT_FOUND" });
+    }
+    const exists = (await db.select({ id: customers.id }).from(customers).where(eq(customers.id, id)).limit(1))[0];
+    if (!exists) return res.status(404).json({ message: "Mijoz topilmadi", code: "CUSTOMER_NOT_FOUND" });
+    const { getCustomerCashbackHistory } = await import("../lib/cashbackHistory");
+    const limitRaw = Number(req.query.limit);
+    const offsetRaw = Number(req.query.offset);
+    const page = await getCustomerCashbackHistory(id, {
+      limit: Number.isFinite(limitRaw) ? limitRaw : 40,
+      offset: Number.isFinite(offsetRaw) ? offsetRaw : 0,
+    });
+    return res.json({
+      customerId: id,
+      ...page,
+      cashbackSource: "cashback_ledger",
+    });
   } catch (error) {
     return next(error);
   }
@@ -391,7 +646,53 @@ router.get("/admin/ratings", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
     await requirePermission(user, "ratings:read");
-    return res.json({ ratings: await db.select().from(staffRatings).orderBy(desc(staffRatings.createdAt)) });
+
+    const requested = req.query.branchId != null ? Number(req.query.branchId) : undefined;
+    // Never trust client branchId to expand access — cashiers forced to own branch.
+    const branchFilter = resolveStaffBranchFilter(
+      user,
+      Number.isFinite(requested as number) ? (requested as number) : undefined,
+    );
+
+    const filters: SQL[] = [];
+    if (branchFilter != null) {
+      filters.push(eq(staffRatings.branchId, branchFilter));
+    }
+    const whereClause = filters.length ? and(...filters) : undefined;
+
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0
+      ? Math.min(100, Math.floor(limitRaw))
+      : 50;
+    const offsetRaw = Number(req.query.offset);
+    const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0;
+
+    const totalRow = await db.select({ value: count() }).from(staffRatings).where(whereClause);
+    const total = Number(totalRow[0]?.value || 0);
+    const rows = await db
+      .select({
+        id: staffRatings.id,
+        branchId: staffRatings.branchId,
+        orderId: staffRatings.orderId,
+        employeeName: staffRatings.employeeName,
+        rating: staffRatings.rating,
+        comment: staffRatings.comment,
+        createdAt: staffRatings.createdAt,
+      })
+      .from(staffRatings)
+      .where(whereClause)
+      .orderBy(desc(staffRatings.createdAt), desc(staffRatings.id))
+      .limit(limit)
+      .offset(offset);
+
+    // Omit customerId from list DTO (least privilege); detail not exposed here.
+    return res.json({
+      ratings: rows,
+      total,
+      hasMore: offset + rows.length < total,
+      branchFilter: branchFilter ?? null,
+      pagination: { limit, offset, total },
+    });
   } catch (error) {
     return next(error);
   }

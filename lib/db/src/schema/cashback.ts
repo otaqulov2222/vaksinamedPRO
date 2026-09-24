@@ -1,9 +1,12 @@
 import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
- * P6.1 cashback financial foundation.
+ * UNIVERSAL CASHBACK 2.0 financial foundation (LOCKED).
  * SoT: cashback_accounts + cashback_ledger.
+ * commercial_transactions = channel-agnostic commercial identity (ORDER | POS | …).
  * customers.balance is legacy mirror only.
+ *
+ * @see docs/UNIVERSAL_CASHBACK_2_0_ARCHITECTURE_LOCK.md
  */
 
 export const commercialTransactions = pgTable("commercial_transactions", {

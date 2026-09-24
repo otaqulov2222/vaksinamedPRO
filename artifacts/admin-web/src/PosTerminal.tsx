@@ -8,6 +8,10 @@ type Props = {
   money: (n: number) => string;
 };
 
+/**
+ * POS cashback UX — server remains authoritative.
+ * Slider max MUST come from preview.maxSpend (engine clamp), never min(balance, amount).
+ */
 export function PosTerminal({ token, branches, defaultBranchId, request, money }: Props) {
   const scanRef = useRef<HTMLInputElement>(null);
   const [qr, setQr] = useState("");
@@ -43,7 +47,13 @@ export function PosTerminal({ token, branches, defaultBranchId, request, money }
         body: JSON.stringify({ qr, amount: Number(amount), cashbackToUse }),
       })
         .then((data) => {
-          setPreview(data.preview);
+          const next = data.preview;
+          setPreview(next);
+          // Clamp requested USE to server maxSpend (never imply > policy).
+          const serverMax = Math.max(0, Math.floor(Number(next?.maxSpend) || 0));
+          if (cashbackToUse > serverMax) {
+            setCashbackToUse(serverMax);
+          }
           setError("");
         })
         .catch((err) => setError(err instanceof Error ? err.message : "Hisob xatosi"));
@@ -134,10 +144,19 @@ export function PosTerminal({ token, branches, defaultBranchId, request, money }
     scanRef.current?.focus();
   }
 
+  /** Authoritative ceiling from preview only — never invent min(balance, amount). */
   const maxSpend = useMemo(() => {
-    if (!customer || !amount) return 0;
-    return Math.min(customer.balance, Math.floor(Number(amount) || 0));
-  }, [customer, amount]);
+    if (!preview) return 0;
+    return Math.max(0, Math.floor(Number(preview.maxSpend) || 0));
+  }, [preview]);
+
+  const maxSpendPercent = useMemo(() => {
+    const ratio = Number(preview?.maxSpendRatio);
+    if (!Number.isFinite(ratio) || ratio <= 0) return null;
+    return Math.round(ratio * 100);
+  }, [preview]);
+
+  const spendLabel = maxSpendPercent != null ? `Maks ${maxSpendPercent}%` : "Maks (server)";
 
   return (
     <div className="pos-shell">
@@ -231,8 +250,13 @@ export function PosTerminal({ token, branches, defaultBranchId, request, money }
 
           <div className="pos-spend">
             <div className="pos-spend-head">
-              <span>Cashback ishlatish</span>
-              <b>{money(cashbackToUse)}</b>
+              <span>
+                Cashback ishlatish
+                {maxSpendPercent != null ? (
+                  <span className="muted"> · {spendLabel}</span>
+                ) : null}
+              </span>
+              <b>{money(Math.min(cashbackToUse, maxSpend))}</b>
             </div>
             <input
               type="range"
@@ -240,14 +264,25 @@ export function PosTerminal({ token, branches, defaultBranchId, request, money }
               max={maxSpend || 0}
               step={1000}
               value={Math.min(cashbackToUse, maxSpend)}
-              disabled={!customer || maxSpend <= 0}
+              disabled={!customer || !preview || maxSpend <= 0}
               onChange={(e) => setCashbackToUse(Number(e.target.value))}
             />
             <div className="pos-spend-actions">
               <button type="button" className="ghost" disabled={!customer} onClick={() => setCashbackToUse(0)}>0</button>
-              <button type="button" className="ghost" disabled={!customer || maxSpend <= 0} onClick={() => setCashbackToUse(Math.floor(maxSpend / 2))}>50%</button>
-              <button type="button" className="ghost" disabled={!customer || maxSpend <= 0} onClick={() => setCashbackToUse(maxSpend)}>Maks</button>
+              <button
+                type="button"
+                className="ghost"
+                disabled={!customer || !preview || maxSpend <= 0}
+                onClick={() => setCashbackToUse(maxSpend)}
+              >
+                {spendLabel}
+              </button>
             </div>
+            {preview && maxSpendPercent != null ? (
+              <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                Ruxsat etilgan maksimum: {money(maxSpend)} ({spendLabel}). Yakuniy hisob serverda.
+              </p>
+            ) : null}
           </div>
 
           {preview ? (

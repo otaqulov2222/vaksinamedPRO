@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual, randomInt, createHash } from "node:crypto";
 import type { Request } from "express";
 import { eq, sql } from "drizzle-orm";
-import { adminUsers, customers, db, hashPassword, verifyPassword } from "@workspace/db";
+import { adminUsers, customers, db, hashPassword, verifyPassword, auditLog } from "@workspace/db";
 import { otpSmsText, sendSms } from "./sms";
 import {
   allowLegacyHmacTokens,
@@ -9,6 +9,7 @@ import {
   allowOtpDevCodeInResponse,
   allowTelegramAutoProvision,
   allowTelegramHeaderAuth,
+  allowDemoCashbackSeed,
   isHqAdminRole,
   isProductionLike,
   requireConfiguredSecret,
@@ -133,7 +134,7 @@ export async function requireCustomer(req: Request) {
 
   const inserted = await db.insert(customers).values({
     telegramId,
-    firstName: telegramId === "firdavs" ? "Firdavs" : "Mijoz",
+    firstName: allowDemoCashbackSeed() && telegramId === "firdavs" ? "Firdavs" : "Mijoz",
     lastName: "",
     phone: "+998 90 000 00 00",
     passwordHash: "",
@@ -491,5 +492,15 @@ export async function loginAdmin(email: string, password: string, req?: Request)
     success: true,
     meta: { role: normalized },
   });
+  try {
+    await db.insert(auditLog).values({
+      actor: user.email,
+      action: "admin.login",
+      entity: "admin_user",
+      payload: JSON.stringify({ adminId: user.id, role: normalized }),
+    });
+  } catch {
+    // audit must not block login
+  }
   return { user, token: await issueAdminSession(user.id, req) };
 }

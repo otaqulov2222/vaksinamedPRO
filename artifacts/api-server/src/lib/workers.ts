@@ -39,6 +39,8 @@ export const JOB_TYPES = {
   FOM_RETRY: "fom_retry",
   NOTIFICATION: "notification",
   DELIVERY_PROVIDER_RETRY: "delivery_provider_retry",
+  /** Read-only cashback ledger ↔ account integrity (never mutates money). */
+  CASHBACK_INTEGRITY: "cashback_integrity",
 } as const;
 
 export function isBackgroundWorkersEnabled(): boolean {
@@ -217,6 +219,10 @@ export async function processWorkerJob(job: typeof workerJobs.$inferSelect) {
       return runFomRetry(payload);
     case JOB_TYPES.DELIVERY_PROVIDER_RETRY:
       return runDeliveryProviderRetry(payload);
+    case JOB_TYPES.CASHBACK_INTEGRITY: {
+      const { runCashbackIntegrityCheck } = await import("./cashbackIntegrity");
+      return runCashbackIntegrityCheck(db, { emitAlerts: true });
+    }
     default:
       throw Object.assign(new Error(`Unknown job type: ${job.jobType}`), { code: "UNKNOWN_JOB_TYPE" });
   }

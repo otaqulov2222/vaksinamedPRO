@@ -55,14 +55,15 @@ describe("Batch 3J HQ branch filter + audit + HTTP IDOR gate", () => {
   });
 
   it("admin UI has HQ branch filter and audit viewer", () => {
-    const ui = readFileSync(path.join(root, "../admin-web/src/App.tsx"), "utf8");
-    assert.match(ui, /isHqRole/);
-    assert.match(ui, /orderBranchId/);
-    assert.match(ui, /branchId/);
-    assert.match(ui, /\["audit", "Audit"\]/);
-    assert.match(ui, /loadAuditPage/);
-    assert.match(ui, /read-only/i);
-    assert.doesNotMatch(ui, /Pul qaytarildi/);
+    const orders = readFileSync(path.join(root, "../admin-web/src/pages/OrdersPage.tsx"), "utf8");
+    const audit = readFileSync(path.join(root, "../admin-web/src/pages/AuditPage.tsx"), "utf8");
+    const nav = readFileSync(path.join(root, "../admin-web/src/nav.ts"), "utf8");
+    assert.match(orders, /isHqRole/);
+    assert.match(orders, /branchId/);
+    assert.match(nav, /id:\s*"audit"/);
+    assert.match(audit, /\/api\/admin\/audit/);
+    assert.match(audit, /read-only|faqat ko‘rish|Read-only/i);
+    assert.doesNotMatch(orders, /Pul qaytarildi/);
   });
 
   it("HTTP IDOR without REAL_POSTGRES_LOAD_TEST is PENDING (not PASS)", () => {

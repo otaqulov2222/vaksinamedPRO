@@ -22,16 +22,20 @@ import { api, API_URL, newIdempotencyKey, type ApiError } from '@/lib/api';
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F5F4FA';
+const BG = '#F3F1F7';
 const CARD = '#FFFFFF';
-const BORDER = '#E8E4F2';
-const LAVENDER = '#F6F2FC';
+const BORDER = '#E9E6F0';
+const LAVENDER = '#F1EBFF';
 const WARN = '#B45309';
 const BAD = '#B91C1C';
 const OK = '#3D7A55';
+const YELLOW = '#FFCC00';
 
 const PRICE_SNAP_KEY = 'vaksinamed-cart-price-snap';
 const FOCUS_FRESH_MS = 400;
+
+/** Honest delivery timing — not an ETA. Sent as optional `window` so server does not store "Bugun 10:00 — 18:00". */
+const DELIVERY_TIMING_HONEST = 'Yetkazib berish vaqti buyurtma tasdiqlangach aniqlanadi';
 
 const priceUz = (n: number) =>
   `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
@@ -301,6 +305,8 @@ export default function CheckoutScreen() {
           paymentMethod,
           address,
           useCashback: Boolean(useCashback && showCashback),
+          // Existing optional field — honest label, not a scheduled ETA/window.
+          ...(fulfillment === 'delivery' ? { window: DELIVERY_TIMING_HONEST } : {}),
         },
         { idempotencyKey: idempotencyRef.current },
       );
@@ -587,11 +593,36 @@ export default function CheckoutScreen() {
             </Text>
           </Pressable>
         </View>
-        {fulfillment === 'delivery' ? (
-          <>
-            <Text style={styles.inlineHint}>
-              Ichki yetkazib berish. Tashqi kuryer shartnomasi hali yo‘q.
-            </Text>
+
+        {fulfillment === 'pickup' ? (
+          <View style={styles.infoCard} accessibilityRole="text">
+            <Feather name="shopping-bag" size={16} color={PURPLE} />
+            <View style={styles.infoBody}>
+              <Text style={styles.infoTitle}>Filialdan olib ketish</Text>
+              <Text style={styles.infoText}>
+                Mahsulotlar tanlangan filialda zaxiralanadi. Kuryer yoki yetkazish yo‘q.
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.deliveryBlock}>
+            <View style={styles.infoCard} accessibilityRole="text">
+              <Feather name="truck" size={16} color={PURPLE} />
+              <View style={styles.infoBody}>
+                <Text style={styles.infoTitle}>Yetkazib berish</Text>
+                <Text style={styles.infoText}>
+                  Ichki yetkazib berish. Tashqi kuryer shartnomasi hali yo‘q — kuzatuv va aniq ETA yo‘q.
+                </Text>
+                <Text style={styles.infoTiming}>{DELIVERY_TIMING_HONEST}</Text>
+                {deliveryFeeKnown ? (
+                  <Text style={styles.infoFee} accessibilityLabel={`Yetkazish narxi ${priceUz(deliveryFee)}`}>
+                    Yetkazish: {priceUz(deliveryFee)}
+                  </Text>
+                ) : (
+                  <Text style={styles.infoFeeWarn}>Yetkazish narxi serverdan yuklanishi kerak.</Text>
+                )}
+              </View>
+            </View>
             <Text style={styles.fieldLabel}>Yetkazib berish manzili</Text>
             <TextInput
               value={address}
@@ -600,12 +631,13 @@ export default function CheckoutScreen() {
               placeholderTextColor={MUTED}
               style={styles.input}
               accessibilityLabel="Yetkazib berish manzili"
+              autoCorrect={false}
             />
-            {!deliveryFeeKnown ? (
-              <Text style={styles.inlineHint}>Yetkazish narxi yuklanmoqda yoki mavjud emas.</Text>
+            {address.trim().length > 0 && address.trim().length < 8 ? (
+              <Text style={styles.inlineHintWarn}>Manzil kamida 8 belgidan iborat bo‘lishi kerak.</Text>
             ) : null}
-          </>
-        ) : null}
+          </View>
+        )}
 
         {/* Cashback */}
         {showCashback ? (
@@ -627,10 +659,10 @@ export default function CheckoutScreen() {
                   </Text>
                   {useCashback && cashbackUsed > 0 ? (
                     <Text style={styles.cashbackPreview}>
-                      Cashback: −{priceUz(cashbackUsed)}
+                      Taxminiy ishlatish: −{priceUz(cashbackUsed)}
                     </Text>
                   ) : useCashback ? (
-                    <Text style={styles.cashbackMeta}>Yakuniy cashback serverda hisoblanadi</Text>
+                    <Text style={styles.cashbackMeta}>Yakuniy ishlatish miqdori serverda</Text>
                   ) : null}
                 </View>
                 <View
@@ -643,9 +675,15 @@ export default function CheckoutScreen() {
               </Pressable>
               {maxSpendPercent != null ? (
                 <Text style={styles.cashbackHint}>
-                  Buyurtmaning ko‘pi bilan {maxSpendPercent}% qismini cashback bilan to‘lashingiz mumkin.
+                  Ko‘pi bilan {maxSpendPercent}% tovar summasidan (server). Yangi cashback to‘lov yoki
+                  PAID da emas — xarid yakunlangach hisoblanadi. Bitta balans — barcha kanallar.
                 </Text>
-              ) : null}
+              ) : (
+                <Text style={styles.cashbackHint}>
+                  Ishlatish shu buyurtmada (server). Yangi cashback faqat xarid yakunlangach. Bitta
+                  balans — ilova va kassa.
+                </Text>
+              )}
             </View>
           </>
         ) : null}
@@ -717,7 +755,8 @@ export default function CheckoutScreen() {
           <View style={styles.summaryDivider} />
           <SummaryRow label="Jami (taxminiy)" value={priceUz(totalPreview)} bold />
           <Text style={styles.summaryNote}>
-            Qiymatlar taxminiy. Yakuniy summa va cashback serverda.
+            Qiymatlar taxminiy. Yakuniy summa serverda. Cashback ishlatish — shu buyurtmada; yangi
+            cashback — xarid yakunlangach (barcha kanallar, bitta balans).
           </Text>
         </View>
 
@@ -999,6 +1038,64 @@ const styles = StyleSheet.create({
     color: MUTED,
     marginBottom: 8,
   },
+  inlineHintWarn: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    color: WARN,
+    marginBottom: 8,
+    marginTop: -4,
+  },
+  deliveryBlock: {
+    marginBottom: 4,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: CARD,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
+  },
+  infoBody: { flex: 1, minWidth: 0 },
+  infoTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
+  },
+  infoText: {
+    marginTop: 4,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: MUTED,
+  },
+  infoTiming: {
+    marginTop: 8,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
+  },
+  infoFee: {
+    marginTop: 6,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: PURPLE,
+  },
+  infoFeeWarn: {
+    marginTop: 6,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    color: WARN,
+  },
   input: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
@@ -1150,8 +1247,8 @@ const styles = StyleSheet.create({
   summaryNote: {
     marginTop: 6,
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 17,
     color: MUTED,
   },
 
@@ -1190,18 +1287,24 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   cta: {
-    minHeight: 50,
-    borderRadius: 16,
+    minHeight: 52,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 3,
+    borderBottomColor: YELLOW,
   },
-  ctaDisabled: { opacity: 0.5 },
+  ctaDisabled: {
+    opacity: 0.5,
+    borderBottomColor: 'transparent',
+  },
   ctaText: {
     color: '#fff',
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    fontSize: 16,
+    letterSpacing: 0.2,
   },
 
   state: {

@@ -183,12 +183,20 @@ export default function BranchMap({
       setTimeout(() => map.invalidateSize(), 100);
     }
 
+    // Container must exist before Leaflet boots. Retry briefly if first paint raced.
     void boot();
+    const retry = setTimeout(() => {
+      if (!cancelled && !mapRef.current) void boot();
+    }, 120);
+
     return () => {
       cancelled = true;
+      clearTimeout(retry);
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
+        layerRef.current = null;
+        routeRef.current = null;
       }
     };
   }, []);
@@ -213,7 +221,7 @@ export default function BranchMap({
     const map = mapRef.current;
     if (!map) return;
     setTimeout(() => map.invalidateSize(), 80);
-  }, [height]);
+  }, [height, mappable.length]);
 
   useEffect(() => {
     async function syncMarkers() {
@@ -254,6 +262,10 @@ export default function BranchMap({
         markersRef.current.set(branch.id, marker);
       });
 
+      if (mappable.length > 0) {
+        setTimeout(() => map.invalidateSize(), 50);
+      }
+
       if (!fittedRef.current && mappable.length > 0 && countryView) {
         const bounds = L.latLngBounds(mappable.map((b) => [b.lat, b.lng] as [number, number]));
         map.fitBounds(bounds.pad(0.18), { maxZoom: 7, animate: false });
@@ -267,6 +279,11 @@ export default function BranchMap({
     }
 
     void syncMarkers();
+    // If Leaflet is still booting when branches arrive, sync once more shortly after.
+    const retry = setTimeout(() => {
+      if (mapRef.current && layerRef.current) void syncMarkers();
+    }, 200);
+    return () => clearTimeout(retry);
   }, [mappable, selectedId, countryView, route]);
 
   useEffect(() => {
@@ -317,18 +334,17 @@ export default function BranchMap({
     void syncRoute();
   }, [route]);
 
-  if (mappable.length === 0) {
-    return (
-      <View style={[styles.wrap, styles.emptyWrap, { height }]}>
-        <Text style={styles.emptyText}>Xaritada joylashuvi mavjud emas</Text>
-      </View>
-    );
-  }
-
+  // Always mount the Leaflet container. Early-return when empty skipped the <div>,
+  // so boot() never saw containerRef and markers never appeared after load.
   return (
     <View ref={wrapRef} style={[styles.wrap, { height }]}>
       <div ref={containerRef as any} style={{ width: '100%', height: '100%', borderRadius: 18 }} />
-      {!active ? (
+      {mappable.length === 0 ? (
+        <View style={[styles.emptyOverlay, styles.emptyWrap]} pointerEvents="none">
+          <Text style={styles.emptyText}>Xaritada joylashuvi mavjud emas</Text>
+        </View>
+      ) : null}
+      {!active && mappable.length > 0 ? (
         <Pressable
           onPress={activate}
           accessibilityLabel="Xaritani faollashtirish"
@@ -348,6 +364,11 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   emptyWrap: { alignItems: 'center', justifyContent: 'center', padding: 16 },
+  emptyOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#F3F0EA',
+    zIndex: 500,
+  },
   emptyText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: '#64748B', textAlign: 'center' },
   lockOverlay: {
     ...StyleSheet.absoluteFill,
