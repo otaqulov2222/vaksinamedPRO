@@ -1,9 +1,10 @@
 # Final Production Closure — Post-P13
 
-**Date evidence window:** 2026-09-22
+**Date evidence window:** 2026-09-22 (updated 2026-09-25 daily checkpoint)
 **Production Payme/Click:** DISABLED
 **FOM inventory writer:** OFF
 **Automatic production cutover:** NOT performed
+**Daily checkpoint:** Admin UX 12.6A–12.25.1 + P0 audits 12.26–12.29 committed; Phase 12.30 Redis live verify **not started** — Redis remains **OPS_REQUIRED**
 
 This document is the final gate assessment. Repository tests alone do **not** make production READY.
 
@@ -52,10 +53,11 @@ This document is the final gate assessment. Repository tests alone do **not** ma
 4. **INFRA_METRICS_EXTERNAL_REQUIRED** — CPU/memory/queue/DB connection dashboards
 5. **PAYME_SANDBOX_E2E_EXTERNAL_REQUIRED** — Sandbox keys + `SANDBOX_E2E_RUN=1` on staging
 6. **CLICK_SANDBOX_E2E_EXTERNAL_REQUIRED** — Same for Click
-7. **MANAGED_POSTGRES_PITR_EXTERNAL_REQUIRED** — Provider backup/PITR + restore drill evidence
+7. **MANAGED_POSTGRES_PITR_EXTERNAL_REQUIRED** — Provider backup/PITR + restore drill evidence (**OPS_REQUIRED** — Phase 12.29 re-verified: no managed instance / `DATABASE_URL` / PITR in this workspace)
 8. **GITHUB_REQUIRED_CHECKS_EXTERNAL_REQUIRED** — Branch protection requiring CI job names (see `docs/GITHUB_REQUIRED_CHECKS.md`)
 9. **DOCKER_RUNNER_EXTERNAL_REQUIRED** (local) — Local Docker CLI absent; **CI docker job PASS** on GitHub
-10. **SECRET_ENCRYPTION_AT_REST_REQUIRED** — KMS/Vault before encrypting `payme_key` / `click_secret`
+10. **SECRET_ENCRYPTION_AT_REST_REQUIRED** — App boundary **IMPLEMENTED** (12.28 `enc:v1` + `MERCHANT_SECRET_KEK`); cloud KMS provisioning + plaintext row migration still **OPS_REQUIRED** before production merchant keys
+
 11. **HMAC_MOBILE_REFRESH_REQUIRED** — Ship `s1.*`-only mobile, then close dual-accept
 12. **DELIVERY_CONTRACT_REQUIRED** — Verified external courier API
 13. **FOM_STOCK_CONTRACT_REQUIRED** — Vendor stock write contract (writer stays OFF)

@@ -1,21 +1,27 @@
-# P12.1 — Secret encryption-at-rest & Legacy HMAC follow-up
+# P12.1 / P12.28 — Secret encryption-at-rest & Legacy HMAC follow-up
 
-## Secret encryption-at-rest
+## Secret encryption-at-rest (updated Phase 12.28)
 
 | Item | Status |
 |------|--------|
-| Branch Payme/Click secrets storage | Plaintext columns on `branches` (`payme_key`, `click_secret`) |
-| Runtime handling | Loaded into `WeakMap` — never returned in public DTOs |
-| Log redaction | Logger redacts payme/click secret paths |
-| KMS / vault abstraction in repo | **Absent** |
-| Risky production-wide migration this batch | **Not performed** (correct) |
+| Branch Payme/Click secrets storage | Text columns on `branches` (`payme_key`, `click_secret`); values stored as `enc:v1:` AES-256-GCM ciphertext when `MERCHANT_SECRET_KEK` is configured |
+| Runtime handling | Decrypt → `WeakMap` — never returned in public/admin DTOs as plaintext or ciphertext |
+| Log / audit redaction | Logger redacts payme/click secret paths; branch.update audit stores credential-updated booleans only |
+| Application crypto boundary | **IMPLEMENTED** — `artifacts/api-server/src/lib/merchantSecretCrypto.ts` |
+| Cloud KMS / Vault SDK in repo | **Absent** (intentionally not invented) |
+| Production without KEK | **Fail closed** |
+| Risky production-wide migration this batch | **Not performed** (correct — no production credentials in workspace) |
 
-**Risk:** DB dump / backup / replica access exposes merchant secrets in plaintext.
+**Risk remaining:** Until ops injects `MERCHANT_SECRET_KEK` and migrates legacy plaintext rows, staging/prod must not enable merchant PSP with plaintext columns.
 
-**Follow-up task (do not invent KMS):**  
-When a vault/KMS abstraction is chosen, encrypt `branches.payme_key` / `branches.click_secret` at rest with envelope encryption; keep `SECRET_ENCRYPTION_AT_REST_FOLLOW_UP` constant in `branchPaymentMerchant.ts` until cutover.
+**OPS follow-up:**
 
-Constant already present:
+1. Inject 32-byte KEK as `MERCHANT_SECRET_KEK` (base64 or hex) from approved secret manager / KMS.
+2. Migrate existing plaintext → `enc:v1:` (Admin re-save or controlled migrate helper).
+3. Clear `MERCHANT_SECRET_ALLOW_PLAINTEXT_READ` after cutover.
+4. Optionally wrap KEK with cloud KMS when provider is chosen — do not invent SDK here.
+
+Constant:
 `SECRET_ENCRYPTION_AT_REST_FOLLOW_UP` in `artifacts/api-server/src/lib/branchPaymentMerchant.ts`.
 
 ---

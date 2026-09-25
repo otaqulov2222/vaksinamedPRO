@@ -53,5 +53,8 @@ Thumbs.db
 .env
 **/.env
 
+# local visual fixtures (generated screenshots / DOM dumps)
+artifacts/admin-web/.tmp-visual/
+
 # local image-upscale tooling
 artifacts/soglom-apteka/assets/images/_upscale/

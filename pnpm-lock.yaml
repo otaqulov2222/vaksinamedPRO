@@ -163,6 +163,9 @@ importers:
 
   artifacts/admin-web:
     dependencies:
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.545.0(react@19.1.0)
       react:
         specifier: 'catalog:'
         version: 19.1.0

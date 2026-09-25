@@ -53,7 +53,8 @@ Technical code readiness (P1–P13.1, typecheck, API/admin build, security tests
 | Evidence to close | Provider console/API status; retention days; PITR window |
 | Owner | Database / platform ops |
 | Rollback | N/A (enable backups; do not disable without replacement) |
-| Current | **NOT_PROVEN** / EXTERNAL |
+| Current | **NOT_PROVEN** / **OPS_REQUIRED** |
+| Phase 12.29 workspace check | `DATABASE_URL=MISSING`; local `5432`/`55432` **CLOSED**; no managed provider selected; no IaC |
 
 ### 1.2 Restore drill
 
@@ -63,15 +64,24 @@ Technical code readiness (P1–P13.1, typecheck, API/admin build, security tests
 | Verify tables | `orders`, `payments`, `payment_intents`, `payment_captures`, `payment_refunds`, `cashback_ledger`, `product_stocks`, `reservations`, `branches`, audit/session tables as applicable |
 | Evidence | Ticket ID + row-count / smoke checklist |
 | Owner | Database ops + eng |
-| Current | **NOT_PROVEN** (managed) |
+| Current | **NOT_PROVEN** (managed) — 12.29: no staging managed DB available to drill |
+| Suggested logical template only | `scripts/backup/README.md` (`pg_dump` / `pg_restore`) — not a substitute for provider PITR |
 
 ### 1.3 RPO / RTO
 
 | Item | Detail |
 |------|--------|
-| Required | Written RPO (e.g. ≤ 24h) and RTO (e.g. ≤ 4h) agreed by ops + product |
+| Required | Written RPO and RTO agreed by ops + product **after** a measured restore |
 | Evidence | Signed runbook section or ticket with measured restore time |
-| Current | **NOT_PROVEN** — do not invent targets as proven |
+| Current | **NOT ESTABLISHED** — do not invent targets as proven (12.29) |
+
+### 1.3a TLS / SSL (DB connection)
+
+| Item | Detail |
+|------|--------|
+| Application Pool | `lib/db/src/index.ts` uses `connectionString` only — does **not** set `sslmode=disable` |
+| Production expectation | Managed PG with TLS; verify on staging (`sslmode=require` or provider equivalent) |
+| Current | **OPS_REQUIRED** — SSL not verifiable without `DATABASE_URL` |
 
 ### 1.4 GitHub main branch protection + required CI checks
 
@@ -88,13 +98,15 @@ Technical code readiness (P1–P13.1, typecheck, API/admin build, security tests
 
 | Item | Detail |
 |------|--------|
-| Current storage | `branches.payme_key`, `branches.click_secret` — **plaintext at rest** |
-| Mitigations in code | WeakMap runtime; DTO/log redaction |
-| Required before prod merchant keys | Managed KMS / Vault / cloud secret manager; envelope encrypt columns; decrypt only in merchant resolver |
-| Do not | Invent homemade AES without KMS-backed keys |
+| Current storage | `branches.payme_key`, `branches.click_secret` — **text columns**; app writes `enc:v1:` AES-256-GCM ciphertext when `MERCHANT_SECRET_KEK` is set |
+| Application boundary | `merchantSecretCrypto.ts` + decrypt in `branchPaymentMerchant.ts`; WeakMap for runtime only |
+| Mitigations in code | Ciphertext at rest (when KEK set); DTO/log/audit redaction; production fail-closed without KEK |
+| Required before prod merchant keys | Ops injects `MERCHANT_SECRET_KEK` from approved secret manager / KMS; migrate any legacy plaintext rows; disable plaintext-read flag |
+| Do not | Hardcode KEK in source; invent AWS/GCP/Azure KMS clients without a chosen provider; claim “KMS complete” until ops provisions |
 | Owner | SecOps + eng |
-| Current | **BLOCKED** (KMS absent) · access isolation **PARTIAL** |
+| Current | App encryption **IMPLEMENTED** · cloud KMS provisioning **OPS_REQUIRED** |
 | Follow-up marker | `SECRET_ENCRYPTION_AT_REST_FOLLOW_UP` in payment merchant code |
+| Env | `MERCHANT_SECRET_KEK` (required staging/prod) · `MERCHANT_SECRET_ALLOW_PLAINTEXT_READ` (temporary migration only) |
 
 ### 1.6 Staging monitoring
 
@@ -117,6 +129,15 @@ Technical code readiness (P1–P13.1, typecheck, API/admin build, security tests
 | Current | **FAILURE_RECOVERY_NOT_PROVEN** (P13.1) |
 
 Fill evidence template per drill. Do not mark PASS without a dated staging run.
+
+### 1.8 Production Redis (rate limits)
+
+| Item | Detail |
+|------|--------|
+| In-repo | `redis.ts` + rate-limit; staging/production **fail closed** without `REDIS_URL` |
+| Required | Managed Redis; `REDIS_URL` set; warm PING; multi-instance shared rate-limit verify |
+| Phase 12.30 | **Not started** on 2026-09-25 checkpoint — no invented Redis provider |
+| Current | Code **READY_IN_REPO** · live verify **OPS_REQUIRED** (`REDIS_URL` MISSING in workspace; TCP 6379 CLOSED) |
 
 ---
 

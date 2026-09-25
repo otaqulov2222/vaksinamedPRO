@@ -33,8 +33,11 @@ export async function softRequest(path: string, token: string | null) {
   }
 }
 
+/** Uzbek-friendly money: `125 500 so‘m` (space thousands). Display only — not authority. */
 export function money(value: number) {
-  return new Intl.NumberFormat("uz-UZ").format(Number(value) || 0) + " so‘m";
+  const n = Math.round(Number(value) || 0);
+  const abs = Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${n < 0 ? "−" : ""}${abs} so‘m`;
 }
 
 export function isHqRole(role: string) {

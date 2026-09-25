@@ -156,24 +156,36 @@ export function PosTerminal({ token, branches, defaultBranchId, request, money }
     return Math.round(ratio * 100);
   }, [preview]);
 
-  const spendLabel = maxSpendPercent != null ? `Maks ${maxSpendPercent}%` : "Maks (server)";
+  const spendLabel =
+    maxSpendPercent != null
+      ? `Server limiti ${maxSpendPercent}%`
+      : "Server limiti";
 
   return (
-    <div className="pos-shell">
+    <div className="pos-shell stack-gap">
       <div className="pos-top">
         <div>
-          <h1>Kassa · Loyalty POS</h1>
-          <p className="muted">QR skaner → mijoz → summa → cashback → chek. Korzinka uslubidagi walk-in sotuv.</p>
+          <h1 className="page-title">Kassa POS</h1>
+          <p className="page-desc">Kassir ish oqimi. Cashback USE limiti faqat server preview.maxSpend (odatda 30%) — UI foizni ixtiyoriy tanlamaydi.</p>
         </div>
         <select
           className="pos-branch"
           value={branchId}
           onChange={(e) => setBranchId(Number(e.target.value))}
+          aria-label="Filial"
         >
           {branches.map((b) => (
             <option key={b.id} value={b.id}>{b.name}</option>
           ))}
         </select>
+      </div>
+
+      <div className="pos-steps" aria-label="POS bosqichlari">
+        <span className={`pos-step${customer ? " done" : " active"}`}>1. Mijoz</span>
+        <span className={`pos-step${customer && amount ? " done" : customer ? " active" : ""}`}>2. Xarid</span>
+        <span className={`pos-step${customer && amount && preview ? " done" : customer && amount ? " active" : ""}`}>3. Cashback</span>
+        <span className={`pos-step${receipt ? " done" : preview ? " active" : ""}`}>4. To‘lov</span>
+        <span className={`pos-step${receipt ? " active done" : ""}`}>5. Chek</span>
       </div>
 
       {(error || okMsg) && (

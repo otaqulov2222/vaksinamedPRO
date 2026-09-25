@@ -1,19 +1,20 @@
 /**
  * P7.6.2 — branch payment merchant resolver + secret access boundary.
  *
- * Internal-only configuration for future Payme/Click adapters.
- * Does NOT call PSPs. Does NOT invent protocols, URLs, or signatures.
+ * Phase 12.28: DB may store ciphertext (`enc:v1:…`). Plaintext exists only after
+ * decrypt into WeakMap for adapter use. WeakMap is NOT encryption-at-rest.
  *
- * Secrets stay in a WeakMap — never serialize PaymentMerchantConfig to API DTOs.
- * Encryption-at-rest is NOT implemented here (no existing vault abstraction) — follow-up.
- *
- * P12.2: All branch secret material MUST go through this module
- * (`resolvePaymentMerchantConfig` / `getPaymentMerchantSecretMaterial`).
- * Do not invent homemade crypto; wait for verified KMS/vault.
+ * Secrets never serialize on PaymentMerchantConfig. No vault/KMS client in-repo —
+ * KEK is ops-injected via MERCHANT_SECRET_KEK (see merchantSecretCrypto.ts).
  */
 
 import { eq } from "drizzle-orm";
 import { db, branches, paymentIntents, type Branch } from "@workspace/db";
+import {
+  decryptMerchantSecretFromStorage,
+  encryptMerchantSecretForStorage,
+  storedSecretConfigured,
+} from "./merchantSecretCrypto";
 
 type DbLike = typeof db;
 
@@ -57,10 +58,20 @@ export function isOnlinePaymentProvider(raw: string): raw is OnlinePaymentProvid
 }
 
 function buildConfig(branch: Branch, provider: OnlinePaymentProvider): PaymentMerchantConfig {
+  let paymePlain = "";
+  let clickPlain = "";
+  try {
+    paymePlain = decryptMerchantSecretFromStorage(branch.paymeKey);
+    clickPlain = decryptMerchantSecretFromStorage(branch.clickSecret);
+  } catch (err) {
+    // Fail closed — do not fall back to sending ciphertext to PSP.
+    throw err;
+  }
+
   const configured =
     provider === "payme"
-      ? Boolean(branch.paymeMerchantId?.trim() && branch.paymeKey?.trim())
-      : Boolean(branch.clickMerchantId?.trim() && branch.clickSecret?.trim());
+      ? Boolean(branch.paymeMerchantId?.trim() && paymePlain.trim())
+      : Boolean(branch.clickMerchantId?.trim() && clickPlain.trim());
 
   const merchantId =
     provider === "payme"
@@ -80,8 +91,8 @@ function buildConfig(branch: Branch, provider: OnlinePaymentProvider): PaymentMe
   };
 
   secretBag.set(handle, {
-    paymeKey: String(branch.paymeKey || ""),
-    clickSecret: String(branch.clickSecret || ""),
+    paymeKey: paymePlain,
+    clickSecret: clickPlain,
   });
 
   return handle;
@@ -195,13 +206,12 @@ export function toPublicMerchantSummary(config: PaymentMerchantConfig) {
     configured: config.configured,
     hasMerchantId: Boolean(config.merchantId),
     hasServiceId: Boolean(config.serviceId),
-    // Public ID only when present — not a secret
     merchantId: config.merchantId || null,
     serviceId: config.provider === "click" ? config.serviceId || null : null,
   };
 }
 
-/** Presence flags from a branch row without returning secrets. */
+/** Presence flags from a branch row without returning or decrypting secrets. */
 export function branchOnlinePaymentFlags(branch: {
   paymeMerchantId?: string | null;
   paymeKey?: string | null;
@@ -209,13 +219,17 @@ export function branchOnlinePaymentFlags(branch: {
   clickSecret?: string | null;
 }) {
   return {
-    hasPayme: Boolean(String(branch.paymeMerchantId || "").trim() && String(branch.paymeKey || "").trim()),
-    hasClick: Boolean(String(branch.clickMerchantId || "").trim() && String(branch.clickSecret || "").trim()),
+    hasPayme: Boolean(
+      String(branch.paymeMerchantId || "").trim() && storedSecretConfigured(branch.paymeKey),
+    ),
+    hasClick: Boolean(
+      String(branch.clickMerchantId || "").trim() && storedSecretConfigured(branch.clickSecret),
+    ),
   };
 }
 
 /**
- * Admin branch payment view — secrets always masked; never raw.
+ * Admin branch payment view — secrets always masked; never raw / never ciphertext.
  * Admin UI can still PATCH raw secrets via write path (branches:manage).
  */
 export function toAdminBranchPaymentDto(branch: Branch) {
@@ -231,6 +245,11 @@ export function toAdminBranchPaymentDto(branch: Branch) {
   };
 }
 
-/** Documented follow-up: plaintext DB secrets — no vault abstraction in repo yet. */
+/** Encrypt plaintext for DB write. Production without KEK fails closed. */
+export function prepareMerchantSecretForStorage(plaintext: string): string {
+  return encryptMerchantSecretForStorage(plaintext);
+}
+
+/** Documented: app encryption boundary exists; cloud KMS still OPS_REQUIRED. */
 export const SECRET_ENCRYPTION_AT_REST_FOLLOW_UP =
-  "P7.6.2 follow-up: encrypt branches.payme_key / branches.click_secret at rest when a vault/KMS abstraction exists.";
+  "P12.28: AES-GCM enc:v1 ciphertext via MERCHANT_SECRET_KEK. Cloud KMS/Vault still OPS_REQUIRED — no homemade cloud KMS.";

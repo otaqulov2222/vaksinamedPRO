@@ -85,15 +85,20 @@ describe("Admin Phase 3 MEDIUM — catalog inventory axes", () => {
     assert.match(admin, /Pass branchId to include authoritative product_stocks axes/);
   });
 
-  it("admin catalog UI shows Physical / Reserved / Available — not client invent", () => {
+  it("admin inventory UI shows stock axes from product_stocks — Catalog stays master data", () => {
+    const inventory = readFileSync(path.join(adminWeb, "pages/InventoryPage.tsx"), "utf8");
     const catalog = readFileSync(path.join(adminWeb, "pages/CatalogPage.tsx"), "utf8");
-    assert.match(catalog, /Physical/);
-    assert.match(catalog, /Reserved/);
-    assert.match(catalog, /Available/);
-    assert.match(catalog, /item\.stock\.physical/);
-    assert.match(catalog, /item\.stock\.reserved/);
-    assert.match(catalog, /item\.stock\.available/);
+    assert.match(inventory, /stockAxisShort\("physical"\)|Fizik/);
+    assert.match(inventory, /stockAxisShort\("reserved"\)|Band/);
+    assert.match(inventory, /stockAxisShort\("available"\)|Mavjud/);
+    assert.match(inventory, /item\.stock\?\.physical|item\.stock\.physical/);
+    assert.match(inventory, /item\.stock\?\.reserved|item\.stock\.reserved/);
+    assert.match(inventory, /item\.stock\?\.available|item\.stock\.available/);
+    assert.doesNotMatch(inventory, /stock\.physical\s*=\s*|invent.*physical/i);
+    // Catalog ≠ Inventory: no primary Fizik/Band/Mavjud table columns
+    assert.doesNotMatch(catalog, /<th[^>]*>Fizik<\/th>|<th[^>]*>Band<\/th>|<th[^>]*>Mavjud<\/th>/);
     assert.doesNotMatch(catalog, /stock\.physical\s*=\s*|invent.*physical/i);
+    assert.match(catalog, /\/api\/admin\/products/);
   });
 });
 

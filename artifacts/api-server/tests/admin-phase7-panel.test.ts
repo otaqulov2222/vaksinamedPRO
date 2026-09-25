@@ -85,7 +85,7 @@ describe("Admin Phase 7 — dashboard KPI coverage", () => {
     assert.match(dash, /kpis\?\.completed|kpis\.completed/);
     assert.match(dash, /kpis\?\.delivering|kpis\.delivering/);
     assert.match(dash, /kpis\?\.customers|kpis\.customers/);
-    assert.match(dash, /cashback_accounts|cashbackSource/);
+    assert.match(dash, /kpis\?\.cashback|kpis\.cashback/);
   });
 });
 

@@ -1,13 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { request, isHqRole, fmtDate, type AdminUser } from "../api";
-import { StateBox, Badge, PageHeader } from "../ui";
+import {
+  StatusBadge,
+  AdminPageHeader,
+  FilterField,
+  DataTable,
+  PaginationBar,
+  ErrorState,
+  LoadingBlock,
+  DetailDrawer,
+  DrawerSection,
+} from "../ui";
+import { PAGE_DESCRIPTIONS } from "../nav";
 
 const RATINGS_PAGE = 50;
 
 function errText(err: unknown, fallback: string) {
   const status = err && typeof err === "object" && "status" in err ? Number((err as { status?: number }).status) : 0;
-  if (status === 401) return "Sessiya tugagan (401)";
-  if (status === 403) return "Baholar uchun ruxsat yo‘q (ratings:read)";
+  if (status === 401) return "Sessiya tugagan. Qayta kiring.";
+  if (status === 403) return "Baholar ro‘yxatini ko‘rish uchun ruxsat yo‘q.";
   return err instanceof Error ? err.message : fallback;
 }
 
@@ -23,12 +34,13 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const [branchFilter, setBranchFilter] = useState<number | null>(null);
   const [branchId, setBranchId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState<any>(null);
 
   const isHq = Boolean(props.user && isHqRole(props.user.role));
+  const hasFilters = Boolean(branchId);
 
   async function load(opts?: { offset?: number; branchId?: string }) {
     const nextOffset = opts?.offset ?? 0;
@@ -44,134 +56,219 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
       setRows(Array.isArray(data?.ratings) ? data.ratings : []);
       setTotal(Number(data?.total || data?.pagination?.total || 0));
       setHasMore(Boolean(data?.hasMore));
-      setBranchFilter(data?.branchFilter != null ? Number(data.branchFilter) : null);
       setOffset(nextOffset);
     } catch (err) {
       setRows([]);
       setTotal(0);
       setHasMore(false);
-      setError(errText(err, "Baholar yuklanmadi"));
+      setError(errText(err, "Baholarni yuklab bo‘lmadi."));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void load({ offset: 0 });  }, [props.token]);
+    void load({ offset: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.token]);
 
-  /** Faqat joriy sahifa bo‘yicha — server o‘rtacha baho agregatini qaytarmaydi. */
-  const pageAverage = useMemo(() => {
-    if (!rows.length) return null;
-    const sum = rows.reduce((acc, r) => acc + (Number(r.rating) || 0), 0);
-    return sum / rows.length;
-  }, [rows]);
+  function branchName(id: unknown) {
+    return props.branches.find((b) => Number(b.id) === Number(id))?.name
+      || (id != null ? `Filial #${id}` : "—");
+  }
 
-  const branchName = (id: unknown) =>
-    props.branches.find((b) => Number(b.id) === Number(id))?.name || (id != null ? `#${id}` : "—");
+  function resetFilters() {
+    setBranchId("");
+    void load({ offset: 0, branchId: "" });
+  }
+
+  const showSurface = !error && !(loading && rows.length === 0);
 
   return (
-    <>
-      <PageHeader
-        title="Xodim baholari"
-        subtitle="Filial doirasi serverda hal qilinadi (resolveStaffBranchFilter). customerId ro‘yxatda ochilmaydi."
+    <div className="ratings-page page-module">
+      <AdminPageHeader
+        title="Baholar"
+        description={PAGE_DESCRIPTIONS.ratings}
         actions={
-          <button className="ghost" type="button" disabled={loading} onClick={() => void load({ offset })}>
+          <button className="btn-tertiary" type="button" disabled={loading} onClick={() => void load({ offset })}>
             Yangilash
           </button>
         }
       />
 
-      <div className="toolbar" style={{ flexWrap: "wrap" }}>
-        {isHq ? (
-          <select
-            value={branchId}
-            onChange={(e) => {
-              setBranchId(e.target.value);
-              void load({ offset: 0, branchId: e.target.value });
-            }}
-          >
-            <option value="">Filial: barchasi</option>
-            {props.branches.map((b) => (
-              <option key={b.id} value={String(b.id)}>{b.name}</option>
-            ))}
-          </select>
-        ) : (
-          <span className="muted">Filial: o‘z filialingiz (server)</span>
-        )}
-        <span className="muted">
-          Server filtri: {branchFilter != null ? branchName(branchFilter) : "barcha filiallar"}
-        </span>
+      <div className="crm-controls">
+        <div className="crm-controls-primary">
+          <FilterField label="Filial">
+            {isHq ? (
+              <select
+                value={branchId}
+                aria-label="Filial"
+                onChange={(e) => {
+                  setBranchId(e.target.value);
+                  void load({ offset: 0, branchId: e.target.value });
+                }}
+              >
+                <option value="">Barchasi</option>
+                {props.branches.map((b) => (
+                  <option key={b.id} value={String(b.id)}>{b.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input value="O‘z filiali" disabled readOnly aria-label="Filial" />
+            )}
+          </FilterField>
+          {hasFilters ? (
+            <div className="crm-controls-actions">
+              <button className="btn-tertiary" type="button" disabled={loading} onClick={resetFilters}>
+                Tozalash
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      <StateBox
-        loading={loading}
-        error={error || null}
-        empty={!loading && !error && rows.length === 0}
-        emptyText="Baho yozuvlari yo‘q."
-      >
-        <div className="kpis">
-          <div className="card">
-            <div className="muted">Jami baholar</div>
-            <h2>{total}</h2>
-          </div>
-          <div className="card">
-            <div className="muted">Sahifa o‘rtachasi</div>
-            <h2>{pageAverage != null ? pageAverage.toFixed(2) : "—"}</h2>
-            <div className="muted" style={{ fontSize: 11 }}>
-              faqat ko‘rinayotgan {rows.length} yozuv bo‘yicha — server agregati yo‘q
-            </div>
-          </div>
-        </div>
+      {error ? <ErrorState message={error} onRetry={() => void load({ offset })} /> : null}
+      {loading && rows.length === 0 ? <LoadingBlock rows={3} /> : null}
 
-        <div className="card" style={{ marginTop: 16 }}>
-          <table className="table">
+      {!error && !loading ? (
+        <div className="crm-context">
+          <span className="crm-result-count">{total} ta baho</span>
+          {hasFilters ? <span className="crm-context-hint">Filtrlar qo‘llangan</span> : null}
+        </div>
+      ) : null}
+
+      {showSurface ? (
+        <div className="crm-surface surface-table">
+          <DataTable sticky>
             <thead>
               <tr>
-                <th>Vaqt</th>
+                <th>Sana</th>
                 <th>Filial</th>
                 <th>Buyurtma</th>
-                <th>Xodim / xizmat</th>
+                <th>Xizmat</th>
                 <th>Baho</th>
                 <th>Izoh</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((item) => (
-                <tr key={item.id}>
-                  <td>{fmtDate(item.createdAt)}</td>
-                  <td>{branchName(item.branchId)}</td>
-                  <td>{item.orderId != null ? `#${item.orderId}` : "—"}</td>
-                  <td>{item.employeeName || "—"}</td>
-                  <td><Badge tone={ratingTone(Number(item.rating))}>{item.rating}</Badge></td>
-                  <td>{item.comment || <span className="muted">—</span>}</td>
+              {rows.length === 0 ? (
+                <tr className="crm-empty-row">
+                  <td colSpan={6}>
+                    <div className="crm-empty">
+                      <div className="empty-title">Baholar topilmadi</div>
+                      <p className="empty-desc">
+                        {hasFilters
+                          ? "Bu filtrlar bo‘yicha baho topilmadi."
+                          : "Hozircha mijoz baholari mavjud emas."}
+                      </p>
+                      {hasFilters ? (
+                        <button className="btn-tertiary" type="button" onClick={resetFilters}>
+                          Filtrlarni tozalash
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                rows.map((item) => {
+                  const active = selected?.id === item.id;
+                  const comment = String(item.comment || "").trim();
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`crm-row${active ? " is-active" : ""}`}
+                      tabIndex={0}
+                      aria-selected={active}
+                      onClick={() => setSelected(item)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelected(item);
+                        }
+                      }}
+                    >
+                      <td className="meta">{fmtDate(item.createdAt)}</td>
+                      <td>{branchName(item.branchId)}</td>
+                      <td>{item.orderId != null ? `#${item.orderId}` : "—"}</td>
+                      <td>{item.employeeName || "—"}</td>
+                      <td>
+                        <StatusBadge tone={ratingTone(Number(item.rating))}>{item.rating}</StatusBadge>
+                      </td>
+                      <td className="ratings-comment">
+                        {comment ? comment : <span className="meta">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
-          </table>
-
-          <div className="toolbar" style={{ marginTop: 12 }}>
-            <button
-              className="ghost"
-              type="button"
-              disabled={loading || offset <= 0}
-              onClick={() => void load({ offset: Math.max(0, offset - RATINGS_PAGE) })}
-            >
-              Oldingi
-            </button>
-            <span className="muted">
-              {total ? `${offset + 1}–${Math.min(offset + rows.length, total)} / ${total}` : "Jami: 0"}
-            </span>
-            <button
-              className="ghost"
-              type="button"
-              disabled={loading || !hasMore}
-              onClick={() => void load({ offset: offset + RATINGS_PAGE })}
-            >
-              Keyingi
-            </button>
-          </div>
+          </DataTable>
+          {rows.length > 0 ? (
+            <PaginationBar
+              offset={offset}
+              limit={RATINGS_PAGE}
+              total={total}
+              hasMore={hasMore}
+              loading={loading}
+              onPrev={() => void load({ offset: Math.max(0, offset - RATINGS_PAGE) })}
+              onNext={() => void load({ offset: offset + RATINGS_PAGE })}
+            />
+          ) : null}
         </div>
-      </StateBox>
-    </>
+      ) : null}
+
+      <DetailDrawer
+        open={Boolean(selected)}
+        title={selected ? `Baho ${selected.rating}` : "Baho"}
+        subtitle={selected ? branchName(selected.branchId) : undefined}
+        status={
+          selected ? (
+            <StatusBadge tone={ratingTone(Number(selected.rating))}>{selected.rating}</StatusBadge>
+          ) : undefined
+        }
+        onClose={() => setSelected(null)}
+      >
+        {selected ? (
+          <>
+            <DrawerSection title="Baho">
+              <dl className="crm-kv">
+                <div>
+                  <dt>Qiymat</dt>
+                  <dd>
+                    <StatusBadge tone={ratingTone(Number(selected.rating))}>{selected.rating}</StatusBadge>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Sana</dt>
+                  <dd>{fmtDate(selected.createdAt)}</dd>
+                </div>
+              </dl>
+            </DrawerSection>
+            <DrawerSection title="Bog‘liq">
+              <dl className="crm-kv">
+                <div>
+                  <dt>Buyurtma</dt>
+                  <dd>{selected.orderId != null ? `#${selected.orderId}` : "—"}</dd>
+                </div>
+                <div>
+                  <dt>Filial</dt>
+                  <dd>{branchName(selected.branchId)}</dd>
+                </div>
+                <div>
+                  <dt>Xizmat</dt>
+                  <dd>{selected.employeeName || "—"}</dd>
+                </div>
+              </dl>
+              <p className="meta">Baho buyurtma xizmatiga bog‘langan. Alohida xodim reytingi yo‘q.</p>
+            </DrawerSection>
+            <DrawerSection title="Izoh">
+              <p className="ratings-drawer-comment">
+                {String(selected.comment || "").trim() || "Izoh yo‘q."}
+              </p>
+            </DrawerSection>
+          </>
+        ) : null}
+      </DetailDrawer>
+    </div>
   );
 }

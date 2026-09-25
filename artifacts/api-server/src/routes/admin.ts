@@ -18,7 +18,7 @@ import { loginAdmin, requireAdmin } from "../lib/auth";
 import { serializeOrder } from "./orders";
 import { rateLimit } from "../lib/rateLimit";
 import { toAdminCustomerListItem } from "../lib/securityEnv";
-import { toAdminBranchPaymentDto } from "../lib/branchPaymentMerchant";
+import { prepareMerchantSecretForStorage, toAdminBranchPaymentDto } from "../lib/branchPaymentMerchant";
 import { adminHasPermission, assertBranchScope, requirePermission, resolveStaffBranchFilter } from "../lib/rbac";
 import { revokeSessionFromToken } from "../lib/sessions";
 import { recordAuthEvent } from "../lib/authEvents";
@@ -94,6 +94,39 @@ router.get("/admin/dashboard", async (req, res, next) => {
     const user = await requireAdmin(req);
     await requirePermission(user, "dashboard:read");
 
+    const requestedBranch = req.query.branchId != null ? Number(req.query.branchId) : undefined;
+    let branchFilter: number | undefined;
+    try {
+      branchFilter = resolveStaffBranchFilter(
+        user,
+        Number.isFinite(requestedBranch as number) ? (requestedBranch as number) : undefined,
+      );
+    } catch (error) {
+      return next(error);
+    }
+
+    const fromRange = typeof req.query.createdFrom === "string"
+      ? tashkentBusinessDayUtcRange(req.query.createdFrom)
+      : null;
+    const toRange = typeof req.query.createdTo === "string"
+      ? tashkentBusinessDayUtcRange(req.query.createdTo)
+      : null;
+    if (
+      (typeof req.query.createdFrom === "string" && req.query.createdFrom.trim() && !fromRange)
+      || (typeof req.query.createdTo === "string" && req.query.createdTo.trim() && !toRange)
+    ) {
+      return res.status(400).json({
+        message: "createdFrom/createdTo YYYY-MM-DD (Asia/Tashkent business day) bo‘lishi kerak",
+        code: "INVALID_DATE_FILTER",
+      });
+    }
+
+    const orderFilters: SQL[] = [];
+    if (branchFilter != null) orderFilters.push(eq(orders.branchId, branchFilter));
+    if (fromRange) orderFilters.push(gte(orders.createdAt, fromRange.start));
+    if (toRange) orderFilters.push(lt(orders.createdAt, toRange.endExclusive));
+    const orderWhere = orderFilters.length ? and(...orderFilters) : undefined;
+
     // Bounded aggregates — never load full tables into memory.
     const [orderKpis] = await db
       .select({
@@ -103,22 +136,106 @@ router.get("/admin/dashboard", async (req, res, next) => {
         delivering: sql<number>`count(*) filter (where ${orders.status} in ('awaiting_delivery', 'paid'))`.mapWith(Number),
         revenue: sql<number>`coalesce(sum(${orders.total}) filter (where ${orders.status} = 'completed'), 0)`.mapWith(Number),
       })
-      .from(orders);
+      .from(orders)
+      .where(orderWhere);
 
+    // Customers / cashback / branch counts are global SoT snapshots (not date-filtered).
     const [customerCount] = await db.select({ value: count() }).from(customers);
     const [branchCount] = await db.select({ value: count() }).from(branches);
-    // Authoritative cashback SoT — not customers.balance mirror.
     const [cashbackSum] = await db
       .select({
         value: sql<number>`coalesce(sum(${cashbackAccounts.balance}), 0)`.mapWith(Number),
       })
       .from(cashbackAccounts);
 
-    const recentRows = await db
-      .select()
+    const recentJoined = await db
+      .select({
+        order: orders,
+        customerId: customers.id,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
+        phone: customers.phone,
+      })
       .from(orders)
+      .leftJoin(customers, eq(orders.customerId, customers.id))
+      .where(orderWhere)
       .orderBy(desc(orders.createdAt), desc(orders.id))
       .limit(8);
+
+    const recentOrders = await Promise.all(recentJoined.map(async (row) => {
+      const base = await serializeOrder(row.order);
+      return {
+        ...base,
+        customer: row.customerId != null
+          ? adminCustomerIdentity({
+            id: row.customerId,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            phone: row.phone,
+          }, { includePhone: false })
+          : null,
+      };
+    }));
+
+    /**
+     * Inventory snapshot — factual axes only.
+     * No invented low-stock threshold: expose Available = 0 rows + lowest available list.
+     * Requires branch scope (cashier forced; HQ must pick branchId).
+     */
+    let inventory: {
+      branchId: number;
+      stockRows: number;
+      zeroAvailable: number;
+      items: Array<{
+        productId: number;
+        sku: string;
+        nameUz: string;
+        physical: number;
+        reserved: number;
+        available: number;
+      }>;
+      note: string;
+    } | null = null;
+
+    if (branchFilter != null) {
+      const stockRows = await db
+        .select({
+          productId: productStocks.productId,
+          physical: productStocks.physicalQuantity,
+          reserved: productStocks.reservedQuantity,
+          available: productStocks.availableQuantity,
+          sku: products.sku,
+          nameUz: products.nameUz,
+        })
+        .from(productStocks)
+        .innerJoin(products, eq(products.id, productStocks.productId))
+        .where(eq(productStocks.branchId, branchFilter));
+
+      const mapped = stockRows.map((s) => {
+        const physical = Number(s.physical) || 0;
+        const reserved = Number(s.reserved) || 0;
+        const available = s.available != null ? Number(s.available) : physical - reserved;
+        return {
+          productId: s.productId,
+          sku: s.sku,
+          nameUz: s.nameUz,
+          physical,
+          reserved,
+          available,
+        };
+      });
+      const zeroAvailable = mapped.filter((m) => m.available <= 0).length;
+      const items = [...mapped]
+        .sort((a, b) => a.available - b.available || a.sku.localeCompare(b.sku))
+        .slice(0, 12);
+      inventory = {
+        branchId: branchFilter,
+        stockRows: mapped.length,
+        zeroAvailable,
+        items,
+        note: "Threshold yo‘q — Available ≤ 0 va eng past available qatorlari (product_stocks).",
+      };
+    }
 
     return res.json({
       kpis: {
@@ -129,11 +246,28 @@ router.get("/admin/dashboard", async (req, res, next) => {
         delivering: Number(orderKpis?.delivering || 0),
         customers: Number(customerCount?.value || 0),
         branches: Number(branchCount?.value || 0),
-        /** Sum of cashback_accounts.balance (SoT), not customers.balance. */
         cashback: Number(cashbackSum?.value || 0),
         cashbackSource: "cashback_accounts",
+        /** Date filter applies to order KPIs only. */
+        customersScope: "global",
+        cashbackScope: "global",
+        branchesScope: "global",
       },
-      recentOrders: await Promise.all(recentRows.map(serializeOrder)),
+      filters: {
+        branchId: branchFilter ?? null,
+        createdFrom: typeof req.query.createdFrom === "string" ? req.query.createdFrom.trim() || null : null,
+        createdTo: typeof req.query.createdTo === "string" ? req.query.createdTo.trim() || null : null,
+        timezone: "Asia/Tashkent",
+        orderKpisScoped: Boolean(branchFilter || fromRange || toRange),
+      },
+      recentOrders,
+      inventory,
+      capabilities: {
+        dateFilter: true,
+        branchFilter: true,
+        inventoryThreshold: false,
+        inventorySnapshotRequiresBranch: true,
+      },
     });
   } catch (error) {
     return next(error);
@@ -165,6 +299,14 @@ router.patch("/admin/branches/:id", async (req, res, next) => {
     const current = (await db.select().from(branches).where(eq(branches.id, id)).limit(1))[0];
     if (!current) return res.status(404).json({ message: "Filial topilmadi" });
     const body = req.body ?? {};
+    let nextPaymeKey = current.paymeKey;
+    let nextClickSecret = current.clickSecret;
+    if (typeof body.paymeKey === "string" && body.paymeKey !== "••••" && body.paymeKey.trim()) {
+      nextPaymeKey = prepareMerchantSecretForStorage(body.paymeKey.trim());
+    }
+    if (typeof body.clickSecret === "string" && body.clickSecret !== "••••" && body.clickSecret.trim()) {
+      nextClickSecret = prepareMerchantSecretForStorage(body.clickSecret.trim());
+    }
     const updated = await db.update(branches).set({
       name: typeof body.name === "string" ? body.name : current.name,
       phone: typeof body.phone === "string" ? body.phone : current.phone,
@@ -172,13 +314,22 @@ router.patch("/admin/branches/:id", async (req, res, next) => {
       address: typeof body.address === "string" ? body.address : current.address,
       isOpen: typeof body.isOpen === "boolean" ? body.isOpen : current.isOpen,
       paymeMerchantId: typeof body.paymeMerchantId === "string" ? body.paymeMerchantId : current.paymeMerchantId,
-      paymeKey: typeof body.paymeKey === "string" && body.paymeKey !== "••••" ? body.paymeKey : current.paymeKey,
+      paymeKey: nextPaymeKey,
       clickMerchantId: typeof body.clickMerchantId === "string" ? body.clickMerchantId : current.clickMerchantId,
       clickServiceId: typeof body.clickServiceId === "string" ? body.clickServiceId : current.clickServiceId,
-      clickSecret: typeof body.clickSecret === "string" && body.clickSecret !== "••••" ? body.clickSecret : current.clickSecret,
+      clickSecret: nextClickSecret,
     }).where(eq(branches.id, id)).returning();
-    // Audit: never log secret values — only branch id
-    await db.insert(auditLog).values({ actor: user.email, action: "branch.update", entity: "branch", payload: JSON.stringify({ id }) });
+    // Audit: never log secret values — only branch id + which fields updated (booleans)
+    await db.insert(auditLog).values({
+      actor: user.email,
+      action: "branch.update",
+      entity: "branch",
+      payload: JSON.stringify({
+        id,
+        paymeCredentialUpdated: nextPaymeKey !== current.paymeKey,
+        clickCredentialUpdated: nextClickSecret !== current.clickSecret,
+      }),
+    });
     return res.json({
       branch: {
         ...updated[0],

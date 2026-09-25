@@ -1,24 +1,40 @@
 import { useEffect, useState } from "react";
 import { request, money, fmtDate } from "../api";
-import { StateBox, Badge, PageHeader } from "../ui";
+import {
+  StatusBadge,
+  StatusLabelBadge,
+  AdminPageHeader,
+  FilterField,
+  SearchInput,
+  DataTable,
+  PaginationBar,
+  ErrorState,
+  LoadingBlock,
+  DetailDrawer,
+  DrawerSection,
+  sourceLabel,
+  operatorCapabilityLabel,
+} from "../ui";
+import { PAGE_DESCRIPTIONS } from "../nav";
 
 const CUSTOMER_PAGE = 25;
 const HISTORY_PAGE = 40;
 
 function errText(err: unknown, fallback: string) {
   const status = err && typeof err === "object" && "status" in err ? Number((err as { status?: number }).status) : 0;
-  if (status === 401) return "Sessiya tugagan (401)";
-  if (status === 403) return "Mijozlar uchun ruxsat yo‘q (customers:read)";
-  if (status === 404) return "Mijoz topilmadi";
+  if (status === 401) return "Sessiya tugagan. Qayta kiring.";
+  if (status === 403) return "Mijozlar ro‘yxatini ko‘rish uchun ruxsat yo‘q.";
+  if (status === 404) return "Mijoz topilmadi.";
   return err instanceof Error ? err.message : fallback;
 }
 
-function entryTone(entryType: string): "ok" | "warn" | "danger" | "neutral" {
-  const t = String(entryType || "").toUpperCase();
-  if (t === "EARN") return "ok";
-  if (t === "USE") return "warn";
-  if (t === "REVERSAL") return "danger";
-  return "neutral";
+function customerName(item: any): string {
+  return `${item?.firstName || ""} ${item?.lastName || ""}`.trim() || "—";
+}
+
+function movementSource(item: any): string {
+  if (item?.sourceLabel) return String(item.sourceLabel);
+  return sourceLabel(item?.sourceType);
 }
 
 export function CustomersPage(props: { token: string }) {
@@ -35,12 +51,15 @@ export function CustomersPage(props: { token: string }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
 
-  async function loadPage(opts?: { offset?: number }) {
+  const hasFilters = Boolean(q.trim());
+
+  async function loadPage(opts?: { offset?: number; q?: string }) {
     const nextOffset = opts?.offset ?? 0;
+    const query = opts?.q ?? q;
     const qs = new URLSearchParams();
     qs.set("limit", String(CUSTOMER_PAGE));
     qs.set("offset", String(nextOffset));
-    if (q.trim()) qs.set("q", q.trim());
+    if (query.trim()) qs.set("q", query.trim());
     setLoading(true);
     setError("");
     try {
@@ -53,14 +72,25 @@ export function CustomersPage(props: { token: string }) {
       setRows([]);
       setTotal(0);
       setHasMore(false);
-      setError(errText(err, "Ro‘yxat yuklanmadi"));
+      setError(errText(err, "Mijozlarni yuklab bo‘lmadi."));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadPage({ offset: 0 });  }, [props.token]);
+    void loadPage({ offset: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.token]);
+
+  function applySearch() {
+    void loadPage({ offset: 0 });
+  }
+
+  function resetFilters() {
+    setQ("");
+    void loadPage({ offset: 0, q: "" });
+  }
 
   async function openCustomer(id: number) {
     setDetailLoading(true);
@@ -75,174 +105,250 @@ export function CustomersPage(props: { token: string }) {
       setDetail(one?.customer || null);
       setHistory(Array.isArray(hist?.items) ? hist.items : []);
     } catch (err) {
-      setDetailError(errText(err, "Mijoz ochilmadi"));
+      setDetailError(errText(err, "Mijoz ochilmadi."));
     } finally {
       setDetailLoading(false);
     }
   }
 
+  const showSurface = !error && !(loading && rows.length === 0);
+
   return (
-    <>
-      <PageHeader
+    <div className="customers-page page-module">
+      <AdminPageHeader
         title="Mijozlar"
-        subtitle="Cashback balansi — cashback_accounts (SoT), customers.balance manba emas. Telefon ro‘yxatda masklangan."
+        description={PAGE_DESCRIPTIONS.customers}
       />
 
-      <div className="toolbar">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Qidiruv: ism, telefon, telegram id" />
-        <button className="primary" type="button" disabled={loading} onClick={() => void loadPage({ offset: 0 })}>
-          Qidirish
-        </button>
+      <div className="crm-controls">
+        <div className="crm-controls-primary">
+          <FilterField label="Ism yoki telefon" grow>
+            <SearchInput
+              value={q}
+              onChange={setQ}
+              placeholder="Ism yoki telefon"
+              onSubmit={applySearch}
+            />
+          </FilterField>
+          <div className="crm-controls-actions">
+            <button className="btn-primary" type="button" disabled={loading} onClick={applySearch}>
+              Qidirish
+            </button>
+            {hasFilters ? (
+              <button className="btn-tertiary" type="button" disabled={loading} onClick={resetFilters}>
+                Tozalash
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
 
-      <StateBox
-        loading={loading}
-        error={error || null}
-        empty={!loading && !error && rows.length === 0}
-        emptyText="Mijozlar topilmadi."
-      >
-        <div className="card">
-          <table className="table">
+      {error ? <ErrorState message={error} onRetry={() => void loadPage({ offset })} /> : null}
+      {loading && rows.length === 0 ? <LoadingBlock rows={3} /> : null}
+
+      {!error && !loading ? (
+        <div className="crm-context">
+          <span className="crm-result-count">{total} ta mijoz</span>
+          {hasFilters ? <span className="crm-context-hint">Filtrlar qo‘llangan</span> : null}
+        </div>
+      ) : null}
+
+      {showSurface ? (
+        <div className="crm-surface surface-table">
+          <DataTable sticky>
             <thead>
               <tr>
-                <th>Ism</th>
-                <th>Telefon</th>
-                <th>Daraja</th>
-                <th>Cashback</th>
-                <th>Xaridlar</th>
-                <th />
+                <th>Mijoz</th>
+                <th>Loyalty</th>
+                <th className="num">Cashback</th>
+                <th className="num">Xaridlar</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((item) => (
-                <tr
-                  key={item.id}
-                  onClick={() => void openCustomer(item.id)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <td>
-                    {`${item.firstName || ""} ${item.lastName || ""}`.trim() || `#${item.id}`}
-                    <div className="muted">id {item.id}</div>
-                  </td>
-                  <td>{item.phoneMasked || "—"}</td>
-                  <td>{item.tier}</td>
-                  <td>{money(Number(item.cashbackBalance || 0))}</td>
-                  <td>{item.purchasesCount}</td>
-                  <td>
-                    <button className="ghost" type="button" onClick={(e) => { e.stopPropagation(); void openCustomer(item.id); }}>
-                      Ochish
-                    </button>
+              {rows.length === 0 ? (
+                <tr className="crm-empty-row">
+                  <td colSpan={4}>
+                    <div className="crm-empty">
+                      <div className="empty-title">Mijozlar topilmadi</div>
+                      <p className="empty-desc">
+                        {hasFilters
+                          ? "Bu filtrlar bo‘yicha mijoz topilmadi."
+                          : "Hozircha mijozlar mavjud emas."}
+                      </p>
+                      {hasFilters ? (
+                        <button className="btn-tertiary" type="button" onClick={resetFilters}>
+                          Filtrlarni tozalash
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="toolbar" style={{ marginTop: 12 }}>
-            <button
-              className="ghost"
-              type="button"
-              disabled={loading || offset <= 0}
-              onClick={() => void loadPage({ offset: Math.max(0, offset - CUSTOMER_PAGE) })}
-            >
-              Oldingi
-            </button>
-            <span className="muted">
-              {total ? `${offset + 1}–${Math.min(offset + rows.length, total)} / ${total}` : "Jami: 0"}
-            </span>
-            <button
-              className="ghost"
-              type="button"
-              disabled={loading || !hasMore}
-              onClick={() => void loadPage({ offset: offset + CUSTOMER_PAGE })}
-            >
-              Keyingi
-            </button>
-          </div>
-        </div>
-      </StateBox>
-
-      {detailLoading || detailError || detail ? (
-        <div className="card" style={{ marginTop: 16 }}>
-          {detailLoading ? <p className="muted">Yuklanmoqda…</p> : null}
-          {detailError ? <p style={{ color: "var(--danger)" }}>{detailError}</p> : null}
-          {detail ? (
-            <>
-              <div className="toolbar" style={{ margin: 0, justifyContent: "space-between" }}>
-                <h2>{`${detail.firstName || ""} ${detail.lastName || ""}`.trim() || `#${detail.id}`}</h2>
-                <button className="ghost" type="button" onClick={() => { setDetail(null); setHistory([]); setDetailError(""); }}>
-                  Yopish
-                </button>
-              </div>
-              <div className="kpis">
-                <div className="card">
-                  <div className="muted">Cashback balansi</div>
-                  <h2>{money(Number(detail.cashbackBalance || 0))}</h2>
-                  <div className="muted" style={{ fontSize: 11 }}>
-                    manba: {String(detail.cashbackSource || "cashback_accounts")}
-                  </div>
-                </div>
-                <div className="card">
-                  <div className="muted">Daraja</div>
-                  <h2>{detail.tier}</h2>
-                </div>
-                <div className="card">
-                  <div className="muted">Xaridlar soni</div>
-                  <h2>{Number(detail.purchasesCount || 0)}</h2>
-                </div>
-                <div className="card">
-                  <div className="muted">Umumiy xarid</div>
-                  <h2>{money(Number(detail.totalPurchases || 0))}</h2>
-                </div>
-              </div>
-              <p className="muted" style={{ marginTop: 10 }}>
-                Telefon: {detail.phoneMasked || "—"} · Til: {detail.language || "—"} · Ro‘yxatdan o‘tgan:{" "}
-                {fmtDate(detail.createdAt)}
-              </p>
-
-              <h2 style={{ marginTop: 16 }}>Cashback tarixi</h2>
-              <p className="muted" style={{ fontSize: 12 }}>
-                cashback_ledger proyeksiyasi (faqat ko‘rish). Balansni qo‘lda o‘zgartirish yo‘q.
-              </p>
-              {history.length === 0 ? (
-                <p className="muted">Cashback yozuvlari yo‘q.</p>
               ) : (
-                <table className="table">
+                rows.map((item) => {
+                  const active = detail?.id === item.id;
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`crm-row${active ? " is-active" : ""}`}
+                      tabIndex={0}
+                      aria-selected={active}
+                      onClick={() => void openCustomer(item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          void openCustomer(item.id);
+                        }
+                      }}
+                    >
+                      <td>
+                        <div className="crm-name">{customerName(item)}</div>
+                        <div className="meta">{item.phoneMasked || "—"}</div>
+                      </td>
+                      <td>{item.tier || "—"}</td>
+                      <td className="num money-md">{money(Number(item.cashbackBalance || 0))}</td>
+                      <td className="num">{item.purchasesCount ?? "—"}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </DataTable>
+          {rows.length > 0 ? (
+            <PaginationBar
+              offset={offset}
+              limit={CUSTOMER_PAGE}
+              total={total}
+              hasMore={hasMore}
+              loading={loading}
+              onPrev={() => void loadPage({ offset: Math.max(0, offset - CUSTOMER_PAGE) })}
+              onNext={() => void loadPage({ offset: offset + CUSTOMER_PAGE })}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      <DetailDrawer
+        open={Boolean(detail) || detailLoading || Boolean(detailError)}
+        title={detail ? customerName(detail) : "Mijoz"}
+        subtitle={detail?.phoneMasked || undefined}
+        status={
+          detail ? (
+            <div className="crm-drawer-status">
+              <StatusBadge tone="info">{detail.tier || "—"}</StatusBadge>
+              <StatusBadge tone="ok">{money(Number(detail.cashbackBalance || 0))}</StatusBadge>
+            </div>
+          ) : undefined
+        }
+        width="lg"
+        onClose={() => {
+          setDetail(null);
+          setHistory([]);
+          setDetailError("");
+        }}
+      >
+        {detailLoading ? <LoadingBlock rows={2} label="Yuklanmoqda…" /> : null}
+        {detailError ? <ErrorState message={detailError} /> : null}
+        {detail ? (
+          <>
+            <DrawerSection title="Mijoz">
+              <dl className="crm-kv">
+                <div>
+                  <dt>Ism</dt>
+                  <dd>{customerName(detail)}</dd>
+                </div>
+                <div>
+                  <dt>Telefon</dt>
+                  <dd>{detail.phoneMasked || "—"}</dd>
+                </div>
+                {detail.language ? (
+                  <div>
+                    <dt>Til</dt>
+                    <dd>{detail.language}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Ro‘yxatdan</dt>
+                  <dd>{fmtDate(detail.createdAt)}</dd>
+                </div>
+              </dl>
+            </DrawerSection>
+
+            <DrawerSection title="Cashback">
+              <dl className="crm-kv">
+                <div>
+                  <dt>Balans</dt>
+                  <dd className="money-md">{money(Number(detail.cashbackBalance || 0))}</dd>
+                </div>
+                {detail.savedAmount != null ? (
+                  <div>
+                    <dt>Tejalgan</dt>
+                    <dd>{money(Number(detail.savedAmount || 0))}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              <p className="meta">Balans tizim hisobi bo‘yicha. Qo‘lda o‘zgartirish yo‘q.</p>
+            </DrawerSection>
+
+            <DrawerSection title="Loyalty">
+              <dl className="crm-kv">
+                <div>
+                  <dt>Daraja</dt>
+                  <dd>{detail.tier || "—"}</dd>
+                </div>
+                <div>
+                  <dt>Xaridlar</dt>
+                  <dd>{Number(detail.purchasesCount || 0)}</dd>
+                </div>
+                <div>
+                  <dt>Umumiy xarid</dt>
+                  <dd>{money(Number(detail.totalPurchases || 0))}</dd>
+                </div>
+              </dl>
+              <p className="meta">Loyalty darajasi cashback balansidan alohida.</p>
+            </DrawerSection>
+
+            <DrawerSection title="Cashback tarixi">
+              {history.length === 0 ? (
+                <p className="meta">Cashback operatsiyalari mavjud emas.</p>
+              ) : (
+                <DataTable>
                   <thead>
                     <tr>
-                      <th>Vaqt</th>
-                      <th>Tur</th>
-                      <th>Summa</th>
-                      <th>Source</th>
-                      <th>Buyurtma / chek</th>
-                      <th>Filial</th>
+                      <th>Sana</th>
+                      <th>Operatsiya</th>
+                      <th className="num">Summa</th>
+                      <th>Manba</th>
+                      <th>Buyurtma</th>
                     </tr>
                   </thead>
                   <tbody>
                     {history.map((item: any) => (
                       <tr key={item.id}>
-                        <td>{fmtDate(item.createdAt)}</td>
-                        <td><Badge tone={entryTone(item.entryType)}>{item.entryType}</Badge></td>
-                        <td>{Number(item.cashback) > 0 ? "+" : ""}{money(Number(item.cashback || 0))}</td>
+                        <td className="meta">{fmtDate(item.createdAt)}</td>
                         <td>
-                          {item.sourceType || "—"}
-                          {item.sourceKey ? <div className="muted">{item.sourceKey}</div> : null}
-                          {item.sourceContract ? <div className="muted">{item.sourceContract}</div> : null}
+                          <StatusLabelBadge domain="entry" status={item.entryType || ""} />
+                          {item.sourceContract ? (
+                            <div className="meta">{operatorCapabilityLabel(String(item.sourceContract))}</div>
+                          ) : null}
                         </td>
+                        <td className="num">
+                          {Number(item.cashback) > 0 ? "+" : ""}
+                          {money(Number(item.cashback || 0))}
+                        </td>
+                        <td>{movementSource(item)}</td>
                         <td>
                           {item.orderCode || (item.orderId != null ? `#${item.orderId}` : "—")}
-                          {item.receiptId ? <div className="muted">chek {item.receiptId}</div> : null}
+                          {item.receiptId ? <div className="meta">Chek {item.receiptId}</div> : null}
                         </td>
-                        <td>{item.branchName || (item.branchId != null ? `#${item.branchId}` : "—")}</td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </DataTable>
               )}
-            </>
-          ) : null}
-        </div>
-      ) : null}
-    </>
+            </DrawerSection>
+          </>
+        ) : null}
+      </DetailDrawer>
+    </div>
   );
 }

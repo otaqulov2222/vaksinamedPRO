@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { assertProductionRedisConfig, warmRedisForBoot } from "./lib/redis";
+import { assertProductionMerchantSecretCryptoReady } from "./lib/merchantSecretCrypto";
 import { isProductionLike } from "./lib/securityEnv";
 
 /** Lokal .env ni yuklash (ESKIZ_EMAIL, ESKIZ_PASSWORD, ...) */
@@ -45,6 +46,8 @@ const smsMode = process.env.ESKIZ_EMAIL && process.env.ESKIZ_PASSWORD ? "eskiz" 
 async function boot() {
   // Fail closed: production-like without REDIS_URL must not start with memory rate limits.
   assertProductionRedisConfig();
+  // Fail closed: production-like without MERCHANT_SECRET_KEK must not run plaintext merchant secrets.
+  assertProductionMerchantSecretCryptoReady();
   let redisBoot: { mode: "redis" | "skipped"; latencyMs?: number } = { mode: "skipped" };
   try {
     redisBoot = await warmRedisForBoot();

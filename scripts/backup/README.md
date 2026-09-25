@@ -3,7 +3,7 @@
 ## Status
 
 - **Logical restore drill (PGlite / migrations):** available via `pnpm backup:drill`
-- **Managed PostgreSQL automated backups:** still **operator-owned / BACKUP_GAP** until provider drill is recorded
+- **Managed PostgreSQL automated backups / PITR:** **OPS_REQUIRED** (Phase 12.29 — no managed provider / `DATABASE_URL` in workspace)
 - This folder does **not** claim production backups exist until a provider drill is recorded
 
 ## Commands

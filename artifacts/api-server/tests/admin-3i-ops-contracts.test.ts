@@ -57,11 +57,14 @@ describe("Batch 3I admin ops polish contracts", () => {
 
   it("admin UI uses capabilities for cancel and honest loading/error/retry", () => {
     const ui = readFileSync(path.join(root, "../admin-web/src/pages/OrdersPage.tsx"), "utf8");
+    const shared = readFileSync(path.join(root, "../admin-web/src/ui.tsx"), "utf8");
     const app = readFileSync(path.join(root, "../admin-web/src/App.tsx"), "utf8");
     assert.match(ui, /capabilities|canCancel/);
     assert.match(ui, /canCancel/);
-    assert.match(ui, /Qayta urinish/);
-    assert.match(ui, /Yuklanmoqda/);
+    assert.match(ui, /ErrorState/);
+    assert.match(ui, /LoadingBlock/);
+    assert.match(shared, /Qayta urinish/);
+    assert.match(shared, /Yuklanmoqda/);
     assert.match(ui, /createdFrom/);
     assert.match(ui, /bron muddati tugagan/);
     assert.match(app, /\/api\/admin\/logout/);

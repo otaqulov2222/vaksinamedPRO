@@ -1,6 +1,24 @@
 import { useEffect, useState } from "react";
 import { request, money, isHqRole, fmtDate, type AdminUser } from "../api";
-import { Badge, PageHeader } from "../ui";
+import {
+  StatusLabelBadge,
+  AdminPageHeader,
+  FilterField,
+  SearchInput,
+  DataTable,
+  PaginationBar,
+  ErrorState,
+  LoadingBlock,
+  ConfirmDialog,
+  DetailDrawer,
+  DrawerSection,
+  FeedbackBanner,
+  fulfillmentLabel,
+  paymentLabel,
+  reservationLabel,
+  operatorCapabilityLabel,
+} from "../ui";
+import { PAGE_DESCRIPTIONS } from "../nav";
 
 const ORDER_PAGE = 25;
 
@@ -16,31 +34,73 @@ const FULFILLMENT_STATUSES = [
 const PAYMENT_STATUSES = ["PENDING", "PAID", "FAILED", "REFUNDED", "PARTIALLY_REFUNDED"];
 const RESERVATION_STATUSES = ["NONE", "ACTIVE", "EXPIRED", "CANCELLED", "FULFILLED"];
 
-function fulfillmentTone(status: string): "ok" | "warn" | "danger" | "neutral" {
-  const s = String(status || "").toUpperCase();
-  if (s === "COMPLETED") return "ok";
-  if (s === "CANCELLED") return "danger";
-  if (s === "CREATED") return "neutral";
-  return "warn";
+type OrderFilters = {
+  q: string;
+  fulfillment: string;
+  payment: string;
+  reservation: string;
+  branchId: string;
+  createdFrom: string;
+  createdTo: string;
+};
+
+const EMPTY_FILTERS: OrderFilters = {
+  q: "",
+  fulfillment: "",
+  payment: "",
+  reservation: "",
+  branchId: "",
+  createdFrom: "",
+  createdTo: "",
+};
+
+function customerLabel(item: any): string {
+  if (!item?.customer) return "—";
+  const n = `${item.customer.firstName || ""} ${item.customer.lastName || ""}`.trim();
+  return n || "—";
 }
 
-function paymentTone(status: string): "ok" | "warn" | "danger" | "neutral" {
-  const s = String(status || "").toUpperCase();
-  if (s === "PAID") return "ok";
-  if (s === "FAILED") return "danger";
-  if (s === "REFUNDED" || s === "PARTIALLY_REFUNDED") return "warn";
-  return "neutral";
+function fulfillmentKindLabel(kind: string): string {
+  const k = String(kind || "").toLowerCase();
+  if (k === "delivery") return "Yetkazib berish";
+  if (k === "pickup") return "Olib ketish";
+  return kind ? String(kind) : "—";
 }
 
-function reservationTone(status: string): "ok" | "warn" | "danger" | "neutral" {
-  const s = String(status || "").toUpperCase();
-  if (s === "ACTIVE" || s === "FULFILLED") return "ok";
-  if (s === "EXPIRED") return "warn";
-  if (s === "CANCELLED") return "danger";
-  return "neutral";
+/** Display-only: calm ALL_CAPS / snake tokens without inventing providers. */
+function paymentMethodLabel(method: string): string {
+  const s = String(method || "").trim();
+  if (!s) return "—";
+  if (/^[A-Z0-9_]+$/.test(s)) {
+    return s
+      .split("_")
+      .map((w) => (w ? w.charAt(0) + w.slice(1).toLowerCase() : ""))
+      .filter(Boolean)
+      .join(" ");
+  }
+  return s;
 }
 
-export function OrdersPage(props: { token: string; user: AdminUser | null; branches: any[] }) {
+function lineTotal(item: any): number {
+  if (item?.total != null && Number.isFinite(Number(item.total))) return Number(item.total);
+  if (item?.lineTotal != null && Number.isFinite(Number(item.lineTotal))) return Number(item.lineTotal);
+  return Number(item?.price || 0) * Number(item?.quantity || 0);
+}
+
+function filtersActive(f: OrderFilters): boolean {
+  return Boolean(
+    f.q.trim() || f.fulfillment || f.payment || f.reservation || f.branchId || f.createdFrom || f.createdTo,
+  );
+}
+
+export function OrdersPage(props: {
+  token: string;
+  user: AdminUser | null;
+  branches: any[];
+  /** Open this order detail on mount (e.g. from Dashboard). */
+  initialOrderId?: number | null;
+  onInitialOrderConsumed?: () => void;
+}) {
   const [orders, setOrders] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -60,21 +120,28 @@ export function OrdersPage(props: { token: string; user: AdminUser | null; branc
 
   const [selected, setSelected] = useState<any>(null);
   const [capabilities, setCapabilities] = useState<any>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const isHq = Boolean(props.user && isHqRole(props.user.role));
+  const currentFilters: OrderFilters = {
+    q, fulfillment, payment, reservation, branchId, createdFrom, createdTo,
+  };
+  const hasFilters = filtersActive(currentFilters);
+  const moreFiltersActive = Boolean(reservation);
 
-  async function loadPage(opts?: { offset?: number }) {
+  async function loadPage(opts?: { offset?: number; filters?: OrderFilters }) {
     const nextOffset = opts?.offset ?? 0;
+    const f = opts?.filters ?? currentFilters;
     const qs = new URLSearchParams();
     qs.set("limit", String(ORDER_PAGE));
     qs.set("offset", String(nextOffset));
-    if (q.trim()) qs.set("q", q.trim());
-    if (fulfillment) qs.set("fulfillmentStatus", fulfillment);
-    if (payment) qs.set("paymentStatus", payment);
-    if (reservation) qs.set("reservationStatus", reservation);
-    if (branchId) qs.set("branchId", branchId);
-    if (createdFrom.trim()) qs.set("createdFrom", createdFrom.trim());
-    if (createdTo.trim()) qs.set("createdTo", createdTo.trim());
+    if (f.q.trim()) qs.set("q", f.q.trim());
+    if (f.fulfillment) qs.set("fulfillmentStatus", f.fulfillment);
+    if (f.payment) qs.set("paymentStatus", f.payment);
+    if (f.reservation) qs.set("reservationStatus", f.reservation);
+    if (f.branchId) qs.set("branchId", f.branchId);
+    if (f.createdFrom.trim()) qs.set("createdFrom", f.createdFrom.trim());
+    if (f.createdTo.trim()) qs.set("createdTo", f.createdTo.trim());
 
     setLoading(true);
     setListError("");
@@ -90,17 +157,31 @@ export function OrdersPage(props: { token: string; user: AdminUser | null; branc
       setHasMore(false);
       const status = err && typeof err === "object" && "status" in err ? Number((err as { status?: number }).status) : 0;
       const code = err && typeof err === "object" && "code" in err ? String((err as { code?: string }).code || "") : "";
-      if (status === 401) setListError("Sessiya tugagan (401)");
-      else if (status === 403) setListError("Ruxsat yo‘q (403)");
-      else if (code === "INVALID_DATE_FILTER") setListError("Sana filtri YYYY-MM-DD (Asia/Tashkent) bo‘lishi kerak");
-      else setListError(err instanceof Error ? err.message : "Ro‘yxat yuklanmadi");
+      if (status === 401) setListError("Sessiya tugagan. Qayta kiring.");
+      else if (status === 403) setListError("Buyurtmalar ro‘yxatini ko‘rish uchun ruxsat yo‘q.");
+      else if (code === "INVALID_DATE_FILTER") setListError("Sana filtri YYYY-MM-DD formatida bo‘lishi kerak.");
+      else setListError(err instanceof Error ? err.message : "Buyurtmalarni yuklab bo‘lmadi.");
     } finally {
       setLoading(false);
     }
   }
 
+  function applySearch() {
+    void loadPage({ offset: 0 });
+  }
+
   useEffect(() => {
-    void loadPage({ offset: 0 });  }, [props.token]);
+    void loadPage({ offset: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.token]);
+
+  useEffect(() => {
+    if (props.initialOrderId == null || !Number.isFinite(props.initialOrderId)) return;
+    void openOrder(props.initialOrderId).finally(() => {
+      props.onInitialOrderConsumed?.();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.initialOrderId]);
 
   async function openOrder(id: number) {
     setMsg("");
@@ -113,9 +194,9 @@ export function OrdersPage(props: { token: string; user: AdminUser | null; branc
       setSelected(null);
       setCapabilities(null);
       const status = err && typeof err === "object" && "status" in err ? Number((err as { status?: number }).status) : 0;
-      if (status === 403) setMsg("Filial ruxsati yo‘q (403)");
-      else if (status === 404) setMsg("Buyurtma topilmadi");
-      else setMsg(err instanceof Error ? err.message : "Buyurtma ochilmadi");
+      if (status === 403) setMsg("Bu buyurtmani ko‘rish uchun filial ruxsati yo‘q.");
+      else if (status === 404) setMsg("Buyurtma topilmadi.");
+      else setMsg(err instanceof Error ? err.message : "Buyurtma ochilmadi.");
     }
   }
 
@@ -125,8 +206,7 @@ export function OrdersPage(props: { token: string; user: AdminUser | null; branc
       setSelected(detail.order);
       setCapabilities(detail.capabilities || null);
     } catch {
-      setSelected(null);
-      setCapabilities(null);
+      /* keep prior selection on soft refresh failure */
     }
   }
 
@@ -140,14 +220,14 @@ export function OrdersPage(props: { token: string; user: AdminUser | null; branc
       await refreshDetail(id);
       if (data?.note) setMsg(String(data.note));
       else if (data?.paymentRefundRequired) {
-        setMsg("Bekor qilindi. PSP refund CONTRACT_PENDING — pul avtomatik qaytarilmaydi.");
-      } else setMsg("Saqlandi");
+        setMsg(`Bekor qilindi. ${operatorCapabilityLabel("CONTRACT_PENDING")} — pul avtomatik qaytarilmaydi.`);
+      } else setMsg("Saqlandi.");
     } catch (err) {
       const status = err && typeof err === "object" && "status" in err ? Number((err as { status?: number }).status) : 0;
       const code = err && typeof err === "object" && "code" in err ? String((err as { code?: string }).code || "") : "";
-      if (status === 403) setMsg("Ruxsat yo‘q");
-      else if (code === "INVALID_TRANSITION") setMsg(err instanceof Error ? err.message : "Holat o‘tishi ruxsat etilmagan");
-      else setMsg(err instanceof Error ? err.message : "Amal bajarilmadi");
+      if (status === 403) setMsg("Ruxsat yo‘q.");
+      else if (code === "INVALID_TRANSITION") setMsg(err instanceof Error ? err.message : "Holat o‘tishi ruxsat etilmagan.");
+      else setMsg(err instanceof Error ? err.message : "Amal bajarilmadi.");
     } finally {
       setBusy(false);
     }
@@ -164,264 +244,492 @@ export function OrdersPage(props: { token: string; user: AdminUser | null; branc
       });
       await loadPage({ offset });
       if (selected?.id === id) await refreshDetail(id);
-      setMsg("FOM tasdiq bajarildi (COMPLETED + consume). To‘lov o‘qi alohida.");
+      setMsg("FOM tasdiq bajarildi. To‘lov o‘qi alohida.");
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Amal bajarilmadi");
+      setMsg(err instanceof Error ? err.message : "Amal bajarilmadi.");
     } finally {
       setBusy(false);
     }
   }
 
+  function resetFilters() {
+    setQ("");
+    setFulfillment("");
+    setPayment("");
+    setReservation("");
+    setBranchId("");
+    setCreatedFrom("");
+    setCreatedTo("");
+    void loadPage({ offset: 0, filters: EMPTY_FILTERS });
+  }
+
+  const showTableSurface = !listError && !(loading && orders.length === 0);
+
   return (
-    <>
-      <PageHeader
+    <div className="orders-page page-module">
+      <AdminPageHeader
         title="Buyurtmalar"
-        subtitle="P5 o‘qlar alohida: FULFILLMENT · PAYMENT · RESERVATION. Server holati asosiy. Sana filtri: Asia/Tashkent kuni."
+        description={PAGE_DESCRIPTIONS.orders}
       />
 
-      <div className="toolbar" style={{ flexWrap: "wrap" }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Kod / telefon / ism" />
-        {isHq ? (
-          <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-            <option value="">Filial: barchasi</option>
-            {props.branches.map((b) => (
-              <option key={b.id} value={String(b.id)}>{b.name}</option>
-            ))}
-          </select>
-        ) : (
-          <span className="muted">Filial: o‘z filialingiz (server)</span>
-        )}
-        <select value={fulfillment} onChange={(e) => setFulfillment(e.target.value)}>
-          <option value="">Fulfillment: barchasi</option>
-          {FULFILLMENT_STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <select value={payment} onChange={(e) => setPayment(e.target.value)}>
-          <option value="">Payment: barchasi</option>
-          {PAYMENT_STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <select value={reservation} onChange={(e) => setReservation(e.target.value)}>
-          <option value="">Reservation: barchasi</option>
-          {RESERVATION_STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} title="createdFrom (Tashkent)" />
-        <input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} title="createdTo (Tashkent)" />
-        <button className="primary" type="button" disabled={loading || busy} onClick={() => void loadPage({ offset: 0 })}>
-          Qidirish
-        </button>
+      <div className="orders-controls">
+        <div className="orders-controls-primary">
+          <FilterField label="Buyurtma yoki mijoz" grow>
+            <SearchInput
+              value={q}
+              onChange={setQ}
+              placeholder="Kod, telefon yoki ism"
+              onSubmit={applySearch}
+            />
+          </FilterField>
+          <FilterField label="Holat">
+            <select
+              value={fulfillment}
+              onChange={(e) => setFulfillment(e.target.value)}
+              aria-label="Holat"
+            >
+              <option value="">Barchasi</option>
+              {FULFILLMENT_STATUSES.map((s) => (
+                <option key={s} value={s}>{fulfillmentLabel(s)}</option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="To‘lov">
+            <select
+              value={payment}
+              onChange={(e) => setPayment(e.target.value)}
+              aria-label="To‘lov"
+            >
+              <option value="">Barchasi</option>
+              {PAYMENT_STATUSES.map((s) => (
+                <option key={s} value={s}>{paymentLabel(s)}</option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Filial">
+            {isHq ? (
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                aria-label="Filial"
+              >
+                <option value="">Barchasi</option>
+                {props.branches.map((b) => (
+                  <option key={b.id} value={String(b.id)}>{b.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input value="O‘z filiali" disabled readOnly aria-label="Filial" />
+            )}
+          </FilterField>
+        </div>
+
+        <div className="orders-controls-secondary">
+          <div className="orders-date-group">
+            <span className="filter-label">Sana</span>
+            <div className="orders-date-inputs">
+              <input
+                type="date"
+                value={createdFrom}
+                onChange={(e) => setCreatedFrom(e.target.value)}
+                aria-label="Dan"
+              />
+              <span className="orders-date-sep" aria-hidden="true">–</span>
+              <input
+                type="date"
+                value={createdTo}
+                onChange={(e) => setCreatedTo(e.target.value)}
+                aria-label="Gacha"
+              />
+            </div>
+          </div>
+
+          <details className="orders-more" {...(moreFiltersActive ? { open: true } : {})}>
+            <summary>
+              Qo‘shimcha filtrlar
+              {moreFiltersActive ? <span className="orders-more-dot" aria-hidden="true" /> : null}
+            </summary>
+            <div className="orders-more-body">
+              <FilterField label="Bron">
+                <select
+                  value={reservation}
+                  onChange={(e) => setReservation(e.target.value)}
+                  aria-label="Bron"
+                >
+                  <option value="">Barchasi</option>
+                  {RESERVATION_STATUSES.map((s) => (
+                    <option key={s} value={s}>{reservationLabel(s)}</option>
+                  ))}
+                </select>
+              </FilterField>
+            </div>
+          </details>
+
+          <div className="orders-controls-actions">
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={loading || busy}
+              onClick={applySearch}
+            >
+              Qidirish
+            </button>
+            {hasFilters ? (
+              <button
+                className="btn-tertiary"
+                type="button"
+                disabled={loading || busy}
+                onClick={resetFilters}
+              >
+                Tozalash
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
 
-      {msg ? <p className="muted">{msg}</p> : null}
-
+      {msg ? <FeedbackBanner tone="info">{msg}</FeedbackBanner> : null}
       {listError ? (
-        <div className="card">
-          <p style={{ color: "var(--danger)" }}>{listError}</p>
-          <button className="ghost" type="button" disabled={loading} onClick={() => void loadPage({ offset })}>
-            Qayta urinish
-          </button>
+        <ErrorState message={listError} onRetry={() => void loadPage({ offset })} />
+      ) : null}
+
+      {!listError && !loading ? (
+        <div className="orders-context">
+          <span className="orders-result-count">{total} ta buyurtma</span>
+          {hasFilters ? <span className="orders-context-hint">Filtrlar qo‘llangan</span> : null}
         </div>
       ) : null}
 
-      {loading ? <p className="muted">Yuklanmoqda…</p> : null}
+      {loading && orders.length === 0 ? <LoadingBlock rows={3} /> : null}
 
-      {!listError && !loading && orders.length === 0 ? (
-        <div className="card"><p className="muted">Buyurtmalar topilmadi.</p></div>
-      ) : null}
-
-      {!listError && orders.length > 0 ? (
-        <div className="card">
-          <table className="table">
+      {showTableSurface ? (
+        <div className="orders-surface surface-table">
+          <DataTable sticky>
             <thead>
               <tr>
-                <th>Kod</th>
+                <th>Buyurtma</th>
                 <th>Mijoz</th>
                 <th>Filial</th>
-                <th>Tur</th>
-                <th>Fulfillment</th>
-                <th>Payment</th>
-                <th>Reservation</th>
-                <th>Summa</th>
-                <th>Yaratilgan</th>
-                <th></th>
+                <th>Holat</th>
+                <th>To‘lov</th>
+                <th className="num">Summa</th>
+                <th>Vaqt</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.code}</td>
-                  <td>
-                    {item.customer
-                      ? `${item.customer.firstName || ""} ${item.customer.lastName || ""}`.trim() || `#${item.customer.id}`
-                      : item.customerId ? `#${item.customerId}` : "—"}
-                    {item.customer?.id ? <div className="muted">id {item.customer.id}</div> : null}
-                  </td>
-                  <td>{item.branch?.name || `#${item.branchId}`}</td>
-                  <td>{item.fulfillment}</td>
-                  <td>
-                    <Badge tone={fulfillmentTone(item.fulfillmentStatus || item.status)}>
-                      {item.fulfillmentStatus || item.status}
-                    </Badge>
-                  </td>
-                  <td>
-                    <Badge tone={paymentTone(item.paymentStatus)}>{item.paymentStatus || "—"}</Badge>
-                  </td>
-                  <td>
-                    <Badge tone={reservationTone(item.reservationStatus)}>{item.reservationStatus || "—"}</Badge>
-                    {item.reservationExpired ? <div className="muted">muddati tugagan</div> : null}
-                  </td>
-                  <td>{money(Number(item.total || 0))}</td>
-                  <td>{fmtDate(item.createdAt)}</td>
-                  <td>
-                    <button className="ghost" type="button" onClick={() => void openOrder(item.id)}>Ochish</button>
+              {orders.length === 0 ? (
+                <tr className="orders-empty-row">
+                  <td colSpan={7}>
+                    <div className="orders-empty">
+                      <div className="empty-title">Buyurtmalar topilmadi</div>
+                      <p className="empty-desc">
+                        {hasFilters
+                          ? "Tanlangan mezonlar bo‘yicha buyurtmalar topilmadi."
+                          : "Buyurtmalar hozircha mavjud emas."}
+                      </p>
+                      {hasFilters ? (
+                        <button
+                          className="btn-tertiary"
+                          type="button"
+                          disabled={busy}
+                          onClick={resetFilters}
+                        >
+                          Filtrlarni tozalash
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                orders.map((item) => {
+                  const active = selected?.id === item.id;
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`orders-row${active ? " is-active" : ""}`}
+                      tabIndex={0}
+                      aria-selected={active}
+                      onClick={() => void openOrder(item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          void openOrder(item.id);
+                        }
+                      }}
+                    >
+                      <td>
+                        <div className="orders-code">{item.code}</div>
+                        <div className="meta">{fulfillmentKindLabel(item.fulfillment)}</div>
+                      </td>
+                      <td>{customerLabel(item)}</td>
+                      <td>{item.branch?.name || "—"}</td>
+                      <td>
+                        <StatusLabelBadge
+                          domain="fulfillment"
+                          status={item.fulfillmentStatus || item.status || ""}
+                        />
+                      </td>
+                      <td>
+                        <StatusLabelBadge domain="payment" status={item.paymentStatus || ""} />
+                      </td>
+                      <td className="num money-md">{money(Number(item.total || 0))}</td>
+                      <td className="meta">{fmtDate(item.createdAt)}</td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
-          </table>
-
-          <div className="toolbar" style={{ marginTop: 12 }}>
-            <span className="muted">
-              {total ? `${offset + 1}–${Math.min(offset + orders.length, total)} / ${total}` : "Jami: 0"}
-            </span>
-            <button
-              className="ghost"
-              type="button"
-              disabled={offset <= 0 || busy || loading}
-              onClick={() => void loadPage({ offset: Math.max(0, offset - ORDER_PAGE) })}
-            >
-              Oldingi
-            </button>
-            <button
-              className="ghost"
-              type="button"
-              disabled={!hasMore || busy || loading}
-              onClick={() => void loadPage({ offset: offset + ORDER_PAGE })}
-            >
-              Keyingi
-            </button>
-          </div>
+          </DataTable>
+          {orders.length > 0 ? (
+            <PaginationBar
+              offset={offset}
+              limit={ORDER_PAGE}
+              total={total}
+              hasMore={hasMore}
+              loading={loading || busy}
+              onPrev={() => void loadPage({ offset: Math.max(0, offset - ORDER_PAGE) })}
+              onNext={() => void loadPage({ offset: offset + ORDER_PAGE })}
+            />
+          ) : null}
         </div>
       ) : null}
 
-      {selected ? (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="toolbar" style={{ margin: 0, justifyContent: "space-between" }}>
-            <h2>{selected.code}</h2>
-            <button className="ghost" type="button" onClick={() => { setSelected(null); setCapabilities(null); }}>
-              Yopish
-            </button>
-          </div>
-          <p className="muted">
-            {selected.branch?.name} · {selected.fulfillment}
-            {selected.createdAt ? ` · yaratilgan: ${fmtDate(selected.createdAt)}` : ""}
-            {selected.reservedUntil ? ` · bron: ${fmtDate(selected.reservedUntil)}` : ""}
-          </p>
-
-          {selected.customer ? (
-            <p>
-              <b>Mijoz:</b> {`${selected.customer.firstName || ""} ${selected.customer.lastName || ""}`.trim() || "—"}
-              {" · "}{selected.customer.phone || "—"}{" · "}id {selected.customer.id}
-              <span className="muted"> (telefon ko‘rinishi POLICY E OPEN)</span>
-            </p>
-          ) : (
-            <p className="muted">Mijoz: #{selected.customerId}</p>
-          )}
-
-          <div className="kpis" style={{ marginTop: 8 }}>
-            <div className="card">
-              <div className="muted">Fulfillment</div>
-              <Badge tone={fulfillmentTone(selected.fulfillmentStatus)}>{selected.fulfillmentStatus}</Badge>
+      <DetailDrawer
+        open={Boolean(selected)}
+        width="lg"
+        title={selected?.code || "Buyurtma"}
+        subtitle={
+          selected
+            ? `${selected.branch?.name || "—"} · ${fulfillmentKindLabel(selected.fulfillment)}`
+            : undefined
+        }
+        status={
+          selected ? (
+            <div className="orders-drawer-status">
+              <StatusLabelBadge
+                domain="fulfillment"
+                status={selected.fulfillmentStatus || ""}
+              />
+              <StatusLabelBadge domain="payment" status={selected.paymentStatus || ""} />
             </div>
-            <div className="card">
-              <div className="muted">Payment</div>
-              <Badge tone={paymentTone(selected.paymentStatus)}>{selected.paymentStatus}</Badge>
-            </div>
-            <div className="card">
-              <div className="muted">Reservation</div>
-              <Badge tone={reservationTone(selected.reservationStatus)}>{selected.reservationStatus}</Badge>
-              {selected.reservationExpired ? (
-                <div className="muted" style={{ fontSize: 11 }}>
-                  bron muddati tugagan — buyurtma avtomatik bekor qilinmaydi
-                </div>
+          ) : undefined
+        }
+        onClose={() => {
+          setSelected(null);
+          setCapabilities(null);
+        }}
+        footer={
+          selected ? (
+            <div className="orders-drawer-actions">
+              <div className="orders-drawer-primary">
+                {capabilities?.canConfirmPos ? (
+                  <button className="btn-primary" type="button" disabled={busy} onClick={() => void confirmPos(selected.id)}>
+                    FOM tasdiq
+                  </button>
+                ) : null}
+                {capabilities?.canCancel ? (
+                  <button className="btn-danger" type="button" disabled={busy} onClick={() => setConfirmCancel(true)}>
+                    Bekor qilish
+                  </button>
+                ) : (
+                  <span className="meta">Bekor qilish mavjud emas (ruxsat yoki holat).</span>
+                )}
+              </div>
+              {capabilities?.canTransitionFulfillment ? (
+                <details className="orders-transitions">
+                  <summary>Holatni o‘zgartirish</summary>
+                  <div className="orders-transition-group" role="group" aria-label="Holat o‘tkazish">
+                    <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/confirm`)}>
+                      {fulfillmentLabel("CONFIRMED")}
+                    </button>
+                    <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/prepare`)}>
+                      {fulfillmentLabel("PREPARING")}
+                    </button>
+                    <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/ready`)}>
+                      {fulfillmentLabel("READY_FOR_PICKUP")}
+                    </button>
+                    {selected.fulfillment === "delivery" ? (
+                      <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/out-for-delivery`)}>
+                        {fulfillmentLabel("OUT_FOR_DELIVERY")}
+                      </button>
+                    ) : null}
+                    <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/complete`)}>
+                      {fulfillmentLabel("COMPLETED")}
+                    </button>
+                  </div>
+                </details>
               ) : null}
             </div>
-            <div className="card">
-              <div className="muted">Jami</div>
-              <h2>{money(Number(selected.total || 0))}</h2>
-            </div>
-          </div>
+          ) : null
+        }
+      >
+        {selected ? (
+          <>
+            <DrawerSection title="Mijoz">
+              {selected.customer ? (
+                <dl className="orders-kv">
+                  <div>
+                    <dt>Ism</dt>
+                    <dd>{customerLabel(selected)}</dd>
+                  </div>
+                  <div>
+                    <dt>Telefon</dt>
+                    <dd>{selected.customer.phone || "—"}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="meta">Mijoz biriktirilmagan.</p>
+              )}
+            </DrawerSection>
 
-          <p className="muted" style={{ marginTop: 12 }}>
-            Subtotal {money(Number(selected.subtotal || 0))}
-            {selected.deliveryFee ? ` + yetkazish ${money(Number(selected.deliveryFee))}` : ""}
-            {selected.cashbackUsed ? ` − cashback ${money(Number(selected.cashbackUsed))}` : ""}
-            {" = "}{money(Number(selected.total || 0))}
-          </p>
-
-          <table className="table">
-            <thead><tr><th>Mahsulot</th><th>Narx</th><th>Soni</th><th>Jami</th></tr></thead>
-            <tbody>
-              {(selected.items || []).map((it: any) => (
-                <tr key={it.id}>
-                  <td>{it.title}</td>
-                  <td>{money(Number(it.price || 0))}</td>
-                  <td>{it.quantity}</td>
-                  <td>{money(Number(it.price || 0) * Number(it.quantity || 0))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="toolbar" style={{ marginTop: 12, flexWrap: "wrap" }}>
-            {capabilities?.canTransitionFulfillment ? (
-              <>
-                <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/confirm`)}>CONFIRMED</button>
-                <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/prepare`)}>PREPARING</button>
-                <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/ready`)}>READY</button>
-                {selected.fulfillment === "delivery" ? (
-                  <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/out-for-delivery`)}>OUT_FOR_DELIVERY</button>
+            <DrawerSection title="Yetkazish / holat">
+              <dl className="orders-kv">
+                <div>
+                  <dt>Tur</dt>
+                  <dd>{fulfillmentKindLabel(selected.fulfillment)}</dd>
+                </div>
+                <div>
+                  <dt>Filial</dt>
+                  <dd>{selected.branch?.name || "—"}</dd>
+                </div>
+                {selected.address ? (
+                  <div>
+                    <dt>Manzil</dt>
+                    <dd>{selected.address}</dd>
+                  </div>
                 ) : null}
-                <button className="ghost" type="button" disabled={busy} onClick={() => void orderAction(selected.id, `/api/orders/${selected.id}/complete`)}>COMPLETED</button>
-              </>
-            ) : null}
-            {capabilities?.canConfirmPos ? (
-              <button className="primary" type="button" disabled={busy} onClick={() => void confirmPos(selected.id)}>
-                FOM tasdiq (shortcut)
-              </button>
-            ) : null}
-            {capabilities?.canCancel ? (
-              <button
-                className="ghost"
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  const warn = selected.paymentStatus === "PAID"
-                    ? "PAID buyurtma: bekor qilish pulni avtomatik qaytarmaydi (PSP refund CONTRACT_PENDING). Davom etasizmi?"
-                    : "Buyurtmani bekor qilasizmi?";
-                  if (window.confirm(warn)) {
-                    void orderAction(selected.id, `/api/orders/${selected.id}/admin-cancel`);
-                  }
-                }}
-              >
-                Bekor qilish
-              </button>
-            ) : (
-              <span className="muted">Bekor qilish mavjud emas (ruxsat yoki holat).</span>
-            )}
-          </div>
+                <div>
+                  <dt>Holat</dt>
+                  <dd>
+                    <StatusLabelBadge
+                      domain="fulfillment"
+                      status={selected.fulfillmentStatus || ""}
+                    />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Yaratilgan</dt>
+                  <dd>{fmtDate(selected.createdAt)}</dd>
+                </div>
+              </dl>
+            </DrawerSection>
 
-          <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-            PSP refund yo‘q (CONTRACT_PENDING). COMPLETED mavjud politikada payment o‘qini PAID qilishi mumkin — bu
-            alohida «to‘landi» tugmasi emas.
-            {capabilities?.paymentRefundsViaPsp === false ? " Refund tugmasi yo‘q." : ""}
-          </p>
-        </div>
-      ) : null}
-    </>
+            <DrawerSection title="To‘lov">
+              <dl className="orders-kv">
+                <div>
+                  <dt>Holat</dt>
+                  <dd>
+                    <StatusLabelBadge domain="payment" status={selected.paymentStatus || ""} />
+                  </dd>
+                </div>
+                {selected.paymentMethod ? (
+                  <div>
+                    <dt>Usul</dt>
+                    <dd>{paymentMethodLabel(selected.paymentMethod)}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Jami</dt>
+                  <dd className="money-md">{money(Number(selected.total || 0))}</dd>
+                </div>
+              </dl>
+              <p className="meta">
+                Subtotal {money(Number(selected.subtotal || 0))}
+                {selected.deliveryFee ? ` + yetkazish ${money(Number(selected.deliveryFee))}` : ""}
+                {selected.cashbackUsed ? ` − cashback ${money(Number(selected.cashbackUsed))}` : ""}
+                {" = "}{money(Number(selected.total || 0))}
+              </p>
+              <p className="meta">
+                Provayder orqali pul qaytarish {operatorCapabilityLabel("CONTRACT_PENDING").toLowerCase()}.
+                Yakunlash to‘lov holatiga ta’sir qilishi mumkin — bu alohida «to‘landi» tugmasi emas.
+                {capabilities?.paymentRefundsViaPsp === false ? " Refund tugmasi yo‘q." : ""}
+              </p>
+            </DrawerSection>
+
+            <DrawerSection title="Mahsulotlar">
+              <DataTable>
+                <thead>
+                  <tr>
+                    <th>Mahsulot</th>
+                    <th className="num">Narx</th>
+                    <th className="num">Soni</th>
+                    <th className="num">Jami</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(selected.items || []).map((it: any) => (
+                    <tr key={it.id}>
+                      <td>{it.title}</td>
+                      <td className="num">{money(Number(it.price || 0))}</td>
+                      <td className="num">{it.quantity}</td>
+                      <td className="num">{money(lineTotal(it))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            </DrawerSection>
+
+            {(Number(selected.cashbackUsed || 0) > 0 || Number(selected.cashbackEarned || 0) > 0) ? (
+              <DrawerSection title="Cashback">
+                <dl className="orders-kv">
+                  {Number(selected.cashbackUsed || 0) > 0 ? (
+                    <div>
+                      <dt>Ishlatilgan</dt>
+                      <dd>{money(Number(selected.cashbackUsed))}</dd>
+                    </div>
+                  ) : null}
+                  {Number(selected.cashbackEarned || 0) > 0 ? (
+                    <div>
+                      <dt>Hisoblangan</dt>
+                      <dd>{money(Number(selected.cashbackEarned))}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </DrawerSection>
+            ) : null}
+
+            <DrawerSection title="Bron">
+              <dl className="orders-kv">
+                <div>
+                  <dt>Holat</dt>
+                  <dd>
+                    <StatusLabelBadge domain="reservation" status={selected.reservationStatus || ""} />
+                  </dd>
+                </div>
+                {selected.reservedUntil ? (
+                  <div>
+                    <dt>Muddat</dt>
+                    <dd>{fmtDate(selected.reservedUntil)}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {selected.reservationExpired ? (
+                <p className="meta">bron muddati tugagan — avto-bekor yo‘q</p>
+              ) : null}
+            </DrawerSection>
+          </>
+        ) : null}
+      </DetailDrawer>
+
+      <ConfirmDialog
+        open={confirmCancel}
+        title="Buyurtmani bekor qilish"
+        danger
+        busy={busy}
+        confirmLabel="Bekor qilish"
+        cancelLabel="Qaytish"
+        description={
+          selected?.paymentStatus === "PAID"
+            ? `To‘langan buyurtma: bekor qilish pulni avtomatik qaytarmaydi (${operatorCapabilityLabel("CONTRACT_PENDING").toLowerCase()}).`
+            : `Buyurtma ${selected?.code || ""} bekor qilinadi. Faqat ruxsat berilgan holatda.`
+        }
+        onCancel={() => setConfirmCancel(false)}
+        onConfirm={() => {
+          if (!selected) return;
+          setConfirmCancel(false);
+          void orderAction(selected.id, `/api/orders/${selected.id}/admin-cancel`);
+        }}
+      />
+    </div>
   );
 }

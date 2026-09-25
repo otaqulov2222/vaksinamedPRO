@@ -8,6 +8,46 @@ export { normalizeAdminRole };
 const permissionCache = new Map<string, { at: number; codes: Set<string> }>();
 const CACHE_MS = 5_000;
 
+/** Known permission sets when auth_role_permissions is missing or empty (seed drift). */
+function fallbackPermissionsForRole(role: string): Set<string> {
+  return isHqAdminRole(role)
+    ? new Set([
+      "dashboard:read",
+      "branches:read",
+      "branches:manage",
+      "products:read",
+      "products:manage",
+      "orders:read",
+      "orders:confirm_pos",
+      "orders:cancel",
+      "customers:read",
+      "payments:read",
+      "payments:manage",
+      "promos:read",
+      "ratings:read",
+      "audit:read",
+      "pos:lookup",
+      "pos:preview",
+      "pos:sale",
+      "pos:void",
+      "pos:sales:read",
+      "delivery:update",
+      "inventory:adjust",
+      "rbac:manage",
+    ])
+    : new Set([
+      "products:read",
+      "orders:read",
+      "orders:confirm_pos",
+      "pos:lookup",
+      "pos:preview",
+      "pos:sale",
+      "pos:void",
+      "pos:sales:read",
+      "delivery:update",
+    ]);
+}
+
 export async function getPermissionsForRole(roleRaw: string): Promise<Set<string>> {
   const role = normalizeAdminRole(roleRaw);
   const cached = permissionCache.get(role);
@@ -15,43 +55,7 @@ export async function getPermissionsForRole(roleRaw: string): Promise<Set<string
 
   const roleRows = await db.select().from(authRoles).where(eq(authRoles.code, role)).limit(1);
   if (!roleRows[0]) {
-    // Fallback for pre-seed / drift: HQ gets all known, cashier gets POS/order ops
-    const fallback = isHqAdminRole(role)
-      ? new Set([
-        "dashboard:read",
-        "branches:read",
-        "branches:manage",
-        "products:read",
-        "products:manage",
-        "orders:read",
-        "orders:confirm_pos",
-        "orders:cancel",
-        "customers:read",
-        "payments:read",
-        "payments:manage",
-        "promos:read",
-        "ratings:read",
-        "audit:read",
-        "pos:lookup",
-        "pos:preview",
-        "pos:sale",
-        "pos:void",
-        "pos:sales:read",
-        "delivery:update",
-        "inventory:adjust",
-        "rbac:manage",
-      ])
-      : new Set([
-        "products:read",
-        "orders:read",
-        "orders:confirm_pos",
-        "pos:lookup",
-        "pos:preview",
-        "pos:sale",
-        "pos:void",
-        "pos:sales:read",
-        "delivery:update",
-      ]);
+    const fallback = fallbackPermissionsForRole(role);
     permissionCache.set(role, { at: Date.now(), codes: fallback });
     return fallback;
   }
@@ -62,7 +66,11 @@ export async function getPermissionsForRole(roleRaw: string): Promise<Set<string
     .innerJoin(authPermissions, eq(authRolePermissions.permissionId, authPermissions.id))
     .where(eq(authRolePermissions.roleId, roleRows[0].id));
 
-  const codes = new Set(links.map((l) => l.code));
+  // Empty links = seed drift (role row without grants). Same fallback as missing role.
+  // Does not invent new permission codes — reuses known operational sets.
+  const codes = links.length
+    ? new Set(links.map((l) => l.code))
+    : fallbackPermissionsForRole(role);
   permissionCache.set(role, { at: Date.now(), codes });
   return codes;
 }
