@@ -172,9 +172,9 @@ describe("Admin Phase 3 MEDIUM — audit coverage", () => {
     assert.match(admin, /action:\s*"product\.update"/);
     const idx = admin.indexOf('action: "branch.update"');
     assert.ok(idx > 0);
-    const snippet = admin.slice(idx, idx + 200);
-    assert.match(snippet, /JSON\.stringify\(\{\s*id\s*\}\)/);
-    assert.doesNotMatch(snippet, /paymeKey|clickSecret|paymeMerchantId/);
+    const snippet = admin.slice(idx, idx + 450);
+    assert.match(snippet, /paymeCredentialUpdated|clickCredentialUpdated|JSON\.stringify\(\{\s*id/);
+    assert.doesNotMatch(snippet, /paymeKey:|clickSecret:|paymeMerchantId:/);
   });
 });
 

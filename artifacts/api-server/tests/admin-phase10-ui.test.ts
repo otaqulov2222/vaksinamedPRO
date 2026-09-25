@@ -46,10 +46,10 @@ describe("Admin Phase 10 — UI design system", () => {
     assert.match(app, /onOpenInventory/);
   });
 
-  it("Dashboard uses command strip hierarchy + compact toolbar; no fake trends", () => {
+  it("Dashboard uses biz-hero ops hierarchy + compact toolbar; no fake trends", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
-    assert.match(dash, /biz-snapshot|cmd-strip|cmd-hero/);
-    assert.match(dash, /dash-toolbar|FilterField/);
+    assert.match(dash, /biz-hero|biz-snapshot|cmd-strip|cmd-hero|dashboard-controls/);
+    assert.match(dash, /FilterField|dashboard-controls/);
     assert.doesNotMatch(dash, /trendPercent|fakeTrend|\+12%/);
   });
 

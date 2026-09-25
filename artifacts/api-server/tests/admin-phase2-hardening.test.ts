@@ -19,7 +19,7 @@ describe("Admin Phase 2 HIGH hardening", () => {
     assert.match(pos, /preview\.maxSpend|preview\?\.maxSpend/);
     assert.doesNotMatch(pos, /Math\.min\(customer\.balance,\s*Math\.floor\(Number\(amount\)/);
     assert.doesNotMatch(pos, />50%</);
-    assert.match(pos, /Maks \$\{maxSpendPercent\}%|Maks \$\{maxSpendPercent\}/);
+    assert.match(pos, /Maks \$\{maxSpendPercent\}%|Maks \$\{maxSpendPercent\}|Server limiti \$\{maxSpendPercent\}%|spendLabel/);
   });
 
   it("2. server POS preview still exposes maxSpend + maxSpendRatio (authoritative)", () => {

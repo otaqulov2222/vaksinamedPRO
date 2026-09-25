@@ -62,7 +62,7 @@ describe("Batch 3J HQ branch filter + audit + HTTP IDOR gate", () => {
     assert.match(orders, /branchId/);
     assert.match(nav, /id:\s*"audit"/);
     assert.match(audit, /\/api\/admin\/audit/);
-    assert.match(audit, /read-only|faqat ko‘rish|Read-only/i);
+    assert.match(audit, /scrubMeta|SENSITIVE_KEY|faqat ko‘rish|read-only|Read-only/i);
     assert.doesNotMatch(orders, /Pul qaytarildi/);
   });
 

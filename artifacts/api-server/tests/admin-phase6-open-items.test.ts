@@ -14,25 +14,34 @@ const adminWeb = path.resolve(root, "../admin-web/src");
 const dbRoot = path.resolve(root, "../../lib/db/src");
 
 describe("Admin Phase 6 — secret encryption at rest", () => {
-  it("branch merchant secrets are plaintext columns; follow-up marker present; no homemade crypto", () => {
+  it("branch merchant secret columns remain text; app encrypts enc:v1; cloud KMS still OPS", () => {
     const schema = readFileSync(path.join(dbRoot, "schema/branches.ts"), "utf8");
     assert.match(schema, /paymeKey:\s*text\("payme_key"\)/);
     assert.match(schema, /clickSecret:\s*text\("click_secret"\)/);
-    assert.doesNotMatch(schema, /encrypt|ciphertext|vault/i);
 
     const merchant = readFileSync(path.join(root, "src/lib/branchPaymentMerchant.ts"), "utf8");
     assert.match(merchant, /SECRET_ENCRYPTION_AT_REST_FOLLOW_UP/);
-    assert.match(merchant, /no existing vault abstraction|wait for verified KMS\/vault/i);
-    assert.doesNotMatch(merchant, /createCipher|aes-256-gcm|scryptSync\(.*payme/i);
+    assert.match(merchant, /Cloud KMS\/Vault still OPS_REQUIRED|enc:v1/i);
+    assert.match(merchant, /encryptMerchantSecretForStorage|decryptMerchantSecretFromStorage/);
+    // Homemade cipher stays in merchantSecretCrypto — not inline in resolver.
+    assert.doesNotMatch(merchant, /createCipheriv|aes-256-gcm|scryptSync\(.*payme/i);
+
+    const crypto = readFileSync(path.join(root, "src/lib/merchantSecretCrypto.ts"), "utf8");
+    assert.match(crypto, /enc:v1:|CIPHERTEXT_PREFIX/);
+    assert.match(crypto, /MERCHANT_SECRET_KEK/);
+    assert.doesNotMatch(crypto, /aws-kms|@aws-sdk\/client-kms|@google-cloud\/kms/i);
   });
 
-  it("API DTOs mask branch secrets; WeakMap holds secret material", () => {
+  it("API DTOs mask branch secrets; WeakMap holds secret material; audit has no secret values", () => {
     const merchant = readFileSync(path.join(root, "src/lib/branchPaymentMerchant.ts"), "utf8");
     assert.match(merchant, /toAdminBranchPaymentDto|hasPayme|••••/);
     assert.match(merchant, /WeakMap/);
     const admin = readFileSync(path.join(root, "src/routes/admin.ts"), "utf8");
     assert.match(admin, /toAdminBranchPaymentDto/);
-    assert.match(admin, /branch\.update[\s\S]{0,200}JSON\.stringify\(\{\s*id\s*\}\)/);
+    assert.match(admin, /prepareMerchantSecretForStorage/);
+    assert.match(admin, /paymeCredentialUpdated/);
+    assert.match(admin, /clickCredentialUpdated/);
+    assert.doesNotMatch(admin, /payload: JSON\.stringify\(\{[^}]*paymeKey:/);
   });
 
   it("admin/customer passwords use scrypt hash — not reversible encryption of plaintext password column", () => {
