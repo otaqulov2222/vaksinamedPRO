@@ -47,7 +47,7 @@ describe("Admin Phase 11 — deep operator UX", () => {
   it("POS shows step chrome without changing engine paths", () => {
     const pos = readFileSync(path.join(adminWeb, "PosTerminal.tsx"), "utf8");
     assert.match(pos, /pos-steps/);
-    assert.match(pos, /1\. Mijoz/);
+    assert.match(pos, /n=\{1\}\s+title="Mijoz"/);
     assert.match(pos, /\/api\/pos\//);
   });
 

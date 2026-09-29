@@ -15,8 +15,8 @@ describe("Admin Phase 12.10 — Dashboard pixel reconstruction", () => {
   it("IA: header → business-snapshot → context-rail → attention → activity", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
     assert.match(dash, /className=\{`dashboard|className="dashboard/);
-    assert.match(dash, /className="dash-board"/);
-    assert.match(dash, /dash-board-metrics/);
+    assert.match(dash, /className="dash-overview"/);
+    assert.match(dash, /dash-metrics/);
     assert.match(dash, /E’tibor|E'tibor|attn/);
     assert.match(dash, /className="act|dash-activity/);
     assert.doesNotMatch(dash, /qa-matrix|Tezkor amallar|QuickAction/);
@@ -24,11 +24,11 @@ describe("Admin Phase 12.10 — Dashboard pixel reconstruction", () => {
 
   it("Savdo is hero focal point; secondary metrics subordinate", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
-    assert.match(dash, /className="dash-rev-value">\{money\(revenue\)\}/);
+    assert.match(dash, /className="dash-hero-value">\{money\(revenue\)\}/);
     assert.match(dash, /Yetkazilmoqda|yetkazilmoqda|deliveringCount/);
     const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
-    assert.match(css, /\.dash-rev-value\s*\{[^}]*font-size:\s*clamp\([^)]*34px\)/);
-    assert.match(css, /inset 3px 0 0 var\(--vm-gold\)/);
+    assert.match(css, /\.dash-hero-value\s*\{[^}]*font-size:\s*var\(--vm-fs-display\)/);
+    assert.match(css, /\.side-nav \.nav-item::before \{[^}]*background: var\(--vm-accent\);/);
   });
 
   it("attention priority: inventory → open orders → delivery; real API only", () => {
@@ -42,18 +42,18 @@ describe("Admin Phase 12.10 — Dashboard pixel reconstruction", () => {
     assert.doesNotMatch(dash, /Available\s*<=\s*0|product_stocks|cashback_accounts|Math\.random/);
   });
 
-  it("empty calm state is compact with check mark", () => {
+  it("empty calm state is compact with check icon", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
     assert.match(dash, /className="dash-status" role="status"/);
     assert.match(dash, /Muammo yo‘q|Muammo yo'q/);
-    assert.match(dash, /✓/);
+    assert.match(dash, /<CheckCircle2 /);
   });
 
-  it("CSS vocabulary uses dashboard / dash-board / attention", () => {
+  it("CSS vocabulary uses dashboard / dash-overview / attention", () => {
     const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
-    assert.match(css, /Phase 12\.(10|11|30)/);
-    assert.match(css, /\.dash-board\s*\{/);
-    assert.match(css, /\.dash-board-metrics\s*\{/);
+    assert.match(css, /Phase (12\.(10|11|30|31)|13\.0)/);
+    assert.match(css, /\.dash-overview\s*\{/);
+    assert.match(css, /\.dash-metrics\s*\{/);
     assert.match(css, /\.attn-row|\.attention-item|\.attention-list/);
     assert.match(css, /\.dashboard-controls/);
   });

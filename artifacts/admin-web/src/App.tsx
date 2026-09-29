@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { request, softRequest, money, type AdminUser } from "./api";
 import {
   NAV,
@@ -28,6 +29,28 @@ import { FomPage } from "./pages/FomPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AdminAccessPage } from "./pages/AdminAccessPage";
 
+const UZ_MONTHS = [
+  "yanvar", "fevral", "mart", "aprel", "may", "iyun",
+  "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr",
+];
+const UZ_WEEKDAYS = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
+
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: "Super admin",
+  admin: "Administrator",
+  hq: "HQ operator",
+  cashier: "Kassir",
+};
+
+function roleLabel(role: string): string {
+  return ROLE_LABELS[String(role || "").toLowerCase()] || role || "Operator";
+}
+
+function initials(name: string): string {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  return (parts.slice(0, 2).map((p) => p[0]).join("") || "VM").toUpperCase();
+}
+
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("vm-admin-token"));
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -38,11 +61,25 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [bootError, setBootError] = useState("");
   const [error, setError] = useState("");
-  const [email, setEmail] = useState("admin@vaksinamed.uz");
-  const [password, setPassword] = useState("vaksinamed");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("vm-admin-sidebar") === "1",
   );
+  const navRef = useRef<HTMLElement>(null);
+
+  /** Scroll only the nav container (never the page) so the active item and its indicator stay visible. */
+  useEffect(() => {
+    const nav = navRef.current;
+    const item = nav?.querySelector<HTMLElement>(".nav-item.active");
+    if (!nav || !item) return;
+    const n = nav.getBoundingClientRect();
+    const r = item.getBoundingClientRect();
+    if (r.top < n.top) nav.scrollTop -= n.top - r.top + 8;
+    else if (r.bottom > n.bottom) nav.scrollTop += r.bottom - n.bottom + 8;
+    if (r.left < n.left) nav.scrollLeft -= n.left - r.left + 8;
+    else if (r.right > n.right) nav.scrollLeft += r.right - n.right + 8;
+  }, [tab, sidebarCollapsed, ready]);
 
   async function bootstrap(nextToken: string, opts?: { forceLanding?: boolean }) {
     setReady(false);
@@ -127,27 +164,35 @@ export default function App() {
     return (
       <div className="login-wrap">
         <form className="login-card" onSubmit={login}>
-          <div className="brand">VAKSINA MED</div>
+          <div className="brand">
+            <span className="brand-mark">VM</span>
+            <span className="brand-text">VAKSINA MED</span>
+          </div>
           <h1>Admin panel</h1>
-          <p className="muted">Tarmoq boshqaruvi · Dashboard · Kassa · Ombor · Cashback</p>
-          <div className="toolbar" style={{ flexDirection: "column", margin: 0 }}>
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              autoComplete="username"
-              aria-label="Email"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Parol"
-              autoComplete="current-password"
-              aria-label="Parol"
-            />
-            {error ? <div style={{ color: "var(--vm-danger)" }}>{error}</div> : null}
-            <button className="primary" type="submit">Kirish</button>
+          <p className="muted">Boshqaruv konsoliga kirish</p>
+          <div className="login-form">
+            <label className="login-field">
+              <span>Email</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username"
+                required
+              />
+            </label>
+            <label className="login-field">
+              <span>Parol</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            {error ? <div className="login-error" role="alert">{error}</div> : null}
+            <button className="btn-primary" type="submit">Kirish</button>
           </div>
         </form>
       </div>
@@ -158,12 +203,15 @@ export default function App() {
     return (
       <div className="login-wrap">
         <div className="login-card">
-          <div className="brand">VAKSINA MED</div>
+          <div className="brand">
+            <span className="brand-mark">VM</span>
+            <span className="brand-text">VAKSINA MED</span>
+          </div>
           <h1>Admin panel</h1>
           <p className="muted">{bootError || "Sessiya va ruxsatlar yuklanmoqda…"}</p>
           {bootError ? (
             <button
-              className="primary"
+              className="btn-primary"
               type="button"
               onClick={() => {
                 localStorage.removeItem("vm-admin-token");
@@ -181,6 +229,8 @@ export default function App() {
   const visibleNav = NAV.filter((item) => navVisible(item, permissions, user.role));
   const pageTitle = PAGE_TITLES[tab] || "Admin";
   const groupLabel = groupLabelForTab(tab);
+  const crumbGroup = groupLabel !== pageTitle && groupLabel !== "Admin" ? groupLabel : null;
+  const today = new Date();
   const onlyHqShell =
     visibleNav.length > 0
     && visibleNav.every((i) => i.id === "fom" || i.id === "settings" || i.id === "admins");
@@ -188,27 +238,40 @@ export default function App() {
   return (
     <div className={`shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="side" aria-label="Asosiy menyu">
-        <div className="side-brand-row">
-          <div className="brand" aria-label="VaksinaMed">
-            <span className="brand-mark">VM</span>
-            {!sidebarCollapsed ? <span className="brand-text">VAKSINA MED</span> : null}
+        <div className="side-head">
+          <div className="side-brand-row">
+            <div className="brand" aria-label="VaksinaMed">
+              <span className="brand-mark">VM</span>
+              {!sidebarCollapsed ? (
+                <span className="brand-lockup">
+                  <span className="brand-text">VAKSINA MED</span>
+                  <span className="brand-sub">Operatsiyalar konsoli</span>
+                </span>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="side-collapse"
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? "Menyuni kengaytirish" : "Menyuni yig‘ish"}
+              title={sidebarCollapsed ? "Kengaytirish" : "Yig‘ish"}
+            >
+              {sidebarCollapsed ? (
+                <ChevronsRight size={16} strokeWidth={1.75} aria-hidden="true" />
+              ) : (
+                <ChevronsLeft size={16} strokeWidth={1.75} aria-hidden="true" />
+              )}
+            </button>
           </div>
-          <button
-            type="button"
-            className="side-collapse"
-            onClick={toggleSidebar}
-            aria-label={sidebarCollapsed ? "Menyuni kengaytirish" : "Menyuni yig‘ish"}
-            title={sidebarCollapsed ? "Kengaytirish" : "Yig‘ish"}
-          >
-            {sidebarCollapsed ? "»" : "«"}
-          </button>
+          <div className="side-operator" title={user.email}>
+            <span className="side-avatar" aria-hidden="true">{initials(user.name)}</span>
+            <span className="side-operator-copy">
+              <span className="side-user-name">{user.name}</span>
+              <span className="side-operator-role">{roleLabel(user.role)}</span>
+            </span>
+          </div>
         </div>
-        {!sidebarCollapsed ? (
-          <div className="side-user" aria-label="Operator">
-            <strong className="side-user-name">{user.name}</strong>
-          </div>
-        ) : null}
-        <nav className="side-nav" aria-label="Admin navigatsiya">
+        <nav className="side-nav" aria-label="Admin navigatsiya" ref={navRef}>
           {NAV_GROUPS.map((group) => {
             const items = group.items.filter((item) => navVisible(item, permissions, user.role));
             if (!items.length) return null;
@@ -258,39 +321,39 @@ export default function App() {
             );
           })}
         </nav>
-        <button
-          type="button"
-          className="side-logout"
-          onClick={() => void logout()}
-          aria-label="Chiqish"
-          title="Chiqish"
-        >
-          <span className="nav-icon" aria-hidden="true">
-            <LOGOUT_ICON size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} />
-          </span>
-          {!sidebarCollapsed ? <span className="side-logout-text">Chiqish</span> : null}
-        </button>
+        <div className="side-footer">
+          <button
+            type="button"
+            className="side-logout"
+            onClick={() => void logout()}
+            title="Chiqish"
+          >
+            <span className="nav-icon" aria-hidden="true">
+              <LOGOUT_ICON size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} />
+            </span>
+            <span className={sidebarCollapsed ? "sr-only" : "side-logout-text"}>Chiqish</span>
+          </button>
+        </div>
       </aside>
 
       <div className="main-wrap">
         <header className="topbar">
-          {tab !== "dashboard" ? (
-            <nav className="breadcrumb" aria-label="Joylashuv">
-              <span className="crumb-root">Admin</span>
-              <span className="crumb-sep" aria-hidden>/</span>
-              <span className="crumb-group">{groupLabel}</span>
-              <span className="crumb-sep" aria-hidden>/</span>
-              <span className="crumb-page" aria-current="location">{pageTitle}</span>
-            </nav>
-          ) : (
-            <div className="topbar-spacer" aria-hidden="true" />
-          )}
-          <div className="topbar-meta">
-            {sidebarCollapsed ? (
-              <span className="topbar-identity" title={user.email}>
-                <span className="topbar-operator">{user.name}</span>
-              </span>
+          <nav className="breadcrumb" aria-label="Joylashuv">
+            {crumbGroup ? (
+              <>
+                <span className="crumb-group">{crumbGroup}</span>
+                <span className="crumb-sep" aria-hidden="true">
+                  <ChevronRight size={14} strokeWidth={2} />
+                </span>
+              </>
             ) : null}
+            <span className="crumb-page" aria-current="location">{pageTitle}</span>
+          </nav>
+          <div className="topbar-meta">
+            <time className="topbar-date" dateTime={today.toISOString().slice(0, 10)}>
+              <span className="topbar-weekday">{UZ_WEEKDAYS[today.getDay()]}</span>
+              <span className="topbar-day">{`${today.getDate()} ${UZ_MONTHS[today.getMonth()]} ${today.getFullYear()}`}</span>
+            </time>
           </div>
         </header>
 
@@ -325,6 +388,7 @@ export default function App() {
               token={token}
               branches={branches}
               defaultBranchId={user.branchId || branches[0]?.id}
+              operatorName={user.name}
               request={request}
               money={money}
             />

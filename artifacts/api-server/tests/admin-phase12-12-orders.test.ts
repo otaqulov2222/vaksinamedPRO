@@ -24,12 +24,12 @@ describe("Admin Phase 12.12 — Orders operations console", () => {
     assert.match(page, /StatusLabelBadge/);
   });
 
-  it("table columns prioritize Buyurtma / Mijoz / Filial / Holat / To‘lov / Summa / Vaqt", () => {
+  it("table columns prioritize Buyurtma / Mijoz / Holat / To‘lov / Summa / Vaqt (Filial for HQ in row meta — Phase 13.2)", () => {
     const page = readFileSync(path.join(adminWeb, "pages/OrdersPage.tsx"), "utf8");
     assert.match(page, /<th>Buyurtma<\/th>/);
     assert.match(page, /<th>Mijoz<\/th>/);
-    assert.match(page, /<th>Filial<\/th>/);
-    assert.match(page, /<th>Holat<\/th>/);
+    assert.match(page, /isHq && item\.branch\?\.name/);
+    assert.match(page, /<th>Buyurtma holati<\/th>/);
     assert.match(page, /<th>To‘lov<\/th>/);
     assert.match(page, /Summa/);
     assert.match(page, /<th>Vaqt<\/th>/);
@@ -61,7 +61,7 @@ describe("Admin Phase 12.12 — Orders operations console", () => {
     assert.match(page, /paymentStatus/);
     assert.match(page, /reservationStatus/);
     assert.match(page, /createdFrom/);
-    assert.match(page, /bron muddati tugagan/);
+    assert.match(page, /[Bb]ron muddati tugagan/);
     assert.match(page, /Qayta urinish|ErrorState/);
     assert.match(page, /Yuklanmoqda|LoadingBlock/);
     assert.match(page, /isHqRole/);
@@ -71,11 +71,11 @@ describe("Admin Phase 12.12 — Orders operations console", () => {
     const page = readFileSync(path.join(adminWeb, "pages/OrdersPage.tsx"), "utf8");
     const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
     const nav = readFileSync(path.join(adminWeb, "nav.ts"), "utf8");
-    assert.match(page, /Buyurtmalar topilmadi/);
-    assert.match(page, /Buyurtmalar hozircha mavjud emas/);
-    assert.match(page, /Tanlangan mezonlar bo‘yicha buyurtmalar topilmadi/);
+    // Phase 13.2 copy: empty vs filtered-empty stay distinct; reservation filter is inline (was a disclosure).
+    assert.match(page, /Buyurtmalar mavjud emas\./);
+    assert.match(page, /Bu filtrlar bo‘yicha buyurtma topilmadi\./);
     assert.match(page, /Filtrlarni tozalash/);
-    assert.match(page, /Qo‘shimcha filtrlar/);
+    assert.match(page, /<FilterField label="Bron">/);
     assert.match(page, /orders-date-group/);
     assert.match(page, /onSubmit=\{applySearch\}/);
     assert.match(page, /ta buyurtma/);

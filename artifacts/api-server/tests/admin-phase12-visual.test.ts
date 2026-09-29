@@ -12,18 +12,21 @@ const adminWeb = path.resolve(root, "../admin-web/src");
 const docs = path.resolve(root, "../../docs");
 
 describe("Admin Phase 12 — premium visual redesign", () => {
-  it("design tokens favor density: narrower sidebar, tighter radius, wider content", () => {
+  it("design tokens (13.0): brand/accent/surface system, tight radius, wide content", () => {
     const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
-    assert.match(css, /--vm-sidebar:\s*212px/);
+    assert.match(css, /--vm-sidebar:\s*236px/);
+    for (const t of ["bg", "surface", "surface-raised", "surface-muted", "border", "border-strong", "brand", "brand-strong", "brand-soft", "accent", "accent-soft", "text", "text-secondary", "text-muted", "text-inverse", "success", "warning", "danger", "info"]) {
+      assert.match(css, new RegExp(`--vm-${t}:\\s*#`), `token --vm-${t}`);
+    }
     assert.match(css, /--vm-content-max:\s*1680px/);
     assert.match(css, /--vm-radius:\s*8px/);
     assert.match(css, /--vm-shadow:\s*none/);
   });
 
-  it("Dashboard Phase 12.30 ops composition", () => {
+  it("Dashboard Phase 13.0 ops composition", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
-    assert.match(dash, /className="dash-board"/);
-    assert.match(dash, /dash-board-metrics|attn|act/);
+    assert.match(dash, /className="dash-overview"/);
+    assert.match(dash, /dash-metrics|attn|act/);
     assert.match(dash, /dash-status/);
     assert.doesNotMatch(dash, /qa-matrix|qa-cell/);
     assert.doesNotMatch(dash, /metric-strip-primary|metric-strip-secondary/);

@@ -66,7 +66,7 @@ describe("Batch 3I admin ops polish contracts", () => {
     assert.match(shared, /Qayta urinish/);
     assert.match(shared, /Yuklanmoqda/);
     assert.match(ui, /createdFrom/);
-    assert.match(ui, /bron muddati tugagan/);
+    assert.match(ui, /[Bb]ron muddati tugagan/);
     assert.match(app, /\/api\/admin\/logout/);
     assert.doesNotMatch(ui, /Pul qaytarildi/);
     assert.doesNotMatch(ui, /refund completed/i);

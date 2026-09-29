@@ -62,7 +62,7 @@ function scrubMeta(raw: unknown): Record<string, unknown> {
   return out;
 }
 
-function actionLabel(action: string): string {
+export function actionLabel(action: string): string {
   const raw = String(action || "").trim();
   if (!raw) return "Noma'lum amal";
   if (ACTION_LABELS[raw]) return ACTION_LABELS[raw];

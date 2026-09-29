@@ -15,8 +15,8 @@ describe("Admin Phase 12.9 — Dashboard operations center reset", () => {
   it("composition: header → snapshot → attention → activity (no QA matrix)", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
     assert.match(dash, /dashboard/);
-    assert.match(dash, /className="dash-board"/);
-    assert.match(dash, />Savdo</);
+    assert.match(dash, /className="dash-overview"/);
+    assert.match(dash, />Savdo<|\{salesLabel\(preset\)\}/);
     assert.match(dash, /E’tibor|E'tibor|attn/);
     assert.match(dash, /act|dash-activity/);
     assert.doesNotMatch(dash, /qa-matrix|QuickAction|Tezkor amallar/);
@@ -57,12 +57,12 @@ describe("Admin Phase 12.9 — Dashboard operations center reset", () => {
 
   it("CSS defines snapshot metrics + attn list; no QA matrix required", () => {
     const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
-    assert.match(css, /Phase 12\.(9|10|11|30)/);
-    assert.match(css, /\.biz-hero|\.business-snapshot|\.biz-snapshot/);
-    assert.match(css, /\.biz-hero-value|\.business-snapshot-hero|\.biz-metric--hero/);
+    assert.match(css, /Phase (12\.(9|10|11|30|31)|13\.0)/);
+    assert.match(css, /\.dash-hero \{/);
+    assert.match(css, /\.dash-hero-value \{/);
     assert.match(css, /\.attn-rows|\.attn-list|\.attention-list/);
     assert.match(css, /\.attn-calm|\.dash-attention--calm|\.attention--calm/);
-    assert.match(css, /\.empty-inline--ok/);
+    assert.match(css, /\.dash-empty \{/);
   });
 
   it("docs record Phase 12.9", () => {

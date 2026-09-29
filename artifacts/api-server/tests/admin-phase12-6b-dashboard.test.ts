@@ -15,8 +15,8 @@ describe("Admin Phase 12.6B — Dashboard operations center", () => {
   it("uses biz-snapshot ops-center composition", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
     assert.match(dash, /dashboard|dash-ops-center/);
-    assert.match(dash, /className="dash-board"/);
-    assert.match(dash, />Savdo</);
+    assert.match(dash, /className="dash-overview"/);
+    assert.match(dash, />Savdo<|\{salesLabel\(preset\)\}/);
     assert.match(dash, /E’tibor|E'tibor|attn/);
     assert.match(dash, /StatusLabelBadge/);
     assert.match(dash, /dash-status/);
@@ -39,8 +39,8 @@ describe("Admin Phase 12.6B — Dashboard operations center", () => {
 
   it("CSS defines biz-snapshot and attention list", () => {
     const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
-    assert.match(css, /\.biz-hero|\.biz-snapshot|\.business-snapshot/);
-    assert.match(css, /\.biz-hero-value|\.biz-metric--hero|\.business-snapshot-hero|\.biz-hero-value/);
+    assert.match(css, /\.dash-hero \{/);
+    assert.match(css, /\.dash-hero-value \{/);
     assert.match(css, /\.attn|\.dash-attention|\.attention/);
   });
 

@@ -35,6 +35,61 @@
 
 ---
 
+## Phase 13.2 — Buyurtmalar operations console
+
+| Item | Status |
+|------|--------|
+| API audit | Same contract: `GET /api/admin/orders?limit&offset&q&fulfillmentStatus&paymentStatus&reservationStatus&branchId&createdFrom&createdTo`, `GET /api/admin/orders/:id` (+ `capabilities`), `POST /api/orders/:id/confirm|prepare|ready|out-for-delivery|complete`, `POST /api/orders/:id/confirm-pos {receiptId}`, `POST /api/orders/:id/admin-cancel` |
+| Table | Buyurtma (code · item count · branch for HQ) · Mijoz · Buyurtma holati · To‘lov · Yetkazish · Summa · Vaqt — row click / Enter / Space opens the drawer |
+| Filters | Search (code, name, phone) + fulfillment / payment / reservation / branch (HQ only) / date range — all server-side, selects apply on change |
+| Status axes | Fulfillment, payment and reservation are three separate badges; payment REFUNDED is neutral (not the PENDING amber), reservation CANCELLED neutral |
+| Drawer | Mijoz (phone masked by default) → Buyurtma (items + totals) → To‘lov → Bron → Yetkazish (real `deliveries` row only) → collapsed Texnik ma’lumotlar |
+| Actions | Next steps mirror `FULFILLMENT_GRAPH` + channel rules (parity test); gated by `canTransitionFulfillment` / `canConfirmPos` / `canCancel`; Yakunlash, FOM tasdiq and Bekor qilish go through `ConfirmDialog` |
+| States | Table skeleton while loading, distinct empty / filtered-empty copy, Uzbek operator errors (no raw server enums), feedback inside the drawer |
+| Not exposed | `POST /orders/:id/refund-cashback` (policy OPEN) — no refund button |
+| Backend / API / data | **Unchanged** — no new endpoints, no fake data |
+
+---
+
+## Phase 13.1 — Kassa POS transaction workspace
+
+| Item | Status |
+|------|--------|
+| API audit | Same contract: `POST /api/pos/lookup {qr}`, `POST /api/pos/preview {qr, amount, cashbackToUse}`, `POST /api/pos/sale {qr, amount, cashbackToUse, branchId}`, `POST /api/pos/void {receiptId}`, `GET /api/pos/sales?branchId&limit=25` |
+| Capability scope | Amount-based loyalty POS — **no product search, cart or payment-method API**, so none shown |
+| Layout | Numbered flow (Mijoz → Xarid summasi → Cashback) + sticky current check (total + single primary CTA) + sales history; container-query composition |
+| Cashback | Available balance · server limit (`preview.maxSpend`, `maxSpendRatio`) · use (slider, 0 / Maks) — values from server only |
+| Receipt / void | Success receipt in the check panel; void via shared `ConfirmDialog` (server keeps the 15-minute rule) |
+| Errors | Domain Uzbek messages from the server; network / 5xx / technical text mapped to operator copy |
+| Keyboard | Scan autofocus, F2 → scan, lookup → amount, Enter in amount → pay button, Escape clears scan field |
+| POS hardcoded colors | **0** — legacy `.pos-*` colors re-expressed on design tokens |
+| Backend / API / data | **Unchanged** — no new endpoints, no fake data |
+
+---
+
+## Phase 13.0 reset — Enterprise Operations Console (design system + shell + Dashboard)
+
+| Item | Status |
+|------|--------|
+| Design tokens (brand, accent, surfaces 0–3, radius, elevation, type, motion) | **DONE** — `styles.css` foundation, no gradients/textures |
+| Shell: sidebar (brand + operator head, quiet groups, accent active line, separate logout), topbar (breadcrumb + date) | **DONE** |
+| Primitives: buttons (primary/secondary/tertiary/danger), inputs, badges, table, drawer, states | **DONE** — shared CSS, module code unchanged |
+| Dashboard: overview (sales on brand surface + 7-day bars, orders stacked status) → key metrics strip → operational signals → order lists → network | **DONE** — same endpoints, no new data |
+| Login default credentials | **REMOVED** (UI state only; auth unchanged) |
+| Remaining modules on the new system | **OPEN** — awaiting visual approval |
+
+### Phase 13.0 final gate
+
+| Item | Status |
+|------|--------|
+| 7-day chart | **REAL API** — 7 × `GET /api/admin/dashboard?createdFrom=d&createdTo=d`, `kpis.revenue` + `kpis.orders`; on failure no bars are drawn (no zero fallback) |
+| Branch network map | **REAL API** — `GET /api/admin/branches` rows (region/city, lat/lng, `isOpen`, `is24h`); region outlines are static OSM geography; `isOpen` is the configured branch flag, not live opening hours |
+| Breadcrumb | **FIXED** — group segment dropped when it equals the page title (Ombor, Mijozlar) |
+| Drawer / dialog focus | **FIXED** in `ui.tsx` (`useModalFocus`): focus in, Tab trap, Escape, focus restore, stacked modals, `aria-modal` + `aria-labelledby` |
+| Hardcoded colors in global primitives | **0** — moved to tokens; 9 remain in the legacy POS slice (module scope, untouched) |
+
+---
+
 ## Phase 12.49 — Provider decision
 
 | Item | Status |

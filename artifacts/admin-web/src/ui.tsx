@@ -1,4 +1,5 @@
-import { useEffect, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, type FormEvent, type ReactNode, type RefObject } from "react";
+import { AlertCircle, X } from "lucide-react";
 import { money } from "./api";
 
 export type BadgeTone = "ok" | "warn" | "danger" | "neutral" | "info";
@@ -72,14 +73,18 @@ export function MetricStrip(props: {
 export function AdminPageHeader(props: {
   title: string;
   description?: string;
+  eyebrow?: ReactNode;
+  meta?: ReactNode;
   actions?: ReactNode;
   className?: string;
 }) {
   return (
     <header className={`page-header${props.className ? ` ${props.className}` : ""}`.trim()}>
       <div className="page-header-text">
+        {props.eyebrow ? <div className="page-eyebrow">{props.eyebrow}</div> : null}
         <h1 className="page-title">{props.title}</h1>
         {props.description ? <p className="page-desc">{props.description}</p> : null}
+        {props.meta ? <div className="page-meta">{props.meta}</div> : null}
       </div>
       {props.actions ? <div className="page-actions">{props.actions}</div> : null}
     </header>
@@ -274,7 +279,13 @@ export function ErrorState(props: {
 }) {
   return (
     <div className="error-state" role="alert">
-      <p>{props.message || "Ma’lumotlarni yuklashda xatolik yuz berdi."}</p>
+      <span className="error-state-icon" aria-hidden="true">
+        <AlertCircle size={18} strokeWidth={2} />
+      </span>
+      <div className="error-state-copy">
+        <div className="error-state-title">Ma’lumot yuklanmadi</div>
+        <p>{props.message || "Ma’lumotlarni yuklashda xatolik yuz berdi."}</p>
+      </div>
       {props.onRetry ? (
         <button type="button" className="ghost" onClick={props.onRetry}>
           Qayta urinish
@@ -499,6 +510,68 @@ export const PAGE_DENSITY: Record<string, PageDensity> = {
   settings: "low",
 };
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
+/** Open modal surfaces, innermost last — only the top one reacts to Escape / Tab. */
+const modalStack: object[] = [];
+
+/**
+ * Shared focus management for modal surfaces: moves focus inside on open, keeps Tab
+ * within the panel, closes only the topmost surface on Escape, restores the trigger on close.
+ */
+function useModalFocus(open: boolean, panelRef: RefObject<HTMLElement | null>, onEscape: () => void) {
+  const escapeRef = useRef(onEscape);
+  escapeRef.current = onEscape;
+
+  useEffect(() => {
+    if (!open) return;
+    const token = {};
+    modalStack.push(token);
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    const initial = panel?.querySelector<HTMLElement>("[data-autofocus]");
+    (initial || panel)?.focus({ preventScroll: true });
+
+    const onKey = (e: KeyboardEvent) => {
+      if (modalStack[modalStack.length - 1] !== token || !panel) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        escapeRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => el.getClientRects().length > 0,
+      );
+      if (!items.length) {
+        e.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      const outside = !active || !panel.contains(active) || active === panel;
+      if (e.shiftKey && (active === first || outside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || (outside && active !== panel))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      const i = modalStack.indexOf(token);
+      if (i >= 0) modalStack.splice(i, 1);
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    };
+  }, [open, panelRef]);
+}
+
 export function DetailDrawer(props: {
   open: boolean;
   title: string;
@@ -511,28 +584,30 @@ export function DetailDrawer(props: {
   /** Short subtitle under title */
   subtitle?: ReactNode;
 }) {
-  useEffect(() => {
-    if (!props.open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") props.onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [props.open, props.onClose]);
+  const panelRef = useRef<HTMLElement>(null);
+  const titleId = useId();
+  useModalFocus(props.open, panelRef, props.onClose);
 
   if (!props.open) return null;
   return (
-    <div className="drawer-root" role="dialog" aria-modal="true" aria-label={props.title}>
-      <button type="button" className="drawer-backdrop" aria-label="Yopish" onClick={props.onClose} />
-      <aside className={`drawer-panel drawer-${props.width || "md"}`}>
+    <div className="drawer-root">
+      <div className="drawer-backdrop" aria-hidden="true" onClick={props.onClose} />
+      <aside
+        ref={panelRef}
+        className={`drawer-panel drawer-${props.width || "md"}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
         <div className="drawer-head">
           <div className="drawer-head-main">
-            <h2 className="section-title">{props.title}</h2>
+            <h2 id={titleId} className="section-title">{props.title}</h2>
             {props.subtitle ? <div className="drawer-subtitle">{props.subtitle}</div> : null}
             {props.status ? <div className="drawer-status">{props.status}</div> : null}
           </div>
-          <button type="button" className="ghost" onClick={props.onClose} aria-label="Yopish">
-            Yopish
+          <button type="button" className="drawer-close" onClick={props.onClose} aria-label="Yopish" title="Yopish">
+            <X size={18} strokeWidth={1.75} aria-hidden="true" />
           </button>
         </div>
         <div className="drawer-body">{props.children}</div>
@@ -563,24 +638,30 @@ export function ConfirmDialog(props: {
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  useEffect(() => {
-    if (!props.open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !props.busy) props.onCancel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [props.open, props.busy, props.onCancel]);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descId = useId();
+  useModalFocus(props.open, panelRef, () => {
+    if (!props.busy) props.onCancel();
+  });
 
   if (!props.open) return null;
   return (
-    <div className="dialog-root" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
-      <button type="button" className="drawer-backdrop" aria-label="Bekor qilish" onClick={props.onCancel} />
-      <div className="dialog-panel">
-        <h2 id="confirm-dialog-title" className="section-title">{props.title}</h2>
-        {props.description ? <div className="dialog-desc">{props.description}</div> : null}
+    <div className="dialog-root">
+      <div className="drawer-backdrop" aria-hidden="true" onClick={props.busy ? undefined : props.onCancel} />
+      <div
+        ref={panelRef}
+        className="dialog-panel"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={props.description ? descId : undefined}
+        tabIndex={-1}
+      >
+        <h2 id={titleId} className="section-title">{props.title}</h2>
+        {props.description ? <div id={descId} className="dialog-desc">{props.description}</div> : null}
         <div className="dialog-actions">
-          <button type="button" className="ghost" disabled={props.busy} onClick={props.onCancel}>
+          <button type="button" className="ghost" disabled={props.busy} onClick={props.onCancel} data-autofocus>
             {props.cancelLabel || "Bekor"}
           </button>
           <button
