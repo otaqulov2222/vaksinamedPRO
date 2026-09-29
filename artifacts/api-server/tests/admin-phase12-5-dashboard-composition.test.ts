@@ -14,19 +14,18 @@ const docs = path.resolve(root, "../../docs");
 describe("Admin Phase 12.5 — Dashboard composition rebuild", () => {
   it("Dashboard hierarchy: snapshot → attention → activity", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
-    assert.match(dash, /biz-hero|biz-snapshot|cmd-strip/);
+    assert.match(dash, /className="dash-board"/);
     assert.match(dash, /attn|dash-attention/);
     assert.match(dash, /act|dash-activity/);
-    assert.match(dash, /activity-tab/);
-    assert.match(dash, /ops-rail|dash-context-line|context-rail/);
+    assert.match(dash, /dash-board-metrics/);
     assert.doesNotMatch(dash, /qa-matrix/);
   });
 
-  it("no equal secondary KPI strip; secondary demoted to context line", () => {
+  it("no equal secondary KPI strip; secondary metrics live in the board foot", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
     assert.doesNotMatch(dash, /metric-strip-secondary|variant="secondary"/);
     assert.doesNotMatch(dash, /MetricStrip/);
-    assert.match(dash, /ops-rail|dash-context-line|context-rail/);
+    assert.match(dash, /dash-board-metrics/);
   });
 
   it("CSS defines ops center snapshot", () => {

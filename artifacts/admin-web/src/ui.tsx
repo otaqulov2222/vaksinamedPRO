@@ -111,10 +111,16 @@ export function FilterBar(props: { children: ReactNode; meta?: ReactNode }) {
   );
 }
 
-export function FilterField(props: { label: string; children: ReactNode; grow?: boolean }) {
+export function FilterField(props: {
+  label: string;
+  children: ReactNode;
+  grow?: boolean;
+  /** Hide visual label; keep text for a11y (screen readers). */
+  hideLabel?: boolean;
+}) {
   return (
-    <label className={`filter-field${props.grow ? " filter-field-grow" : ""}`}>
-      <span className="filter-label">{props.label}</span>
+    <label className={`filter-field${props.grow ? " filter-field-grow" : ""}${props.hideLabel ? " filter-field--nolabel" : ""}`}>
+      <span className={props.hideLabel ? "sr-only" : "filter-label"}>{props.label}</span>
       {props.children}
     </label>
   );

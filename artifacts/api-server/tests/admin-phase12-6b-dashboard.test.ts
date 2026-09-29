@@ -15,11 +15,11 @@ describe("Admin Phase 12.6B — Dashboard operations center", () => {
   it("uses biz-snapshot ops-center composition", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
     assert.match(dash, /dashboard|dash-ops-center/);
-    assert.match(dash, /biz-hero|biz-snapshot|business-snapshot/);
-    assert.match(dash, /Bugungi savdo|Biznes holati/);
-    assert.match(dash, /E’tibor|E'tibor|Hammasi joyida|attn/);
+    assert.match(dash, /className="dash-board"/);
+    assert.match(dash, />Savdo</);
+    assert.match(dash, /E’tibor|E'tibor|attn/);
     assert.match(dash, /StatusLabelBadge/);
-    assert.match(dash, /empty-inline/);
+    assert.match(dash, /dash-status/);
   });
 
   it("activity columns match operator fields; no raw enum badges", () => {

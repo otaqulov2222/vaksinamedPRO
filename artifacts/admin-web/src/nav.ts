@@ -135,7 +135,7 @@ export const PAGE_TITLES: Record<string, string> = {
 
 /** One short operator line — no technical axes / API jargon. */
 export const PAGE_DESCRIPTIONS: Record<string, string> = {
-  dashboard: "Bugungi operatsion holat.",
+  dashboard: "",
   kassa: "Savdo, cashback va chek.",
   branches: "Filiallar tarmog‘ini boshqarish.",
   products: "Mahsulot katalogini boshqarish.",

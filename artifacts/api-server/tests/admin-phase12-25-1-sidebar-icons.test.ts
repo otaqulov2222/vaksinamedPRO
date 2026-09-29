@@ -20,11 +20,11 @@ describe("Admin Phase 12.25.1 — sidebar icons", () => {
     const icons = readFileSync(path.join(adminWeb, "navIcons.tsx"), "utf8");
     assert.match(icons, /from "lucide-react"/);
     assert.match(icons, /LayoutDashboard/);
-    assert.match(icons, /MonitorSmartphone/);
-    assert.match(icons, /ShoppingBag/);
+    assert.match(icons, /Banknote/);
+    assert.match(icons, /Receipt/);
     assert.match(icons, /CreditCard/);
     assert.match(icons, /Warehouse/);
-    assert.match(icons, /PackageSearch/);
+    assert.match(icons, /Package/);
     assert.match(icons, /BadgePercent/);
     assert.match(icons, /Users/);
     assert.match(icons, /WalletCards/);
@@ -32,7 +32,7 @@ describe("Admin Phase 12.25.1 — sidebar icons", () => {
     assert.match(icons, /Store/);
     assert.match(icons, /Truck/);
     assert.match(icons, /ChartNoAxesCombined/);
-    assert.match(icons, /ClipboardCheck/);
+    assert.match(icons, /History/);
     assert.match(icons, /Cable/);
     assert.match(icons, /ShieldUser/);
     assert.match(icons, /Settings2/);

@@ -20,12 +20,11 @@ describe("Admin Phase 12 — premium visual redesign", () => {
     assert.match(css, /--vm-shadow:\s*none/);
   });
 
-  it("Dashboard Phase 12.11 ops composition", () => {
+  it("Dashboard Phase 12.30 ops composition", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
-    assert.match(dash, /biz-hero|biz-snapshot/);
-    assert.match(dash, /ops-rail|attn|act/);
-    assert.match(dash, /activity-tab/);
-    assert.match(dash, /empty-inline/);
+    assert.match(dash, /className="dash-board"/);
+    assert.match(dash, /dash-board-metrics|attn|act/);
+    assert.match(dash, /dash-status/);
     assert.doesNotMatch(dash, /qa-matrix|qa-cell/);
     assert.doesNotMatch(dash, /metric-strip-primary|metric-strip-secondary/);
     assert.doesNotMatch(dash, /low stock < 10|trendPercent|\+12%/);

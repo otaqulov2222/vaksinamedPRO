@@ -15,12 +15,12 @@ describe("Admin Phase 12.9 — Dashboard operations center reset", () => {
   it("composition: header → snapshot → attention → activity (no QA matrix)", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
     assert.match(dash, /dashboard/);
-    assert.match(dash, /biz-hero|biz-snapshot|business-snapshot/);
-    assert.match(dash, /Bugungi savdo/);
-    assert.match(dash, /E’tibor|E'tibor|Hammasi joyida|attn/);
-    assert.match(dash, /act|dash-activity|activity-tab/);
+    assert.match(dash, /className="dash-board"/);
+    assert.match(dash, />Savdo</);
+    assert.match(dash, /E’tibor|E'tibor|attn/);
+    assert.match(dash, /act|dash-activity/);
     assert.doesNotMatch(dash, /qa-matrix|QuickAction|Tezkor amallar/);
-    assert.doesNotMatch(dash, /onOpenCustomers|onOpenBranches|onOpenCatalog/);
+    assert.doesNotMatch(dash, /onOpenCatalog/);
   });
 
   it("attention uses real API signals only", () => {
@@ -31,15 +31,14 @@ describe("Admin Phase 12.9 — Dashboard operations center reset", () => {
     assert.match(dash, /Mavjud emas|mavjud emas/);
     assert.match(dash, /Yetkazilmoqda|yetkazilmoqda/);
     assert.match(dash, /Buyurtmalar/);
-    assert.match(dash, /e’tibor talab qiladigan|e'tibor talab qiladigan|Hammasi joyida/i);
+    assert.match(dash, /Muammo yo‘q|Muammo yo'q/);
     assert.doesNotMatch(dash, /failed.?payment|fake|Math\.random|threshold qoida/i);
     assert.doesNotMatch(dash, /Available\s*<=\s*0|product_stocks|cashback_accounts|server agregat/i);
   });
 
   it("inventory attention filters Available<=0 and omits SKU/tech columns", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
-    assert.match(dash, /Ombor nazorati|title:\s*"Ombor"/);
-    assert.match(dash, /Filial tanlash/);
+    assert.match(dash, /title:\s*"Ombor"/);
     assert.match(dash, /<th>Mahsulot<\/th>/);
     assert.match(dash, /<th className="num">Fizik<\/th>/);
     assert.match(dash, /<th className="num">Band<\/th>/);
@@ -47,18 +46,18 @@ describe("Admin Phase 12.9 — Dashboard operations center reset", () => {
     assert.doesNotMatch(dash, /<th>SKU<\/th>/);
   });
 
-  it("activity uses StatusLabelBadge; POS tab gated by permission", () => {
+  it("activity uses StatusLabelBadge; POS gated by permission; tables only with real rows", () => {
     const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
     assert.match(dash, /StatusLabelBadge/);
     assert.match(dash, /canPosSales/);
-    assert.match(dash, /Buyurtmalar topilmadi|Buyurtmalar yo‘q|Buyurtmalar yo'/);
-    assert.match(dash, /Kassa savdolari yo‘q|Kassa savdolari yo'/);
+    assert.match(dash, /hasOrderActivity = recent\.length > 0/);
+    assert.match(dash, /hasPosActivity = Boolean\(posSales && posSales\.length > 0\)/);
     assert.doesNotMatch(dash, /fulfillmentTone\(/);
   });
 
   it("CSS defines snapshot metrics + attn list; no QA matrix required", () => {
     const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
-    assert.match(css, /Phase 12\.(9|10|11)/);
+    assert.match(css, /Phase 12\.(9|10|11|30)/);
     assert.match(css, /\.biz-hero|\.business-snapshot|\.biz-snapshot/);
     assert.match(css, /\.biz-hero-value|\.business-snapshot-hero|\.biz-metric--hero/);
     assert.match(css, /\.attn-rows|\.attn-list|\.attention-list/);

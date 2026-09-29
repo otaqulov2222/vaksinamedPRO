@@ -44,8 +44,6 @@ export default function App() {
     () => localStorage.getItem("vm-admin-sidebar") === "1",
   );
 
-  const [sessionBusy, setSessionBusy] = useState(false);
-
   async function bootstrap(nextToken: string, opts?: { forceLanding?: boolean }) {
     setReady(false);
     setBootError("");
@@ -71,32 +69,6 @@ export default function App() {
       setUser(null);
       setPermissions([]);
       setReady(false);
-    }
-  }
-
-  async function refreshSession() {
-    if (!token || sessionBusy) return;
-    setSessionBusy(true);
-    try {
-      const me = await request("/api/admin/me", token);
-      setUser(me.user);
-      const perms: string[] = Array.isArray(me.permissions) ? me.permissions.map(String) : [];
-      setPermissions(perms);
-      const b = await softRequest("/api/admin/branches", token);
-      setBranches(b?.branches || []);
-      const allowed = NAV.filter((item) => navVisible(item, perms, me.user?.role || ""));
-      if (!allowed.some((item) => item.id === tab)) {
-        setTab(preferLandingTab(allowed));
-      }
-    } catch (err) {
-      setBootError(err instanceof Error ? err.message : "Sessiya yangilanmadi");
-      localStorage.removeItem("vm-admin-token");
-      setToken(null);
-      setUser(null);
-      setPermissions([]);
-      setReady(false);
-    } finally {
-      setSessionBusy(false);
     }
   }
 
@@ -212,11 +184,6 @@ export default function App() {
   const onlyHqShell =
     visibleNav.length > 0
     && visibleNav.every((i) => i.id === "fom" || i.id === "settings" || i.id === "admins");
-  const branchLabel =
-    user.branchId != null
-      ? branches.find((b) => Number(b.id) === Number(user.branchId))?.name || `Filial #${user.branchId}`
-      : "HQ";
-  const roleLabel = String(user.role || "").replace(/_/g, " ");
 
   return (
     <div className={`shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
@@ -239,8 +206,6 @@ export default function App() {
         {!sidebarCollapsed ? (
           <div className="side-user" aria-label="Operator">
             <strong className="side-user-name">{user.name}</strong>
-            <span className="side-user-role">{roleLabel}</span>
-            <span className="side-user-scope">{branchLabel}</span>
           </div>
         ) : null}
         <nav className="side-nav" aria-label="Admin navigatsiya">
@@ -309,45 +274,23 @@ export default function App() {
 
       <div className="main-wrap">
         <header className="topbar">
-          <nav className="breadcrumb" aria-label="Joylashuv">
-            <span className="crumb-root">Admin</span>
-            <span className="crumb-sep" aria-hidden>/</span>
-            <span className="crumb-group">{groupLabel}</span>
-            <span className="crumb-sep" aria-hidden>/</span>
-            <span className="crumb-page" aria-current="location">{pageTitle}</span>
-          </nav>
+          {tab !== "dashboard" ? (
+            <nav className="breadcrumb" aria-label="Joylashuv">
+              <span className="crumb-root">Admin</span>
+              <span className="crumb-sep" aria-hidden>/</span>
+              <span className="crumb-group">{groupLabel}</span>
+              <span className="crumb-sep" aria-hidden>/</span>
+              <span className="crumb-page" aria-current="location">{pageTitle}</span>
+            </nav>
+          ) : (
+            <div className="topbar-spacer" aria-hidden="true" />
+          )}
           <div className="topbar-meta">
-            <span
-              className="topbar-identity"
-              title={user.email}
-            >
-              {sidebarCollapsed ? (
-                <>
-                  <span className="topbar-operator">{user.name}</span>
-                  <span className="topbar-dot" aria-hidden>·</span>
-                  <span className="topbar-scope">{branchLabel}</span>
-                </>
-              ) : (
-                <span className="topbar-scope" aria-label="Filial doirasi">{branchLabel}</span>
-              )}
-            </span>
-            <button
-              className="btn-tertiary topbar-action"
-              type="button"
-              disabled={sessionBusy}
-              aria-busy={sessionBusy}
-              title="Sessiya va ruxsatlarni yangilash (sahifa ma’lumoti emas)"
-              onClick={() => void refreshSession()}
-            >
-              {sessionBusy ? "Yangilanmoqda…" : "Sessiya"}
-            </button>
-            <button
-              className="btn-tertiary topbar-action topbar-logout"
-              type="button"
-              onClick={() => void logout()}
-            >
-              Chiqish
-            </button>
+            {sidebarCollapsed ? (
+              <span className="topbar-identity" title={user.email}>
+                <span className="topbar-operator">{user.name}</span>
+              </span>
+            ) : null}
           </div>
         </header>
 
@@ -372,6 +315,9 @@ export default function App() {
               onOpenOrders={() => setTab("orders")}
               onOpenPos={() => setTab("kassa")}
               onOpenDelivery={() => setTab("delivery")}
+              onOpenCustomers={() => setTab("customers")}
+              onOpenCashback={() => setTab("cashback")}
+              onOpenBranches={() => setTab("branches")}
             />
           ) : null}
           {tab === "kassa" ? (

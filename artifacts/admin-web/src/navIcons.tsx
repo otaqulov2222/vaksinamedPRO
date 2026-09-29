@@ -1,15 +1,15 @@
 /**
- * Phase 12.25.1 — Admin sidebar lucide icons (FINAL mapping).
+ * Admin sidebar lucide icons — semantic map (routes/permissions unchanged).
  * Decorative when label is visible; parent button provides accessible name.
  */
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
-  MonitorSmartphone,
-  ShoppingBag,
+  Banknote,
+  Receipt,
   CreditCard,
   Warehouse,
-  PackageSearch,
+  Package,
   BadgePercent,
   Users,
   WalletCards,
@@ -17,7 +17,7 @@ import {
   Store,
   Truck,
   ChartNoAxesCombined,
-  ClipboardCheck,
+  History,
   Cable,
   ShieldUser,
   Settings2,
@@ -30,11 +30,11 @@ export const NAV_ICON_SIZE = 16;
 /** Sidebar nav item id → Lucide icon (routes/permissions unchanged). */
 export const NAV_ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
-  kassa: MonitorSmartphone,
-  orders: ShoppingBag,
+  kassa: Banknote,
+  orders: Receipt,
   payments: CreditCard,
   inventory: Warehouse,
-  products: PackageSearch,
+  products: Package,
   promos: BadgePercent,
   customers: Users,
   cashback: WalletCards,
@@ -42,7 +42,7 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   branches: Store,
   delivery: Truck,
   reports: ChartNoAxesCombined,
-  audit: ClipboardCheck,
+  audit: History,
   fom: Cable,
   admins: ShieldUser,
   settings: Settings2,
