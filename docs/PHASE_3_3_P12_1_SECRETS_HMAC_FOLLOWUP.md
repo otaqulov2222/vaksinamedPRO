@@ -43,3 +43,67 @@ Constant:
 4. Keep flag available for emergency reopen in staging only.
 
 Default remains dual-accept ON when unset — residual risk documented; not blindly removed in P12.1.
+
+---
+
+## Phase 12.33 — HMAC legacy closure audit (2026-09-28)
+
+| Item | Status |
+|------|--------|
+| s1.* issuance on all logins | **DONE** |
+| Dual-accept default | **ON** when ALLOW_LEGACY_HMAC_TOKENS / LEGACY_HMAC_DEADLINE unset |
+| Mobile s1.*-only store proof | **NOT_PROVEN** / **OPS_REQUIRED** |
+| Quiet period evidence | **NOT_PROVEN** |
+| Legacy HMAC CLOSED | **No** — do not remove verify path |
+| Strategy | **B deprecate** — keep dual-accept until runbook §6 complete |
+| Safe to close now? | **No** |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.33 and `docs/PRODUCTION_OPS_RUNBOOK.md` §6.
+
+---
+
+## Phase 12.34 — Mobile s1.* migration readiness (2026-09-28)
+
+| Item | Status |
+|------|--------|
+| Mobile stores opaque API token | **READY_IN_REPO** |
+| Mobile constructs legacy HMAC | **No** |
+| New login issues s1 only | **DONE** |
+| Refresh endpoint | **NOT_PRESENT** (re-login recovery) |
+| MOBILE s1-ONLY PROOF | **NOT_PROVEN** |
+| LEGACY HMAC RETIREMENT | **OPS_REQUIRED** — dual-accept **not** disabled this phase |
+| Telemetry / quiet period | **NOT_PROVEN** |
+
+Do not set `ALLOW_LEGACY_HMAC_TOKENS=0` until ops quiet-period evidence exists.
+
+## Phase 12.39 — Operational retirement gate (2026-09-28)
+
+| Item | Status |
+|------|--------|
+| Code migration (s1 issuance) | **READY_IN_REPO** / **DONE** |
+| Tests (dual-accept / flag / deadline) | **TEST_VERIFIED** |
+| Mobile/admin client HMAC construction | **Absent** (**READY_IN_REPO**) |
+| Legacy HMAC issuance on login paths | **UNUSED / DEPRECATED** |
+| LEGACY_HMAC_USAGE_TELEMETRY | **NOT_PROVEN** (no legacy-accept counter/event) |
+| MOBILE_S1_POPULATION_PROOF | **NOT_PROVEN** |
+| HMAC_QUIET_PERIOD | **NOT_PROVEN** |
+| LEGACY_HMAC_DEADLINE | **NOT_CONFIGURED** in this workspace |
+| ALLOW_LEGACY_HMAC_TOKENS set to 0? | **No** (left default ON) |
+| HMAC RETIREMENT GATE | **OPS_REQUIRED** / **NOT_PROVEN** |
+
+Do not disable dual-accept until telemetry + release population + quiet period evidence exist.
+
+## Phase 12.42 — Merchant secret KMS operational gate (2026-09-28)
+
+| Item | Status |
+|------|--------|
+| Application encryption boundary | **READY_IN_REPO** / **TEST_VERIFIED** |
+| CURRENT_KEY_SOURCE | **ENVIRONMENT_KEK** |
+| KMS_PROVIDER / KMS_BACKING | **MISSING** / **NOT_PROVEN** |
+| MERCHANT_SECRET_KEK (workspace) | **MISSING** |
+| Live rotation / IAM / private KMS network | **NOT_PROVEN** |
+| MERCHANT SECRET KMS GATE | **OPS_REQUIRED** / **NOT_PROVEN** |
+| Production PSP | **OFF** |
+
+Do not invent AWS/GCP/Azure/Vault clients. Inject KEK from approved secret manager first; prefer KMS-wrapped KEK when provider is chosen.
+

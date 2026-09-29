@@ -40,6 +40,26 @@
 
 ---
 
+## Phase 12.49 — Provider decision (2026-09-28)
+
+**SELECTED STAGING PROVIDER: DigitalOcean** (FRA1 candidate). Decision: `docs/PHASE_12_49_PROVIDER_DECISION.md`. **No provisioning.** Production remains **NOT READY — OPERATIONAL EVIDENCE MISSING**. KMS tradeoff: ENVIRONMENT_KEK (not cloud KMS). See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.49.
+
+## Phase 12.48 — Provider research (2026-09-28)
+
+Current provider research: `docs/PHASE_12_48_PROVIDER_RESEARCH.md`. **No provider selected. No provisioning.** Production remains **NOT READY — OPERATIONAL EVIDENCE MISSING**. See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.48.
+
+## Phase 12.47 — Staging infrastructure blueprint (2026-09-28)
+
+Provider-neutral blueprint published: `docs/STAGING_INFRASTRUCTURE_BLUEPRINT.md`. **No provider selected. No provisioning.** Production remains **NOT READY — OPERATIONAL EVIDENCE MISSING**. Operational P0/P1 gates unchanged. See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.47.
+
+## Phase 12.46 — Staging infrastructure bootstrap (2026-09-28)
+
+Provider-neutral staging evidence checklists added for P0-1/P0-2/P0-3/P0-4/O-4/HMAC/SMS. **No gate closed.** Production remains **NOT READY — OPERATIONAL EVIDENCE MISSING**. Deployment sequence: managed PG → PITR/restore → Redis → KEK/KMS → API/Admin → worker → SMS → Payme/Click sandbox → mobile s1 → HMAC quiet → failure drills. See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.46.
+
+## Phase 12.45 checkpoint (2026-09-28)
+
+Full-system re-audit: **PRODUCTION NOT READY — OPERATIONAL EVIDENCE MISSING**. P0-1..P0-4 remain **OPS_REQUIRED**; HMAC retirement / worker live drill **OPS_REQUIRED**/NOT_PROVEN; FOM/external delivery/outbound refund **CONTRACT_PENDING**. See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.45. No production enablement.
+
 ## 1. Pre-production gates
 
 Technical code readiness (P1–P13.1, typecheck, API/admin build, security tests, concurrency) is **in-repo**. The gates below are **external / staging ops**.
@@ -55,6 +75,7 @@ Technical code readiness (P1–P13.1, typecheck, API/admin build, security tests
 | Rollback | N/A (enable backups; do not disable without replacement) |
 | Current | **NOT_PROVEN** / **OPS_REQUIRED** |
 | Phase 12.29 workspace check | `DATABASE_URL=MISSING`; local `5432`/`55432` **CLOSED**; no managed provider selected; no IaC |
+| Phase 12.37 workspace check | Re-verified 2026-09-28 — still **MISSING** URL/provider; TCP closed; PGlite local; restore drill **NOT RUN**; RPO/RTO **NOT_ESTABLISHED** |
 
 ### 1.2 Restore drill
 
@@ -104,7 +125,9 @@ Technical code readiness (P1–P13.1, typecheck, API/admin build, security tests
 | Required before prod merchant keys | Ops injects `MERCHANT_SECRET_KEK` from approved secret manager / KMS; migrate any legacy plaintext rows; disable plaintext-read flag |
 | Do not | Hardcode KEK in source; invent AWS/GCP/Azure KMS clients without a chosen provider; claim “KMS complete” until ops provisions |
 | Owner | SecOps + eng |
-| Current | App encryption **IMPLEMENTED** · cloud KMS provisioning **OPS_REQUIRED** |
+**Phase 12.42 (2026-09-28):** Merchant secret KMS **operational** re-audit — app AES-GCM `enc:v1:` **READY_IN_REPO** / **TEST_VERIFIED**; CURRENT_KEY_SOURCE=ENVIRONMENT_KEK; managed KMS provider **MISSING**; `MERCHANT_SECRET_KEK` **MISSING** in this workspace; IAM/TLS/rotation live **NOT_PROVEN**; production PSP **OFF**. Gate **OPS_REQUIRED**.
+
+| Current | App encryption **IMPLEMENTED** · managed KMS provisioning **OPS_REQUIRED** (12.42: provider MISSING; env KEK MISSING) |
 | Follow-up marker | `SECRET_ENCRYPTION_AT_REST_FOLLOW_UP` in payment merchant code |
 | Env | `MERCHANT_SECRET_KEK` (required staging/prod) · `MERCHANT_SECRET_ALLOW_PLAINTEXT_READ` (temporary migration only) |
 
@@ -134,10 +157,39 @@ Fill evidence template per drill. Do not mark PASS without a dated staging run.
 
 | Item | Detail |
 |------|--------|
-| In-repo | `redis.ts` + rate-limit; staging/production **fail closed** without `REDIS_URL` |
-| Required | Managed Redis; `REDIS_URL` set; warm PING; multi-instance shared rate-limit verify |
-| Phase 12.30 | **Not started** on 2026-09-25 checkpoint — no invented Redis provider |
-| Current | Code **READY_IN_REPO** · live verify **OPS_REQUIRED** (`REDIS_URL` MISSING in workspace; TCP 6379 CLOSED) |
+| In-repo | `redis.ts` + `rateLimit.ts`; staging/production **fail closed** without `REDIS_URL`; mid-request Redis failure → **503** (no memory bypass) |
+| Package | `ioredis@5.6.1` |
+| Algorithm | Fixed-window `INCR` + `PEXPIRE`; keys `rl:v1:` + SHA-256(logical)[:40] |
+| Required | Managed Redis; `REDIS_URL` (prefer `rediss://`); warm PING at boot; multi-instance shared rate-limit verify on staging |
+| TLS | App documents `rediss://`; no insecure `rejectUnauthorized: false` in code; live TLS **NOT_PROVEN** without endpoint |
+| Observability | `alertCode` `RATE_LIMITED` / `RATE_LIMIT_REDIS_UNAVAILABLE` logged — APM scrape **OPS_REQUIRED** |
+| Phase 12.30 | Full audit 2026-09-28 — no invented provider |
+| Phase 12.38 | Staging provisioning re-audit 2026-09-28 — provider still **MISSING**; no compose Redis; TCP 6379/6380 **CLOSED**; live PING/rate-limit/failover **NOT_PROVEN** |
+| Current | Code **READY_IN_REPO** · live verify **OPS_REQUIRED** (`REDIS_URL` MISSING; TCP 6379 CLOSED) |
+| Readiness | `/health/ready` remains **PostgreSQL-only** — Redis not part of readiness contract |
+| Recovery | Stop writes relying on abuse control if Redis down in prod (API returns 503 on limited routes); restore Redis; confirm PING; no financial SoT in Redis |
+
+---
+
+## 1.9 Failure recovery drills (Phase 12.35)
+
+**Code foundations:** health live≠ready (PG only); Redis rate-limit 503 fail-closed; worker SKIP LOCKED; payment capture uniqueness; session revoke/expire.
+
+**Honest limits:** Local FakeRedis / PGlite / unit tests ≠ production HA. **RPO/RTO = NOT_ESTABLISHED** until managed PITR + restore drill.
+
+| Drill | Staging evidence required | Rollback |
+|-------|---------------------------|----------|
+| Stop Redis under production-like API | Limited routes return 503; no unlimited abuse bypass | Restore Redis; confirm PING |
+| Phase 12.38 live Redis drills | **NOT_PROVEN** / **OPS_REQUIRED** until managed staging Redis exists | — |
+| Restart API under light writes | One capture per payment; sessions still valid (PG) | Redeploy prior revision |
+| Kill worker mid-job | Confirm stale RUNNING auto-reclaim via `WORKER_STALE_RUNNING_MS` + `run-due` (Phase 12.36); verify single business effect | Tune lease; emergency SQL only if needed |
+
+**Phase 12.44 (2026-09-28):** Worker live crash/recovery **operational** re-attempt — reclaim code **READY_IN_REPO** / **TEST_VERIFIED**; staging worker **MISSING**; staging PostgreSQL **NOT_PROVEN**; live kill drill **NOT_RUN** / **NOT_PROVEN**; OBSERVED_STAGING_RECOVERY_TIME **NOT_ESTABLISHED**. Gate **OPS_REQUIRED**.
+
+**Phase 12.36 (2026-09-28):** Stale RUNNING reclaim **READY_IN_REPO** / **TEST_VERIFIED**. Env `WORKER_STALE_RUNNING_MS` (default 30m). Live staging kill drill still **OPS_REQUIRED**.
+| DB unavailable | ready 503; no fake PAID/cashback | Restore DB |
+
+**Phase 12.35 (2026-09-28):** Audit complete — resilience patterns **READY_IN_REPO** / **TEST_VERIFIED**; real infrastructure drills **OPS_REQUIRED** / **NOT_PROVEN**.
 
 ---
 
@@ -168,7 +220,11 @@ Fill evidence template per drill. Do not mark PASS without a dated staging run.
 | Idempotency | Repeat settle/callback → **exactly one** effective capture |
 | Final state | Intent captured; order `paymentStatus` paid axis; no duplicate captures |
 
-**Current (checkpoint machine):** credentials **absent** → `PAYME_SANDBOX_E2E = PENDING`.
+**Current (checkpoint machine / 12.40):** credentials **absent** → `PAYME_SANDBOX_E2E = PENDING` / **NOT_RUN**.
+
+**Phase 12.40 (2026-09-28):** Payme sandbox **operational** re-attempt — adapter/contract **READY_IN_REPO** / **VERIFIED_IN_REPO**; credentials still **MISSING**; harness `PAYME_SANDBOX_E2E=PENDING`; live Create/Perform/callback **NOT_RUN** / **NOT_PROVEN**; outbound refund **CONTRACT_PENDING**; production Payme **OFF**. Gate **OPS_REQUIRED**.
+
+**Phase 12.31 (2026-09-28):** Full Payme sandbox gate audit — in-repo Merchant API **READY_IN_REPO**; live E2E **OPS_REQUIRED** / **NOT_PROVEN** (PENDING; credentials MISSING). No fake PASS. Production Payme OFF. Outbound refund **CONTRACT_PENDING**.
 
 **Harness note:** Even with env present, live network PASS requires approved staging fixture; do not invent PASS.
 
@@ -186,7 +242,11 @@ Fill evidence template per drill. Do not mark PASS without a dated staging run.
 | Idempotency | Duplicate Complete → one capture |
 | Final state | Captured once; refund path still subject to outbound contract limits |
 
-**Current:** `CLICK_SANDBOX_E2E = PENDING`.
+**Current (checkpoint machine / 12.41):** credentials **absent** → `CLICK_SANDBOX_E2E = PENDING` / **NOT_RUN**.
+
+**Phase 12.41 (2026-09-28):** Click sandbox **operational** re-attempt — adapter/Shop API **READY_IN_REPO** / **VERIFIED_IN_REPO**; credentials still **MISSING**; harness `CLICK_SANDBOX_E2E=PENDING`; live Prepare/Complete/callback **NOT_RUN** / **NOT_PROVEN**; outbound refund **CONTRACT_PENDING**; production Click **OFF**. Gate **OPS_REQUIRED**.
+
+**Phase 12.32 (2026-09-28):** Full Click sandbox gate audit — in-repo Shop API **READY_IN_REPO**; live E2E **OPS_REQUIRED** / **NOT_PROVEN** (PENDING; credentials MISSING). No fake PASS. Production Click OFF. Outbound refund / SHA1 Merchant API **CONTRACT_PENDING**.
 
 ### 2.3 Closing the sandbox gate
 
@@ -270,6 +330,8 @@ Commercial FOM sale / cashback paths may already operate without stock writes. B
 
 ### Status
 
+**Phase 12.43 (2026-09-28):** External delivery **operational** re-audit — internal lifecycle **READY_IN_REPO**; `ExternalDeliveryAdapter` stub **CONTRACT_PENDING**; EXTERNAL_PROVIDER **MISSING**; credentials **MISSING**; live create/sync/webhook/tracking **NOT_PROVEN**; Admin remains honest (Hali ulanmagan). Gate **CONTRACT_PENDING** / **OPS_REQUIRED**.
+
 Internal pickup / internal delivery axes may function. **External courier adapter remains `CONTRACT_PENDING`.** Keep external provider disabled until contract verified.
 
 ### Required contract evidence
@@ -295,6 +357,12 @@ Internal pickup / internal delivery axes may function. **External courier adapte
 ---
 
 ## 6. Mobile HMAC migration
+
+**Phase 12.33 (2026-09-28):** Full HMAC legacy gate audit — `s1.*` issuance **DONE**; dual-accept still default **ON**; mobile s1-only + quiet period **NOT_PROVEN**; legacy HMAC **NOT CLOSED**. Strategy: deprecate (runbook steps below). Do not set `ALLOW_LEGACY_HMAC_TOKENS=0` until mobile proof exists.
+
+**Phase 12.39 (2026-09-28):** HMAC retirement **operational** re-audit — code migration **READY_IN_REPO**; legacy issuance **UNUSED/DEPRECATED**; legacy usage telemetry **NOT_PROVEN**; mobile s1 population **NOT_PROVEN**; quiet period **NOT_PROVEN**; dual-accept **NOT** disabled. Gate **OPS_REQUIRED**.
+
+**Phase 12.34 (2026-09-28):** Mobile s1 migration readiness — client opaque Bearer **READY_IN_REPO**; no client HMAC secrets; issuance already s1-only; refresh **NOT_PRESENT** (re-login); **MOBILE s1-ONLY PROOF = NOT_PROVEN**; **LEGACY HMAC RETIREMENT = OPS_REQUIRED**. Dual-accept remains **ON**.
 
 ### Current design
 

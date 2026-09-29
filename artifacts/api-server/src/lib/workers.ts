@@ -48,6 +48,101 @@ export function isBackgroundWorkersEnabled(): boolean {
   return !isProductionLike() && flagEnabled("ENABLE_BACKGROUND_WORKERS_DEV");
 }
 
+/**
+ * How long a RUNNING job may hold its lease before reclaim.
+ * Must exceed the longest expected handler (sweeps, retries).
+ * Env: WORKER_STALE_RUNNING_MS (ms). Default 30 minutes.
+ */
+export function workerStaleRunningMs(): number {
+  const raw = (process.env.WORKER_STALE_RUNNING_MS || "").trim();
+  if (raw) {
+    const n = Number(raw);
+    if (Number.isFinite(n)) {
+      const ms = Math.floor(n);
+      if (ms >= 60_000 && ms <= 24 * 60 * 60 * 1000) return ms;
+    }
+  }
+  return 30 * 60 * 1000;
+}
+
+function backoffAfterAttempt(attempts: number): number {
+  const n = Math.max(1, Number(attempts) || 1);
+  return Math.min(60_000 * n, 15 * 60_000);
+}
+
+/**
+ * Reclaim RUNNING jobs whose lease (locked_at) is older than staleMs.
+ * Does not increment attempts (already counted at claim).
+ * FAILED → eligible for re-claim; DEAD if attempts >= max_attempts.
+ * Race-safe: FOR UPDATE SKIP LOCKED + status=RUNNING guard on update.
+ */
+export async function reclaimStaleRunningJobs(
+  opts: { now?: Date; staleMs?: number; limit?: number } = {},
+  executor: DbLike = db,
+): Promise<{ reclaimed: number; dead: number; jobs: Array<{ id: number; status: string; jobType: string }> }> {
+  const now = opts.now ?? new Date();
+  const staleMs = opts.staleMs ?? workerStaleRunningMs();
+  const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
+  const cutoff = new Date(now.getTime() - staleMs);
+
+  return withTx(executor, async (tx) => {
+    const locked = await tx.execute(sql`
+      SELECT id, attempts, max_attempts, job_type
+      FROM worker_jobs
+      WHERE status = 'RUNNING'
+        AND locked_at IS NOT NULL
+        AND locked_at < ${cutoff}
+      ORDER BY id ASC
+      LIMIT ${limit}
+      FOR UPDATE SKIP LOCKED
+    `);
+    const rows = rowsOf(locked);
+    const jobs: Array<{ id: number; status: string; jobType: string }> = [];
+    let dead = 0;
+
+    for (const row of rows) {
+      const id = Number(row.id);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const attempts = Number(row.attempts);
+      const maxAttempts = Number(row.max_attempts);
+      const jobType = String(row.job_type || "");
+      const isDead = attempts >= maxAttempts;
+      const nextStatus = isDead ? "DEAD" : "FAILED";
+      const updated = await tx
+        .update(workerJobs)
+        .set({
+          status: nextStatus,
+          lastError: "stale_running_reclaimed",
+          // Immediate eligibility after crash reclaim (attempts already consumed at claim).
+          // Handler failure path still applies backoff when transitioning RUNNING→FAILED after an error.
+          runAfter: now,
+          lockedAt: null,
+          lockedBy: "",
+          updatedAt: now,
+        })
+        .where(and(eq(workerJobs.id, id), eq(workerJobs.status, "RUNNING")))
+        .returning();
+
+      if (!updated[0]) continue;
+      jobs.push({ id, status: nextStatus, jobType: updated[0].jobType || jobType });
+      if (isDead) dead += 1;
+      emitAlert(ALERT.WORKER_STALE_JOB_RECLAIMED, {
+        jobId: id,
+        jobType: updated[0].jobType || jobType,
+        attempt: attempts,
+        nextStatus,
+      });
+      logger.warn(
+        { jobId: id, jobType: updated[0].jobType || jobType, attempt: attempts, nextStatus },
+        "Worker stale RUNNING reclaimed",
+      );
+    }
+
+    return { reclaimed: jobs.length, dead, jobs };
+  });
+}
+
+
 export async function enqueueJob(input: {
   jobType: string;
   entityKey?: string;
@@ -230,12 +325,21 @@ export async function processWorkerJob(job: typeof workerJobs.$inferSelect) {
 
 /** Claim and run due jobs using PostgreSQL FOR UPDATE SKIP LOCKED. */
 export async function runDueWorkerJobs(
-  opts: { limit?: number; workerId?: string } = {},
+  opts: { limit?: number; workerId?: string; skipReclaim?: boolean; staleMs?: number } = {},
   executor: DbLike = db,
 ) {
   const limit = Math.min(Math.max(Number(opts.limit) || 20, 1), 100);
   const workerId = opts.workerId || `worker-${process.pid}`;
   const now = new Date();
+
+  // Crash recovery: reclaim abandoned RUNNING leases before claiming new work.
+  let reclaim: { reclaimed: number; dead: number } = { reclaimed: 0, dead: 0 };
+  if (!opts.skipReclaim) {
+    reclaim = await reclaimStaleRunningJobs(
+      { now, staleMs: opts.staleMs, limit: Math.min(limit * 2, 100) },
+      executor,
+    );
+  }
 
   const claimed = await withTx(executor, async (tx) => {
     const locked = await tx.execute(sql`
@@ -275,7 +379,7 @@ export async function runDueWorkerJobs(
   for (const job of claimed) {
     try {
       const result = await processWorkerJob(job);
-      await executor
+      const done = await executor
         .update(workerJobs)
         .set({
           status: "SUCCEEDED",
@@ -285,7 +389,22 @@ export async function runDueWorkerJobs(
           lockedAt: null,
           lockedBy: "",
         })
-        .where(eq(workerJobs.id, job.id));
+        .where(
+          and(
+            eq(workerJobs.id, job.id),
+            eq(workerJobs.status, "RUNNING"),
+            eq(workerJobs.lockedBy, workerId),
+          ),
+        )
+        .returning();
+      if (!done[0]) {
+        logger.warn(
+          { jobId: job.id, jobType: job.jobType, workerId },
+          "Worker job success ignored — lease lost (reclaimed or stolen)",
+        );
+        results.push({ jobId: job.id, status: "LEASE_LOST" });
+        continue;
+      }
       logger.info(
         { jobId: job.id, jobType: job.jobType, entityKey: job.entityKey, attempt: job.attempts },
         "Worker job succeeded",
@@ -295,8 +414,8 @@ export async function runDueWorkerJobs(
       const message = error instanceof Error ? error.message : String(error);
       const nextAttempts = job.attempts;
       const dead = nextAttempts >= job.maxAttempts;
-      const backoffMs = Math.min(60_000 * nextAttempts, 15 * 60_000);
-      await executor
+      const backoffMs = backoffAfterAttempt(nextAttempts);
+      const failed = await executor
         .update(workerJobs)
         .set({
           status: dead ? "DEAD" : "FAILED",
@@ -306,7 +425,22 @@ export async function runDueWorkerJobs(
           lockedAt: null,
           lockedBy: "",
         })
-        .where(eq(workerJobs.id, job.id));
+        .where(
+          and(
+            eq(workerJobs.id, job.id),
+            eq(workerJobs.status, "RUNNING"),
+            eq(workerJobs.lockedBy, workerId),
+          ),
+        )
+        .returning();
+      if (!failed[0]) {
+        logger.warn(
+          { jobId: job.id, jobType: job.jobType, workerId },
+          "Worker job failure ignored — lease lost (reclaimed or stolen)",
+        );
+        results.push({ jobId: job.id, status: "LEASE_LOST", error: message });
+        continue;
+      }
       logger.warn(
         { jobId: job.id, jobType: job.jobType, attempt: nextAttempts, err: message },
         "Worker job failed",
@@ -321,12 +455,9 @@ export async function runDueWorkerJobs(
     }
   }
 
-  if (claimed.length === 0) {
-    // optional backlog probe could live in ops cron
-  }
-
-  return { processed: results.length, results };
+  return { processed: results.length, results, reclaim };
 }
+
 
 /** Ensure periodic sweep jobs are enqueued (idempotent keys). */
 export async function ensureSweepJobsEnqueued() {

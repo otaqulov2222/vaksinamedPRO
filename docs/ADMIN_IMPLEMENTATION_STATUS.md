@@ -25,12 +25,286 @@
 
 | Gate | Status |
 |------|--------|
-| P0-1 Managed PG PITR + restore | **OPS_REQUIRED** (12.29) |
-| P0-2 Merchant secret encryption | App boundary **READY_IN_REPO**; cloud KMS **OPS_REQUIRED** (12.28) |
-| P0-3 Payme/Click sandbox E2E | **OPS_REQUIRED** |
-| P0-4 Redis live verify | **OPS_REQUIRED** (Phase 12.30 **not started** today) |
+| P0-1 Managed PG PITR + restore | **OPS_REQUIRED** (12.37 re-verified) |
+| P0-2 Merchant secret encryption | App boundary **READY_IN_REPO**; managed KMS **OPS_REQUIRED** (12.42) |
+| P0-3 Payme/Click sandbox E2E | **OPS_REQUIRED** (12.40 Payme + 12.41 Click PENDING/NOT_RUN) |
+| P0-4 Redis live verify | **OPS_REQUIRED** (12.38 re-verified: provider MISSING; live NOT_PROVEN) |
+| HMAC legacy retirement | **OPS_REQUIRED** (12.39: telemetry/quiet/population NOT_PROVEN) |
 | Production enablement | **CLOSED** |
 | FOM writer / FOM POS | OFF / **CONTRACT_PENDING** |
+
+---
+
+## Phase 12.49 — Provider decision
+
+| Item | Status |
+|------|--------|
+| Decision | `docs/PHASE_12_49_PROVIDER_DECISION.md` |
+| Staging provider | **DigitalOcean** (not provisioned) |
+| Production gates closed? | **No** |
+| Admin UI change | None |
+
+---
+
+## Phase 12.48 — Provider research
+
+| Item | Status |
+|------|--------|
+| Research | `docs/PHASE_12_48_PROVIDER_RESEARCH.md` |
+| Provider / provisioning | **None** — **TO_BE_AGREED** |
+| Production gates closed? | **No** |
+| Admin UI change | None |
+
+---
+
+## Phase 12.47 — Staging infrastructure blueprint
+
+| Item | Status |
+|------|--------|
+| Blueprint | `docs/STAGING_INFRASTRUCTURE_BLUEPRINT.md` |
+| Provider / provisioning | **None** — **TO_BE_AGREED** |
+| Production gates closed? | **No** |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.47.
+
+---
+
+## Phase 12.46 — Staging infrastructure bootstrap
+
+| Item | Status |
+|------|--------|
+| Staging evidence checklists | Documented in gap matrix |
+| Production gates closed? | **No** — still **OPS_REQUIRED** / **CONTRACT_PENDING** |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.46.
+
+---
+
+## Phase 12.45 — Final full-system gap re-audit
+
+| Item | Status |
+|------|--------|
+| Admin honesty console (12.6A–12.25) | **READY_IN_REPO** / **TEST_VERIFIED** |
+| Admin users CRUD API | **MISSING** (honest UI) |
+| Deep reports / export | **Hali ulanmagan** (honest) |
+| FOM / external delivery / PSP refund | **CONTRACT_PENDING** / OFF |
+| Production | **NOT READY — OPERATIONAL EVIDENCE MISSING** |
+| Admin UI redesign this phase | **None** |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.45.
+
+---
+
+## Phase 12.44 — Worker live crash / recovery operational gate
+
+| Item | Status |
+|------|--------|
+| Reclaim implementation | **READY_IN_REPO** / **TEST_VERIFIED** |
+| Staging worker / PostgreSQL | **MISSING** / **NOT_PROVEN** |
+| Live crash drill | **NOT_PROVEN** |
+| Gate | **OPS_REQUIRED** |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.44.
+
+---
+
+## Phase 12.43 — External delivery production contract gate
+
+| Item | Status |
+|------|--------|
+| Internal delivery Admin UI | **READY_IN_REPO** |
+| External provider | **MISSING** → **CONTRACT_PENDING** |
+| Tracking / ETA | **CONTRACT_PENDING** (honest Hali ulanmagan) |
+| Live provider E2E | **NOT_PROVEN** |
+| Gate | **CONTRACT_PENDING** / **OPS_REQUIRED** |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.43.
+
+---
+
+## Phase 12.42 — Merchant secret KMS operational gate
+
+| Item | Status |
+|------|--------|
+| App enc:v1 AES-GCM boundary | **READY_IN_REPO** / **TEST_VERIFIED** |
+| Managed KMS | **MISSING** → **OPS_REQUIRED** |
+| MERCHANT_SECRET_KEK (workspace) | **MISSING** |
+| Branches UI secret exposure | Write-only / masked — no plaintext seed from API |
+| Production PSP | **OFF** |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.42.
+
+---
+
+## Phase 12.41 — Click sandbox E2E operational gate
+
+| Item | Status |
+|------|--------|
+| Adapter / Shop API (in-repo) | **READY_IN_REPO** / **VERIFIED_IN_REPO** |
+| Sandbox credentials / live E2E | **MISSING** / **NOT_RUN** |
+| Outbound refund | **CONTRACT_PENDING** |
+| Production Click | **OFF** |
+| Gate | **OPS_REQUIRED** |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.41.
+
+---
+
+## Phase 12.40 — Payme sandbox E2E operational gate
+
+| Item | Status |
+|------|--------|
+| Adapter / Merchant RPC (in-repo) | **READY_IN_REPO** / **VERIFIED_IN_REPO** |
+| Sandbox credentials / live E2E | **MISSING** / **NOT_RUN** |
+| Outbound refund | **CONTRACT_PENDING** |
+| Production Payme | **OFF** |
+| Gate | **OPS_REQUIRED** |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.40.
+
+---
+
+## Phase 12.39 — HMAC legacy retirement operational gate
+
+| Item | Status |
+|------|--------|
+| Admin s1 issuance / opaque Bearer | **DONE** / **READY_IN_REPO** |
+| Admin HMAC construction | **Absent** |
+| Legacy dual-accept | Still **ON** (default) |
+| Telemetry / quiet / population | **NOT_PROVEN** |
+| Gate | **OPS_REQUIRED** |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.39.
+
+---
+
+## Phase 12.38 — Production Redis staging gate
+
+| Item | Status |
+|------|--------|
+| Managed provider / REDIS_URL | **MISSING** |
+| TLS / AUTH / live PING / failover | **NOT_PROVEN** |
+| Gate | **OPS_REQUIRED** |
+| Provider invented? | **No** |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.38.
+
+---
+
+## Phase 12.37 — Managed PostgreSQL staging gate
+
+| Item | Status |
+|------|--------|
+| Managed provider / staging DATABASE_URL | **MISSING** |
+| PITR / restore / RPO / RTO | **NOT_PROVEN** / **NOT_ESTABLISHED** |
+| Gate | **OPS_REQUIRED** |
+| Provider invented? | **No** |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.37.
+
+---
+
+## Phase 12.36 — Worker crash recovery
+
+| Item | Status |
+|------|--------|
+| Stale RUNNING reclaim | **READY_IN_REPO** / **TEST_VERIFIED** |
+| Production worker kill drill | **OPS_REQUIRED** (12.44 re-verified) |
+| Admin UI change | None |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.36.
+
+---
+
+## Phase 12.35 — Failure recovery & resilience
+
+| Item | Status |
+|------|--------|
+| In-repo fail-closed / idempotency | **READY_IN_REPO** / **TEST_VERIFIED** |
+| Real staging/production outage drills | **OPS_REQUIRED** / **NOT_PROVEN** |
+| RPO / RTO | **NOT_ESTABLISHED** |
+| Production enablement | **CLOSED** |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.35.
+
+---
+
+## Phase 12.34 — Mobile s1.* migration readiness
+
+| Item | Status |
+|------|--------|
+| Admin auth | Unaffected (`s1.*` issuance DONE; dual-accept still ON) |
+| Mobile s1-only production proof | **NOT_PROVEN** |
+| Legacy HMAC disabled this phase? | **No** |
+| Retirement gate | **OPS_REQUIRED** |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.34.
+
+---
+
+## Phase 12.33 — HMAC legacy auth gate
+
+| Item | Status |
+|------|--------|
+| Admin login → `s1.*` | **DONE** |
+| Legacy admin HMAC dual-accept | Still **ON** by default |
+| Legacy HMAC CLOSED | **No** — **OPS_REQUIRED** / **NOT_PROVEN** |
+| Blind removal performed? | **No** |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.33.
+
+---
+
+## Phase 12.32 — Click sandbox E2E gate
+
+| Item | Status |
+|------|--------|
+| Shop API + adapter (Prepare/Complete) | **READY_IN_REPO** |
+| Sandbox credentials | **MISSING** |
+| Live sandbox E2E | **NOT RUN** → **OPS_REQUIRED** / PENDING |
+| Outbound Click refund / SHA1 Merchant API | **CONTRACT_PENDING** |
+| Production Click | **OFF** |
+| Credentials invented? | **No** |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.32.
+
+---
+
+## Phase 12.31 — Payme sandbox E2E gate
+
+| Item | Status |
+|------|--------|
+| Merchant API + adapter (core settle) | **READY_IN_REPO** |
+| Sandbox credentials | **MISSING** |
+| Live sandbox E2E | **NOT RUN** → **OPS_REQUIRED** / PENDING |
+| Outbound Payme refund | **CONTRACT_PENDING** |
+| Production Payme | **OFF** |
+| Credentials invented? | **No** |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.31.
+
+---
+
+## Phase 12.30 — Redis production gate
+
+| Item | Status |
+|------|--------|
+| In-repo client + fail-closed + rate-limit | **READY_IN_REPO** |
+| FakeRedis multi-instance / atomic tests | **TEST VERIFIED** |
+| `REDIS_URL` / live PING / TLS | **MISSING** / **NOT_PROVEN** |
+| Production Redis gate | **OPS_REQUIRED** |
+| Provider invented? | **No** |
+
+See `docs/PRODUCTION_GAP_MATRIX.md` § Phase 12.30.
 
 ---
 
@@ -667,7 +941,7 @@
 | Cashback correction workflow | **OPEN** |
 | Secret encryption at rest | **OPEN** |
 | PSP outbound refund | **CONTRACT_PENDING** |
-| External delivery | **CONTRACT_PENDING** |
+| External delivery | **CONTRACT_PENDING** (12.43 re-verified) |
 | FOM_POS | **CONTRACT_PENDING** |
 | FOM inventory writer | **DISABLED** |
 | Inventory low-stock threshold policy | **MISSING** (not invented) |
