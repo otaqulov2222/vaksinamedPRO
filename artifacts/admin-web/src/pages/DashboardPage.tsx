@@ -5,14 +5,12 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Boxes,
-  CalendarClock,
   CheckCircle2,
   Package,
   Receipt,
   RefreshCw,
   ShoppingBag,
   Store,
-  Users,
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
@@ -122,6 +120,16 @@ function pct(n: number, total: number): number {
   return total > 0 ? Math.min(100, (n / total) * 100) : 0;
 }
 
+/** Rounds the chart ceiling up to 1 / 2 / 2.5 / 5 × 10ⁿ so gridline labels read cleanly. */
+function niceCeil(value: number): number {
+  if (value <= 0) return 0;
+  const p = 10 ** Math.floor(Math.log10(value));
+  const n = value / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+}
+
+const GRID_STEPS = [1, 0.5, 0];
+
 type DayPoint = { date: string; revenue: number; orders: number };
 type LoadState = "loading" | "ready" | "error";
 
@@ -131,15 +139,22 @@ function SalesChart(props: { points: DayPoint[]; state: LoadState; focusDate: st
   let max = 0;
   for (const p of pts) max = Math.max(max, p.revenue);
   const hasData = props.state === "ready" && max > 0;
+  const top = niceCeil(max);
   const n = Math.max(1, pts.length);
-  const barHeight = (v: number) => (hasData && v > 0 ? Math.max(3, (v / max) * 100) : 0);
+  const barHeight = (v: number) => (hasData && v > 0 ? Math.max(2, (v / top) * 100) : 0);
   const active = hover != null ? pts[hover] : null;
 
   return (
-    <div className={`sales-chart is-${props.state}${hasData ? "" : " is-empty"}`}>
-      {props.state !== "error" ? (
+    <div className={`sales-chart is-${props.state}${hasData ? " has-scale" : " is-empty"}`}>
       <div className="sales-chart-plot">
-        {hasData ? <span className="sales-chart-max">{compactMoney(max)}</span> : null}
+        <div className="sales-chart-grid" aria-hidden="true">
+          {GRID_STEPS.map((f) => (
+            <span key={f} className="sales-chart-gridline" style={{ bottom: `${f * 100}%` }}>
+              {hasData ? <span className="sales-chart-tick">{f === 0 ? "0" : compactMoney(top * f)}</span> : null}
+            </span>
+          ))}
+        </div>
+        {props.state !== "error" ? (
         <div className="sales-bars">
           {props.state === "loading"
             ? Array.from({ length: 7 }, (_, i) => (
@@ -172,6 +187,7 @@ function SalesChart(props: { points: DayPoint[]; state: LoadState; focusDate: st
                 );
               })}
         </div>
+        ) : null}
         {active && hover != null ? (
           <div
             className={`sales-chart-tip${hover > n - 3 ? " is-left" : ""}`}
@@ -183,8 +199,24 @@ function SalesChart(props: { points: DayPoint[]; state: LoadState; focusDate: st
             <span>{active.orders} ta buyurtma</span>
           </div>
         ) : null}
+        {!hasData ? (
+          <p className="sales-chart-empty" role="status">
+            {props.state === "loading" ? (
+              <span>Dinamika yuklanmoqda…</span>
+            ) : props.state === "error" ? (
+              <>
+                <strong>Dinamika yuklanmadi</strong>
+                <span>Kunlik ma’lumotni olishda xatolik bo‘ldi.</span>
+              </>
+            ) : (
+              <>
+                <strong>Ma’lumot yetarli emas</strong>
+                <span>So‘nggi 7 kunda yakunlangan savdo qayd etilmagan.</span>
+              </>
+            )}
+          </p>
+        ) : null}
       </div>
-      ) : null}
       {props.state === "ready" ? (
         <div className="sales-chart-axis" aria-hidden="true">
           {pts.map((p) => {
@@ -196,23 +228,6 @@ function SalesChart(props: { points: DayPoint[]; state: LoadState; focusDate: st
             );
           })}
         </div>
-      ) : null}
-      {!hasData ? (
-        <p className="sales-chart-empty" role="status">
-          {props.state === "loading" ? (
-            <span>Dinamika yuklanmoqda…</span>
-          ) : props.state === "error" ? (
-            <>
-              <strong>Dinamika yuklanmadi</strong>
-              <span>Kunlik ma’lumotni olishda xatolik bo‘ldi.</span>
-            </>
-          ) : (
-            <>
-              <strong>Ma’lumot yetarli emas</strong>
-              <span>So‘nggi 7 kunda yakunlangan savdo qayd etilmagan — har kun 0 so‘m.</span>
-            </>
-          )}
-        </p>
       ) : null}
     </div>
   );
@@ -645,7 +660,7 @@ function NetworkMap(props: {
   );
 }
 
-type KpiAccent = "customers" | "cash" | "network" | "reserve";
+type KpiAccent = "orders" | "cash" | "network";
 
 function DashMetric(props: {
   label: string;
@@ -662,9 +677,7 @@ function DashMetric(props: {
   const body = (
     <>
       <span className="dash-kpi-top">
-        <span className="dash-kpi-icon" aria-hidden="true">
-          <Icon size={15} strokeWidth={1.75} />
-        </span>
+        <Icon className="dash-kpi-icon" size={14} strokeWidth={2} aria-hidden="true" />
         <span className="dash-kpi-label">{props.label}</span>
         {props.onOpen ? <ArrowUpRight className="dash-kpi-go" size={14} strokeWidth={2} aria-hidden="true" /> : null}
       </span>
@@ -996,7 +1009,6 @@ export function DashboardPage(props: {
   let restRegionsCount = 0;
   for (const [, n] of network.regions.slice(topRegions.length)) restRegionsCount += n;
   const topRegion = network.regions[0] || null;
-  const topShare = topRegion ? Math.round(pct(topRegion[1], network.total)) : 0;
 
   const feed = useMemo(() => {
     const items: FeedItem[] = [];
@@ -1123,9 +1135,11 @@ export function DashboardPage(props: {
       : "O‘z filiali";
 
   let weekTotal = 0;
+  let weekOrders = 0;
   let bestDay: DayPoint | null = null;
   for (const p of days) {
     weekTotal += p.revenue;
+    weekOrders += p.orders;
     if (p.revenue > 0 && (!bestDay || p.revenue > bestDay.revenue)) bestDay = p;
   }
   const dynamicsReady = daysState === "ready";
@@ -1140,6 +1154,10 @@ export function DashboardPage(props: {
       : prevRevenue === 0 && preset !== "all" && preset !== "custom"
         ? "Oldingi davrda savdo qayd etilmagan"
         : "";
+  const compareUnavailable =
+    preset === "all" || preset === "custom"
+      ? "Bu davr uchun taqqoslash yo‘q"
+      : "Taqqoslash uchun ma’lumot yetarli emas";
 
   const segments: Segment[] = [
     { key: "done", label: "Yakunlangan", value: completedCount, tone: "ok" },
@@ -1157,7 +1175,7 @@ export function DashboardPage(props: {
         </span>
       ) : (
         <div className="dash-health">
-          <CheckCircle2 size={14} strokeWidth={2.25} aria-hidden="true" />
+          <span className="dash-health-dot" aria-hidden="true" />
           <p className="dash-status" role="status">Muammo yo‘q</p>
         </div>
       )}
@@ -1177,11 +1195,10 @@ export function DashboardPage(props: {
 
       {loading && !data ? (
         <div className="dash-skeleton" role="status" aria-label="Yuklanmoqda…">
-          <span className="dash-skel dash-skel--hero" />
-          <span className="dash-skel dash-skel--orders" />
           <span className="dash-skel dash-skel--metrics" />
-          <span className="dash-skel dash-skel--signals" />
-          <span className="dash-skel dash-skel--signals" />
+          <span className="dash-skel dash-skel--sales" />
+          <span className="dash-skel dash-skel--orders" />
+          <span className="dash-skel dash-skel--network" />
         </div>
       ) : (
         <StateBox
@@ -1191,87 +1208,143 @@ export function DashboardPage(props: {
           emptyText="Ma’lumot yo‘q"
           onRetry={() => void load()}
         >
-          <section className="dash-overview" aria-label="Biznes holati">
-            <article className="dash-hero" aria-label="Savdo">
+          <section className="dash-metrics" aria-label="Asosiy ko‘rsatkichlar">
+            <article className="dash-kpi dash-hero" aria-label="Savdo">
               <div className="dash-hero-stage">
-                <div className="dash-hero-head">
-                  <div className="dash-hero-title">
-                    <h2 className="dash-label">{salesLabel(preset)}</h2>
-                    <span className="dash-hero-scope">{scopeLabel}</span>
-                  </div>
+                <div className="dash-kpi-top">
+                  <h2 className="dash-kpi-label">{salesLabel(preset)}</h2>
                   <span className="dash-hero-period">{periodText(dateBounds)}</span>
                 </div>
-
-                <div className="dash-hero-figure">
-                  <div className="dash-hero-value">{money(revenue)}</div>
-                  <div className="dash-hero-delta-row">
-                    {showDelta ? (
-                      <span className={`dash-delta ${delta >= 0 ? "is-up" : "is-down"}`}>
-                        {delta >= 0 ? (
-                          <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden="true" />
-                        ) : (
-                          <ArrowDownRight size={14} strokeWidth={2.25} aria-hidden="true" />
-                        )}
-                        {`${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1).replace(".", ",")}%`}
-                      </span>
-                    ) : null}
-                    {showDelta ? <span className="dash-delta-note">{compareLabel(preset)}</span> : null}
-                    {heroNote ? <span className="dash-hero-note">{heroNote}</span> : null}
-                  </div>
-                </div>
-
-                <dl className="dash-hero-stats">
-                  <div>
-                    <dt>O‘rtacha chek</dt>
-                    <dd>{avgCheck != null ? money(avgCheck) : "—"}</dd>
-                    <span className="dash-hero-stat-note">
-                      {completedCount > 0 ? `${completedCount} ta yakunlangan buyurtma` : "Yakunlangan buyurtma yo‘q"}
-                    </span>
-                  </div>
-                  <div>
-                    <dt>7 kunlik jami</dt>
-                    <dd>{dynamicsReady ? money(weekTotal) : "—"}</dd>
-                    <span className="dash-hero-stat-note">
-                      {days.length ? `${shortDay(days[0].date)} — ${shortDay(days[days.length - 1].date)}` : "—"}
-                    </span>
-                  </div>
-                  <div>
-                    <dt>Eng yuqori kun</dt>
-                    <dd>{bestDay ? shortDay(bestDay.date) : "—"}</dd>
-                    <span className="dash-hero-stat-note">
-                      {bestDay ? money(bestDay.revenue) : dynamicsReady ? "Savdo qayd etilmagan" : "—"}
-                    </span>
-                  </div>
-                </dl>
+                <div className="dash-hero-value">{money(revenue)}</div>
+                <span className="dash-kpi-caption">{scopeLabel}</span>
               </div>
+              <div className="dash-kpi-detail dash-hero-delta-row">
+                {showDelta ? (
+                  <>
+                    <span className={`dash-delta ${delta >= 0 ? "is-up" : "is-down"}`}>
+                      {delta >= 0 ? (
+                        <ArrowUpRight size={14} strokeWidth={2.25} aria-hidden="true" />
+                      ) : (
+                        <ArrowDownRight size={14} strokeWidth={2.25} aria-hidden="true" />
+                      )}
+                      {`${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1).replace(".", ",")}%`}
+                    </span>
+                    <span className="dash-delta-note">{compareLabel(preset)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="dash-delta is-flat" aria-hidden="true">—</span>
+                    <span className="dash-delta-note">{heroNote || compareUnavailable}</span>
+                  </>
+                )}
+              </div>
+            </article>
+            <DashMetric
+              label="Buyurtmalar"
+              icon={ShoppingBag}
+              accent="orders"
+              value={<span className="dash-orders-n">{ordersCount}</span>}
+              unit="ta"
+              caption={
+                ordersCount > 0
+                  ? `${openOrders} ta ochiq · ${Math.round(pct(completedCount, ordersCount))}% yakunlangan`
+                  : "Ochiq buyurtma yo‘q"
+              }
+              detail={
+                <span className={`dash-kpi-state${reservedCount > 0 ? " is-active" : ""}`}>
+                  <span aria-hidden="true" />
+                  {reservedCount > 0 ? `${reservedCount} ta faol bron` : "Faol bron yo‘q"}
+                </span>
+              }
+              onOpen={props.onOpenOrders}
+            />
+            <DashMetric
+              label="Cashback"
+              icon={WalletCards}
+              accent="cash"
+              value={money(cashbackTotal)}
+              caption="Mijozlar balansida"
+              detail={
+                customersCount > 0
+                  ? `${customersCount.toLocaleString("ru-RU")} mijoz · o‘rtacha ${money(cashbackTotal / customersCount)}`
+                  : "Mijozlar hali yo‘q"
+              }
+              onOpen={props.onOpenCashback}
+            />
+            <DashMetric
+              label="Filiallar"
+              icon={Store}
+              accent="network"
+              value={Number(kpis?.branches || 0)}
+              unit={network.regions.length ? `${network.regions.length} hudud` : undefined}
+              caption="Tarmoqdagi filiallar"
+              detail={
+                network.total > 0 ? (
+                  <>
+                    <span
+                      className="dash-kpi-health"
+                      role="img"
+                      aria-label={`${network.open} / ${network.total} filial ochiq`}
+                    >
+                      <span style={{ width: `${pct(network.open, network.total)}%` }} />
+                    </span>
+                    <span className="dash-kpi-split">
+                      <span className="is-ok">{network.open} ochiq</span>
+                      <span>{network.h24} ta 24 soat</span>
+                      {network.closed > 0 ? <span className="is-muted">{network.closed} yopiq</span> : null}
+                    </span>
+                  </>
+                ) : undefined
+              }
+              onOpen={props.onOpenBranches}
+            />
+          </section>
 
-              <div className="dash-hero-chart">
-                <div className="dash-hero-chart-head">
-                  <span>Savdo dinamikasi</span>
-                  <span className="dash-hero-chart-range">So‘nggi 7 kun</span>
+          <section className="dash-overview" aria-label="Savdo va buyurtmalar">
+            <article className="dash-sales" aria-label="Savdo dinamikasi">
+              <div className="dash-card-head">
+                <h2 className="dash-title">Savdo dinamikasi</h2>
+                <span className="dash-card-meta">
+                  So‘nggi 7 kun
+                  {days.length ? ` · ${shortDay(days[0].date)} — ${shortDay(days[days.length - 1].date)}` : ""}
+                </span>
+              </div>
+              <dl className="dash-sales-stats">
+                <div>
+                  <dt>O‘rtacha chek</dt>
+                  <dd>{avgCheck != null ? money(avgCheck) : "—"}</dd>
+                  <dd className="dash-sales-note">
+                    {completedCount > 0 ? `${completedCount} ta yakunlangan buyurtma` : "Yakunlangan buyurtma yo‘q"}
+                  </dd>
                 </div>
+                <div>
+                  <dt>7 kunlik jami</dt>
+                  <dd>{dynamicsReady ? money(weekTotal) : "—"}</dd>
+                  <dd className="dash-sales-note">{dynamicsReady ? `${weekOrders} ta buyurtma` : "—"}</dd>
+                </div>
+                <div>
+                  <dt>Eng yuqori kun</dt>
+                  <dd>{bestDay ? shortDay(bestDay.date) : "—"}</dd>
+                  <dd className="dash-sales-note">
+                    {bestDay ? money(bestDay.revenue) : dynamicsReady ? "Savdo qayd etilmagan" : "—"}
+                  </dd>
+                </div>
+              </dl>
+              <div className="dash-sales-chart">
                 <SalesChart points={days} state={daysState} focusDate={ymd(anchorDay)} />
               </div>
             </article>
 
-            <article className="dash-orders" aria-label="Buyurtmalar">
+            <article className="dash-orders" aria-label="Operatsion holat">
+              <div className="dash-orders-status">
               <div className="dash-card-head">
-                <h2 className="dash-title">Buyurtmalar</h2>
+                <h2 className="dash-title">Buyurtmalar holati</h2>
                 {props.onOpenOrders ? (
                   <button className="btn-tertiary dash-link" type="button" onClick={props.onOpenOrders}>
                     Ko‘rish
                     <ArrowUpRight size={14} strokeWidth={2} aria-hidden="true" />
                   </button>
                 ) : null}
-              </div>
-
-              <div className="dash-orders-figure">
-                <span className="dash-orders-n">{ordersCount}</span>
-                <span className="dash-orders-unit">
-                  {ordersCount > 0
-                    ? `${openOrders} ta ochiq · ${Math.round(pct(completedCount, ordersCount))}% yakunlangan`
-                    : "ta buyurtma"}
-                </span>
               </div>
 
               <OrdersStack total={ordersCount} segments={segments} />
@@ -1292,95 +1365,24 @@ export function DashboardPage(props: {
 
               {ordersCount === 0 ? (
                 <p className="dash-orders-empty">
-                  <strong>{preset === "today" ? "Bugun faol buyurtmalar yo‘q" : "Bu davrda buyurtmalar yo‘q"}</strong>
-                  <span>Yangi buyurtmalar kelganda shu yerda ko‘rinadi.</span>
+                  {preset === "today" ? "Bugun faol buyurtmalar yo‘q" : "Bu davrda buyurtmalar yo‘q"}
                 </p>
               ) : null}
-            </article>
-          </section>
+              </div>
 
-          <section className="dash-metrics" aria-label="Asosiy ko‘rsatkichlar">
-            <DashMetric
-              label="Mijozlar"
-              icon={Users}
-              accent="customers"
-              value={customersCount.toLocaleString("ru-RU")}
-              caption="Ro‘yxatdan o‘tgan mijozlar"
-              detail="Butun tarmoq bo‘yicha"
-              onOpen={props.onOpenCustomers}
-            />
-            <DashMetric
-              label="Cashback"
-              icon={WalletCards}
-              accent="cash"
-              value={money(cashbackTotal)}
-              caption="Mijozlar balansidagi cashback"
-              detail={
-                customersCount > 0 ? `Mijoz boshiga ${money(cashbackTotal / customersCount)}` : "Mijozlar hali yo‘q"
-              }
-              onOpen={props.onOpenCashback}
-            />
-            <DashMetric
-              label="Filiallar"
-              icon={Store}
-              accent="network"
-              value={Number(kpis?.branches || 0)}
-              unit={network.regions.length ? `${network.regions.length} hudud` : undefined}
-              caption="Tarmoqdagi filiallar"
-              detail={
-                network.total > 0 ? (
-                  <>
-                    <span
-                      className="dash-kpi-regionbar"
-                      role="img"
-                      aria-label={`Hududlar bo‘yicha: ${network.regions.map(([r, n]) => `${r} ${n}`).join(", ")}`}
-                    >
-                      {network.regions.map(([region, n], i) => (
-                        <span
-                          key={region}
-                          className={`dash-kpi-regionseg is-t${Math.min(i, 3)}`}
-                          style={{ flexGrow: n }}
-                          title={`${region}: ${n}`}
-                        />
-                      ))}
-                    </span>
-                    <span className="dash-kpi-split">
-                      <span className="is-ok">{network.open} ochiq</span>
-                      <span>{network.h24} ta 24 soat</span>
-                      {network.closed > 0 ? <span className="is-muted">{network.closed} yopiq</span> : null}
-                    </span>
-                  </>
-                ) : undefined
-              }
-              onOpen={props.onOpenBranches}
-            />
-            <DashMetric
-              label="Bronlar"
-              icon={CalendarClock}
-              accent="reserve"
-              value={reservedCount}
-              caption="Rezervdagi buyurtmalar"
-              detail={
-                <span className={`dash-kpi-state${reservedCount > 0 ? " is-active" : ""}`}>
-                  <span aria-hidden="true" />
-                  {reservedCount > 0 ? `${reservedCount} ta faol bron` : "Faol bron yo‘q"}
-                </span>
-              }
-            />
-          </section>
-
-          <section className="dash-signals" aria-label="Operatsion signallar">
             <section className="attn" data-state={attnState} aria-label="Holat">
               <div className="dash-card-head">
                 <h2 className="dash-title">Holat</h2>
                 {hasAttention ? <span className="attn-count">{attentionItems.length}</span> : null}
               </div>
-              <p className="attn-state">
-                <span className="attn-state-mark" aria-hidden="true">
-                  {hasAttention ? <AlertTriangle size={15} strokeWidth={2} /> : <CheckCircle2 size={15} strokeWidth={2} />}
-                </span>
-                {attnHeadline}
-              </p>
+              {hasAttention ? (
+                <p className="attn-state">
+                  <span className="attn-state-mark" aria-hidden="true">
+                    <AlertTriangle size={14} strokeWidth={2} />
+                  </span>
+                  {attnHeadline}
+                </p>
+              ) : null}
               {hasAttention ? (
                 <ul className="attn-rows">
                   {attentionItems.map((item) => {
@@ -1409,10 +1411,111 @@ export function DashboardPage(props: {
                   })}
                 </ul>
               ) : (
-                <p className="attn-calm-note">Tizimda hozir e’tibor talab qiladigan holat mavjud emas.</p>
+                <p className="attn-calm-note">
+                  <CheckCircle2 className="attn-calm-mark" size={14} strokeWidth={2} aria-hidden="true" />
+                  Tizimda hozir e’tibor talab qiladigan holat mavjud emas.
+                </p>
               )}
             </section>
+            </article>
+          </section>
 
+          <section className="dash-insights" aria-label="Tarmoq">
+            <article className="dash-network" aria-label="Filiallar tarmog‘i">
+              <div className="dash-card-head">
+                <div className="dash-network-title">
+                  <h2 className="dash-title">Filiallar tarmog‘i</h2>
+                  <span className="dash-network-total">
+                    <span className="dash-network-n">{network.total || Number(kpis?.branches || 0)}</span> filial
+                    {network.regions.length ? (
+                      <>
+                        <span className="dash-network-sep" aria-hidden="true">·</span>
+                        <span className="dash-network-n">{network.regions.length}</span> hudud
+                      </>
+                    ) : null}
+                  </span>
+                </div>
+                {props.onOpenBranches ? (
+                  <button className="btn-tertiary dash-link" type="button" onClick={props.onOpenBranches}>
+                    Filiallar
+                    <ArrowUpRight size={14} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
+
+              {network.total > 0 ? (
+                <div className="dash-network-body">
+                  <NetworkMap
+                    branches={network.mapped}
+                    total={network.total}
+                    open={network.open}
+                    selectedId={branchId}
+                    pinned={netRegion}
+                    onPin={setNetRegion}
+                  >
+                    <div className="dash-network-side">
+                      {topRegion ? (
+                        <div className="dash-net-dist">
+                          <span className="dash-net-k">Hududlar bo‘yicha taqsimot</span>
+                          <span
+                            className="dash-net-bar"
+                            role="img"
+                            aria-label={`Hududlar bo‘yicha: ${network.regions.map(([r, n]) => `${r} ${n}`).join(", ")}`}
+                          >
+                            {network.regions.map(([region, n], i) => (
+                              <span
+                                key={region}
+                                className={`dash-net-seg ${i < topRegions.length ? `is-t${i}` : "is-rest"}`}
+                                style={{ flexGrow: n }}
+                                title={`${region}: ${n}`}
+                              />
+                            ))}
+                          </span>
+                        </div>
+                      ) : null}
+                      <ol className="dash-regions" aria-label="Eng yirik hududlar">
+                        {topRegions.map(([region, n], i) => {
+                          const iso = regionIso(region);
+                          return (
+                            <li key={region} className={iso && iso === netRegion ? "is-active" : undefined}>
+                              <button
+                                type="button"
+                                className="dash-region-btn"
+                                disabled={!iso}
+                                aria-pressed={iso ? iso === netRegion : undefined}
+                                onClick={() => iso && setNetRegion(iso === netRegion ? null : iso)}
+                              >
+                                <span className={`dash-region-rank is-t${i}`}>{i + 1}</span>
+                                <span className="dash-region-name">{region}</span>
+                                <span className="dash-region-n">{n}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                        {restRegionsCount > 0 ? (
+                          <li className="is-rest">
+                            <span className="dash-region-rank is-rest">+</span>
+                            <span className="dash-region-name">Boshqa {network.regions.length - topRegions.length} hudud</span>
+                            <span className="dash-region-n">{restRegionsCount}</span>
+                          </li>
+                        ) : null}
+                      </ol>
+                    </div>
+                  </NetworkMap>
+                </div>
+              ) : (
+                <div className="dash-empty">
+                  <span className="dash-empty-icon" aria-hidden="true"><Store size={16} strokeWidth={1.75} /></span>
+                  <span className="dash-empty-copy">
+                    <strong>Filiallar ro‘yxati mavjud emas</strong>
+                    <span>Filiallar ma’lumotini ko‘rish uchun ruxsat kerak.</span>
+                  </span>
+                </div>
+              )}
+            </article>
+          </section>
+
+          <section className="dash-signals" aria-label="Operatsion signallar">
             <article className="dash-activity" aria-label="So‘nggi faollik">
               <div className="dash-card-head">
                 <h2 className="dash-title">So‘nggi faollik</h2>
@@ -1453,10 +1556,7 @@ export function DashboardPage(props: {
                 </div>
               )}
             </article>
-          </section>
 
-          {hasOrderActivity || hasPosActivity ? (
-            <section className="dash-lists" aria-label="Operatsiyalar">
               {hasOrderActivity ? (
                 <section className="act" aria-label="Oxirgi buyurtmalar">
                   <div className="dash-card-head">
@@ -1546,98 +1646,6 @@ export function DashboardPage(props: {
                   </ol>
                 </section>
               ) : null}
-            </section>
-          ) : null}
-
-          <section className="dash-insights" aria-label="Tarmoq">
-            <article className="dash-network" aria-label="Filiallar tarmog‘i">
-              <div className="dash-card-head">
-                <div className="dash-network-title">
-                  <h2 className="dash-title">Filiallar tarmog‘i</h2>
-                  <span className="dash-network-total">
-                    <span className="dash-network-n">{network.total || Number(kpis?.branches || 0)}</span> filial
-                    {network.regions.length ? (
-                      <>
-                        <span className="dash-network-sep" aria-hidden="true">·</span>
-                        <span className="dash-network-n">{network.regions.length}</span> hudud
-                      </>
-                    ) : null}
-                  </span>
-                </div>
-                {props.onOpenBranches ? (
-                  <button className="btn-tertiary dash-link" type="button" onClick={props.onOpenBranches}>
-                    Filiallar
-                    <ArrowUpRight size={14} strokeWidth={2} aria-hidden="true" />
-                  </button>
-                ) : null}
-              </div>
-
-              {network.total > 0 ? (
-                <div className="dash-network-body">
-                  <NetworkMap
-                    branches={network.mapped}
-                    total={network.total}
-                    open={network.open}
-                    selectedId={branchId}
-                    pinned={netRegion}
-                    onPin={setNetRegion}
-                  >
-                    <div className="dash-network-side">
-                      {topRegion ? (
-                        <div className="dash-net-stat">
-                          <span className="dash-net-k">Konsentratsiya</span>
-                          <span className="dash-net-v">
-                            <strong>{topShare}%</strong>
-                            <span>{topRegion[0]}</span>
-                          </span>
-                          <span className="dash-net-split" aria-hidden="true">
-                            <span style={{ width: `${topShare}%` }} />
-                          </span>
-                          <span className="dash-net-note">
-                            {network.total - topRegion[1]} filial boshqa {network.regions.length - 1} hududda
-                          </span>
-                        </div>
-                      ) : null}
-                      <ol className="dash-regions" aria-label="Eng yirik hududlar">
-                        {topRegions.map(([region, n], i) => {
-                          const iso = regionIso(region);
-                          return (
-                            <li key={region} className={iso && iso === netRegion ? "is-active" : undefined}>
-                              <button
-                                type="button"
-                                className="dash-region-btn"
-                                disabled={!iso}
-                                aria-pressed={iso ? iso === netRegion : undefined}
-                                onClick={() => iso && setNetRegion(iso === netRegion ? null : iso)}
-                              >
-                                <span className="dash-region-rank">{i + 1}</span>
-                                <span className="dash-region-name">{region}</span>
-                                <span className="dash-region-n">{n}</span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                        {restRegionsCount > 0 ? (
-                          <li className="is-rest">
-                            <span className="dash-region-rank">+</span>
-                            <span className="dash-region-name">Boshqa {network.regions.length - topRegions.length} hudud</span>
-                            <span className="dash-region-n">{restRegionsCount}</span>
-                          </li>
-                        ) : null}
-                      </ol>
-                    </div>
-                  </NetworkMap>
-                </div>
-              ) : (
-                <div className="dash-empty">
-                  <span className="dash-empty-icon" aria-hidden="true"><Store size={16} strokeWidth={1.75} /></span>
-                  <span className="dash-empty-copy">
-                    <strong>Filiallar ro‘yxati mavjud emas</strong>
-                    <span>Filiallar ma’lumotini ko‘rish uchun ruxsat kerak.</span>
-                  </span>
-                </div>
-              )}
-            </article>
           </section>
         </StateBox>
       )}

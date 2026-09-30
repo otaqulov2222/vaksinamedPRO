@@ -341,10 +341,20 @@ export function fulfillmentTone(status: string): BadgeTone {
 
 export function paymentTone(status: string): BadgeTone {
   const s = String(status || "").toUpperCase();
-  if (s === "PAID") return "ok";
+  if (s === "PAID" || s === "SUCCEEDED") return "ok";
   if (s === "FAILED") return "danger";
-  if (s === "REFUNDED" || s === "PARTIALLY_REFUNDED") return "warn";
-  if (s === "PENDING") return "warn";
+  if (s === "PARTIALLY_REFUNDED") return "info";
+  if (
+    s === "PENDING"
+    || s === "CREATED"
+    || s === "REQUIRES_PAYMENT"
+    || s === "PROCESSING"
+    || s === "STARTED"
+    || s === "AWAITING_POS"
+    || s === "PENDING_KEYS"
+  ) {
+    return "warn";
+  }
   return "neutral";
 }
 
@@ -359,8 +369,8 @@ export function reservationTone(status: string): BadgeTone {
 export function entryTone(entryType: string): BadgeTone {
   const t = String(entryType || "").toUpperCase();
   if (t === "EARN") return "ok";
-  if (t === "USE") return "warn";
-  if (t === "REVERSAL") return "danger";
+  if (t === "USE") return "info";
+  if (t === "REVERSAL") return "warn";
   return "neutral";
 }
 
@@ -388,6 +398,15 @@ export function paymentLabel(status: string): string {
     FAILED: "Amal bajarilmadi",
     REFUNDED: "Qaytarilgan",
     PARTIALLY_REFUNDED: "Qisman qaytarilgan",
+    CREATED: "Yaratilgan",
+    REQUIRES_PAYMENT: "To‘lov kutilmoqda",
+    PROCESSING: "Jarayonda",
+    STARTED: "Boshlangan",
+    SUCCEEDED: "Muvaffaqiyatli",
+    CANCELLED: "Bekor qilingan",
+    EXPIRED: "Muddati o‘tgan",
+    AWAITING_POS: "Kassada to‘lov kutilmoqda",
+    PENDING_KEYS: "Provayder sozlanmagan",
   };
   return map[s] || (status ? String(status) : "—");
 }
@@ -459,14 +478,14 @@ export function sourceLabel(sourceType: string): string {
 /** Stock axis labels — wire fields unchanged (physical/reserved/available). */
 export function stockAxisLabel(axis: "physical" | "reserved" | "available"): string {
   if (axis === "physical") return "Fizik qoldiq";
-  if (axis === "reserved") return "Band";
+  if (axis === "reserved") return "Rezerv";
   return "Mavjud";
 }
 
 /** Short column headers for stock tables. */
 export function stockAxisShort(axis: "physical" | "reserved" | "available"): string {
   if (axis === "physical") return "Fizik";
-  if (axis === "reserved") return "Band";
+  if (axis === "reserved") return "Rezerv";
   return "Mavjud";
 }
 

@@ -1,24 +1,40 @@
 import { Router } from "express";
-import { and, count, desc, eq, gte, ilike, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, ilike, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import {
+  adminUsers,
   auditLog,
   branches,
+  carts,
   cashbackAccounts,
   customers,
   db,
+  deliveries,
+  fomSaleEvents,
+  inventoryMovements,
   orders,
+  paymentIntents,
   payments,
+  posSales,
   productStocks,
   products,
   promos,
+  reservations,
   rewards,
   staffRatings,
 } from "@workspace/db";
 import { loginAdmin, requireAdmin } from "../lib/auth";
 import { serializeOrder } from "./orders";
 import { rateLimit } from "../lib/rateLimit";
-import { toAdminCustomerListItem } from "../lib/securityEnv";
+import { isHqAdminRole, toAdminCustomerListItem } from "../lib/securityEnv";
 import { prepareMerchantSecretForStorage, toAdminBranchPaymentDto } from "../lib/branchPaymentMerchant";
+import {
+  branchCodeTakenError,
+  branchInUseMessage,
+  branchValidationError,
+  isUniqueViolation,
+  parseBranchInput,
+} from "../lib/adminBranches";
 import { adminHasPermission, assertBranchScope, requirePermission, resolveStaffBranchFilter } from "../lib/rbac";
 import { revokeSessionFromToken } from "../lib/sessions";
 import { recordAuthEvent } from "../lib/authEvents";
@@ -290,6 +306,75 @@ router.get("/admin/branches", async (req, res, next) => {
   }
 });
 
+async function requireHqBranchManager(req: Parameters<typeof requireAdmin>[0]) {
+  const user = await requireAdmin(req);
+  await requirePermission(user, "branches:manage");
+  if (!isHqAdminRole(user.role)) {
+    await recordAuthEvent({
+      actorType: "admin",
+      actorId: user.id,
+      eventType: "authz.denied",
+      success: false,
+      reason: "hq_required",
+      meta: { permission: "branches:manage" },
+    });
+    throw Object.assign(new Error("Filial qo‘shish va o‘chirish faqat bosh ofis uchun"), { status: 403 });
+  }
+  return user;
+}
+
+router.post("/admin/branches", async (req, res, next) => {
+  try {
+    const user = await requireHqBranchManager(req);
+    const body = req.body ?? {};
+    const parsed = parseBranchInput(body, "create");
+    if (!parsed.ok) throw branchValidationError(parsed.message);
+    const values = parsed.values as Required<typeof parsed.values>;
+    const taken = await db.select({ id: branches.id }).from(branches).where(eq(branches.code, values.code)).limit(1);
+    if (taken[0]) throw branchCodeTakenError();
+    const paymeKey = typeof body.paymeKey === "string" && body.paymeKey !== "••••" && body.paymeKey.trim()
+      ? prepareMerchantSecretForStorage(body.paymeKey.trim())
+      : "";
+    const clickSecret = typeof body.clickSecret === "string" && body.clickSecret !== "••••" && body.clickSecret.trim()
+      ? prepareMerchantSecretForStorage(body.clickSecret.trim())
+      : "";
+    let created;
+    try {
+      created = await db.transaction(async (tx) => {
+        const rows = await tx.insert(branches).values({ ...values, paymeKey, clickSecret }).returning();
+        const productRows = await tx.select({ id: products.id }).from(products);
+        // Every product needs a stock row per branch (same invariant as POST /admin/products); new branch starts at 0.
+        if (productRows.length) {
+          await tx.insert(productStocks).values(productRows.map((p) => ({ productId: p.id, branchId: rows[0].id, quantity: 0 })));
+        }
+        return rows[0];
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) throw branchCodeTakenError();
+      throw error;
+    }
+    await db.insert(auditLog).values({
+      actor: user.email,
+      action: "branch.create",
+      entity: "branch",
+      payload: JSON.stringify({
+        id: created.id,
+        code: created.code,
+        paymeCredentialUpdated: Boolean(paymeKey),
+        clickCredentialUpdated: Boolean(clickSecret),
+      }),
+    });
+    return res.status(201).json({
+      branch: {
+        ...created,
+        ...toAdminBranchPaymentDto(created),
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.patch("/admin/branches/:id", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
@@ -299,6 +384,17 @@ router.patch("/admin/branches/:id", async (req, res, next) => {
     const current = (await db.select().from(branches).where(eq(branches.id, id)).limit(1))[0];
     if (!current) return res.status(404).json({ message: "Filial topilmadi" });
     const body = req.body ?? {};
+    const parsed = parseBranchInput(body, "update");
+    if (!parsed.ok) throw branchValidationError(parsed.message);
+    const changes = parsed.values;
+    if (changes.code !== undefined && changes.code !== current.code) {
+      const taken = await db
+        .select({ id: branches.id })
+        .from(branches)
+        .where(and(eq(branches.code, changes.code), ne(branches.id, id)))
+        .limit(1);
+      if (taken[0]) throw branchCodeTakenError();
+    }
     let nextPaymeKey = current.paymeKey;
     let nextClickSecret = current.clickSecret;
     if (typeof body.paymeKey === "string" && body.paymeKey !== "••••" && body.paymeKey.trim()) {
@@ -307,25 +403,26 @@ router.patch("/admin/branches/:id", async (req, res, next) => {
     if (typeof body.clickSecret === "string" && body.clickSecret !== "••••" && body.clickSecret.trim()) {
       nextClickSecret = prepareMerchantSecretForStorage(body.clickSecret.trim());
     }
-    const updated = await db.update(branches).set({
-      name: typeof body.name === "string" ? body.name : current.name,
-      phone: typeof body.phone === "string" ? body.phone : current.phone,
-      hours: typeof body.hours === "string" ? body.hours : current.hours,
-      address: typeof body.address === "string" ? body.address : current.address,
-      isOpen: typeof body.isOpen === "boolean" ? body.isOpen : current.isOpen,
-      paymeMerchantId: typeof body.paymeMerchantId === "string" ? body.paymeMerchantId : current.paymeMerchantId,
-      paymeKey: nextPaymeKey,
-      clickMerchantId: typeof body.clickMerchantId === "string" ? body.clickMerchantId : current.clickMerchantId,
-      clickServiceId: typeof body.clickServiceId === "string" ? body.clickServiceId : current.clickServiceId,
-      clickSecret: nextClickSecret,
-    }).where(eq(branches.id, id)).returning();
-    // Audit: never log secret values — only branch id + which fields updated (booleans)
+    const changedFields = (Object.keys(changes) as (keyof typeof changes)[]).filter((key) => changes[key] !== current[key]);
+    let updated;
+    try {
+      updated = await db.update(branches).set({
+        ...changes,
+        paymeKey: nextPaymeKey,
+        clickSecret: nextClickSecret,
+      }).where(eq(branches.id, id)).returning();
+    } catch (error) {
+      if (isUniqueViolation(error)) throw branchCodeTakenError();
+      throw error;
+    }
+    // Audit: never log secret values — only branch id, changed non-secret field names + credential booleans
     await db.insert(auditLog).values({
       actor: user.email,
       action: "branch.update",
       entity: "branch",
       payload: JSON.stringify({
         id,
+        fields: changedFields,
         paymeCredentialUpdated: nextPaymeKey !== current.paymeKey,
         clickCredentialUpdated: nextClickSecret !== current.clickSecret,
       }),
@@ -336,6 +433,54 @@ router.patch("/admin/branches/:id", async (req, res, next) => {
         ...toAdminBranchPaymentDto(updated[0]),
       },
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete("/admin/branches/:id", async (req, res, next) => {
+  try {
+    const user = await requireHqBranchManager(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(404).json({ message: "Filial topilmadi" });
+    const current = (await db.select().from(branches).where(eq(branches.id, id)).limit(1))[0];
+    if (!current) return res.status(404).json({ message: "Filial topilmadi" });
+    const countWhere = async (label: string, table: PgTable, where: SQL | undefined) => {
+      const rows = await db.select({ n: count() }).from(table).where(where);
+      return { label, count: Number(rows[0]?.n ?? 0) };
+    };
+    const refs = await Promise.all([
+      countWhere("buyurtma", orders, eq(orders.branchId, id)),
+      countWhere("kassa sotuvi", posSales, eq(posSales.branchId, id)),
+      countWhere("to‘lov", payments, eq(payments.branchId, id)),
+      countWhere("to‘lov niyati", paymentIntents, eq(paymentIntents.branchId, id)),
+      countWhere("rezerv", reservations, eq(reservations.branchId, id)),
+      countWhere("ombor harakati", inventoryMovements, eq(inventoryMovements.branchId, id)),
+      countWhere("qoldiqli mahsulot", productStocks, and(
+        eq(productStocks.branchId, id),
+        or(gt(productStocks.quantity, 0), gt(productStocks.physicalQuantity, 0), gt(productStocks.reservedQuantity, 0)),
+      )),
+      countWhere("xodim", adminUsers, eq(adminUsers.branchId, id)),
+      countWhere("baho", staffRatings, eq(staffRatings.branchId, id)),
+      countWhere("yetkazish", deliveries, eq(deliveries.courierBranchId, id)),
+      countWhere("FOM chek", fomSaleEvents, eq(fomSaleEvents.branchId, id)),
+    ]);
+    const blocking = refs.filter((r) => r.count > 0);
+    if (blocking.length) {
+      throw Object.assign(new Error(branchInUseMessage(blocking)), { status: 409, code: "BRANCH_IN_USE" });
+    }
+    await db.transaction(async (tx) => {
+      await tx.delete(productStocks).where(eq(productStocks.branchId, id));
+      await tx.update(carts).set({ branchId: null }).where(eq(carts.branchId, id));
+      await tx.delete(branches).where(eq(branches.id, id));
+    });
+    await db.insert(auditLog).values({
+      actor: user.email,
+      action: "branch.delete",
+      entity: "branch",
+      payload: JSON.stringify({ id, code: current.code, name: current.name }),
+    });
+    return res.json({ ok: true, id });
   } catch (error) {
     return next(error);
   }

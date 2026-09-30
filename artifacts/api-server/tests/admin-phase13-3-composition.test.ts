@@ -15,17 +15,24 @@ const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
 const dashBlock = css.slice(css.indexOf("Dashboard — Phase 13.0 reset"), css.indexOf("Responsive — shell"));
 
 describe("Admin Phase 13.3 — operations center composition", () => {
-  it("stage order: money → operations → metrics → signals → network", () => {
-    const order = ['className="dash-hero"', 'className="dash-orders"', 'className="dash-metrics"', 'className="dash-signals"', 'className="dash-network"'];
+  it("stage order: business → orders → network → operations", () => {
+    const order = [
+      'className="dash-metrics"',
+      'className="dash-kpi dash-hero"',
+      'className="dash-sales"',
+      'className="dash-orders"',
+      'className="dash-network"',
+      'className="dash-signals"',
+    ];
     const idx = order.map((s) => dash.indexOf(s));
     assert.ok(idx.every((i) => i > 0), `all stages present: ${idx}`);
     assert.deepEqual([...idx].sort((a, b) => a - b), idx);
   });
 
-  it("sales sits on the brand-tinted surface; chart follows the headline stats", () => {
-    assert.match(dashBlock, /\.dash-hero \{[^}]*background: var\(--vm-surface-brand\)/);
-    assert.match(dashBlock, /\.dash-orders \{[^}]*padding: 20px 22px;/);
-    assert.ok(dash.indexOf('className="dash-hero-chart"') > dash.indexOf('<dl className="dash-hero-stats">'));
+  it("primary sales cell stays neutral; chart follows the sales stats", () => {
+    assert.doesNotMatch(dashBlock, /\.dash-hero \{[^}]*background:/);
+    assert.match(dashBlock, /\.dash-metrics \{[^}]*grid-template-columns: minmax\(0, 1\.4fr\) repeat\(3, minmax\(0, 1fr\)\)/);
+    assert.ok(dash.indexOf('className="dash-sales-chart"') > dash.indexOf('<dl className="dash-sales-stats">'));
   });
 
   it("KPIs form one strip with hairline separators, no filled cards", () => {
@@ -42,11 +49,11 @@ describe("Admin Phase 13.3 — operations center composition", () => {
     assert.match(dash, /className="network-rail"/);
   });
 
-  it("surfaces rely on tone and elevation, not outline borders", () => {
-    const roles = dashBlock.match(/\.dash-orders,\r?\n\.dash-metrics,\r?\n\.attn,\r?\n\.dash-activity,\r?\n\.act,\r?\n\.dash-network \{[^}]*\}/);
+  it("surfaces share one hairline rule — no outline borders, no heavy shadows", () => {
+    const roles = dashBlock.match(/\.dash-metrics,\r?\n\.dash-sales,\r?\n\.dash-orders,\r?\n\.dash-network,\r?\n\.dash-activity,\r?\n\.act \{[^}]*\}/);
     assert.ok(roles, "shared surface rule");
-    assert.match(roles![0], /box-shadow: var\(--vm-elev-1\), 0 0 0 1px var\(--vm-border-subtle\);/);
-    assert.doesNotMatch(roles![0], /border:/);
+    assert.match(roles![0], /box-shadow: 0 0 0 1px var\(--vm-border-subtle\);/);
+    assert.doesNotMatch(roles![0], /border:|--vm-elev-2/);
   });
 
   it("no fake data or invented trends", () => {

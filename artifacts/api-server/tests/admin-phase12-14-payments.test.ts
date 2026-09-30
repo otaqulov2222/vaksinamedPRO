@@ -40,7 +40,7 @@ describe("Admin Phase 12.14 — Payments operations console", () => {
     assert.match(page, /<th>Usul<\/th>/);
     assert.match(page, /<th>Holat<\/th>/);
     assert.match(page, /Summa/);
-    assert.match(page, /To‘lovlar topilmadi/);
+    assert.match(page, /To‘lovlar mavjud emas\./);
     assert.doesNotMatch(page, /<th>Tranzaksiya<\/th>/);
     assert.doesNotMatch(page, /<th>Intent<\/th>/);
     assert.doesNotMatch(page, /Filial ID/);

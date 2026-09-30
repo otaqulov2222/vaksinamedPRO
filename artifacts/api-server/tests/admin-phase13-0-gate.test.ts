@@ -31,8 +31,10 @@ describe("Admin Phase 13.0 gate — chart and map use real API data only", () =>
     assert.match(dash, /const hasData = props\.state === "ready" && max > 0;/);
   });
 
-  it("wide hero stays single-column while the chart has nothing to show", () => {
-    assert.match(css, /\.dash-hero:has\(\.sales-chart\.is-empty\) \{ grid-template-columns: minmax\(0, 1fr\);/);
+  it("empty chart keeps its frame and states the gap instead of drawing a scale", () => {
+    assert.match(dash, /hasData \? " has-scale" : " is-empty"/);
+    assert.match(css, /\.sales-chart\.has-scale \{ padding-left: \d+px; \}/);
+    assert.match(css, /\.sales-chart-empty \{[^}]*position: absolute;/);
   });
 
   it("network map is derived from the /api/admin/branches rows passed in by the shell", () => {

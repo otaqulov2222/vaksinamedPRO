@@ -15,8 +15,8 @@ const app = readFileSync(path.join(adminWeb, "App.tsx"), "utf8");
 const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
 
 describe("Admin Phase 13.4 — operations & navigation polish", () => {
-  it("status and activity form the operational signals stage; order lists follow; network last", () => {
-    const order = ['className="dash-signals"', 'className="attn"', 'className="dash-activity"', 'className="act"', 'className="dash-network"'];
+  it("status sits in the operational summary; network precedes activity and order lists", () => {
+    const order = ['className="dash-orders"', 'className="attn"', 'className="dash-network"', 'className="dash-signals"', 'className="dash-activity"', 'className="act"'];
     const idx = order.map((s) => dash.indexOf(s));
     assert.ok(idx.every((i) => i > 0), `all present: ${idx}`);
     assert.deepEqual([...idx].sort((a, b) => a - b), idx);

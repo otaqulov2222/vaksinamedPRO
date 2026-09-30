@@ -18,7 +18,7 @@ describe("Admin Phase 12.16 — Catalog product console", () => {
     const page = readFileSync(path.join(adminWeb, "pages/CatalogPage.tsx"), "utf8");
     assert.match(page, /DetailDrawer/);
     assert.match(page, /DrawerSection/);
-    assert.match(page, /title="Mahsulotlar"/);
+    assert.match(page, /title="Katalog"/);
     assert.match(page, /\/api\/admin\/products/);
     assert.match(page, /method:\s*"POST"/);
     assert.match(page, /method:\s*"PATCH"/);

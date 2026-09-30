@@ -27,12 +27,15 @@ describe("Admin Phase 12.17 — Branches network console", () => {
     assert.match(page, /<th>Manzil<\/th>/);
   });
 
-  it("no invent create/delete; no mini inventory/orders tabs; secrets masked", () => {
+  it("no invented create/delete; no mini inventory/orders tabs; secrets masked", () => {
     const page = readFileSync(path.join(adminWeb, "pages/BranchesPage.tsx"), "utf8");
+    const admin = readFileSync(path.join(root, "src/routes/admin.ts"), "utf8");
     assert.match(page, /MASK|••••/);
     assert.doesNotMatch(page, /paymeKey:\s*branch\.paymeKey/);
     assert.doesNotMatch(page, /Filial qo‘shish|\+ Filial/);
-    assert.doesNotMatch(page, /method:\s*"POST"|method:\s*"DELETE"/);
+    // Create/delete UI only when the secured backend route exists (Phase 13.10.1 added both).
+    if (/method:\s*"POST"/.test(page)) assert.match(admin, /router\.post\("\/admin\/branches", /);
+    if (/method:\s*"DELETE"/.test(page)) assert.match(admin, /router\.delete\("\/admin\/branches\/:id", /);
     assert.doesNotMatch(page, /softRequest/);
     assert.doesNotMatch(page, /id:\s*"inventory"|id:\s*"orders"|Tabs/);
     assert.doesNotMatch(page, /StatCard|Ko‘rish<\/button>|Ochish<\/button>/);

@@ -23,7 +23,8 @@ describe("Admin Phase 12.13 — Customers / Cashback / Ratings", () => {
     assert.match(page, /CUSTOMER_PAGE|limit.*25/);
     assert.match(page, /StatusLabelBadge/);
     assert.match(page, /crm-row/);
-    assert.match(page, /Mijozlar topilmadi/);
+    assert.match(page, /Mijozlar mavjud emas/);
+    assert.match(page, /mijoz topilmadi/);
     assert.doesNotMatch(page, /money\(item\.balance\)/);
     assert.doesNotMatch(page, /Korreksiya OPEN/);
     assert.doesNotMatch(page, /cashback_accounts/);

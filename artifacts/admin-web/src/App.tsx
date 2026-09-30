@@ -399,6 +399,9 @@ export default function App() {
               user={user}
               permissions={permissions}
               onOpenInventory={() => setTab("inventory")}
+              onBranchesChanged={() => {
+                void softRequest("/api/admin/branches", token).then((b) => setBranches(b?.branches || []));
+              }}
             />
           ) : null}
           {tab === "products" ? (

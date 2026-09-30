@@ -103,7 +103,8 @@ describe("Admin Phase 13.0 reset — Dashboard", () => {
 
   it("zero data stays compact and truthful", () => {
     assert.match(dash, /\.sales-chart\.is-empty|is-empty/);
-    assert.match(dashBlock, /\.sales-chart\.is-empty \.sales-bars \{ height: 28px; \}/);
+    assert.match(dash, /Ma’lumot yetarli emas/);
+    assert.match(dashBlock, /\.sales-chart-zero \.sales-bar-fill \{ height: 2px;/);
     assert.match(dash, /Faol bron yo‘q/);
   });
 

@@ -35,6 +35,182 @@
 
 ---
 
+## Phase 13.0 refinement — Dashboard (Network Operations Center)
+
+Faqat vizual kompozitsiya o‘zgardi; API, filtrlar, KPI hisoblari va endpointlar (`/api/admin/dashboard`, `/api/pos/sales`, `/api/admin/audit`) o‘zgarmagan.
+
+- **Ko‘z oqimi:** biznes → buyurtmalar → tarmoq → operatsiyalar. Manba tartibi vizual tartibga teng.
+- **KPI band (`.dash-metrics`):** bitta surface, 4 katak: asosiy **Savdo** (kengroq, neytral fon, `fs-display`) + Buyurtmalar / Cashback / Filiallar. Taqqoslash faqat `showDelta` bo‘lsa ko‘rsatiladi, aks holda neytral “—” va izoh. Mijozlar soni Cashback detaliga, faol bronlar Buyurtmalar detaliga ko‘chdi (alohida Mijozlar/Bronlar KPI olib tashlandi).
+- **Savdo dinamikasi (`.dash-sales`):** O‘rtacha chek · 7 kunlik jami · Eng yuqori kun, so‘ng real 7 kunlik grafik — ma’lumot bo‘lsa gridline, o‘q, shkala va tooltip; bo‘lmasa bir xil ramka ichida “Ma’lumot yetarli emas”. Xato holatida bar chizilmaydi.
+- **Operatsion holat (`.dash-orders`):** buyurtma holatlari (Yakunlangan / Yetkazilmoqda / Rezerv) kichik indikator qatorlari bilan + ichida ixcham “Holat” bloki; tinch holatda bitta qator, sarlavha takrorlanmaydi.
+- **Tarmoq:** xarita saqlangan; rail — Filial / Ochiq / 24/7 / Hudud real sonlari, hududlar bo‘yicha taqsimot chizig‘i (`network.regions`) va top hududlar.
+- **Signallar (`.dash-signals`):** so‘nggi faollik + real buyurtma/kassa qatorlari (faqat mavjud bo‘lsa).
+- **Ranglar:** binafsha faqat brend/aktiv holat va tarmoq vizualizatsiyasida; sariq faqat tanlov; surface’lar oq + hairline, og‘ir soya yo‘q. Header’dagi “Muammo yo‘q” ikkinchi darajali nuqta.
+- **Responsive:** 1280 da 4 katakli band siqiladi, ≤1100 da asosiy katak to‘liq qator + 3 katak, ≤560 da bitta ustun; dashboard breakpointlari `Dashboard — Phase 13.0 reset` blokida jamlangan.
+
+---
+
+## Phase 13.10 — Filiallar
+
+13.10: UI reconstruction over the existing GET/PATCH contracts (backend untouched). 13.10.1 (user request): full branch CRUD — new `POST` / `DELETE` routes, validated and extended `PATCH`. DB sxemasi va migratsiyalar o‘zgartirilmadi; RBAC kodlari o‘zgarmadi (`branches:read`, `branches:manage`).
+
+| Area | Status | Source |
+| --- | --- | --- |
+| Branch list | REAL | `GET /admin/branches` (`branches:read`, HQ only) — full list in one response, no pagination / search / filter params |
+| Fields shown | REAL | `id`, `code`, `name`, `region`, `city`, `district`, `address`, `phone`, `hours`, `lat`, `lng`, `isOpen`, `is24h`, `createdAt`, `hasPayme`, `hasClick` |
+| Create | REAL (13.10.1) | `POST /admin/branches` — `branches:manage` + HQ role; validated (`lib/adminBranches.ts`); unique code → 409 `BRANCH_CODE_TAKEN`; secrets encrypted; one transaction inserts the branch and a 0-quantity `product_stocks` row per product (same invariant as `POST /admin/products`); audit `branch.create` |
+| Edit | REAL | `PATCH /admin/branches/:id` (`branches:manage` + `assertBranchScope`) — code, name, region, city, district, address, phone, hours, lat/lng, isOpen, is24h, merchant IDs, write-only secrets; invalid input → 400 `BRANCH_INVALID`; audit `branch.update` with changed field names + credential booleans |
+| Delete | REAL (13.10.1, safe) | `DELETE /admin/branches/:id` — `branches:manage` + HQ role; 409 `BRANCH_IN_USE` while any order, POS sale, payment, payment intent, reservation, inventory movement, stocked product, staff account, rating, courier delivery or FOM receipt references the branch; otherwise one transaction removes zero stock rows, clears cart branch selections and deletes the branch; audit `branch.delete` |
+| Secrets | MASKED | `toAdminBranchPaymentDto` returns `••••`; UI never seeds or re-sends the mask; audit log never stores secret values |
+| KPI | REAL (client count) | total / open / closed / 24/7 / regions counted from the full loaded list (valid because the API has no pagination) |
+| Search / filters | REAL (client-side, disclosed) | search on Enter over name, code, region, city, district, address, phone; status, region, 24/7 filters |
+| Map | LINK ONLY | coordinates open an external map (no new dependency) |
+| Branch-scoped list | CONTRACT_PENDING | GET is not branch-scoped for any holder of `branches:read` (today HQ only) |
+| Concurrency | CONTRACT_PENDING | no version / ETag — last write wins (UI sends changed fields only) |
+
+UI: header mode line ("Qo‘shish, tahrirlash va o‘chirish mumkin" / "Faqat o‘z filialingizni tahrirlash mumkin" / "Faqat ko‘rish — tahrirlash uchun ruxsat yo‘q"), Yangilash and (HQ) "Yangi filial"; 5 KPI cells; table Filial → Holat → Manzil → Ish vaqti → Aloqa → row actions (edit; delete for HQ); drawer view sections + footer Tahrirlash / O‘chirish; one form for create and edit (Asosiy ma’lumotlar, Manzil with coordinates, Ish rejimi va holat, To‘lov kabineti) with client validation mirroring the server. Every write goes form → ConfirmDialog (closing and deleting are danger) → API → notice → reload → shell branch list refreshed (`onBranchesChanged`). A refused delete shows the server's reference summary in the drawer with a "Filialni yopish" path. Responsive: hours column hidden ≤1100px, phone ≤900px, cards ≤560px (actions in the card), drawer fits 390px.
+
+Security: unauthenticated 401, cashier 403 and no nav item (no `branches:*` in fallback or seeded grants); non-HQ create/delete denied and audited (`hq_required`). Only server texts carrying `BRANCH_INVALID` / `BRANCH_CODE_TAKEN` / `BRANCH_IN_USE` are shown; other failures use fixed copy. Performance: one list request; drawer opens from the list row; stale responses dropped via a request sequence guard.
+
+Gaps: public `/branches` spreads merchant IDs; `city` duplicates `region` in current seed data; `hours` is free text next to `is24h`; no soft-delete/archive (would need a schema change) — branches with history can only be closed.
+
+Tests: `artifacts/api-server/tests/admin-phase13-10-branches.test.ts`.
+
+---
+
+## Phase 13.9 — Baholar
+
+Read-only UI reconstruction over the single existing admin contract. No backend, schema, RBAC or rating logic change.
+
+| Area | Status | Source |
+| --- | --- | --- |
+| Ratings list | REAL | `GET /admin/ratings` (`ratings:read`, HQ only) — `limit` (default 50, max 100), `offset`, `total`, `hasMore`, fixed `createdAt desc` |
+| Branch filter | REAL (server) | `branchId` via `resolveStaffBranchFilter`; non-HQ forced to own branch |
+| Fields shown | REAL | `id`, `branchId` (name from loaded branch list), `orderId`, `employeeName`, `rating`, `comment`, `createdAt` |
+| Scale | REAL | integer 1–5 enforced by `POST /ratings` (customer); no DB CHECK — out-of-range legacy values render raw |
+| Search / score / date filters, sorting | NOT IMPLEMENTED | no API parameters |
+| KPI (average, distribution) | NOT IMPLEMENTED | no aggregate API; only server `total` is shown |
+| Customer / product relation | NOT EXPOSED | `customerId` omitted from DTO (least privilege); no product relation in model |
+| Order code | CONTRACT_PENDING | DTO returns `orderId` only; UI shows `#id` |
+| Tags | CONTRACT_PENDING | stored in `staff_ratings.tags`, not returned by admin API |
+| Moderation / reply / delete / edit | NOT IMPLEMENTED | no endpoint, no status column; page has no mutation controls |
+
+UI: header with "Faqat ko‘rish — baholarni o‘zgartirish API mavjud emas", server branch filter (HQ), table Baho → Buyurtma → Filial → Izoh → Sana, stars + number with tones (4–5 positive, 3 neutral, 2 warning, 1 negative), "Izohsiz" for empty comments, drawer Baho → Buyurtma → Filial → Izoh → collapsed technical section. Dates in Asia/Tashkent. Order column hidden ≤900px; cards ≤560px.
+
+Security: unauthenticated 401, cashier 403 (no `ratings:read` in fallback or seeded grants), branch widening refused server-side. No detail route → no ID-based access surface. Performance: one list request with a count query; branch names resolved from the already-loaded branch list; drawer opens from the list row (no extra request).
+
+Gaps: no rating aggregates, no search, no order code / tags in DTO, no DB range constraint on `rating`, legacy rows may have `order_id` null or a person name in `employee_name`, dev DB has 0 ratings.
+
+Tests: `artifacts/api-server/tests/admin-phase13-9-ratings.test.ts`.
+
+---
+
+## Phase 13.8 — Cashback / Loyalty financial console
+
+Read-only UI composition over existing contracts. No backend, schema, RBAC or cashback engine change.
+
+| Area | Status | Source |
+| --- | --- | --- |
+| Liability KPI | REAL | `GET /admin/dashboard` → `kpis.cashback` = `sum(cashback_accounts.balance)` (requires `dashboard:read`) |
+| Rules (max spend %, min purchase, tiers) | REAL | `GET /cashback/rules` (`getMaxSpendRatio` from settings) |
+| Account list | REAL | `GET /admin/customers` (server `q`, limit/offset, SoT balance) |
+| Account ledger | REAL | `GET /admin/customers/:id/cashback-history` (append-only `cashback_ledger`, "Yana ko‘rsatish") |
+| Entry drawer | REAL | ledger row → commercial transaction → order / POS receipt / branch; REVERSAL section; technical collapsed |
+| Cashback adjust / reverse / expire actions | NOT IMPLEMENTED | no admin write API; page performs no mutation |
+| Original entry link for REVERSAL | CONTRACT_PENDING | history DTO does not expose `reverses_entry_id` |
+| Ledger total count | CONTRACT_PENDING | history API returns no total |
+| TTL (`ttlDays`) | NOT IMPLEMENTED | published in rules, not enforced by engine |
+| Integrity check | CONTRACT_PENDING | `cashbackIntegrity` has no admin route |
+
+UI details: entry tones EARN ok, USE info, REVERSAL warn, ADJUSTMENT neutral; dates in Asia/Tashkent; `sourceKey` / idempotency keys never rendered.
+
+Data quality (reported, not fixed): legacy `customers.purchases_count` / `total_purchases` diverge from the ledger for seeded customers; default tier differs between schema ("Gold") and DTO/auth ("Silver"); unknown tiers fall back to 5%; tier auto-updates only on POS sales.
+
+Tests: `artifacts/api-server/tests/admin-phase13-8-cashback.test.ts`.
+
+---
+
+## Phase 13.7 — Mijozlar customers console
+
+| Item | Status |
+|------|--------|
+| API audit | `GET /api/admin/customers` (server `q` over first / last name, phone and telegram id; `limit` default 25, max 50; `offset`; server `total` / `hasMore`; newest id first), `GET /api/admin/customers/:id`, `GET /api/admin/customers/:id/cashback-history` (`limit` ≤100 / `offset`, no total). All require `customers:read` (super_admin only). No write, block, delete, export, sort or filter endpoints; no `customers:manage` |
+| Identity / PII | DTO `toAdminCustomerListItem`: id, first / last name, `phoneMasked` (`+998 90 *** ** 67`), tier, purchasesCount, cashbackBalance. Full phone, telegram id, password hash and redeemed rewards are never returned; the UI states the full number is not available |
+| Cashback | Balance from `cashback_accounts` (SoT), history from the `cashback_ledger` ⨝ `commercial_transactions` projection with server source labels (ORDER / POS / SYSTEM / FOM_POS). `savedAmount` shown as a profile counter, not a financial source. No correction API → read-only |
+| Loyalty | Real `tier` text (Silver / Gold / Platinum in the engine) + purchases count / sum; rate is not returned by the admin API and is not recomputed in the UI |
+| Orders / POS / branch | No customer-scoped order or POS list in the admin API; order codes, receipts and branch names appear only on ledger rows. No home branch |
+| List | Server search (Enter / Qidirish), server pages via `PaginationBar`, `Jami N ta mijoz` from the server total; no KPI cards, filters or sorting |
+| Drawer | Loaded on open only (detail + one history page, "Yana ko‘rsatish" for the next page): Mijoz → Loyalty → Cashback → Cashback tarixi → collapsed tech |
+| Backend / API / data | **Unchanged** |
+
+---
+
+## Phase 13.6 — Aksiyalar promotions console
+
+| Item | Status |
+|------|--------|
+| API audit | Only `GET /api/admin/promos` (`promos:read`, super_admin) returning the full `promos` and `rewards` tables (no search / filter / pagination / limit). Public `GET /api/catalog/promos` serves active promos to the mobile app. No create / update / delete / toggle endpoints; no `promos:manage` permission |
+| Promo model | Marketing banner: `title`, `subtitle`, `tag` (free text), `icon`, `background`, `active`. No period, discount type / value, scope (branch / product / category / segment), usage limit, redemption counter or analytics |
+| Integration | Orders, POS, FOM, payments and cashback code never read `promos`; checkout ignores client `discount` (`PROMO_MARKETING_ONLY`) |
+| Rewards | Separate tab "Cashback sovg‘alari": loyalty catalog redeemed once per customer via `/api/loyalty/redeem` → `useCashback` (cashback balance debit). Shown as a loyalty item, never as a promotion; redemption counts not exposed to admin |
+| Status | Real `active` boolean only: Faol (shown in the app) / Nofaol (hidden). `tag` is displayed as free text and never parsed as a period |
+| Honesty | Free text that reads like a %, discount, cashback or bonus promise is flagged ("Matnda va’da — tizim qo‘llamaydi") because no engine fulfils it |
+| Controls | Search (Enter / Qidirish) + Holat filter over the complete list, stated in the UI; counts (jami / faol / nofaol) come from the complete response |
+| Drawer | Promo: Aksiya → Holat → Ta’sir (price / POS / cashback: none; period / scope / limit: not in system) → collapsed tech. Reward: Sovg‘a → Almashtirish → collapsed tech |
+| Backend / API / data | **Unchanged** |
+
+---
+
+## Phase 13.5 — Katalog product catalog console
+
+| Item | Status |
+|------|--------|
+| API audit | Read: `GET /api/catalog/products` (public; server-side `q` over nameUz / nameRu / manufacturer / sku, exact `category`, `sort` default / name / price_asc / price_desc, `limit` ≤ 50, `offset`, `total`, `hasMore`; optional `branchId` adds `availableQuantity`), `GET /api/catalog/categories` (distinct product categories). Admin: `GET /api/admin/products` (`products:read`, unbounded, no search — no longer used by Katalog), `POST /api/admin/products` and `PATCH /api/admin/products/:id` (`products:manage`, audited) |
+| Not available in API | Product status / activation, delete / archive, category management, images / media, barcode, import / export, admin-scoped paginated list, server validation of create / edit input |
+| Controls | Search first (server-side, Enter / Qidirish, ≤80 chars, clearing reloads) · Kategoriya (from categories endpoint) · Saralash (server sort). The former client-only prescription filter was removed — the API cannot filter by it |
+| Table | Mahsulot (initial mark + name, SKU · manufacturer) → Kategoriya → Narx (integer `money()` + unit) → Retsept badge; branch staff also see a read-only "Filialda" available column for their own branch. 50 per page with server total; ≤900px category column hidden; ≤560px rows become cards |
+| Drawer | Mahsulot → Narx va tasnif → Ombor (relation only, link to Ombor) → collapsed Texnik ma’lumotlar (ID, created, app icon code) |
+| Create / edit | Only with `products:manage`; fields limited to what POST / PATCH accept; integer price validation; `ConfirmDialog` before write; edit sends only changed fields (fixes description being blanked by the old form, whose list DTO had no description). Create copy states the real backend side effect: every branch gets a starting physical quantity of 10 without an inventory movement |
+| Backend / API / data | **Unchanged** — no new endpoints, schema or inventory writers |
+
+---
+
+## Phase 13.4 — Ombor operations console
+
+| Item | Status |
+|------|--------|
+| API audit | Same contract: `GET /api/admin/products?branchId=` (`products:read`; HQ passes a branch, branch staff are forced to their own branch by `resolveStaffBranchFilter`; returns every product with `stock {physical, reserved, available}` from `product_stocks`, no pagination / search / thresholds / timestamps); `POST /api/admin/inventory/adjust {branchId, productId, physicalDelta, reason, idempotencyKey?}` (`inventory:adjust` + `assertBranchScope`, physical only, never below 0 or below reserved, audited); `POST /api/admin/inventory/expire-due` (`inventory:adjust`, **network-wide** sweep of due ACTIVE reservations, ≤100 per call) |
+| Not available in API | Network aggregate stock, multi-branch list, stock movements history, reservation list, low-stock policy, transfers, batches / expiry, FOM stock sync |
+| Scope | Branch selector is the first control (HQ only); branch staff see their server-resolved branch read-only; stale branch responses are dropped |
+| Summary | Mahsulot · Mavjud · Mavjud emas (incl. "to‘liq rezervda") · Rezervda (SKU + units) · Nomuvofiq (only if >0) — computed from the **complete** list of the selected branch; labelled with the branch name, never as network totals |
+| Table | Mahsulot (name + SKU · category, one line) → Fizik → Rezerv → **Mavjud** (server value) → Holat; right-aligned integers, 44px rows, client pages of 50; ≤560px rows become cards (product + available + status first) |
+| Status | Presentation-only from server axes: Mavjud (ok) · Mavjud emas (warn) · To‘liq rezervda (info) · Nomuvofiq (danger: available < 0 or reserved > physical, shown uncorrected). No threshold invented |
+| Drawer | Qoldiq (Fizik / Rezerv / Mavjud) → Mahsulot → Filial → Rezerv (reservations are the authority; no reservation list API) → Korreksiya (`inventory:adjust` only) → collapsed Texnik ma’lumotlar |
+| Adjustment | Integer ± delta + required reason; client guards mirror server rules; `ConfirmDialog` shows branch, product, delta, physical/available before → after; stable `idempotencyKey` per confirmed input; 403 / 404 / 409 / network errors in Uzbek; list revalidated after success or 409 |
+| FOM | Read from `GET /api/integrations/fom/status`: subtle info "FOM inventar yozuvchisi faol emas"; no sync / import / push actions |
+| Labels | Shared `stockAxisLabel` / `stockAxisShort`: reserved axis renamed **Band → Rezerv** |
+| Visual refinement | Two-tier controls (Filial scope row first, highlighted while HQ has no branch; Mahsulot / Kategoriya / Mavjudlik below, disabled until stock loads); no-branch state = neutral "—" summary placeholders ("Filial tanlanmagan", hidden ≤560px) + compact "Avval filialni tanlang" guide whose "Filialni tanlash" button only focuses the existing selector; distinct states: no branch · empty branch · no filter match · load error · skeleton |
+| Backend / API / data | **Unchanged** — no new endpoints, writers or schema |
+
+---
+
+## Phase 13.3 — To‘lovlar operations console
+
+| Item | Status |
+|------|--------|
+| API audit | Same contract: `GET /api/admin/payments` (latest ≤200 legacy rows, branch-scoped, **no filters / pagination / dates**), `GET /api/admin/payments/intents/:id` (intent, attempts, capture, refunds, `refundableAmount`, `orderPaymentStatus`), `POST /api/admin/payments/intents/:id/refund {reason, amount?}` (`payments:manage`) |
+| Status strip | Jami yozuv · To‘langan (count + sum) · Kutilmoqda (count + sum) · Qaytarilgan (count, "shundan N qisman") · Boshqa (only if >0). Counted from the loaded rows **only when the response is below the 200-row cap** (complete set in the operator's scope); capped responses show "jami hisoblanmaydi". Sums only when all rows share one currency; refunded amounts are not in the list DTO, so that group is a count |
+| Table | Buyurtma #orderId (primary) · To‘lov #id (+ "tarixsiz yozuv") → Summa (right-aligned, strong) → Holat → Usul (Payme / Click marked as online PSP) → Filial; ≤1100px the branch moves under the identity, ≤560px rows stack as compact cards (no horizontal table scroll); row click / Enter / Space opens the drawer; client-side pages of 25 |
+| Filters | Holat / Usul / Filial (only when >1 branch loaded) — options come from loaded rows, applied client-side with an explicit note; no search / date filter (API has none) |
+| Status tones | Shared `paymentTone`: PAID ok, PENDING family (incl. legacy `awaiting_pos`, `pending_keys`) warn, FAILED danger, REFUNDED **neutral** (was amber), PARTIALLY_REFUNDED **info** |
+| Drawer | Buyurtma → To‘lov → Urinishlar (compact list) → Qabul qilish → Qaytarish (refundable, refunded total, refund rows) → collapsed Texnik ma’lumotlar (intent / capture / refund ids, merchant, external ref) |
+| Refund | Danger button only when `payments:manage` + `refundableAmount > 0` + intent PAID / PARTIALLY_REFUNDED; `ConfirmDialog` with integer amount ≤ refundable (full = `{reason}`, partial adds `amount`); idempotent replay reported as such |
+| Provider refund | Not connected for Payme / Click — operator copy "Provayder orqali qaytarish hozircha ulanmagan", internal record only; cashback not auto-reversed |
+| States | Table skeleton, distinct empty / filtered-empty copy, Uzbek list / detail / refund errors (no raw server messages) |
+| Backend / API / data | **Unchanged** — no new endpoints, no fake data |
+
+---
+
 ## Phase 13.2 — Buyurtmalar operations console
 
 | Item | Status |

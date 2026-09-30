@@ -35,10 +35,10 @@ describe("Admin Phase 13.2 — premium visual signature", () => {
     assert.match(dashBlock, /background:\s*var\(--vm-surface-brand\)/);
   });
 
-  it("hero is a main stage with a vertical stats column", () => {
+  it("hero is a main stage; sales stats sit with the 7-day chart", () => {
     assert.match(dash, /className="dash-hero-stage"/);
     assert.match(dash, /VaksinaMed HQ/);
-    assert.match(dash, /<dl className="dash-hero-stats">/);
+    assert.match(dash, /<dl className="dash-sales-stats">/);
     assert.match(dash, /sales-chart-zero/);
   });
 
