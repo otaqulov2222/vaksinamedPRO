@@ -21,6 +21,40 @@ Do not treat repository green as production GO. Aligns with `docs/FINAL_PRODUCTI
 
 ---
 
+## Phase 13.21 — Staging infrastructure provisioning readiness (2026-10-01)
+
+**CODE READY / INFRASTRUCTURE NOT PROVISIONED.** STAGING STATUS: **NOT PROVISIONED**. This phase produced the provisioning package (resource inventory, firewall matrix, secrets inventory, PostgreSQL / Valkey / API / worker / Admin packages, migration release, backup drill, registry, monitoring, deployment order A–R, rollback). No cloud resource, DNS record, domain or secret was created, and no P0/P1 gate changed status. Package: `docs/STAGING_INFRASTRUCTURE_BLUEPRINT.md` § Phase 13.21. Report and smoke checklist: `docs/ADMIN_IMPLEMENTATION_STATUS.md` § Phase 13.21.
+
+| Item | Before 13.21 | After 13.21 |
+|------|--------------|-------------|
+| Migration release (O-8) | No in-image command; the drizzle migrator took no lock, so concurrent boots could race | `dist/migrate.mjs` (`--status` read-only / apply), and API boot + release share one PostgreSQL advisory lock. LOCAL embedded PostgreSQL: two concurrent applies both exit 0. Staging run NOT RUN |
+| Outbound firewall | 13.20 listed Payme / Click / Eskiz for API and worker | Corrected: API → `notify.eskiz.uz` and `router.project-osrm.org` only; Payme / Click are browser checkout URLs plus inbound callbacks; the worker needs no internet and no Valkey |
+| Registry (O-2) | Undecided | **STATUS = DECISION REQUIRED**; alternatives listed, none selected |
+| Trusted proxy (O-6) | Decision open | Formalised as **O-6 TRUSTED PROXY CUTOVER BLOCKER** with the seven required inputs; runtime unchanged (`trust proxy` off) |
+| Secrets | Contract only | Inventory with statuses: every staging secret **MISSING** (no secret store) |
+| Monitoring | Log alerts only | Required signals listed; alert destination **TBD** |
+| Valkey TLS | Assumed `rediss://` works | Node default certificate verification; provider trust **TBD** (PROVIDER) |
+
+Blockers and owners: account access (OPS), registry O-2 (DEVOPS), domain (BUSINESS), edge type (OPS), O-6 (SECURITY + OPS), secret store (OPS + SECURITY), Valkey certificate trust (PROVIDER), PSP / Eskiz credentials and callback sources (PROVIDER), alert destination (OPS), public OSRM dependency (BUSINESS), `docker build` / CI not executed (DEVOPS).
+
+---
+
+## Phase 13.20 — Staging infrastructure bootstrap (2026-10-01)
+
+STAGING STATUS: **NOT PROVISIONED**. The repository was prepared for DigitalOcean FRA1 (candidate). No resource, domain, firewall or secret was created, and no P0/P1 gate changed status. Procedure: `docs/STAGING_INFRASTRUCTURE_BLUEPRINT.md` § Phase 13.20 addendum. Report and smoke checklist: `docs/ADMIN_IMPLEMENTATION_STATUS.md` § Phase 13.20.
+
+| Item | Before 13.20 | After 13.20 |
+|------|--------------|-------------|
+| Runtime container image | Could not boot: bundle externals (`ioredis`, `@electric-sql/pglite`) and `lib/db/migrations` were missing from the runtime stage | **READY_IN_REPO** (O-7). `docker build` NOT RUN locally; CI step added |
+| Worker process | HTTP-triggered only (`POST /api/workers/run-due` with an admin token) | `dist/worker.mjs` always-on loop, gated by `ENABLE_BACKGROUND_WORKERS=1`; staging run NOT RUN (O-4) |
+| CORS | Reflect any origin; `CORS_ORIGIN` **MISSING** | `CORS_ORIGIN` exact allowlist, no wildcard, https in staging; unset keeps legacy reflect (O-3) |
+| PostgreSQL TLS | `sslmode=require` advice | node-postgres treats it as verify-full: provide the CA via `sslrootcert` (documented) |
+| Migrations | Auto-apply in every process, no advisory lock | Release-step procedure documented (O-8) |
+| Readiness | PostgreSQL only | Unchanged (12.38 decision) |
+| Trusted proxy | Off + boot guard | Unchanged (13.19). Every staging edge is a proxy hop, so O-6 blocks load test / pilot |
+
+---
+
 ## Phase 12.27 — P0 gate verification (2026-09-25)
 
 Workspace verification only. **No managed staging/production infrastructure available from this environment.** No production enablement. No secrets printed.
@@ -1848,10 +1882,13 @@ Launching production money/ops would be unsafe or impossible without these.
 | # | Item | Current State | Evidence | Next Action |
 |---|------|---------------|----------|-------------|
 | O-1 | Staging environment with HTTPS + secrets | **OPS_REQUIRED** | Ops runbook | Provision staging |
-| O-2 | Docker image push/registry (CI builds only) | **OPS_REQUIRED** | CI docker job PASS; no push | Decide registry + push policy |
-| O-3 | TLS termination / CORS production config | **OPS_REQUIRED** | Assumptions in security docs | Document and configure edge |
-| O-4 | Worker process always-on in production | **OPS_REQUIRED** (12.44: code **READY_IN_REPO**; live crash drill **NOT_PROVEN**) | 12.44: staging worker MISSING; DATABASE_URL MISSING; TCP 5432/55432 CLOSED; compose workers OFF; reclaim TEST_VERIFIED only | Run worker supervisor with prod flags + staging kill drill |
+| O-2 | Docker image push/registry (CI builds only) | **OPS_REQUIRED** — 13.21: **DECISION REQUIRED** | CI docker job PASS; no push; 13.21: no registry selected or created (alternatives DOCR / GHCR / other OCI listed, none selected) | Decide registry + push policy, immutable tags, Droplet pull credentials |
+| O-3 | TLS termination / CORS production config | **OPS_REQUIRED** | Assumptions in security docs; 13.20: `CORS_ORIGIN` allowlist in code (wildcard rejected, https in staging), unset = legacy reflect + boot warning | Document and configure edge; set `CORS_ORIGIN` per environment |
+| O-4 | Worker process always-on in production | **OPS_REQUIRED** (12.44: code **READY_IN_REPO**; live crash drill **NOT_PROVEN**) | 12.44: staging worker MISSING; DATABASE_URL MISSING; TCP 5432/55432 CLOSED; compose workers OFF; reclaim TEST_VERIFIED only; 13.20: `dist/worker.mjs` entrypoint (gated, no HTTP, graceful stop) — local PGlite run only | Run `node dist/worker.mjs` under a restart policy with prod flags + staging kill drill |
 | O-5 | SMS/OTP provider production credentials | **OPS_REQUIRED** | Auth OTP hashed; provider env | Configure production SMS |
+| O-6 | Trusted proxy topology (LB / TLS terminator addresses, `X-Forwarded-For` handling) | **OPS_REQUIRED** | 13.19: `trust proxy` off + boot guard; spoofed forwarding headers ignored (tested); no proxy CIDR defined in repo; 13.21: **O-6 TRUSTED PROXY CUTOVER BLOCKER** — needs proxy type, proxy IPs / CIDRs, forwarding-header behaviour, firewall restriction, TLS termination point, proxy chain and test evidence | Decide edge per environment, then an address-restricted trust config (never `true`) — until then all clients behind a proxy share one rate-limit identity |
+| O-7 | Runtime container image (bundle externals + migrations in image) | **READY_IN_REPO** (13.20; `docker build` NOT RUN locally) | Before 13.20 the runtime stage lacked `node_modules` for `ioredis` / `@electric-sql/pglite` and `lib/db/migrations`, so boot would fail. Fixed with a `prod-deps` stage; the prod-only install and API boot from that layout were verified locally; CI layout step added | CI docker job green, then staging boot evidence |
+| O-8 | Migration release step (no advisory lock on concurrent boot) | **OPS_REQUIRED** (13.21: code **READY_IN_REPO**) | The drizzle migrator applies in one transaction without an advisory lock; API and worker auto-apply at boot. 13.21: `dist/migrate.mjs` release entry (`--status` read-only, non-zero unless 0013 applied + critical tables present); API boot and release share a PostgreSQL advisory lock; LOCAL embedded PostgreSQL: concurrent applies serialized, both exit 0 | Run `node dist/migrate.mjs --status`, then `node dist/migrate.mjs` once per release before API / worker rollout on staging |
 
 ---
 

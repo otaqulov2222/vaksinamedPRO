@@ -3,10 +3,11 @@
  * (workers returns fixed elsewhere)
  */
 import { Router } from "express";
-import { and, count, desc, eq, type SQL } from "drizzle-orm";
-import { db, deliveries, orders } from "@workspace/db";
+import { and, count, desc, eq, ilike, or, type SQL } from "drizzle-orm";
+import { customers, db, deliveries, orders } from "@workspace/db";
 import { requireAdmin, requireCustomer } from "../lib/auth";
 import { requirePermission, assertBranchScope, resolveStaffBranchFilter } from "../lib/rbac";
+import { adminCustomerIdentity, sanitizeAdminOrderSearch } from "../lib/adminOrderOps";
 import {
   assignCourier,
   getDeliveryByOrderId,
@@ -33,6 +34,7 @@ router.get("/admin/deliveries", async (req, res, next) => {
       Number.isFinite(requested as number) ? (requested as number) : undefined,
     );
     const status = typeof req.query.status === "string" ? req.query.status.trim() : "";
+    const q = sanitizeAdminOrderSearch(typeof req.query.q === "string" ? req.query.q : "");
     const limitRaw = Number(req.query.limit);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(100, Math.floor(limitRaw)) : 40;
     const offsetRaw = Number(req.query.offset);
@@ -41,12 +43,23 @@ router.get("/admin/deliveries", async (req, res, next) => {
     const filters: SQL[] = [];
     if (branchFilter != null) filters.push(eq(orders.branchId, branchFilter));
     if (status) filters.push(eq(deliveries.status, status));
+    if (q) {
+      const pattern = `%${q}%`;
+      filters.push(or(
+        ilike(orders.code, pattern),
+        ilike(customers.phone, pattern),
+        ilike(customers.firstName, pattern),
+        ilike(customers.lastName, pattern),
+        ilike(deliveries.address, pattern),
+      )!);
+    }
     const whereClause = filters.length ? and(...filters) : undefined;
 
     const totalRow = await db
       .select({ value: count() })
       .from(deliveries)
       .innerJoin(orders, eq(deliveries.orderId, orders.id))
+      .leftJoin(customers, eq(orders.customerId, customers.id))
       .where(whereClause);
     const total = Number(totalRow[0]?.value || 0);
 
@@ -55,12 +68,17 @@ router.get("/admin/deliveries", async (req, res, next) => {
         delivery: deliveries,
         orderCode: orders.code,
         orderBranchId: orders.branchId,
+        orderCreatedAt: orders.createdAt,
         deliveryFee: orders.deliveryFee,
         fulfillmentStatus: orders.fulfillmentStatus,
         customerId: orders.customerId,
+        customerRowId: customers.id,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
       })
       .from(deliveries)
       .innerJoin(orders, eq(deliveries.orderId, orders.id))
+      .leftJoin(customers, eq(orders.customerId, customers.id))
       .where(whereClause)
       .orderBy(desc(deliveries.updatedAt), desc(deliveries.id))
       .limit(limit)
@@ -69,11 +87,17 @@ router.get("/admin/deliveries", async (req, res, next) => {
     return res.json({
       deliveries: rows.map((row) => ({
         ...serializeDeliveryPublic(row.delivery),
+        updatedAt: row.delivery.updatedAt,
         orderCode: row.orderCode,
+        orderCreatedAt: row.orderCreatedAt,
         branchId: row.orderBranchId,
         deliveryFee: row.deliveryFee,
         fulfillmentStatus: row.fulfillmentStatus,
         customerId: row.customerId,
+        // List rows: name only — phone stays in the order detail (orders:read + branch scope).
+        customer: row.customerRowId != null
+          ? adminCustomerIdentity({ id: row.customerRowId, firstName: row.firstName, lastName: row.lastName }, { includePhone: false })
+          : null,
         providerStatus: row.delivery.provider === "external" ? "CONTRACT_PENDING" : row.delivery.status,
       })),
       total,

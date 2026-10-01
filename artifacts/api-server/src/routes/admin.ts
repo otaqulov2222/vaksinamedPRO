@@ -79,8 +79,10 @@ router.post("/admin/logout", async (req, res, next) => {
   try {
     const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
     const result = await revokeSessionFromToken(token, { actorType: "admin" });
+    // actorId only when the bearer secret was verified and its session revoked; unknown tokens stay unattributed.
     await recordAuthEvent({
       actorType: "admin",
+      actorId: result.revoked ? result.actorId ?? null : null,
       eventType: "logout",
       success: true,
       meta: { revoked: result.revoked },
@@ -150,6 +152,8 @@ router.get("/admin/dashboard", async (req, res, next) => {
         completed: sql<number>`count(*) filter (where ${orders.status} = 'completed')`.mapWith(Number),
         reserved: sql<number>`count(*) filter (where ${orders.status} = 'reserved')`.mapWith(Number),
         delivering: sql<number>`count(*) filter (where ${orders.status} in ('awaiting_delivery', 'paid'))`.mapWith(Number),
+        pendingPayment: sql<number>`count(*) filter (where ${orders.status} = 'pending_payment')`.mapWith(Number),
+        cancelled: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`.mapWith(Number),
         revenue: sql<number>`coalesce(sum(${orders.total}) filter (where ${orders.status} = 'completed'), 0)`.mapWith(Number),
       })
       .from(orders)
@@ -260,6 +264,8 @@ router.get("/admin/dashboard", async (req, res, next) => {
         completed: Number(orderKpis?.completed || 0),
         reserved: Number(orderKpis?.reserved || 0),
         delivering: Number(orderKpis?.delivering || 0),
+        pendingPayment: Number(orderKpis?.pendingPayment || 0),
+        cancelled: Number(orderKpis?.cancelled || 0),
         customers: Number(customerCount?.value || 0),
         branches: Number(branchCount?.value || 0),
         cashback: Number(cashbackSum?.value || 0),

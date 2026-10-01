@@ -1,36 +1,11 @@
-import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { loadEnvFile } from "./lib/envFile";
 import { assertProductionRedisConfig, warmRedisForBoot } from "./lib/redis";
 import { assertProductionMerchantSecretCryptoReady } from "./lib/merchantSecretCrypto";
 import { isProductionLike } from "./lib/securityEnv";
-
-/** Lokal .env ni yuklash (ESKIZ_EMAIL, ESKIZ_PASSWORD, ...) */
-function loadEnvFile() {
-  const candidates = [
-    resolve(process.cwd(), ".env"),
-    resolve(process.cwd(), "../../.env"),
-  ];
-  for (const file of candidates) {
-    if (!existsSync(file)) continue;
-    const text = readFileSync(file, "utf8");
-    for (const raw of text.split(/\r?\n/)) {
-      const line = raw.trim();
-      if (!line || line.startsWith("#")) continue;
-      const i = line.indexOf("=");
-      if (i <= 0) continue;
-      const key = line.slice(0, i).trim();
-      let val = line.slice(i + 1).trim();
-      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-        val = val.slice(1, -1);
-      }
-      if (!(key in process.env)) process.env[key] = val;
-    }
-    logger.info({ file }, "Loaded env file");
-    break;
-  }
-}
+import { assertNoProxyTrust } from "./lib/requestTelemetry";
+import { resolveCorsPolicy } from "./lib/corsPolicy";
 
 loadEnvFile();
 
@@ -48,6 +23,13 @@ async function boot() {
   assertProductionRedisConfig();
   // Fail closed: production-like without MERCHANT_SECRET_KEK must not run plaintext merchant secrets.
   assertProductionMerchantSecretCryptoReady();
+  // Fail closed: client IP (rate-limit keys, auth telemetry) stays the TCP peer until a trusted-proxy contract exists.
+  assertNoProxyTrust(app);
+  // Fail closed: a malformed or wildcard CORS_ORIGIN stops boot instead of silently denying browsers.
+  const corsPolicy = resolveCorsPolicy();
+  if (corsPolicy.mode === "reflect" && isProductionLike()) {
+    logger.warn("CORS_ORIGIN is not set — reflecting any browser origin; configure the exact staging/production origins");
+  }
   let redisBoot: { mode: "redis" | "skipped"; latencyMs?: number } = { mode: "skipped" };
   try {
     redisBoot = await warmRedisForBoot();
@@ -76,6 +58,9 @@ async function boot() {
         workersAutoStart: false,
         rateLimitStorage: redisBoot.mode === "redis" ? "redis" : "memory",
         redisLatencyMs: redisBoot.latencyMs,
+        trustProxy: Boolean(app.get("trust proxy")),
+        cors: corsPolicy.mode,
+        corsOrigins: corsPolicy.mode === "allowlist" ? corsPolicy.origins.length : undefined,
         note: "ENABLE_BACKGROUND_WORKERS gates /workers/run-due in production-like",
       },
       "Vaksina Med API listening",

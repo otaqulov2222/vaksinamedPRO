@@ -438,6 +438,7 @@ export default function App() {
             <DeliveryPage
               token={token}
               user={user}
+              permissions={permissions}
               branches={branches}
               onOpenOrder={(orderId) => {
                 setFocusOrderId(orderId);
@@ -448,12 +449,29 @@ export default function App() {
           {tab === "reports" ? (
             <ReportsPage token={token} user={user} branches={branches} />
           ) : null}
-          {tab === "audit" ? <AuditPage token={token} branches={branches} /> : null}
+          {tab === "audit" ? (
+            <AuditPage
+              token={token}
+              branches={branches}
+              onOpenOrder={(orderId) => {
+                setFocusOrderId(orderId);
+                setTab("orders");
+              }}
+            />
+          ) : null}
           {tab === "fom" ? <FomPage token={token} /> : null}
           {tab === "admins" ? (
-            <AdminAccessPage user={user} permissions={permissions} branches={branches} />
+            <AdminAccessPage token={token} branches={branches} />
           ) : null}
-          {tab === "settings" ? <SettingsPage token={token} /> : null}
+          {tab === "settings" ? (
+            <SettingsPage
+              token={token}
+              user={user}
+              permissions={permissions}
+              openableTabs={visibleNav.map((item) => item.id)}
+              onOpenTab={setTab}
+            />
+          ) : null}
         </main>
       </div>
     </div>

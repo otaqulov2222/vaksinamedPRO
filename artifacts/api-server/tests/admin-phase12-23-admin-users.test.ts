@@ -15,21 +15,30 @@ const docs = path.resolve(root, "../../docs");
 const adminRoutes = path.join(root, "src/routes/admin.ts");
 
 describe("Admin Phase 12.23 — Admin access boundary", () => {
-  it("no admin-user management routes exist", () => {
+  it("admin.ts has no admin-user routes; management lives only in the rbac:manage router (Phase 13.16)", () => {
     const admin = readFileSync(adminRoutes, "utf8");
     assert.doesNotMatch(admin, /router\.(get|post|patch|put|delete)\("\/admin\/users/);
     assert.doesNotMatch(admin, /router\.(post|patch)\("\/admin\/roles/);
+    const users = readFileSync(path.join(root, "src/routes/adminUsers.ts"), "utf8");
+    assert.match(users, /RBAC_MANAGE_PERMISSION = "rbac:manage"/);
+    assert.doesNotMatch(users, /router\.(post|patch|put|delete)\("\/admin\/(roles|rbac|permissions)/);
+    assert.doesNotMatch(users, /router\.delete\(/);
   });
 
-  it("AdminAccessPage is honest unavailable management + session read-only", () => {
+  it("AdminAccessPage: real management over /api/admin/users, honest gaps, session context, no secrets", () => {
     const page = readFileSync(path.join(adminWeb, "pages/AdminAccessPage.tsx"), "utf8");
-    assert.match(page, /title="Adminlar va ruxsatlar"/);
+    assert.match(page, /title="Adminlar"/);
     assert.match(page, /operatorCapabilityLabel\("API_REQUIRED"\)/);
     assert.match(page, /Hozir ishlayotgan/);
     assert.match(page, /Joriy sessiya/);
-    assert.doesNotMatch(page, /Yaratish|Saqlash|O‘chirish|Deactivate|Invite/);
-    assert.doesNotMatch(page, /\/api\/admin\/users/);
-    assert.doesNotMatch(page, /password|passwordHash|accessToken|refreshToken/i);
+    // 13.16: create / edit / status exist server-side now; hard delete and invite still do not.
+    assert.doesNotMatch(page, /O‘chirish|Deactivate|Invite|method: "DELETE"/);
+    assert.match(page, /\/api\/admin\/users/);
+    assert.doesNotMatch(page, /passwordHash|accessToken|refreshToken|tokenHash/i);
+    // The password is a write-only form field (show/hide), never rendered from data.
+    assert.equal((page.match(/type=\{showPassword \? "text" : "password"\}/g) || []).length, 1);
+    assert.match(page, /autoComplete="new-password"/);
+    assert.doesNotMatch(page, /\{[a-zA-Z.?]*user\.password|\{detail\.[a-z.]*password/i);
     assert.doesNotMatch(page, /ADMIN_USER_MANAGEMENT\s*=\s*API_REQUIRED/);
   });
 

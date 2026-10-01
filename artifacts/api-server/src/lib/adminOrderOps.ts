@@ -51,9 +51,23 @@ export function tashkentBusinessDayUtcRange(dateStr: string): { start: Date; end
   return { start, endExclusive };
 }
 
-const SENSITIVE_KEY = /password|otp|token|secret|authorization|merchant.?key|payme.?key|click.?secret|api.?key/i;
+const SENSITIVE_KEY = /password|otp|token|secret|authorization|cookie|session|hmac|merchant.?key|payme.?key|click.?secret|api.?key/i;
+const AUDIT_MAX_DEPTH = 4;
 
-/** Read-only audit payload scrubber — never invent event types. */
+function scrubAuditValue(value: unknown, depth: number): unknown {
+  if (typeof value === "string") return value.length > 500 ? `${value.slice(0, 500)}…` : value;
+  if (!value || typeof value !== "object") return value;
+  if (depth >= AUDIT_MAX_DEPTH) return "…";
+  if (Array.isArray(value)) return value.map((item) => scrubAuditValue(item, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (SENSITIVE_KEY.test(k)) continue;
+    out[k] = scrubAuditValue(v, depth + 1);
+  }
+  return out;
+}
+
+/** Read-only audit payload scrubber — never invent event types. Sensitive keys are dropped at every depth. */
 export function sanitizeAuditPayload(raw: string): Record<string, unknown> {
   let parsed: unknown;
   try {
@@ -62,11 +76,5 @@ export function sanitizeAuditPayload(raw: string): Record<string, unknown> {
     return {};
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-    if (SENSITIVE_KEY.test(k)) continue;
-    if (typeof v === "string" && v.length > 500) out[k] = `${v.slice(0, 500)}…`;
-    else out[k] = v;
-  }
-  return out;
+  return scrubAuditValue(parsed, 0) as Record<string, unknown>;
 }

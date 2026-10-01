@@ -47,6 +47,10 @@ export const authEvents = pgTable("auth_events", {
   success: boolean("success").notNull().default(true),
   reason: text("reason").notNull().default(""),
   meta: text("meta").notNull().default("{}"),
+  /** Normalized client address of the request that produced the event (0013); NULL when not stored. */
+  ipAddress: text("ip_address"),
+  /** User-Agent header of that request, control chars removed, max 512 chars (0013); NULL when not stored. */
+  userAgent: text("user_agent"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

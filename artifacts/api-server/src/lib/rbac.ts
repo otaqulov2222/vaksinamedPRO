@@ -9,7 +9,7 @@ const permissionCache = new Map<string, { at: number; codes: Set<string> }>();
 const CACHE_MS = 5_000;
 
 /** Known permission sets when auth_role_permissions is missing or empty (seed drift). */
-function fallbackPermissionsForRole(role: string): Set<string> {
+export function fallbackPermissionsForRole(role: string): Set<string> {
   return isHqAdminRole(role)
     ? new Set([
       "dashboard:read",

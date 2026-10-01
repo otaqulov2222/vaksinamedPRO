@@ -109,7 +109,7 @@ export async function validateSessionToken(token: string | undefined): Promise<V
 export async function revokeSessionFromToken(
   token: string | undefined,
   opts?: { actorType?: SessionActorType; expectedActorId?: number },
-): Promise<{ ok: true; revoked: boolean }> {
+): Promise<{ ok: true; revoked: boolean; actorId?: number }> {
   if (!token || !isSessionToken(token)) {
     return { ok: true, revoked: false };
   }
@@ -140,7 +140,7 @@ export async function revokeSessionFromToken(
     success: true,
     meta: { sessionPublicId: publicId },
   });
-  return { ok: true, revoked: true };
+  return { ok: true, revoked: true, actorId: session.actorId };
 }
 
 export { allowLegacyHmacTokens };

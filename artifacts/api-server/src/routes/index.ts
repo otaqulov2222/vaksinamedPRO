@@ -8,6 +8,8 @@ import ordersRouter from "./orders";
 import paymentsRouter from "./payments";
 import deliveriesRouter from "./deliveries";
 import adminRouter from "./admin";
+import adminUsersRouter from "./adminUsers";
+import adminSecurityRouter from "./adminSecurity";
 import integrationsRouter from "./integrations";
 import mapsRouter from "./maps";
 import authRouter from "./auth";
@@ -28,6 +30,8 @@ router.use(paymentsRouter);
 router.use(deliveriesRouter);
 router.use(workersRouter);
 router.use(adminRouter);
+router.use(adminUsersRouter);
+router.use(adminSecurityRouter);
 router.use(integrationsRouter);
 router.use(mapsRouter);
 

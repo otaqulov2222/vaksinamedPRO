@@ -16,6 +16,7 @@ import {
 } from "./securityEnv";
 import { createSession, isSessionToken, validateSessionToken, type SessionMeta } from "./sessions";
 import { recordAuthEvent } from "./authEvents";
+import { normalizeIp } from "./requestTelemetry";
 import { normalizeAdminRole } from "./securityEnv";
 import { earnCashback } from "./cashbackFinance";
 
@@ -35,7 +36,7 @@ function sessionMetaFrom(req?: Request): SessionMeta {
   if (!req) return {};
   return {
     userAgent: req.header("user-agent") || "",
-    ip: req.ip || "",
+    ip: normalizeIp(req.ip) || "",
     deviceLabel: typeof req.body?.deviceLabel === "string" ? req.body.deviceLabel : "",
   };
 }
@@ -430,6 +431,26 @@ export async function issueAdminSession(userId: number, req?: Request) {
   return created.token;
 }
 
+export const ADMIN_ACTIVE_STATUS = "active";
+
+/** Session/token → admin row → status. A disabled admin is rejected even with a still-valid token. */
+async function activeAdminOrThrow(adminId: number) {
+  const rows = await db.select().from(adminUsers).where(eq(adminUsers.id, adminId)).limit(1);
+  const user = rows[0];
+  if (!user) throw Object.assign(new Error("Admin topilmadi"), { status: 401 });
+  if (user.status !== ADMIN_ACTIVE_STATUS) {
+    await recordAuthEvent({
+      actorType: "admin",
+      actorId: user.id,
+      eventType: "authz.denied",
+      success: false,
+      reason: "admin_disabled",
+    });
+    throw Object.assign(new Error("Hisob faol emas"), { status: 401, code: "ADMIN_DISABLED" });
+  }
+  return user;
+}
+
 export async function requireAdmin(req: Request) {
   const token = bearerFrom(req);
 
@@ -438,16 +459,12 @@ export async function requireAdmin(req: Request) {
     if (!session || session.actorType !== "admin") {
       throw Object.assign(new Error("Kirish talab qilinadi"), { status: 401 });
     }
-    const rows = await db.select().from(adminUsers).where(eq(adminUsers.id, session.actorId)).limit(1);
-    if (!rows[0]) throw Object.assign(new Error("Admin topilmadi"), { status: 401 });
-    return rows[0];
+    return activeAdminOrThrow(session.actorId);
   }
 
   const parsed = readAdminToken(token);
   if (!parsed) throw Object.assign(new Error("Kirish talab qilinadi"), { status: 401 });
-  const rows = await db.select().from(adminUsers).where(eq(adminUsers.id, parsed.userId)).limit(1);
-  if (!rows[0]) throw Object.assign(new Error("Admin topilmadi"), { status: 401 });
-  return rows[0];
+  return activeAdminOrThrow(parsed.userId);
 }
 
 /** HQ-only — uses normalized role (super_admin / legacy admin|hq). Prefer permission checks. */
@@ -478,6 +495,16 @@ export async function loginAdmin(email: string, password: string, req?: Request)
       reason: "bad_credentials",
     });
     throw Object.assign(new Error("Email yoki parol noto‘g‘ri"), { status: 401 });
+  }
+  if (user.status !== ADMIN_ACTIVE_STATUS) {
+    await recordAuthEvent({
+      actorType: "admin",
+      actorId: user.id,
+      eventType: "login.failure",
+      success: false,
+      reason: "admin_disabled",
+    });
+    throw Object.assign(new Error("Hisob faol emas. Bosh administratorga murojaat qiling."), { status: 403, code: "ADMIN_DISABLED" });
   }
   // Persist normalized role if legacy label present (deterministic, no privilege expansion)
   const normalized = normalizeAdminRole(user.role);

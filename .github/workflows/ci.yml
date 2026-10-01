@@ -81,6 +81,12 @@ jobs:
             exit 1
           fi
           echo "IMAGE_ENV_OK"
+      - name: Runtime image resolves bundle externals + migrations + worker entry (no secrets)
+        run: |
+          docker run --rm --entrypoint node vaksinamed-api:ci --input-type=module \
+            -e "await import('ioredis'); await import('@electric-sql/pglite'); console.log('EXTERNALS_OK')"
+          docker run --rm --entrypoint sh vaksinamed-api:ci -c \
+            'test -f /app/lib/db/migrations/meta/_journal.json && test -f dist/index.mjs && test -f dist/worker.mjs && test -f dist/migrate.mjs && echo RUNTIME_LAYOUT_OK'
       - name: Smoke container health/live (no DB → readiness may fail; liveness must work)
         run: |
           docker run -d --name vaksinamed-smoke \

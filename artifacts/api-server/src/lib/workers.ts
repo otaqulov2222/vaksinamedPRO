@@ -13,7 +13,7 @@ import {
 import { expireDueReservations, releaseReservation } from "./inventory";
 import { failPaymentIntent, findIntentByOrderId } from "./paymentService";
 import { logger } from "./logger";
-import { flagEnabled, isProductionLike } from "./securityEnv";
+import { backgroundWorkersEnabled } from "./securityEnv";
 import { emitAlert, ALERT } from "./alerts";
 
 type DbLike = typeof db;
@@ -44,8 +44,7 @@ export const JOB_TYPES = {
 } as const;
 
 export function isBackgroundWorkersEnabled(): boolean {
-  if (flagEnabled("ENABLE_BACKGROUND_WORKERS")) return true;
-  return !isProductionLike() && flagEnabled("ENABLE_BACKGROUND_WORKERS_DEV");
+  return backgroundWorkersEnabled();
 }
 
 /**

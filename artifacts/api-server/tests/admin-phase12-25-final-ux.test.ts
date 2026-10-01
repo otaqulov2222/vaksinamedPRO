@@ -61,7 +61,9 @@ describe("Admin Phase 12.25 — final UX consolidation", () => {
 
     const admins = read("pages/AdminAccessPage.tsx");
     assert.match(admins, /operatorCapabilityLabel\("API_REQUIRED"\)/);
-    assert.doesNotMatch(admins, /\/api\/admin\/users/);
+    // Phase 13.16: the admin management API exists, so the page now uses it (server-paginated, no DELETE).
+    assert.match(admins, /request\(`\/api\/admin\/users\?\$\{params\.toString\(\)\}`, token\)/);
+    assert.doesNotMatch(admins, /method: "DELETE"/);
 
     const audit = read("pages/AuditPage.tsx");
     assert.match(audit, /actionDraft|setEntity/);

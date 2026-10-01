@@ -6,6 +6,7 @@ import { PGlite } from "@electric-sql/pglite";
 import pg from "pg";
 import * as schema from "./schema";
 import { applyMigrations } from "./migrate";
+import { applyPostgresMigrationsLocked } from "./migrationLock";
 import { seedDatabase } from "./seed";
 import {
   assertProductionDatabaseConfig,
@@ -46,7 +47,7 @@ async function createDatabase(): Promise<DatabaseInstance> {
       allowExitOnIdle: poolOpts.allowExitOnIdle,
     });
     const database = drizzlePg(pool, { schema });
-    await applyMigrations(database, "postgres");
+    await applyPostgresMigrationsLocked(pool);
     if (shouldAutoSeed(environment, "postgres")) {
       await seedDatabase(database, { profile: "demo", environment });
     }
@@ -79,6 +80,7 @@ export * from "./password";
 export * from "./env";
 export * from "./health";
 export * from "./migrate";
+export * from "./migrationLock";
 export * from "./poolConfig";
 export { getMigrationsFolder } from "./migrationsPath";
 /** @deprecated Prefer versioned migrations. Kept for reference / emergency local repair. */

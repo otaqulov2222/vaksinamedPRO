@@ -494,3 +494,378 @@ See [`docs/PHASE_12_49_PROVIDER_DECISION.md`](./PHASE_12_49_PROVIDER_DECISION.md
 - Operational P0/P1 gates remain **OPS_REQUIRED** / **CONTRACT_PENDING**.
 - Production remains **NOT READY — OPERATIONAL EVIDENCE MISSING**.
 
+---
+
+## Phase 13.19 addendum — Trusted proxy
+
+- The API resolves the client IP from the TCP peer: Express `trust proxy` is off, and boot refuses to start if it is enabled. `X-Forwarded-For` / `X-Real-IP` / `Forwarded` are ignored.
+- The "Reverse Proxy / LB" boxes above are **not** a trusted-proxy contract. No proxy address / CIDR, hop count or header policy is defined.
+- Behind any LB or TLS terminator, every client would share the proxy's address for rate limiting and auth-event IP. **Decide before routing staging traffic through a proxy.**
+- Open decision: trusted proxy topology per environment (edge type, peer addresses / CIDRs, firewall so only the proxy reaches the API, `X-Forwarded-For` overwrite vs append, IPv6) — **TO_BE_AGREED** (OPS + SECURITY). Tracked as O-6 in `docs/PRODUCTION_GAP_MATRIX.md`; details in `docs/ADMIN_IMPLEMENTATION_STATUS.md` § Phase 13.19.
+
+---
+
+## Phase 13.20 addendum — DigitalOcean staging bootstrap (FRA1 candidate)
+
+STAGING STATUS: **NOT PROVISIONED**. The repository is prepared, but no DigitalOcean resource exists and no evidence is attached. Every gate in § 18 keeps its status. The full readiness report and the 20-item smoke checklist (all NOT RUN / BLOCKED) are in `docs/ADMIN_IMPLEMENTATION_STATUS.md` § Phase 13.20.
+
+### Repository changes this addendum relies on
+
+| Change | Why |
+|--------|-----|
+| `Dockerfile`: `prod-deps` stage plus a runtime with workspace layout, production `node_modules` and `lib/db/migrations` | The previous runtime image could not boot. `ioredis` and `@electric-sql/pglite` are bundle externals and the migrations journal was missing |
+| `dist/worker.mjs` (`src/worker.ts`) | A separate always-on worker process with no HTTP server, driving the existing `worker_jobs` runner |
+| `CORS_ORIGIN` exact-origin allowlist | Replaces reflect-any once configured. Wildcards are rejected and staging requires `https` |
+| CI runtime-image step | Proves the image resolves the externals and contains the migrations and both entrypoints |
+
+### Target topology (not provisioned)
+
+```
+Internet ──HTTPS 443──▶ Edge (DO Load Balancer or on-host TLS proxy — TO_BE_AGREED)
+                          ├── /api/*  ──HTTP──▶ API container(s)  node dist/index.mjs  (PORT 5000)
+                          └── /*      ──────▶ Admin static build (artifacts/admin-web/dist), same origin
+
+Worker container (node dist/worker.mjs, ENABLE_BACKGROUND_WORKERS=1) — no inbound
+
+API, Worker ──TLS (verify-full, provider CA)──▶ DO Managed PostgreSQL (FRA1 candidate, VPC)
+API         ──rediss://──────────────────────▶ DO Managed Valkey (FRA1 candidate, VPC)
+API, Worker ──HTTPS 443──▶ checkout.test.paycom.uz · my.click.uz · notify.eskiz.uz
+```
+
+- **Admin must share the API origin.** `artifacts/admin-web/src/api.ts` uses `const API = ""` and has no build-time or runtime API URL. A DO Load Balancer alone cannot serve static files or route by path. The edge therefore needs either an on-host proxy that serves the Admin build and forwards `/api`, or another platform with path routing. **TO_BE_AGREED**.
+- **Trusted proxy (13.19):** every edge option above is a proxy hop. With `trust proxy` off, all clients share the edge's address for rate limiting and auth-event IP. That is acceptable for a closed internal smoke test only. Decide O-6 before any load test or pilot traffic.
+- **Worker:** the same image with `CMD ["node","--enable-source-maps","dist/worker.mjs"]`. Disable the image HEALTHCHECK for it, since it has no port. It may share the API Droplet at first (**TO_BE_AGREED**). Running several replicas is safe (SKIP LOCKED plus lease reclaim).
+
+### Firewall matrix (only repo-confirmed ports)
+
+| Source | Destination | Port / protocol | Basis |
+|--------|-------------|-----------------|-------|
+| Internet | Edge | 443 HTTPS | § 5 "Inbound public: 443 only" |
+| Edge | API | `PORT` 5000 HTTP | `Dockerfile` `EXPOSE 5000` / `ENV PORT=5000` |
+| Internet | API `PORT` | **deny** | Clients must not bypass the edge |
+| Any | Worker | **deny all inbound** | `dist/worker.mjs` opens no port |
+| API, Worker | Managed PostgreSQL | Provider-assigned port from DO connection details (not invented here) | VPC / trusted sources only |
+| API | Managed Valkey | Provider-assigned port (not invented here) | VPC / trusted sources only |
+| API, Worker | `checkout.test.paycom.uz`, `my.click.uz`, `notify.eskiz.uz` | 443 HTTPS outbound | Hosts from `paymeContract.ts`, `clickContract.ts`, `sms.ts` |
+| Ops | Droplets (SSH / console) | **TO_BE_AGREED** | Not defined in repo |
+
+### Environment contract
+
+- **REQUIRED STAGING, API:** `APP_ENV=staging`, `NODE_ENV=production`, `PORT`, `DATABASE_URL`, `REDIS_URL`, `ADMIN_SECRET`, `CUSTOMER_SECRET`, `POS_SECRET`, `MERCHANT_SECRET_KEK`, `FOM_WEBHOOK_SECRET`, `CORS_ORIGIN`.
+- **REQUIRED STAGING, Worker:** the same database, KEK and app secrets, plus `ENABLE_BACKGROUND_WORKERS=1`.
+- **OPTIONAL:** `PG_POOL_*`, `WORKER_POLL_INTERVAL_MS`, `WORKER_STALE_RUNNING_MS`, `PAYMENT_INTENT_TTL_MS`, `LOG_LEVEL`, HMAC window vars, `ESKIZ_*`, the sandbox harness vars.
+- **Never set in staging:** `ALLOW_*` dev flags, `ENABLE_BACKGROUND_WORKERS_DEV`, PSP merchant flags (until the sandbox gate), or any trusted-proxy variable (none exists).
+- **Placeholders:** `.env.example`. Real values live only in the DO encrypted environment or the team secret store, never in git.
+
+### PostgreSQL TLS (corrects § 2A wording)
+
+- With node-postgres 8.x (repo: `pg` 8.23), `sslmode=require` in the URL is treated as **verify-full**.
+- Download the cluster CA from the provider, mount it as a file, and use `...?sslmode=verify-full&sslrootcert=<mounted CA path>`.
+- Never use `sslmode=no-verify` or disable certificate verification.
+
+### Database bootstrap procedure
+
+1. Provision Managed PostgreSQL in the VPC. Restrict trusted sources to the API and Worker Droplets (plus the ops host used for migrations).
+2. Create the database and app user. The app runs the drizzle migrator at boot (it creates the `drizzle` schema/table if missing), so verify that user's privileges at provisioning.
+3. Store `DATABASE_URL` (with TLS params) in the secret store. Never print it.
+4. **Migration release step, once, before scaling out:** either run `pnpm db:migrate` from an ops checkout, or start a **single** API instance (boot applies migrations). The migrator takes no advisory lock, so never start several instances at the same time on an unmigrated database.
+5. Verify with `pnpm db:migrate:status`: 14 migrations, ending at `0013_auth_event_telemetry`. Check that `/api/health/ready` returns `driver: "postgres"`.
+6. The demo seed never runs in staging. Never run destructive scripts (`ALLOW_DESTRUCTIVE_DB`, push `--force`) against staging.
+7. Enable automated backups and PITR, then run the restore drill below.
+
+### Backup / restore drill (NOT RUN)
+
+1. Restore from backup or PITR into a **new** cluster.
+2. Point a temporary API instance at it.
+3. Check `/api/health/ready` (`driver: "postgres"`) and `db:migrate:status`.
+4. Check row counts for the critical tables (orders, payments, payment_intents, cashback_ledger, product_stocks, reservations, worker_jobs, audit_log).
+5. Record the restore duration and the measured RPO/RTO.
+
+`pnpm backup:drill` is a PGlite non-production drill and is not evidence.
+
+---
+
+## Phase 13.21 — Staging provisioning package (DigitalOcean FRA1 candidate)
+
+**CODE READY / INFRASTRUCTURE NOT PROVISIONED.** STAGING STATUS: **NOT PROVISIONED**. This section is the hand-over package for whoever provisions staging. No cloud resource, DNS record, domain or secret was created, and nothing below is staging evidence. Values not documented in the repository are marked **TBD** with an owner (OPS / SECURITY / DEVOPS / PROVIDER / BUSINESS). The 13.20 addendum above remains valid except where this section corrects it (outbound hosts and the migration step).
+
+### A. Resource inventory
+
+| RESOURCE | PURPOSE | EXPECTED TYPE | REGION | NETWORK EXPOSURE | STATUS | BLOCKER |
+|----------|---------|---------------|--------|------------------|--------|---------|
+| API compute | `node dist/index.mjs` container (port 5000) | DO Droplet running the API image. SIZE: TBD during provisioning based on measured staging load | FRA1 (12.49 primary; AMS3 / BLR1 alternates) | Private; inbound only from the HTTPS edge on 5000 | NOT PROVISIONED | Account access (OPS); registry O-2 (DEVOPS) |
+| Worker compute | `node dist/worker.mjs` container, no HTTP | Same image; separate container, may share the API Droplet at first (**TO_BE_AGREED**, OPS). SIZE: TBD during provisioning based on measured staging load | FRA1 | No inbound | NOT PROVISIONED | Same as API |
+| Managed PostgreSQL | System of record; migrations 0000–0013 | DO Managed PostgreSQL, 2 GiB single-node (12.49 staging sizing, ~$30.45/mo list) | FRA1 | VPC / trusted sources only; TLS verify-full | NOT PROVISIONED | Account access (OPS) |
+| Managed Valkey | Shared rate-limit storage (`rl:v1:<sha256>`) | DO Managed Valkey, 1 GiB single-node (12.49 staging sizing, $15/mo list) | FRA1 | VPC / trusted sources only; `rediss://` | NOT PROVISIONED | Account access (OPS) |
+| Container registry | Store the CI-built image | **DECISION REQUIRED** (O-2) | — | — | NOT SELECTED | O-2 (DEVOPS) |
+| HTTPS edge | TLS termination; serve the Admin static build; forward `/api/*` on the same origin | **TO_BE_AGREED** (OPS + SECURITY): an on-host reverse proxy, or a DO Load Balancer in front of a path-routing proxy. A DO Load Balancer alone cannot serve static files or route by path | FRA1 | Public 443 | NOT PROVISIONED | Edge decision; O-6 for anything beyond a closed smoke test |
+| Domain / DNS | `https://<staging-domain>/` | TBD | — | Public DNS | NOT SELECTED | Domain decision (BUSINESS) |
+| Firewall | Enforce the matrix in § C | DO Cloud Firewall on Droplets plus managed-database trusted sources (rules in § C) | FRA1 | — | NOT PROVISIONED | Compute + edge decision (OPS) |
+| Monitoring / alerts | Availability, error and job-health signals (§ O) | DO metrics (12.49) plus pino JSON logs with alert codes; alert destination **TBD** | — | — | NOT PROVISIONED | Alert destination (OPS) |
+
+Droplet, Load Balancer and production sizes are not documented ("DEPENDS_ON_PLAN" in 12.49; "PRODUCTION SIZE NOT FINALIZED"). No total cost is claimed beyond the documented PostgreSQL + Valkey subtotal (~$45.45/mo list).
+
+### B. Network topology (target, not provisioned)
+
+```
+Browser / mobile / Telegram ──HTTPS 443──▶ HTTPS edge (https://<staging-domain>)
+                                             ├── /api/*  ──HTTP 5000──▶ API  (node dist/index.mjs)
+                                             └── /*      ──▶ Admin static build (artifacts/admin-web/dist)
+
+API     ──VPC──▶ Managed PostgreSQL (TLS verify-full + provider CA file)
+API     ──VPC──▶ Managed Valkey (rediss://)
+Worker  ──VPC──▶ Managed PostgreSQL              (no Valkey, no inbound)
+Release ──VPC──▶ Managed PostgreSQL              (one-off: node dist/migrate.mjs)
+
+API ──HTTPS 443 outbound──▶ notify.eskiz.uz (OTP SMS) · router.project-osrm.org (GET /api/maps/route)
+Payme / Click / FOM ──HTTPS 443 inbound via edge──▶ /api/payments/{payme,click}/{merchant,webhook} · /api/integrations/fom/sale
+```
+
+Corrections to the 13.20 addendum, from the 13.21 code and bundle audit:
+
+- **Payme and Click are not server-side outbound calls.** `checkout.test.paycom.uz` / `checkout.paycom.uz` (`paymeContract.ts`) and `my.click.uz/services/pay` (`clickContract.ts`) are checkout URLs returned to the browser. The PSP merchant APIs are **inbound** callbacks, disabled by default (`PAYME_MERCHANT_API_ENABLED` / `CLICK_MERCHANT_API_ENABLED` unset).
+- **The API makes two outbound calls:** `notify.eskiz.uz` (`sms.ts`) and `router.project-osrm.org` (`routes/maps.ts`, the public OSRM demo server). Whether staging or production may depend on that public server is **TBD** (BUSINESS).
+- **The worker needs neither Valkey nor the internet.** `dist/worker.mjs` contains no Redis client and none of the provider hosts. The notification job is a no-op (`NOOP_OR_SYNC_SMS`), the FOM retry calls the in-process `processFomSale`, and the external delivery retry returns `CONTRACT_PENDING`.
+
+### C. Firewall matrix
+
+| SOURCE | DESTINATION | PORT/PROTOCOL | PURPOSE | PUBLIC? | REQUIRED? | STATUS |
+|--------|-------------|---------------|---------|---------|-----------|--------|
+| Internet | HTTPS edge | 443/TCP (HTTPS) | Admin, customer and PSP / FOM callback entry | YES | YES | NOT PROVISIONED |
+| HTTPS edge | API | 5000/TCP HTTP (`Dockerfile` `EXPOSE 5000`, `ENV PORT=5000`) | Forward `/api/*` | NO | YES | NOT PROVISIONED |
+| Internet | API 5000 | **DENY** | Clients must not bypass the edge | NO | YES (deny) | NOT PROVISIONED |
+| Admin (browser) | API | No separate rule: same-origin `/api` through the edge on 443 | Admin calls `""` + `/api/...` | — | NO | N/A |
+| API | Managed PostgreSQL | Use provider-assigned endpoint/port from provisioned resource. | System of record | NO | YES | NOT PROVISIONED |
+| Worker | Managed PostgreSQL | Use provider-assigned endpoint/port from provisioned resource. | `worker_jobs` | NO | YES | NOT PROVISIONED |
+| Release job (`dist/migrate.mjs`, same image) | Managed PostgreSQL | Use provider-assigned endpoint/port from provisioned resource. | Controlled migration step | NO | YES | NOT PROVISIONED |
+| API | Managed Valkey | Use provider-assigned endpoint/port from provisioned resource. | Rate-limit storage; boot PING | NO | YES | NOT PROVISIONED |
+| Worker | Managed Valkey | — | Not used (no Redis client in `dist/worker.mjs`) | NO | NO | N/A |
+| API | Payme (`checkout*.paycom.uz`) | — | Not a server call: checkout URL handed to the browser | — | NO | N/A |
+| API | Click (`my.click.uz`) | — | Not a server call: checkout URL handed to the browser | — | NO | N/A |
+| Payme / Click | HTTPS edge → `/api/payments/{payme,click}/{merchant,webhook}` | 443/TCP (HTTPS) | Merchant API callbacks (flags off by default) | YES | Only after the sandbox gate | BLOCKED — PSP source addresses **TBD** (PROVIDER) |
+| FOM POS | HTTPS edge → `/api/integrations/fom/sale` | 443/TCP (HTTPS) | Sale webhook (`FOM_WEBHOOK_SECRET`) | YES | When the FOM contract exists | **CONTRACT_PENDING** |
+| API | `notify.eskiz.uz` | 443/TCP (HTTPS) outbound | OTP SMS | — | YES when `ESKIZ_*` is set | NOT PROVISIONED |
+| API | `router.project-osrm.org` | 443/TCP (HTTPS) outbound | `GET /api/maps/route` | — | Optional (route preview) | TBD (BUSINESS) |
+| Worker | External providers | — | No outbound provider call in the current code | — | NO | N/A |
+| API / Worker hosts | Container registry | 443/TCP (HTTPS) outbound | Image pull | — | YES | BLOCKED — O-2 |
+| Operator | Droplets (SSH / console) | TBD | Administration | TBD | TBD | TBD (OPS) — not defined in the repository |
+
+PostgreSQL and Valkey are never exposed publicly. The provider's trusted-sources list should contain only the API / worker host(s), plus the host that runs the release step if it is different.
+
+### D. Environment and secrets inventory
+
+Only secrets that the repository reads are listed. CURRENT STATUS describes the staging secret store, which does not exist yet; no value is written anywhere in this document.
+
+| SECRET | PURPOSE | STAGING REQUIRED? | STORAGE | ROTATION | CURRENT STATUS |
+|--------|---------|-------------------|---------|----------|----------------|
+| `DATABASE_URL` (PostgreSQL user + password) | API, worker and release job connection; carries `sslmode` / `sslrootcert` | YES | Secret store **TBD** (OPS; DO encrypted env or team store) | TBD — no documented procedure (OPS) | MISSING |
+| PostgreSQL CA certificate (file; not a secret) | TLS verify-full against the provider CA | YES | Mounted file on API / worker / release hosts; path referenced by `sslrootcert` | Follows the provider CA | MISSING |
+| `REDIS_URL` (Valkey password) | Rate-limit storage | YES (API) | Secret store TBD | TBD — no documented procedure (OPS) | MISSING |
+| `ADMIN_SECRET` | Admin token signing key (`auth.ts`); fail-closed at boot | YES | Secret store TBD | TBD — no documented procedure (SECURITY) | MISSING |
+| `CUSTOMER_SECRET` | Customer token signing + OTP hash pepper (`auth.ts`); fail-closed | YES | Secret store TBD | TBD (SECURITY) | MISSING |
+| `POS_SECRET` | Signed POS QR tokens (`pos.ts`); fail-closed | YES | Secret store TBD | TBD (SECURITY) | MISSING |
+| `FOM_WEBHOOK_SECRET` | FOM sale webhook auth (`securityEnv.ts`) | YES (fail-closed in production-like) | Secret store TBD | TBD (SECURITY) | MISSING |
+| `MERCHANT_SECRET_KEK` | AES-GCM `enc:v1` key for branch Payme / Click merchant secrets stored in the DB | YES | Secret store TBD (ENVIRONMENT_KEK; no managed KMS, 12.49) | New KEK → re-encrypt → retire old (§ 10) | MISSING |
+| `ESKIZ_EMAIL` / `ESKIZ_PASSWORD` | Eskiz SMS login (`sms.ts`) | YES for OTP SMS | Secret store TBD | TBD (OPS) | MISSING |
+| `PAYME_SANDBOX_KEY` | Payme sandbox E2E harness | Only for the sandbox gate | Secret store TBD | Rotate if compromised (runbook § sandbox) | MISSING |
+| `CLICK_SANDBOX_SECRET` | Click sandbox E2E harness | Only for the sandbox gate | Secret store TBD | Rotate if compromised (runbook § sandbox) | MISSING |
+| Branch Payme key / Click secret | Per-branch merchant credentials | When PSP is enabled | PostgreSQL, encrypted with the KEK (not env) | TBD (SECURITY) | MISSING |
+
+Non-secret identifiers (`PAYME_SANDBOX_MERCHANT_ID`, `CLICK_SANDBOX_SERVICE_ID` / `MERCHANT_ID`, `ESKIZ_FROM`) and plain config (`APP_ENV=staging`, `NODE_ENV=production`, `PORT=5000`, `CORS_ORIGIN`, `ENABLE_BACKGROUND_WORKERS=1` on the worker) belong in the environment config, not the secret store. Placeholders only: `.env.example`. There is no trusted-proxy variable.
+
+### E. PostgreSQL package
+
+- DO Managed PostgreSQL, FRA1, VPC / trusted sources only, 2 GiB single-node (12.49).
+- **TLS:** `pg` 8.23 treats `sslmode=require` as verify-full, so the provider's CA must be supplied. Download the CA from the provisioned cluster (contents not reproduced here), mount it read-only as a file, and reference it in the URL: `postgres://<user>:<password>@<provider-host>:<provider-port>/<db>?sslmode=verify-full&sslrootcert=<mounted CA path>`. The mount path is chosen at provisioning (OPS); it is not in `.env.example`. Never use `sslmode=no-verify` or disable verification.
+- **Pool:** `PG_POOL_MAX` (default 20), `PG_POOL_IDLE_MS`, `PG_POOL_CONNECT_TIMEOUT_MS` (`lib/db/src/poolConfig.ts`). Size the total (API replicas × max + worker + release job's 1) against the provider's connection limit, which is **TBD** until provisioning.
+- **Boot guards:** `assertProductionDatabaseConfig` refuses staging without a `postgres://` URL, with `DB_DRIVER=pglite`, or without `ADMIN_SECRET` / `CUSTOMER_SECRET`. The demo seed never runs in staging.
+- Migrations: § L. Backup / PITR: § M.
+
+### F. Valkey package
+
+- DO Managed Valkey, FRA1, VPC / trusted sources only, 1 GiB single-node (12.49). Used by the API only.
+- `REDIS_URL=rediss://<user>:<password>@<provider-host>:<provider-port>` (format from `lib/redis.ts`; host, port and user come from the provisioned resource).
+- **Startup:** `assertProductionRedisConfig` requires `REDIS_URL`; `warmRedisForBoot` connects and PINGs, and production-like boot exits on failure. Boot log: `rateLimitStorage: "redis"`.
+- **Failure:** the limiter fails closed (HTTP 503 `RATE_LIMIT_REDIS_UNAVAILABLE`); there is no in-memory fallback in staging. Readiness stays PostgreSQL-only (12.38 contract, pinned by `phase12-38-redis-staging-gate`).
+- **TLS certificate:** `rediss://` uses Node's default certificate verification and the app has no CA-file option for Valkey. Whether the provider's Valkey certificate verifies against the default trust store must be confirmed at provisioning — **TBD** (PROVIDER). If it does not, that is a code change, not a reason to disable verification.
+
+### G. API deployment package
+
+| Check | Evidence (repository / local) | Status |
+|-------|-------------------------------|--------|
+| `dist/index.mjs`, `dist/worker.mjs`, `dist/migrate.mjs` | `build.mjs` entry points; local build emits all three | CODE READY |
+| Production dependencies only | `prod-deps` stage: `pnpm install --frozen-lockfile --prod --no-optional --filter @workspace/api-server...` | CODE READY (13.20 local prod-only install) |
+| `ioredis` + `@electric-sql/pglite` present at runtime | Both are bundle externals; PGlite is still imported statically by the bundle even in staging; CI step `EXTERNALS_OK` | CODE READY; CI not run |
+| Migrations in image | `COPY --from=build /app/lib/db/migrations ...`; CI `test -f /app/lib/db/migrations/meta/_journal.json` | CODE READY; CI not run |
+| Non-root, healthcheck, no baked secrets | `USER appuser`; `HEALTHCHECK /api/health/live`; PSP / worker flags `0` | CODE READY |
+| Graceful shutdown / secret validation | Boot guards (DB, Redis, KEK, CORS, no trust proxy) | CODE READY |
+| `docker build` | — | **BLOCKED — Docker unavailable** locally; CI not executed |
+
+Commands (actual `artifacts/api-server/package.json` scripts): `start` = `node --enable-source-maps ./dist/index.mjs` (API; there is **no** `start:api` script), `start:worker`, `migrate:release`, `migrate:release:status`. In the image: `CMD ["node","--enable-source-maps","dist/index.mjs"]` (default).
+
+### H. Worker deployment package
+
+- Same image, `CMD ["node","--enable-source-maps","dist/worker.mjs"]`, `ENABLE_BACKGROUND_WORKERS=1`, the database secrets and KEK; no `REDIS_URL` needed. Disable the image HEALTHCHECK for it (no port).
+- Source of truth: the PostgreSQL `worker_jobs` table. Claims use FOR UPDATE SKIP LOCKED with leases; stale RUNNING jobs are reclaimed after `WORKER_STALE_RUNNING_MS` (default 30 min). No other queue, no BullMQ.
+- Tick: enqueue idempotent hourly sweeps, then drain due jobs in batches of 20, at most 10 batches per tick; poll interval `WORKER_POLL_INTERVAL_MS` (default 15 s, clamped 1–300 s); ticks never overlap.
+- SIGTERM / SIGINT: stop scheduling, wait up to 25 s for the in-flight tick, exit 0 when drained.
+- No public inbound traffic. Several replicas are safe. The API never starts workers (`workersAutoStart: false`).
+
+### I. Admin deployment package
+
+- `artifacts/admin-web/src/api.ts` uses `const API = ""`, so the build calls same-origin `/api`. The edge serves `artifacts/admin-web/dist` and forwards `/api/*` on one hostname. No build change is needed.
+- 13.21 bundle scan (`artifacts/admin-web/dist`): no database URL, no provider credential, no secret variable names, no private address and no hard-coded API hostname (results in `docs/ADMIN_IMPLEMENTATION_STATUS.md` § Phase 13.21).
+- A separate Admin hostname would require an application change (an API base URL), which is not done.
+
+### J. Domain / TLS plan
+
+- Target structure: `https://<staging-domain>/` serves the Admin static build and `https://<staging-domain>/api/*` reaches the API. The domain is **not decided** (BUSINESS); no hostname is hard-coded in application code.
+- Certificate issuance and renewal depend on the edge choice — **TBD** (OPS).
+- `CORS_ORIGIN` lists only real cross-origin browser clients, each an exact `https://` origin with no path, no trailing slash and no wildcard (boot fails otherwise in staging). Same-origin Admin needs no entry. Leaving it unset keeps legacy reflect mode and logs a boot warning, so set it in staging.
+
+### K. Trusted-proxy cutover requirements — O-6 TRUSTED PROXY CUTOVER BLOCKER
+
+Current state (13.19, authoritative): Express `trust proxy` is off and `assertNoProxyTrust(app)` refuses to boot if it is enabled. Forwarding headers are ignored, and every rate-limit key and auth-event IP comes from the TCP peer.
+
+Why it matters: behind any HTTPS edge, every client reaches the API from the edge's address. All clients then share one rate-limit identity, and auth-event IP telemetry records the edge instead of the client. That is acceptable for a closed internal smoke test only.
+
+Before trust can be enabled, OPS + SECURITY must provide:
+
+1. The exact proxy type.
+2. The exact proxy IPs / CIDRs.
+3. Forwarding-header behaviour (overwrite vs append `X-Forwarded-For`).
+4. The firewall restriction ensuring only the proxy reaches the API.
+5. The TLS termination point.
+6. The expected proxy chain.
+7. Test evidence.
+
+Only then is an address-restricted trust configuration (never `true`, never a hop count, never a broad range) a reviewed code change. Nothing changes at runtime in this phase.
+
+### L. Migration release procedure — O-8
+
+Journal: 14 migrations, ending at `0013_auth_event_telemetry`. This phase adds no migration.
+
+13.21 code (deployment blocker fixed, CODE READY):
+
+- **The release entry point** is `dist/migrate.mjs` (`artifacts/api-server/src/migrate.ts`, which calls `@workspace/db/release`). It runs no seed and no HTTP server, uses one pooled connection, never prints the URL, and exits non-zero unless every journal migration is applied, no unknown applied hash exists, and the critical tables are present.
+- **Two modes:** `--status` is read-only; without the flag it applies the migrations.
+- **API boot and the release step share one PostgreSQL advisory lock** (`lib/db/src/migrationLock.ts`). Concurrent starts are therefore serialized: one applies, the others wait, then find nothing pending.
+
+LOCAL evidence (embedded PostgreSQL 18.4, temp directory; **not staging evidence**):
+
+- Status on an empty database: exit 1, 14 pending.
+- Two concurrent apply runs: both exited 0, with 14 applied and no error.
+- Status afterwards: exit 0, ending at `0013_auth_event_telemetry`.
+- A repeated apply: a no-op.
+
+Controlled sequence:
+
+1. Provision PostgreSQL (§ E).
+2. Verify network / TLS: the CA is mounted and the release host is in trusted sources.
+3. Verify `DATABASE_URL` is set in the secret store (never print it).
+4. Run `node --enable-source-maps dist/migrate.mjs --status` in a one-off container of the release image. On a new database, expect exit 1 with 14 pending.
+5. Run `node --enable-source-maps dist/migrate.mjs` **once**, as a single one-off job.
+6. Verify the journal: the report shows `pendingTags: []`, `appliedCount: 14`, `lastJournalTag: "0013_auth_event_telemetry"`.
+7. Verify critical tables: the report shows `missingCriticalTables: []` (lists from `lib/db/src/health.ts`).
+8. Start the API replicas (boot finds nothing pending).
+9. Start the worker.
+10. Run the smoke tests (§ P).
+
+Rollback: drizzle migrations are forward-only and no down-migration procedure exists. A bad migration is fixed by a new forward migration, or by restore under controlled recovery (§ M / § Q).
+
+### M. Backup / PITR procedure (NOT RUN)
+
+Configuration: enable automated backups and PITR on the managed cluster (12.48 verified a 7-day PITR capability; retention for staging is **TBD**, OPS).
+
+Evidence drill (each step is NOT RUN):
+
+1. Insert controlled staging test data.
+2. Verify the backup / PITR configuration.
+3. Restore to an isolated new cluster.
+4. Run `dist/migrate.mjs --status` against it and confirm exit 0 at `0013`.
+5. Check the critical records: orders, payments, `payment_intents`, `cashback_ledger`, `product_stocks`, reservations, `worker_jobs`, `audit_log`.
+6. Point a temporary API at it and confirm `/api/health/ready` returns `driver: "postgres"`.
+7. Record the restore duration.
+8. Record RPO / RTO evidence.
+9. Delete the restored cluster safely.
+
+`pnpm backup:drill` (PGlite) is not evidence.
+
+### N. Container registry — O-2
+
+**STATUS = DECISION REQUIRED** (DEVOPS). No registry is selected or created; CI builds the image but does not push. Alternatives, **none selected**: DigitalOcean Container Registry, GitHub Container Registry, or another OCI registry. The decision needs a push policy (CI on main / tags), image tagging (immutable digest per release), pull credentials on the Droplets, and retention.
+
+### O. Monitoring / alerting
+
+Present today: pino JSON logs with redaction; log-based alert codes (`emitAlert` in `lib/alerts.ts`: `PAYMENT_*`, `WORKER_JOB_FAILED`, `WORKER_JOB_DEAD`, `WORKER_QUEUE_BACKLOG`, `WORKER_STALE_JOB_RECLAIMED`, `FOM_*`, `DELIVERY_PROVIDER_FAILURE`, `CASHBACK_*`, `RATE_LIMITED`, `RATE_LIMIT_REDIS_UNAVAILABLE`); health endpoints; DO metrics (12.49). No metrics / APM platform is selected, and none is added here.
+
+| Area | Required signal | Source available today | Status |
+|------|-----------------|------------------------|--------|
+| API | Availability | `/api/health/live`, `/api/health/ready` (external probe needed) | TBD |
+| API | HTTP errors / latency | pino-http request logs | TBD (no aggregation) |
+| API | Auth failures | `auth_events` table + logs | TBD |
+| API | Rate-limit failures / Redis errors | `RATE_LIMITED`, `RATE_LIMIT_REDIS_UNAVAILABLE` log alerts | TBD |
+| API | DB errors | readiness 503 + error logs | TBD |
+| Worker | Running / failed / stale-reclaimed jobs, latency | `worker_jobs` rows; `WORKER_*` log alerts | TBD |
+| PostgreSQL | Connection health, errors, storage, CPU / memory | Provider metrics | TBD |
+| Valkey | Availability, memory, connection errors | Provider metrics; boot PING | TBD |
+
+Alert destination: **STATUS = TBD** (OPS). The runbook's severity table (Sev-1 pages on-call) has no configured channel.
+
+### P. Smoke-test procedure
+
+The evidence checklist (INFRA / APPLICATION / SECURITY / RESILIENCE, each NOT RUN / PASS / FAIL / BLOCKED) is in `docs/ADMIN_IMPLEMENTATION_STATUS.md` § Phase 13.21. Nothing is PASS, because nothing is provisioned.
+
+### Q. Rollback
+
+- **Application:** redeploy the previous image digest (needs O-2) with the previous release's environment.
+- **Database:** no destructive rollback and no down migrations. Use forward-fix migrations; restore (§ M) only under controlled recovery with an owner sign-off.
+- **Worker:** stop the worker; queued jobs stay in `worker_jobs` (RUNNING ones are reclaimed after `WORKER_STALE_RUNNING_MS`); start the previous worker image.
+- **Admin:** redeploy the previous static build.
+- **Configuration:** revert environment changes one at a time, then restart. Never "fix" an outage by disabling TLS verification, the limiter or the boot guards.
+
+### R. Cost / size
+
+Documented only: PostgreSQL 2 GiB (~$30.45/mo) and Valkey 1 GiB ($15/mo) list prices from 12.49. Droplets, the Load Balancer, the registry and bandwidth are **TBD** (DEPENDS_ON_PLAN).
+
+### S. Deployment order (runbook — do not execute without authorization)
+
+| Phase | Step | Depends on | Owner |
+|-------|------|-----------|-------|
+| A | Cloud account / access, team roles | Authorization | OPS |
+| B | VPC / network in FRA1 | A | OPS |
+| C | Managed PostgreSQL + CA download + trusted sources | B | OPS |
+| D | Managed Valkey + trusted sources | B | OPS |
+| E | Registry (O-2 decision) + CI push | A | DEVOPS |
+| F | API / worker compute | B, E | OPS |
+| G | Firewall (§ C) | F | OPS + SECURITY |
+| H | Domain / DNS (`<staging-domain>`) | Domain decision | BUSINESS + OPS |
+| I | TLS / HTTPS edge (same origin: static Admin + `/api`) | F, H | OPS |
+| J | Migration release (`dist/migrate.mjs --status`, then apply once) | C, E | DEVOPS |
+| K | API (`APP_ENV=staging`, secrets, `CORS_ORIGIN`) | J, D | DEVOPS |
+| L | Worker (`ENABLE_BACKGROUND_WORKERS=1`) | J | DEVOPS |
+| M | Admin static build on the edge | I | DEVOPS |
+| N | Provider sandbox credentials (Payme, Click, Eskiz) | K | PROVIDER + BUSINESS |
+| O | Smoke tests (§ P) | K, L, M | OPS |
+| P | Load / concurrency (preconditions below) | O, R | OPS |
+| Q | Backup / restore drill (§ M) | C | OPS |
+| R | Trusted-proxy decision (O-6, § K) | I | OPS + SECURITY |
+
+Load-test preconditions: real PostgreSQL, real Valkey, the real API and a live worker, never PGlite. Before testing, O-6 must be decided (otherwise every virtual client shares the edge's rate-limit identity), the limiter's behaviour understood, database capacity and connection limits known, the worker deployed, and the § O signals observable. The 1000+ branch load test is not run in this phase.
+
+### Blockers (with owners)
+
+| # | Blocker | Category |
+|---|---------|----------|
+| 1 | No authorization / account access to create DigitalOcean resources | OPS |
+| 2 | Registry not selected (O-2) | DEVOPS |
+| 3 | Staging domain not decided | BUSINESS |
+| 4 | Edge type not decided (static Admin + `/api` on one origin) | OPS |
+| 5 | Trusted-proxy topology (O-6) | SECURITY + OPS |
+| 6 | Secret store not chosen; every staging secret MISSING | OPS + SECURITY |
+| 7 | Valkey certificate trust with Node defaults unverified | PROVIDER |
+| 8 | PSP callback source addresses / sandbox credentials; Eskiz credentials | PROVIDER |
+| 9 | Alert destination not chosen | OPS |
+| 10 | Production use of the public OSRM routing server | BUSINESS |
+| 11 | `docker build` and the CI runtime checks not executed | DEVOPS |
+

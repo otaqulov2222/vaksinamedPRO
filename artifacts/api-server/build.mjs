@@ -15,7 +15,12 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    // dist/index.mjs = API server; dist/worker.mjs = standalone worker_jobs process (no HTTP);
+    // dist/migrate.mjs = one-off migration release step (no HTTP, no seed).
+    entryPoints: [
+      path.resolve(artifactDir, "src/index.ts"), path.resolve(artifactDir, "src/worker.ts"),
+      path.resolve(artifactDir, "src/migrate.ts"),
+    ],
     platform: "node",
     bundle: true,
     format: "esm",

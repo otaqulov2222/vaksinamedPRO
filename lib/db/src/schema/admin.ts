@@ -8,6 +8,9 @@ export const adminUsers = pgTable("admin_users", {
   role: text("role").notNull(),
   branchId: integer("branch_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  /** 0011_admin_management: 'active' | 'disabled' (CHECK constraint). */
+  status: text("status").notNull().default("active"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const auditLog = pgTable("audit_log", {

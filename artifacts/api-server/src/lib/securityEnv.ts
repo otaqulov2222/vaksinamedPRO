@@ -16,6 +16,12 @@ export function flagEnabled(name: string): boolean {
   return v === "1" || v === "true" || v === "yes";
 }
 
+/** worker_jobs execution: explicit ENABLE_BACKGROUND_WORKERS; non-production may use ENABLE_BACKGROUND_WORKERS_DEV. */
+export function backgroundWorkersEnabled(): boolean {
+  if (flagEnabled("ENABLE_BACKGROUND_WORKERS")) return true;
+  return !isProductionLike() && flagEnabled("ENABLE_BACKGROUND_WORKERS_DEV");
+}
+
 function secretsEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let out = 0;
