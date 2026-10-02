@@ -66,7 +66,10 @@ describe("Phase 12.34 — Mobile s1 migration readiness", () => {
     assert.match(api, /TOKEN_KEY|setAuthToken|getAuthToken/);
     assert.match(api, /authorization.*Bearer|Bearer.*token/i);
     assert.match(api, /setAuthToken\(data\.token\)/);
-    assert.match(api, /logout[\s\S]{0,200}setAuthToken\(null\)/);
+    assert.match(api, /revokeSession: \(\) => request<[^>]+>\('\/api\/auth\/logout', \{ method: 'POST' \}\)/);
+    const ctx = readFileSync(path.join(repo, "artifacts/soglom-apteka/context/AppContext.tsx"), "utf8");
+    assert.match(ctx, /revoke: \(\) => api\.revokeSession\(\)/);
+    assert.match(ctx, /clearToken: \(\) => setAuthToken\(null\)/);
     assert.doesNotMatch(api, /createHmac|signCustomerToken|CUSTOMER_SECRET|ADMIN_SECRET/);
     assert.doesNotMatch(api, /id:exp:sig|startsWith\(['"]s1\./);
   });

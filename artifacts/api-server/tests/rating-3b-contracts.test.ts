@@ -46,7 +46,13 @@ describe("Batch 3B rating trust boundary contracts", () => {
     assert.doesNotMatch(src, /branchId:\s*12/);
     assert.doesNotMatch(src, /Sog‘lom apteka №12/);
     assert.match(src, /orderId/);
-    assert.match(src, /Filial xizmati/);
+    assert.match(src, /t\('orders\.ratingTargetTitle'\)/);
+    const messages = readFileSync(
+      path.join(repoRoot, "artifacts/soglom-apteka/lib/i18n/messages/orders.ts"),
+      "utf8",
+    );
+    assert.match(messages, /ratingTargetTitle: 'Filial xizmati'/);
+    assert.doesNotMatch(messages, /Dilnoza/);
   });
 
   it("migration adds order_id uniqueness for staff_ratings", () => {

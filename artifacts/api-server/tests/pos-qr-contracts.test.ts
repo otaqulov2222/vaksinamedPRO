@@ -85,7 +85,13 @@ describe("QR / POS loyalty identity contracts", () => {
     assert.match(qr, /QRExpiryTimer/);
     assert.match(qr, /api\.posCard/);
     assert.doesNotMatch(qr, /bir martalik|one-time|offline/i);
-    assert.match(qr, /QR amal qiladi/);
+    assert.match(qr, /t\('home\.qrValidFor', \{ seconds: secondsLeft \}\)/);
+    const homeMessages = readFileSync(
+      path.join(root, "../soglom-apteka/lib/i18n/messages/home.ts"),
+      "utf8",
+    );
+    assert.match(homeMessages, /qrValidFor: 'QR amal qiladi: \{seconds\} soniya'/);
+    assert.doesNotMatch(homeMessages, /bir martalik|one-time|offline/i);
     // Must not call global AppContext refresh inside focus effect (loop cause).
     const focusBlock = qr.slice(qr.indexOf("useFocusEffect"));
     const focusCb = focusBlock.slice(0, focusBlock.indexOf("}, [instanceId]"));
