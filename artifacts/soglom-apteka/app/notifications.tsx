@@ -3,6 +3,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useApp } from '@/context/AppContext';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -17,6 +18,7 @@ const BORDER = '#EEF0F6';
  */
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useApp();
 
   return (
     <ScrollView
@@ -28,38 +30,32 @@ export default function NotificationsScreen() {
         <View style={styles.iconWrap}>
           <Feather name="bell-off" size={28} color={PURPLE} />
         </View>
-        <Text style={styles.title}>Bildirishnomalar hozircha mavjud emas</Text>
-        <Text style={styles.body}>
-          Push va ichki bildirishnomalar uchun server xizmati hali ulanmagan. Bu yerda soxta
-          xabarlar ko‘rsatilmaydi.
-        </Text>
+        <Text style={styles.title}>{t('profile.notifEmptyTitle')}</Text>
+        <Text style={styles.body}>{t('profile.notifEmptyBody')}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Nima kutilmoqda?</Text>
-        <Text style={styles.cardText}>
-          Keyingi versiyada buyurtma holati, cashback va aksiya xabarlari shu bo‘limda
-          ko‘rinadi — faqat haqiqiy API ulanganidan keyin.
-        </Text>
+        <Text style={styles.cardTitle}>{t('profile.notifExpectTitle')}</Text>
+        <Text style={styles.cardText}>{t('profile.notifExpectBody')}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Hozir nima qilish mumkin?</Text>
+        <Text style={styles.cardTitle}>{t('profile.notifNowTitle')}</Text>
         <Pressable style={styles.linkRow} onPress={() => router.push('/(tabs)/purchases')}>
           <MaterialCommunityIcons name="package-variant" size={20} color={PURPLE} />
-          <Text style={styles.linkText}>Buyurtmalar holatini ko‘rish</Text>
+          <Text style={styles.linkText}>{t('profile.notifLinkOrders')}</Text>
           <Feather name="chevron-right" size={18} color="#C5CAD6" />
         </Pressable>
         <View style={styles.divider} />
         <Pressable style={styles.linkRow} onPress={() => router.push('/promos')}>
           <MaterialCommunityIcons name="tag-outline" size={20} color={PURPLE} />
-          <Text style={styles.linkText}>Aksiyalarni ko‘rish</Text>
+          <Text style={styles.linkText}>{t('profile.notifLinkPromos')}</Text>
           <Feather name="chevron-right" size={18} color="#C5CAD6" />
         </Pressable>
         <View style={styles.divider} />
         <Pressable style={styles.linkRow} onPress={() => router.push('/cashback')}>
           <MaterialCommunityIcons name="wallet-outline" size={20} color={PURPLE} />
-          <Text style={styles.linkText}>Cashback tarixi</Text>
+          <Text style={styles.linkText}>{t('profile.notifLinkCashback')}</Text>
           <Feather name="chevron-right" size={18} color="#C5CAD6" />
         </Pressable>
       </View>

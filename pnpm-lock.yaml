@@ -467,6 +467,9 @@ importers:
       '@types/leaflet':
         specifier: ^1.9.22
         version: 1.9.22
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.9.6
       '@types/react':
         specifier: ~19.2.2
         version: 19.2.18
@@ -569,6 +572,9 @@ importers:
       react-native-worklets:
         specifier: 0.10.1
         version: 0.10.1(@babel/core@7.29.7(supports-color@8.1.1))(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.13
       typescript:
         specifier: ~6.0.3
         version: 6.0.3

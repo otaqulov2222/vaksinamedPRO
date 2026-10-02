@@ -6,31 +6,16 @@ export type LanguageMeta = {
   code: Language;
   /** Uppercase UI code shown in badges (UZ / RU / EN). */
   shortCode: string;
-  /** Native / primary display name. */
+  /** Endonym — always shown in its own language so users can find it from any UI language. */
   nativeName: string;
-  /** Secondary label (often English or role description). */
-  displayName: string;
+  /** Translation key for the language name in the current UI language. */
+  nameKey: `common.languageName_${Language}`;
 };
 
 export const LANGUAGES: readonly LanguageMeta[] = [
-  {
-    code: 'uz',
-    shortCode: 'UZ',
-    nativeName: 'O‘zbekcha',
-    displayName: 'Asosiy til',
-  },
-  {
-    code: 'ru',
-    shortCode: 'RU',
-    nativeName: 'Русский',
-    displayName: 'Russian',
-  },
-  {
-    code: 'en',
-    shortCode: 'EN',
-    nativeName: 'English',
-    displayName: 'English',
-  },
+  { code: 'uz', shortCode: 'UZ', nativeName: 'O‘zbekcha', nameKey: 'common.languageName_uz' }, // i18n-ignore: endonym
+  { code: 'ru', shortCode: 'RU', nativeName: 'Русский', nameKey: 'common.languageName_ru' }, // i18n-ignore: endonym
+  { code: 'en', shortCode: 'EN', nativeName: 'English', nameKey: 'common.languageName_en' }, // i18n-ignore: endonym
 ] as const;
 
 export function isLanguage(value: unknown): value is Language {

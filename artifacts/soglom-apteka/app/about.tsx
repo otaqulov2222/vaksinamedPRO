@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import React from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useApp } from '@/context/AppContext';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -19,6 +20,7 @@ function appVersion() {
 
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useApp();
   const version = appVersion();
   const build =
     Constants.expoConfig?.ios?.buildNumber ||
@@ -42,21 +44,18 @@ export default function AboutScreen() {
           <Text style={{ color: PURPLE }}>VAKSINA </Text>
           <Text style={{ color: YELLOW }}>MED</Text>
         </Text>
-        <Text style={styles.tagline}>Sodiqlik dasturi va onlayn dorixona xizmati</Text>
+        <Text style={styles.tagline}>{t('profile.aboutTagline')}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Ilova haqida</Text>
-        <Text style={styles.cardText}>
-          Vaksina Med ilovasi orqali mahsulotlarni ko‘rish, buyurtma berish, cashback balansini
-          kuzatish va yaqin filiallarni topish mumkin.
-        </Text>
+        <Text style={styles.cardTitle}>{t('common.navAbout')}</Text>
+        <Text style={styles.cardText}>{t('profile.aboutBody')}</Text>
       </View>
 
       <View style={styles.card}>
         <View style={styles.metaRow}>
           <Feather name="smartphone" size={18} color={PURPLE} />
-          <Text style={styles.metaLabel}>Versiya</Text>
+          <Text style={styles.metaLabel}>{t('profile.aboutVersion')}</Text>
           <Text style={styles.metaValue}>{version}</Text>
         </View>
         {build ? (
@@ -64,7 +63,7 @@ export default function AboutScreen() {
             <View style={styles.divider} />
             <View style={styles.metaRow}>
               <Feather name="hash" size={18} color={PURPLE} />
-              <Text style={styles.metaLabel}>Build</Text>
+              <Text style={styles.metaLabel}>{t('profile.aboutBuild')}</Text>
               <Text style={styles.metaValue}>{build}</Text>
             </View>
           </>
@@ -72,14 +71,12 @@ export default function AboutScreen() {
         <View style={styles.divider} />
         <View style={styles.metaRow}>
           <Feather name="package" size={18} color={PURPLE} />
-          <Text style={styles.metaLabel}>Ilova</Text>
-          <Text style={styles.metaValue}>Vaksina Med</Text>
+          <Text style={styles.metaLabel}>{t('profile.aboutApp')}</Text>
+          <Text style={styles.metaValue}>{t('common.appName')}</Text>
         </View>
       </View>
 
-      <Text style={styles.footerNote}>
-        Maxfiylik siyosati va foydalanish shartlari havolalari hozircha ilovada joylashtirilmagan.
-      </Text>
+      <Text style={styles.footerNote}>{t('profile.aboutLegalNote')}</Text>
     </ScrollView>
   );
 }

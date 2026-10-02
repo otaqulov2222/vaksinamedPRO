@@ -4,7 +4,6 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Platform,
   Pressable,
@@ -17,7 +16,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
+import { localizedName } from '@/lib/i18n/data';
 import { api, API_URL, newIdempotencyKey, type ApiError } from '@/lib/api';
+import { confirmAction, notify } from '@/lib/dialogs';
+import type { TranslationKey } from '@/lib/i18n';
+import { localizeError } from '@/lib/i18n/errors';
+import { fulfillmentTypeLabel, paymentMethodLabel } from '@/lib/orderLabels';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -34,20 +38,23 @@ const YELLOW = '#FFCC00';
 const PRICE_SNAP_KEY = 'vaksinamed-cart-price-snap';
 const FOCUS_FRESH_MS = 400;
 
-/** Honest delivery timing — not an ETA. Sent as optional `window` so server does not store "Bugun 10:00 — 18:00". */
-const DELIVERY_TIMING_HONEST = 'Yetkazib berish vaqti buyurtma tasdiqlangach aniqlanadi';
+/**
+ * Honest delivery timing — not an ETA. Sent as optional `window` so server does not store "Bugun 10:00 — 18:00".
+ * API value: keep in Uzbek and untranslated; the UI shows `cart.checkoutDeliveryTiming` instead.
+ */
+const DELIVERY_TIMING_HONEST = 'Yetkazib berish vaqti buyurtma tasdiqlangach aniqlanadi'; // i18n-ignore: API payload value
+const MIN_ADDRESS_LENGTH = 8;
 
-const priceUz = (n: number) =>
-  `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
-
-function toast(title: string, msg: string) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    window.alert(`${title}\n${msg}`);
-  } else {
-    Alert.alert(title, msg);
-  }
-}
+/** Localized fallback per checkout error code; Uzbek UI still shows the server message when present. */
+const CHECKOUT_ERROR_FALLBACK: Record<string, TranslationKey> = {
+  BRANCH_REQUIRED: 'cart.checkoutBranchRequired',
+  BRANCH_NOT_FOUND: 'cart.checkoutBranchNotFound',
+  BRANCH_CLOSED: 'cart.checkoutBranchClosed',
+  INSUFFICIENT_CASHBACK: 'cart.checkoutCashbackInsufficient',
+  SPEND_CAP_ZERO: 'cart.checkoutCashbackCapZero',
+  CART_EMPTY: 'cart.cartEmptyTitle',
+  ADDRESS_REQUIRED: 'cart.checkoutAddressRequired',
+};
 
 function productIconName(icon: unknown) {
   const raw = typeof icon === 'string' ? icon : 'pill';
@@ -63,7 +70,7 @@ function SkeletonBlock({ style }: { style?: object }) {
 export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { t, refresh, balance, syncCartCount } = useApp();
+  const { t, fmt, language, refresh, balance, syncCartCount } = useApp();
   const narrow = width < 380;
   const contentWidth = Math.min(width, 480);
 
@@ -123,16 +130,16 @@ export default function CheckoutScreen() {
       } catch (error) {
         if (gen !== loadGen.current) return;
         if (!cartRef.current) {
-          setLoadError(error instanceof Error ? error.message : 'Yuklanmadi');
+          setLoadError(localizeError(error, t));
           setCart(null);
         } else {
-          toast('Xatolik', error instanceof Error ? error.message : 'Yangilab bo‘lmadi');
+          notify(t('common.errorTitle'), localizeError(error, t, { fallback: 'cart.checkoutRefreshFailed' }));
         }
       } finally {
         if (gen === loadGen.current) setLoading(false);
       }
     },
-    [applyCart, refresh],
+    [applyCart, refresh, t],
   );
 
   useFocusEffect(
@@ -183,30 +190,30 @@ export default function CheckoutScreen() {
   const paymentOptions: Array<{ value: string; label: string; enabled: boolean; hint?: string }> = [
     {
       value: 'pay_at_branch',
-      label: 'Filialda to‘lash',
-      hint: 'Filialda to‘lov qilasiz',
+      label: paymentMethodLabel(t, 'pay_at_branch'),
+      hint: t('cart.checkoutPayAtBranchHint'),
       enabled: true,
     },
     ...(fulfillment === 'delivery'
       ? [
           {
             value: 'cod',
-            label: t('payCod') || 'Yetkazib berganda to‘lash',
-            hint: 'Yetkazib berganda to‘lov qilasiz',
+            label: paymentMethodLabel(t, 'cod'),
+            hint: t('cart.checkoutCodHint'),
             enabled: true,
           },
         ]
       : []),
     {
       value: 'payme',
-      label: 'Payme',
-      hint: 'Payme — hozircha mavjud emas',
+      label: paymentMethodLabel(t, 'payme'),
+      hint: t('cart.checkoutMethodUnavailable', { method: paymentMethodLabel(t, 'payme') }),
       enabled: false,
     },
     {
       value: 'click',
-      label: 'Click',
-      hint: 'Click — hozircha mavjud emas',
+      label: paymentMethodLabel(t, 'click'),
+      hint: t('cart.checkoutMethodUnavailable', { method: paymentMethodLabel(t, 'click') }),
       enabled: false,
     },
   ];
@@ -216,23 +223,23 @@ export default function CheckoutScreen() {
     && branchId != null
     && !submitting
     && !(fulfillment === 'delivery' && !deliveryFeeKnown)
-    && !(fulfillment === 'delivery' && address.trim().length < 8);
+    && !(fulfillment === 'delivery' && address.trim().length < MIN_ADDRESS_LENGTH);
 
   const explainBlocked = () => {
     if (!hasItems) {
-      toast('Savat', 'Savat bo‘sh');
+      notify(t('common.navCart'), t('cart.cartEmptyTitle'));
       return;
     }
     if (!branchId) {
-      toast('Filial', 'Buyurtma uchun filialni tanlang');
+      notify(t('cart.branchLabel'), t('cart.checkoutBranchRequired'));
       return;
     }
     if (fulfillment === 'delivery' && !deliveryFeeKnown) {
-      toast('Yetkazish', 'Yetkazish narxi serverdan yuklanmadi. Qayta urinib ko‘ring.');
+      notify(t('cart.checkoutDeliveryTitle'), t('cart.checkoutDeliveryFeeFailed'));
       return;
     }
-    if (fulfillment === 'delivery' && address.trim().length < 8) {
-      toast('Manzil', 'Yetkazib berish manzilini kiriting');
+    if (fulfillment === 'delivery' && address.trim().length < MIN_ADDRESS_LENGTH) {
+      notify(t('cart.checkoutAddressTitle'), t('cart.checkoutAddressRequired'));
       return;
     }
   };
@@ -245,49 +252,39 @@ export default function CheckoutScreen() {
   const submit = async () => {
     if (submittingRef.current || submitting) return;
     if (!hasItems) {
-      toast('Savat', 'Savat bo‘sh');
+      notify(t('common.navCart'), t('cart.cartEmptyTitle'));
       return;
     }
     if (!branchId) {
-      toast('Filial', 'Buyurtma uchun filialni tanlang');
+      notify(t('cart.branchLabel'), t('cart.checkoutBranchRequired'));
       return;
     }
     if (fulfillment === 'delivery' && !deliveryFeeKnown) {
-      toast('Yetkazish', 'Yetkazish narxi serverdan yuklanmadi. Qayta urinib ko‘ring.');
+      notify(t('cart.checkoutDeliveryTitle'), t('cart.checkoutDeliveryFeeFailed'));
       return;
     }
-    if (fulfillment === 'delivery' && address.trim().length < 8) {
-      toast('Manzil', 'Yetkazib berish manzilini kiriting');
+    if (fulfillment === 'delivery' && address.trim().length < MIN_ADDRESS_LENGTH) {
+      notify(t('cart.checkoutAddressTitle'), t('cart.checkoutAddressRequired'));
       return;
     }
     if (stockIssues.length) {
       const names = stockIssues
         .slice(0, 3)
         .map((item: any) => {
-          const name = String(item.product?.nameUz || 'Mahsulot');
+          const name = (localizedName(language, item.product) || t('cart.productFallbackName'));
           const avail =
             item.available != null && Number.isFinite(Number(item.available))
-              ? ` — mavjud: ${Number(item.available)}`
+              ? ` — ${t('cart.checkoutStockAvailableShort', { count: Number(item.available) })}`
               : '';
           return `${name}${avail}`;
         })
         .join('\n');
-      const proceed =
-        Platform.OS === 'web'
-          ? // eslint-disable-next-line no-alert
-            window.confirm(
-              `Ba’zi mahsulotlar tanlangan filialda yetarli emas.\n\n${names}\n\nDavom etasizmi? Yakuniy tekshiruv serverda.`,
-            )
-          : await new Promise<boolean>((resolve) => {
-              Alert.alert(
-                'Qoldiq',
-                `Ba’zi mahsulotlar tanlangan filialda yetarli emas.\n\n${names}\n\nYakuniy tekshiruv serverda.`,
-                [
-                  { text: 'Bekor', style: 'cancel', onPress: () => resolve(false) },
-                  { text: 'Davom etish', onPress: () => resolve(true) },
-                ],
-              );
-            });
+      const proceed = await confirmAction({
+        title: t('cart.stockTitle'),
+        message: `${t('cart.stockShortMessage')}\n\n${names}\n\n${t('cart.checkoutStockConfirmQuestion')}`,
+        confirmText: t('common.continue'),
+        cancelText: t('common.cancel'),
+      });
       if (!proceed) return;
     }
 
@@ -312,7 +309,7 @@ export default function CheckoutScreen() {
       );
       const orderId = result?.order?.id;
       if (orderId == null) {
-        throw Object.assign(new Error('Buyurtma ID serverdan kelmadi'), { code: 'ORDER_ID_MISSING' });
+        throw Object.assign(new Error('Order ID missing in checkout response'), { code: 'ORDER_ID_MISSING' });
       }
       try {
         await AsyncStorage.removeItem(PRICE_SNAP_KEY);
@@ -329,22 +326,26 @@ export default function CheckoutScreen() {
     } catch (error) {
       const err = error as ApiError;
       const code = err.code || '';
-      let title = 'Xatolik';
-      let message = err.message || 'Buyurtma yuborilmadi';
+      let title = t('common.errorTitle');
+      const message = localizeError(err, t, {
+        byCode: {
+          STOCK_UNAVAILABLE: 'cart.checkoutStockChangedMessage',
+          ORDER_ID_MISSING: 'cart.checkoutOrderIdMissing',
+        },
+        fallback: CHECKOUT_ERROR_FALLBACK[code] ?? 'cart.checkoutFailed',
+      });
       if (code === 'STOCK_UNAVAILABLE') {
-        title = 'Qoldiq o‘zgardi';
-        message =
-          'Mahsulotlardan biri endi mavjud emas yoki yetarli emas. Savatni yangilab qayta urinib ko‘ring.';
+        title = t('cart.checkoutStockChangedTitle');
       } else if (code === 'BRANCH_REQUIRED' || code === 'BRANCH_NOT_FOUND' || code === 'BRANCH_CLOSED') {
-        title = 'Filial';
+        title = t('cart.branchLabel');
       } else if (code === 'INSUFFICIENT_CASHBACK' || code === 'SPEND_CAP_ZERO') {
-        title = 'Cashback';
+        title = t('common.navCashback');
       } else if (code === 'CART_EMPTY') {
-        title = 'Savat';
+        title = t('common.navCart');
       } else if (code === 'ADDRESS_REQUIRED') {
-        title = 'Manzil';
+        title = t('cart.checkoutAddressTitle');
       }
-      toast(title, message);
+      notify(title, message);
       await loadCheckout({ force: true });
     } finally {
       submittingRef.current = false;
@@ -366,12 +367,12 @@ export default function CheckoutScreen() {
         style={styles.iconBtn}
         onPress={goBack}
         accessibilityRole="button"
-        accessibilityLabel="Orqaga"
+        accessibilityLabel={t('common.back')}
       >
         <Feather name="chevron-left" size={22} color={PURPLE_DEEP} />
       </Pressable>
       <Text style={styles.headerTitle} numberOfLines={1}>
-        Rasmiylashtirish
+        {t('common.navCheckout')}
       </Text>
       <View style={styles.iconBtnGhost} />
     </View>
@@ -403,15 +404,15 @@ export default function CheckoutScreen() {
         {header}
         <View style={styles.state}>
           <MaterialCommunityIcons name="cloud-off-outline" size={44} color={MUTED} />
-          <Text style={styles.stateTitle}>Checkout yuklanmadi</Text>
+          <Text style={styles.stateTitle}>{t('cart.checkoutLoadFailed')}</Text>
           <Text style={styles.stateHint}>{loadError}</Text>
           <Pressable
             style={styles.primaryBtn}
             onPress={() => void loadCheckout({ force: true, forceSkeleton: true })}
             accessibilityRole="button"
-            accessibilityLabel="Qayta urinish"
+            accessibilityLabel={t('common.retry')}
           >
-            <Text style={styles.primaryBtnText}>Qayta urinish</Text>
+            <Text style={styles.primaryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       </View>
@@ -426,15 +427,15 @@ export default function CheckoutScreen() {
           <View style={styles.emptyIcon}>
             <Feather name="shopping-cart" size={28} color={PURPLE} />
           </View>
-          <Text style={styles.stateTitle}>Savatingiz bo‘sh</Text>
-          <Text style={styles.stateHint}>Buyurtma berish uchun avval mahsulot tanlang.</Text>
+          <Text style={styles.stateTitle}>{t('cart.checkoutEmptyTitle')}</Text>
+          <Text style={styles.stateHint}>{t('cart.checkoutEmptyHint')}</Text>
           <Pressable
             style={styles.primaryBtn}
             onPress={() => router.replace({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
             accessibilityRole="button"
-            accessibilityLabel="Katalogga o‘tish"
+            accessibilityLabel={t('cart.checkoutGoToCatalog')}
           >
-            <Text style={styles.primaryBtnText}>Katalogga o‘tish</Text>
+            <Text style={styles.primaryBtnText}>{t('cart.checkoutGoToCatalog')}</Text>
           </Pressable>
         </View>
       </View>
@@ -460,12 +461,12 @@ export default function CheckoutScreen() {
         keyboardDismissMode="on-drag"
       >
         <Text style={styles.pageHint}>
-          Yakuniy narx, qoldiq va to‘lov holati buyurtma vaqtida serverda tasdiqlanadi.
+          {t('cart.checkoutPageHint')}
         </Text>
 
         {/* Branch — same /branches picker as Cart */}
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Filial</Text>
+          <Text style={styles.cardLabel}>{t('cart.branchLabel')}</Text>
           {selectedBranch?.name ? (
             <>
               <Text style={styles.branchName} numberOfLines={2}>
@@ -485,21 +486,21 @@ export default function CheckoutScreen() {
                 style={styles.linkBtn}
                 onPress={openBranches}
                 accessibilityRole="button"
-                accessibilityLabel="Filialni o‘zgartirish"
+                accessibilityLabel={t('cart.changeBranchA11y')}
               >
-                <Text style={styles.linkBtnText}>O‘zgartirish</Text>
+                <Text style={styles.linkBtnText}>{t('cart.change')}</Text>
               </Pressable>
             </>
           ) : (
             <>
-              <Text style={styles.warnText}>Filial tanlanmagan</Text>
+              <Text style={styles.warnText}>{t('cart.branchNotSelected')}</Text>
               <Pressable
                 style={[styles.primaryBtn, { marginTop: 12, alignSelf: 'stretch' }]}
                 onPress={openBranches}
                 accessibilityRole="button"
-                accessibilityLabel="Filial tanlash"
+                accessibilityLabel={t('cart.chooseBranch')}
               >
-                <Text style={styles.primaryBtnText}>Filial tanlash</Text>
+                <Text style={styles.primaryBtnText}>{t('cart.chooseBranch')}</Text>
               </Pressable>
             </>
           )}
@@ -508,9 +509,9 @@ export default function CheckoutScreen() {
         {/* Stock preflight */}
         {stockIssues.length ? (
           <View style={styles.warnCard}>
-            <Text style={styles.warnTitle}>Ba’zi mahsulotlar tanlangan filialda yetarli emas.</Text>
+            <Text style={styles.warnTitle}>{t('cart.stockShortMessage')}</Text>
             {stockIssues.map((item: any) => {
-              const name = String(item.product?.nameUz || 'Mahsulot');
+              const name = (localizedName(language, item.product) || t('cart.productFallbackName'));
               const avail =
                 item.available != null && Number.isFinite(Number(item.available))
                   ? Number(item.available)
@@ -518,19 +519,19 @@ export default function CheckoutScreen() {
               return (
                 <Text key={item.id} style={styles.warnLine} numberOfLines={2}>
                   {name}
-                  {avail != null ? ` — mavjud: ${avail}` : ''}
+                  {avail != null ? ` — ${t('cart.checkoutStockAvailableShort', { count: avail })}` : ''}
                 </Text>
               );
             })}
-            <Text style={styles.warnNote}>Yakuniy qoldiq tekshiruvi buyurtmada (server).</Text>
+            <Text style={styles.warnNote}>{t('cart.checkoutStockNote')}</Text>
           </View>
         ) : null}
 
         {/* Order lines */}
-        <Text style={styles.sectionTitle}>Buyurtma tarkibi</Text>
+        <Text style={styles.sectionTitle}>{t('cart.checkoutOrderItems')}</Text>
         {items.map((item: any) => {
           const product = item.product || {};
-          const name = String(product.nameUz || product.nameRu || 'Mahsulot');
+          const name = (localizedName(language, product) || t('cart.productFallbackName'));
           const qty = Math.max(1, Number(item.quantity) || 1);
           const unitPrice = Number(item.unitPrice ?? product.price ?? 0);
           const lineTotal = Number(item.lineTotal ?? unitPrice * qty);
@@ -553,10 +554,10 @@ export default function CheckoutScreen() {
                 </Text>
                 <View style={styles.lineBottom}>
                   <Text style={styles.lineMeta} numberOfLines={1}>
-                    {qty} dona × {priceUz(unitPrice)}
+                    {t('cart.checkoutLineMeta', { qty, price: fmt.money(unitPrice) })}
                   </Text>
                   <Text style={styles.lineTotal} numberOfLines={1}>
-                    {priceUz(lineTotal)}
+                    {fmt.money(lineTotal)}
                   </Text>
                 </View>
               </View>
@@ -565,7 +566,7 @@ export default function CheckoutScreen() {
         })}
 
         {/* Fulfillment */}
-        <Text style={styles.sectionTitle}>Olish usuli</Text>
+        <Text style={styles.sectionTitle}>{t('cart.checkoutFulfillmentTitle')}</Text>
         <View style={styles.pillRow}>
           <Pressable
             style={[styles.pill, fulfillment === 'pickup' && styles.pillActive]}
@@ -575,10 +576,10 @@ export default function CheckoutScreen() {
             }}
             accessibilityRole="button"
             accessibilityState={{ selected: fulfillment === 'pickup' }}
-            accessibilityLabel="Filialdan olib ketish"
+            accessibilityLabel={fulfillmentTypeLabel(t, 'pickup')}
           >
             <Text style={[styles.pillText, fulfillment === 'pickup' && styles.pillTextActive]}>
-              Filialdan olib ketish
+              {fulfillmentTypeLabel(t, 'pickup')}
             </Text>
           </Pressable>
           <Pressable
@@ -586,10 +587,10 @@ export default function CheckoutScreen() {
             onPress={() => setFulfillment('delivery')}
             accessibilityRole="button"
             accessibilityState={{ selected: fulfillment === 'delivery' }}
-            accessibilityLabel="Yetkazib berish"
+            accessibilityLabel={fulfillmentTypeLabel(t, 'delivery')}
           >
             <Text style={[styles.pillText, fulfillment === 'delivery' && styles.pillTextActive]}>
-              Yetkazib berish
+              {fulfillmentTypeLabel(t, 'delivery')}
             </Text>
           </Pressable>
         </View>
@@ -598,9 +599,9 @@ export default function CheckoutScreen() {
           <View style={styles.infoCard} accessibilityRole="text">
             <Feather name="shopping-bag" size={16} color={PURPLE} />
             <View style={styles.infoBody}>
-              <Text style={styles.infoTitle}>Filialdan olib ketish</Text>
+              <Text style={styles.infoTitle}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
               <Text style={styles.infoText}>
-                Mahsulotlar tanlangan filialda zaxiralanadi. Kuryer yoki yetkazish yo‘q.
+                {t('cart.checkoutPickupInfo')}
               </Text>
             </View>
           </View>
@@ -609,32 +610,37 @@ export default function CheckoutScreen() {
             <View style={styles.infoCard} accessibilityRole="text">
               <Feather name="truck" size={16} color={PURPLE} />
               <View style={styles.infoBody}>
-                <Text style={styles.infoTitle}>Yetkazib berish</Text>
+                <Text style={styles.infoTitle}>{fulfillmentTypeLabel(t, 'delivery')}</Text>
                 <Text style={styles.infoText}>
-                  Ichki yetkazib berish. Tashqi kuryer shartnomasi hali yo‘q — kuzatuv va aniq ETA yo‘q.
+                  {t('cart.checkoutDeliveryInfo')}
                 </Text>
-                <Text style={styles.infoTiming}>{DELIVERY_TIMING_HONEST}</Text>
+                <Text style={styles.infoTiming}>{t('cart.checkoutDeliveryTiming')}</Text>
                 {deliveryFeeKnown ? (
-                  <Text style={styles.infoFee} accessibilityLabel={`Yetkazish narxi ${priceUz(deliveryFee)}`}>
-                    Yetkazish: {priceUz(deliveryFee)}
+                  <Text
+                    style={styles.infoFee}
+                    accessibilityLabel={t('cart.checkoutDeliveryFeeA11y', { amount: fmt.money(deliveryFee) })}
+                  >
+                    {t('cart.checkoutDeliveryFee', { amount: fmt.money(deliveryFee) })}
                   </Text>
                 ) : (
-                  <Text style={styles.infoFeeWarn}>Yetkazish narxi serverdan yuklanishi kerak.</Text>
+                  <Text style={styles.infoFeeWarn}>{t('cart.checkoutDeliveryFeePending')}</Text>
                 )}
               </View>
             </View>
-            <Text style={styles.fieldLabel}>Yetkazib berish manzili</Text>
+            <Text style={styles.fieldLabel}>{t('cart.checkoutAddressLabel')}</Text>
             <TextInput
               value={address}
               onChangeText={setAddress}
-              placeholder="Tuman, ko‘cha, uy"
+              placeholder={t('cart.checkoutAddressPlaceholder')}
               placeholderTextColor={MUTED}
               style={styles.input}
-              accessibilityLabel="Yetkazib berish manzili"
+              accessibilityLabel={t('cart.checkoutAddressLabel')}
               autoCorrect={false}
             />
-            {address.trim().length > 0 && address.trim().length < 8 ? (
-              <Text style={styles.inlineHintWarn}>Manzil kamida 8 belgidan iborat bo‘lishi kerak.</Text>
+            {address.trim().length > 0 && address.trim().length < MIN_ADDRESS_LENGTH ? (
+              <Text style={styles.inlineHintWarn}>
+                {t('cart.checkoutAddressTooShort', { min: MIN_ADDRESS_LENGTH })}
+              </Text>
             ) : null}
           </View>
         )}
@@ -642,27 +648,29 @@ export default function CheckoutScreen() {
         {/* Cashback */}
         {showCashback ? (
           <>
-            <Text style={styles.sectionTitle}>Cashback</Text>
+            <Text style={styles.sectionTitle}>{t('common.navCashback')}</Text>
             <View style={styles.cashbackCard}>
               <Pressable
                 onPress={() => setUseCashback(!useCashback)}
                 style={styles.cashbackRow}
                 accessibilityRole="switch"
                 accessibilityState={{ checked: useCashback }}
-                accessibilityLabel="Cashbackdan foydalanish"
+                accessibilityLabel={t('cart.checkoutUseCashback')}
               >
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.cashbackTitle}>Cashbackdan foydalanish</Text>
+                  <Text style={styles.cashbackTitle}>{t('cart.checkoutUseCashback')}</Text>
                   <Text style={styles.cashbackMeta} numberOfLines={2}>
-                    Mavjud: {priceUz(balanceNum)}
-                    {maxSpendPercent != null ? ` · max ${maxSpendPercent}%` : ''}
+                    {t('cart.checkoutCashbackAvailable', { amount: fmt.money(balanceNum) })}
+                    {maxSpendPercent != null
+                      ? ` · ${t('cart.checkoutCashbackMaxPercent', { percent: maxSpendPercent })}`
+                      : ''}
                   </Text>
                   {useCashback && cashbackUsed > 0 ? (
                     <Text style={styles.cashbackPreview}>
-                      Taxminiy ishlatish: −{priceUz(cashbackUsed)}
+                      {t('cart.checkoutCashbackPreview', { amount: fmt.money(cashbackUsed) })}
                     </Text>
                   ) : useCashback ? (
-                    <Text style={styles.cashbackMeta}>Yakuniy ishlatish miqdori serverda</Text>
+                    <Text style={styles.cashbackMeta}>{t('cart.checkoutCashbackServerFinal')}</Text>
                   ) : null}
                 </View>
                 <View
@@ -675,13 +683,11 @@ export default function CheckoutScreen() {
               </Pressable>
               {maxSpendPercent != null ? (
                 <Text style={styles.cashbackHint}>
-                  Ko‘pi bilan {maxSpendPercent}% tovar summasidan (server). Yangi cashback to‘lov yoki
-                  PAID da emas — xarid yakunlangach hisoblanadi. Bitta balans — barcha kanallar.
+                  {t('cart.checkoutCashbackHintCap', { percent: maxSpendPercent })}
                 </Text>
               ) : (
                 <Text style={styles.cashbackHint}>
-                  Ishlatish shu buyurtmada (server). Yangi cashback faqat xarid yakunlangach. Bitta
-                  balans — ilova va kassa.
+                  {t('cart.checkoutCashbackHint')}
                 </Text>
               )}
             </View>
@@ -689,7 +695,7 @@ export default function CheckoutScreen() {
         ) : null}
 
         {/* Payment */}
-        <Text style={styles.sectionTitle}>To‘lov</Text>
+        <Text style={styles.sectionTitle}>{t('cart.checkoutPaymentTitle')}</Text>
         {paymentOptions.map((opt) => {
           const selected = paymentMethod === opt.value && opt.enabled;
           if (!opt.enabled) {
@@ -699,7 +705,7 @@ export default function CheckoutScreen() {
                 style={[styles.optionRow, styles.optionDisabled]}
                 accessibilityRole="text"
                 accessibilityState={{ disabled: true }}
-                accessibilityLabel={`${opt.label}. ${opt.hint || 'Hozircha mavjud emas'}`}
+                accessibilityLabel={`${opt.label}. ${opt.hint || t('cart.checkoutUnavailable')}`}
               >
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={[styles.optionTitle, styles.optionTitleDisabled]} numberOfLines={2}>
@@ -740,23 +746,22 @@ export default function CheckoutScreen() {
 
         {/* Summary */}
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Hisob (taxminiy)</Text>
-          <SummaryRow label="Mahsulotlar" value={priceUz(goods)} />
+          <Text style={styles.summaryTitle}>{t('cart.summaryTitle')}</Text>
+          <SummaryRow label={t('cart.summaryItems')} value={fmt.money(goods)} />
           {fulfillment === 'delivery' ? (
             deliveryFeeKnown ? (
-              <SummaryRow label="Yetkazib berish" value={priceUz(deliveryFee)} />
+              <SummaryRow label={fulfillmentTypeLabel(t, 'delivery')} value={fmt.money(deliveryFee)} />
             ) : (
-              <SummaryRow label="Yetkazib berish" value="Noma’lum" warn />
+              <SummaryRow label={fulfillmentTypeLabel(t, 'delivery')} value={t('common.unknown')} warn />
             )
           ) : null}
           {useCashback && cashbackUsed > 0 ? (
-            <SummaryRow label="Cashback" value={`− ${priceUz(cashbackUsed)}`} warn />
+            <SummaryRow label={t('common.navCashback')} value={`− ${fmt.money(cashbackUsed)}`} warn />
           ) : null}
           <View style={styles.summaryDivider} />
-          <SummaryRow label="Jami (taxminiy)" value={priceUz(totalPreview)} bold />
+          <SummaryRow label={t('cart.checkoutTotalEstimate')} value={fmt.money(totalPreview)} bold />
           <Text style={styles.summaryNote}>
-            Qiymatlar taxminiy. Yakuniy summa serverda. Cashback ishlatish — shu buyurtmada; yangi
-            cashback — xarid yakunlangach (barcha kanallar, bitta balans).
+            {t('cart.checkoutSummaryNote')}
           </Text>
         </View>
 
@@ -779,9 +784,9 @@ export default function CheckoutScreen() {
         >
           <View style={[styles.footerInner, { maxWidth: contentWidth - sidePad * 2, width: '100%' }]}>
             <View style={styles.footerSum}>
-              <Text style={styles.footerSumLabel}>Jami (taxminiy)</Text>
+              <Text style={styles.footerSumLabel}>{t('cart.checkoutTotalEstimate')}</Text>
               <Text style={styles.footerSumValue} numberOfLines={1}>
-                {priceUz(totalPreview)}
+                {fmt.money(totalPreview)}
               </Text>
             </View>
             <Pressable
@@ -797,13 +802,13 @@ export default function CheckoutScreen() {
               }}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSubmit || submitting }}
-              accessibilityLabel="Buyurtmani tasdiqlash"
+              accessibilityLabel={t('cart.checkoutSubmit')}
             >
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.ctaText} numberOfLines={1}>
-                  Buyurtmani tasdiqlash
+                  {t('cart.checkoutSubmit')}
                 </Text>
               )}
             </Pressable>

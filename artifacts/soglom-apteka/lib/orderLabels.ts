@@ -1,91 +1,57 @@
 /** Batch 3F / ORDER CONFIRM 2 — labels for existing P5 axes only. No invented statuses. */
+import { hasTranslation, type TFunction } from '@/lib/i18n';
 
-export function fulfillmentLabel(status?: string | null): string {
-  switch (String(status || '').toUpperCase()) {
-    case 'CREATED':
-      return 'Qabul qilindi';
-    case 'CONFIRMED':
-      return 'Tasdiqlandi';
-    case 'PREPARING':
-      return 'Tayyorlanmoqda';
-    case 'READY_FOR_PICKUP':
-      return 'Olib ketishga tayyor';
-    case 'OUT_FOR_DELIVERY':
-      return 'Yetkazilmoqda';
-    case 'COMPLETED':
-      return 'Yakunlangan';
-    case 'CANCELLED':
-      return 'Bekor qilingan';
-    default:
-      return status ? String(status) : 'Noma’lum';
-  }
+function lookup(t: TFunction, prefix: string, value: string, unknownKey: Parameters<TFunction>[0]): string {
+  const key = `status.${prefix}_${value}`;
+  return hasTranslation(key) ? t(key) : t(unknownKey);
 }
 
-export function paymentLabel(status?: string | null): string {
-  switch (String(status || '').toUpperCase()) {
-    case 'PENDING':
-      return 'To‘lov kutilmoqda';
-    case 'PAID':
-      return 'To‘langan';
-    case 'FAILED':
-      return 'To‘lov amalga oshmadi';
-    case 'REFUNDED':
-      return 'Qaytarilgan';
-    case 'PARTIALLY_REFUNDED':
-      return 'Qisman qaytarilgan';
-    default:
-      return status ? String(status) : 'To‘lov holati noma’lum';
-  }
+export function fulfillmentLabel(t: TFunction, status?: string | null): string {
+  return lookup(t, 'fulfillment', String(status || '').toUpperCase(), 'status.fulfillment_unknown');
+}
+
+export function paymentLabel(t: TFunction, status?: string | null): string {
+  return lookup(t, 'payment', String(status || '').toUpperCase(), 'status.payment_unknown');
 }
 
 /** Compact payment chip for Purchases list — same wording as paymentLabel. */
-export function paymentLabelShort(status?: string | null): string {
+export function paymentLabelShort(t: TFunction, status?: string | null): string {
   const s = String(status || '').toUpperCase();
   if (!s) return '';
-  if (!['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED'].includes(s)) {
-    return status ? String(status) : '';
-  }
-  return paymentLabel(status);
+  return paymentLabel(t, s);
 }
 
-export function reservationLabel(status?: string | null, expiredHint?: boolean): string {
-  if (expiredHint) return 'Mahsulot band qilish muddati tugagan';
-  switch (String(status || '').toUpperCase()) {
-    case 'NONE':
-      return 'Band qilinmagan';
-    case 'ACTIVE':
-      return 'Mahsulotlar band qilindi';
-    case 'EXPIRED':
-      return 'Mahsulot band qilish muddati tugagan';
-    case 'CANCELLED':
-      return 'Mahsulot band qilinishi bekor qilingan';
-    case 'FULFILLED':
-      return 'Mahsulotlar buyurtmaga berilgan';
-    default:
-      return status ? String(status) : 'Zaxira holati noma’lum';
-  }
+export function reservationLabel(t: TFunction, status?: string | null, expiredHint?: boolean): string {
+  if (expiredHint) return t('status.reservation_EXPIRED');
+  return lookup(t, 'reservation', String(status || '').toUpperCase(), 'status.reservation_unknown');
 }
 
 /** Compact reservation chip for Purchases list — omit NONE and FULFILLED (noise). */
 export function reservationLabelShort(
+  t: TFunction,
   status?: string | null,
   expiredHint?: boolean,
 ): string | null {
-  if (expiredHint) return 'Muddati tugagan';
-  switch (String(status || '').toUpperCase()) {
-    case 'ACTIVE':
-      return 'Band qilingan';
-    case 'EXPIRED':
-      return 'Muddati tugagan';
-    case 'CANCELLED':
-      return 'Band bekor';
-    case 'FULFILLED':
-    case 'NONE':
-    case '':
-      return null;
-    default:
-      return status ? String(status) : null;
-  }
+  if (expiredHint) return t('status.reservationShort_EXPIRED');
+  const s = String(status || '').toUpperCase();
+  if (s === 'FULFILLED' || s === 'NONE' || s === '') return null;
+  const key = `status.reservationShort_${s}`;
+  return hasTranslation(key) ? t(key) : t('status.reservation_unknown');
+}
+
+/** P8 delivery axis (lowercase API values). */
+export function deliveryStatusLabel(t: TFunction, status?: string | null): string {
+  return lookup(t, 'delivery', String(status || '').toLowerCase(), 'status.delivery_unknown');
+}
+
+export function fulfillmentTypeLabel(t: TFunction, fulfillment?: string | null): string {
+  return String(fulfillment || '').toLowerCase() === 'delivery'
+    ? t('status.fulfillmentType_delivery')
+    : t('status.fulfillmentType_pickup');
+}
+
+export function paymentMethodLabel(t: TFunction, method?: string | null): string {
+  return lookup(t, 'paymentMethod', String(method || '').toLowerCase(), 'status.paymentMethod_unknown');
 }
 
 /** Progress track step 0–3 from fulfillment axis (delivery-oriented). */

@@ -1,8 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, getAuthToken, setAuthToken } from '@/lib/api';
+import React, { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { api, getAuthToken, setAuthToken, setSessionEnded, telegramIdentity, type ApiError } from '@/lib/api';
+import { createT, setCurrentLanguage, type TFunction } from '@/lib/i18n';
+import { createFormatters, type Formatters } from '@/lib/i18n/format';
 import { clearRegisterDraft } from '@/lib/registerDraft';
-import { isLanguage, type Language } from '@/lib/languages';
+import { decideProfileLanguage, DEFAULT_LANGUAGE, parseStoredLanguage } from '@/lib/languagePreference';
+import type { Language } from '@/lib/languages';
+import { LANGUAGE_STORAGE_KEY, performLogout } from '@/lib/session';
 
 export type { Language };
 export type Transaction = {
@@ -37,49 +41,12 @@ export type Reward = {
   accent: string;
 };
 
-const dictionary: Record<Language, Record<string, string>> = {
-  uz: {
-    home: 'Bosh sahifa', catalog: 'Katalog', cashback: 'Cashback', bonuses: 'Bonuslar', purchases: 'Buyurtmalar', profile: 'Profil',
-    hello: 'Salom', welcome: 'Har bir xarid — ko‘proq imkoniyat', balance: 'Mening balansim', spend: 'Cashback ishlatish', history: 'Tarix',
-    purchasesCount: 'Xaridlar', saved: 'Tejalgan summa', level: 'Daraja', gold: 'Gold daraja', nextLevel: 'Keyingi darajagacha', points: 'ball',
-    quickAccess: 'Tezkor xizmatlar', myQr: 'Mening QR kodim', branches: 'Dorixonalar', offers: 'Aksiyalar', cart: 'Savat', checkout: 'Rasmiylashtirish',
-    nearby: 'Eng yaqin dorixona', openNow: 'Ochiq', details: 'Batafsil', all: 'Barchasi', available: 'Mavjud', earned: 'To‘plangan', used: 'Ishlatilgan',
-    noData: 'Hozircha ma’lumot yo‘q', redeem: 'Almashtirish', redeemed: 'Almashtirildi', profileInfo: 'Profil ma’lumotlari', settings: 'Sozlamalar',
-    language: 'Til', notifications: 'Bildirishnomalar', help: 'Yordam markazi', about: 'Ilova haqida', logout: 'Chiqish', chooseLanguage: 'Tilni tanlang',
-    uzbek: 'O‘zbekcha', russian: 'Русский', english: 'English', rating: 'Xodimni baholash', send: 'Yuborish', thankYou: 'Fikringiz uchun rahmat',
-    selectRating: 'Xizmatni qanday baholaysiz?', pickup: 'Filialdan olish', delivery: 'Yetkazib berish', payOnline: 'Onlayn to‘lov',
-    payBranch: 'Filialda to‘lash', payCod: 'Yetkazib berganda', search: 'Dori qidirish',
-  },
-  ru: {
-    home: 'Главная', catalog: 'Каталог', cashback: 'Кэшбэк', bonuses: 'Бонусы', purchases: 'Заказы', profile: 'Профиль',
-    hello: 'Здравствуйте', welcome: 'Каждая покупка — больше возможностей', balance: 'Мой баланс', spend: 'Потратить кэшбэк', history: 'История',
-    purchasesCount: 'Покупки', saved: 'Сэкономлено', level: 'Уровень', gold: 'Золотой уровень', nextLevel: 'До следующего уровня', points: 'баллов',
-    quickAccess: 'Быстрые сервисы', myQr: 'Мой QR-код', branches: 'Аптеки', offers: 'Акции', cart: 'Корзина', checkout: 'Оформление',
-    nearby: 'Ближайшая аптека', openNow: 'Открыто', details: 'Подробнее', all: 'Все', available: 'Доступные', earned: 'Начисления', used: 'Списания',
-    noData: 'Пока нет данных', redeem: 'Обменять', redeemed: 'Обменено', profileInfo: 'Данные профиля', settings: 'Настройки',
-    language: 'Язык', notifications: 'Уведомления', help: 'Центр помощи', about: 'О приложении', logout: 'Выйти', chooseLanguage: 'Выберите язык',
-    uzbek: 'O‘zbekcha', russian: 'Русский', english: 'English', rating: 'Оценить сотрудника', send: 'Отправить', thankYou: 'Спасибо за отзыв',
-    selectRating: 'Как вы оцениваете сервис?', pickup: 'Самовывоз', delivery: 'Доставка', payOnline: 'Онлайн оплата',
-    payBranch: 'Оплата в аптеке', payCod: 'При получении', search: 'Поиск лекарств',
-  },
-  en: {
-    home: 'Home', catalog: 'Catalog', cashback: 'Cashback', bonuses: 'Bonuses', purchases: 'Orders', profile: 'Profile',
-    hello: 'Hello', welcome: 'Every purchase brings more value', balance: 'My balance', spend: 'Use cashback', history: 'History',
-    purchasesCount: 'Purchases', saved: 'You saved', level: 'Level', gold: 'Gold level', nextLevel: 'Until next level', points: 'points',
-    quickAccess: 'Quick services', myQr: 'My QR code', branches: 'Pharmacies', offers: 'Offers', cart: 'Cart', checkout: 'Checkout',
-    nearby: 'Nearest pharmacy', openNow: 'Open', details: 'Details', all: 'All', available: 'Available', earned: 'Earned', used: 'Used',
-    noData: 'Nothing here yet', redeem: 'Redeem', redeemed: 'Redeemed', profileInfo: 'Profile information', settings: 'Settings',
-    language: 'Language', notifications: 'Notifications', help: 'Help center', about: 'About the app', logout: 'Log out', chooseLanguage: 'Choose a language',
-    uzbek: 'O‘zbekcha', russian: 'Русский', english: 'English', rating: 'Rate an employee', send: 'Send', thankYou: 'Thank you for your feedback',
-    selectRating: 'How would you rate the service?', pickup: 'Pickup', delivery: 'Delivery', payOnline: 'Pay online',
-    payBranch: 'Pay at pharmacy', payCod: 'Cash on delivery', search: 'Search medicines',
-  },
-};
-
 type AppContextValue = {
   language: Language;
   setLanguage: (language: Language) => void;
-  t: (key: string) => string;
+  t: TFunction;
+  /** Language-aware money/number/date formatters. */
+  fmt: Formatters;
   loading: boolean;
   isAuthenticated: boolean;
   balance: number;
@@ -91,6 +58,7 @@ type AppContextValue = {
   refresh: () => Promise<void>;
   /** Update badge from an already-fetched cart payload (avoids a second GET). */
   syncCartCount: (count: number) => void;
+  /** Ends the customer session locally (always) and server-side (when reachable). Keeps the language. */
   logout: () => Promise<void>;
   redeemReward: (reward: Reward) => Promise<boolean>;
 };
@@ -98,65 +66,109 @@ type AppContextValue = {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: PropsWithChildren) {
-  const [language, setLanguageState] = useState<Language>('uz');
-  const [loading, setLoading] = useState(true);
+  const [language, setLanguageState] = useState<Language>(DEFAULT_LANGUAGE);
+  const [languageReady, setLanguageReady] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [cartCount, setCartCount] = useState(0);
+  const languageRef = useRef<Language>(DEFAULT_LANGUAGE);
+  const hasLocalLanguageRef = useRef(false);
+  const languageLoadRef = useRef<Promise<void> | null>(null);
+  /** Incremented on logout so in-flight refreshes cannot resurrect a closed session. */
+  const sessionEpochRef = useRef(0);
+
+  const applyLanguage = useCallback((next: Language) => {
+    languageRef.current = next;
+    setCurrentLanguage(next);
+    setLanguageState(next);
+  }, []);
+
+  const loadStoredLanguage = useCallback(() => {
+    if (!languageLoadRef.current) {
+      languageLoadRef.current = AsyncStorage.getItem(LANGUAGE_STORAGE_KEY)
+        .then((value) => {
+          const stored = parseStoredLanguage(value);
+          if (stored) {
+            hasLocalLanguageRef.current = true;
+            applyLanguage(stored);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => setLanguageReady(true));
+    }
+    return languageLoadRef.current;
+  }, [applyLanguage]);
+
+  const clearSessionState = useCallback(() => {
+    setIsAuthenticated(false);
+    setProfile(null);
+    setCartCount(0);
+  }, []);
 
   const refresh = useCallback(async () => {
+    const epoch = sessionEpochRef.current;
     try {
+      await loadStoredLanguage();
       const token = await getAuthToken();
-      const tg = typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      if (!token && !tg && !process.env.EXPO_PUBLIC_TELEGRAM_ID) {
-        setIsAuthenticated(false);
-        setProfile(null);
-        setCartCount(0);
+      const tg = await telegramIdentity();
+      if (!token && !tg) {
+        clearSessionState();
         return;
       }
       const [nextProfile, cart] = await Promise.all([
         api.profile(),
         api.cart().catch(() => ({ items: [] })),
       ]);
+      if (epoch !== sessionEpochRef.current) return;
       setProfile(nextProfile);
       setCartCount(cart.items?.length ?? 0);
       setIsAuthenticated(true);
-      if (nextProfile.language && isLanguage(nextProfile.language)) setLanguageState(nextProfile.language);
-    } catch {
-      setIsAuthenticated(false);
-      setProfile(null);
-      setCartCount(0);
-      await setAuthToken(null);
+      const decision = decideProfileLanguage({
+        local: languageRef.current,
+        hasLocalPreference: hasLocalLanguageRef.current,
+        server: nextProfile?.language,
+      });
+      if (decision.push) void api.setLanguage(decision.push).catch(() => undefined);
+      if (decision.adopt) {
+        hasLocalLanguageRef.current = true;
+        applyLanguage(decision.adopt);
+        void AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, decision.adopt).catch(() => undefined);
+      }
+    } catch (err) {
+      if (epoch !== sessionEpochRef.current) return;
+      clearSessionState();
+      const status = (err as ApiError | undefined)?.status;
+      if (status === 401) await setAuthToken(null).catch(() => undefined);
     } finally {
-      setLoading(false);
+      setSessionReady(true);
     }
-  }, []);
+  }, [applyLanguage, clearSessionState, loadStoredLanguage]);
 
   const logout = useCallback(async () => {
-    await api.logout();
-    clearRegisterDraft();
-    try {
-      await AsyncStorage.removeItem('vaksinamed-cart-price-snap');
-    } catch {
-      // ignore
-    }
-    setIsAuthenticated(false);
-    setProfile(null);
-    setCartCount(0);
-  }, []);
+    sessionEpochRef.current += 1;
+    await performLogout({
+      revoke: () => api.revokeSession(),
+      clearToken: () => setAuthToken(null),
+      markSessionEnded: () => setSessionEnded(true),
+      removeItem: (key) => AsyncStorage.removeItem(key),
+      clearMemory: () => {
+        clearRegisterDraft();
+        clearSessionState();
+      },
+    });
+  }, [clearSessionState]);
 
   useEffect(() => {
-    void AsyncStorage.getItem('soglom-language').then((value) => {
-      if (isLanguage(value)) setLanguageState(value);
-    });
     void refresh();
   }, [refresh]);
 
   const setLanguage = useCallback((nextLanguage: Language) => {
-    setLanguageState(nextLanguage);
-    void AsyncStorage.setItem('soglom-language', nextLanguage);
-    if (isAuthenticated) void api.setLanguage(nextLanguage);
-  }, [isAuthenticated]);
+    hasLocalLanguageRef.current = true;
+    applyLanguage(nextLanguage);
+    void AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, nextLanguage).catch(() => undefined);
+    if (isAuthenticated) void api.setLanguage(nextLanguage).catch(() => undefined);
+  }, [applyLanguage, isAuthenticated]);
 
   const redeemReward = useCallback(async (reward: Reward) => {
     try {
@@ -172,10 +184,15 @@ export function AppProvider({ children }: PropsWithChildren) {
     setCartCount(Math.max(0, Math.floor(Number(count) || 0)));
   }, []);
 
+  const t = useMemo(() => createT(language), [language]);
+  const fmt = useMemo(() => createFormatters(language), [language]);
+  const loading = !languageReady || !sessionReady;
+
   const value = useMemo<AppContextValue>(() => ({
     language,
     setLanguage,
-    t: (key: string) => dictionary[language][key] ?? dictionary.uz[key] ?? key,
+    t,
+    fmt,
     loading,
     isAuthenticated,
     // balance = getAuthoritativeBalance (spendable cashback). Never invent money.
@@ -260,7 +277,7 @@ export function AppProvider({ children }: PropsWithChildren) {
     syncCartCount,
     logout,
     redeemReward,
-  }), [profile, language, loading, cartCount, isAuthenticated, refresh, setLanguage, syncCartCount, logout, redeemReward]);
+  }), [profile, language, t, fmt, loading, cartCount, isAuthenticated, refresh, setLanguage, syncCartCount, logout, redeemReward]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

@@ -1,9 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { tr } from '@/lib/i18n';
+import { NETWORK_ERROR_CODE } from '@/lib/i18n/errors';
+import { SESSION_ENDED_KEY } from '@/lib/session';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
 const TOKEN_KEY = 'vaksinamed-customer-token';
 
 let memoryToken: string | null = null;
+/** null = not loaded yet. True after an explicit logout until the next successful login. */
+let sessionEnded: boolean | null = null;
 
 export async function getAuthToken() {
   if (memoryToken) return memoryToken;
@@ -17,11 +22,35 @@ export async function getAuthToken() {
 
 export async function setAuthToken(token: string | null) {
   memoryToken = token;
-  if (token) await AsyncStorage.setItem(TOKEN_KEY, token);
-  else await AsyncStorage.removeItem(TOKEN_KEY);
+  if (token) {
+    await AsyncStorage.setItem(TOKEN_KEY, token);
+    await setSessionEnded(false);
+  } else {
+    await AsyncStorage.removeItem(TOKEN_KEY);
+  }
 }
 
-function telegramId() {
+async function isSessionEnded(): Promise<boolean> {
+  if (sessionEnded != null) return sessionEnded;
+  try {
+    sessionEnded = (await AsyncStorage.getItem(SESSION_ENDED_KEY)) === '1';
+  } catch {
+    sessionEnded = false;
+  }
+  return sessionEnded;
+}
+
+export async function setSessionEnded(ended: boolean) {
+  sessionEnded = ended;
+  try {
+    if (ended) await AsyncStorage.setItem(SESSION_ENDED_KEY, '1');
+    else await AsyncStorage.removeItem(SESSION_ENDED_KEY);
+  } catch {
+    // in-memory flag still applies for this run
+  }
+}
+
+function rawTelegramId() {
   if (typeof window !== 'undefined') {
     const user = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
     if (user?.id) return String(user.id);
@@ -29,12 +58,18 @@ function telegramId() {
   return process.env.EXPO_PUBLIC_TELEGRAM_ID || '';
 }
 
+/** Telegram identity is ignored after an explicit logout so the user is not silently re-authenticated. */
+export async function telegramIdentity(): Promise<string> {
+  if (await isSessionEnded()) return '';
+  return rawTelegramId();
+}
+
 export type ApiError = Error & { status?: number; code?: string };
 
 async function request<T>(path: string, init: RequestInit = {}, auth = true): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
-  const tg = telegramId();
+  const tg = await telegramIdentity();
   if (tg) headers.set('x-telegram-id', tg);
   if (auth) {
     const token = await getAuthToken();
@@ -44,7 +79,9 @@ async function request<T>(path: string, init: RequestInit = {}, auth = true): Pr
   try {
     response = await fetch(`${API_URL}${path}`, { ...init, headers });
   } catch {
-    throw new Error('Serverga ulanib bo‘lmadi. API ishlayotganini tekshiring (localhost:5000).');
+    const err = new Error(tr('common.errorNetwork')) as ApiError;
+    err.code = NETWORK_ERROR_CODE;
+    throw err;
   }
   const text = await response.text();
   let data: any = null;
@@ -85,10 +122,8 @@ export const api = {
     return data;
   },
   me: () => request<any>('/api/auth/me'),
-  logout: async () => {
-    try { await request('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
-    await setAuthToken(null);
-  },
+  /** Revokes the current session server-side. Local cleanup is owned by performLogout. */
+  revokeSession: () => request<{ ok: boolean; revoked: boolean }>('/api/auth/logout', { method: 'POST' }),
   profile: () => request<any>('/api/loyalty/profile'),
   updateProfile: (body: { firstName?: string; lastName?: string; language?: string }) =>
     request<any>('/api/loyalty/profile', { method: 'PATCH', body: JSON.stringify(body) }),

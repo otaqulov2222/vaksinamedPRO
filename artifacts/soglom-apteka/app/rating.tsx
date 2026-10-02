@@ -13,6 +13,8 @@ import {
 import { useApp } from '@/context/AppContext';
 import { Screen } from '@/components/AppUI';
 import { api } from '@/lib/api';
+import type { TranslationKey } from '@/lib/i18n';
+import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -23,12 +25,20 @@ const BORDER = '#EEF0F6';
 const GOLD = '#e7ad17';
 const DANGER = '#DC2626';
 
-const TAGS = ['Tez xizmat', 'Professional', 'Toza filial', 'Yaxshi muloqot', 'Tavsiya qilaman'];
+/** `value` is sent to the API as-is (existing backend data uses these Uzbek strings); only `labelKey` is displayed. */
+const TAGS: { value: string; labelKey: TranslationKey }[] = [
+  { value: 'Tez xizmat', labelKey: 'orders.ratingTagFast' }, // i18n-ignore: stable API tag value
+  { value: 'Professional', labelKey: 'orders.ratingTagProfessional' }, // i18n-ignore: stable API tag value
+  { value: 'Toza filial', labelKey: 'orders.ratingTagClean' }, // i18n-ignore: stable API tag value
+  { value: 'Yaxshi muloqot', labelKey: 'orders.ratingTagCommunication' }, // i18n-ignore: stable API tag value
+  { value: 'Tavsiya qilaman', labelKey: 'orders.ratingTagRecommend' }, // i18n-ignore: stable API tag value
+];
 
 type RateableOrder = {
   id: number;
   code: string;
   branchName: string;
+  branchId: string;
   canRate: boolean;
   alreadyRated: boolean;
 };
@@ -37,7 +47,8 @@ function mapOrder(o: any): RateableOrder {
   return {
     id: Number(o.id),
     code: String(o.code || ''),
-    branchName: String(o.branch?.name || `Filial #${o.branchId || '—'}`),
+    branchName: String(o.branch?.name || ''),
+    branchId: String(o.branchId || '—'),
     canRate: Boolean(o.canRate),
     alreadyRated: Boolean(o.alreadyRated),
   };
@@ -45,6 +56,8 @@ function mapOrder(o: any): RateableOrder {
 
 export default function RatingScreen() {
   const { t } = useApp();
+  const branchTitle = (o: RateableOrder) =>
+    o.branchName || t('orders.ratingBranchFallback', { id: o.branchId });
   const params = useLocalSearchParams<{ orderId?: string }>();
   const paramOrderId = params.orderId ? Number(params.orderId) : NaN;
 
@@ -83,7 +96,7 @@ export default function RatingScreen() {
           setSelected(null);
           setAlreadyRated(false);
           setEligible([]);
-          setLoadError('Baholash uchun mos buyurtma topilmadi.');
+          setLoadError(t('orders.ratingNoEligible'));
         }
       } else {
         const data = await api.orders();
@@ -100,33 +113,34 @@ export default function RatingScreen() {
     } catch (err: any) {
       setEligible([]);
       setSelected(null);
-      if (err?.status === 401 || err?.status === 403) {
-        setLoadError('Sessiya tugagan. Qayta kiring.');
-      } else {
-        setLoadError(err?.message || 'Buyurtmalarni yuklab bo‘lmadi');
-      }
+      setLoadError(
+        localizeError(err, t, {
+          byStatus: { 401: 'common.errorSessionExpired', 403: 'common.errorSessionExpired' },
+          fallback: 'orders.listLoadFailed',
+        }),
+      );
     } finally {
       setLoading(false);
     }
-  }, [paramOrderId]);
+  }, [paramOrderId, t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const toggleTag = (tag: string) => {
-    setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+    setTags((prev) => (prev.includes(tag) ? prev.filter((v) => v !== tag) : [...prev, tag]));
   };
 
   const onSubmit = async () => {
     if (savingLock.current || saving || success || alreadyRated) return;
     setSaveError(null);
     if (!selected) {
-      setSaveError('Baholash uchun buyurtma tanlang');
+      setSaveError(t('orders.ratingSelectOrderError'));
       return;
     }
     if (rating < 1 || rating > 5) {
-      setSaveError('1 dan 5 gacha baho tanlang');
+      setSaveError(t('orders.ratingSelectStarsError'));
       return;
     }
 
@@ -149,11 +163,14 @@ export default function RatingScreen() {
     } catch (err: any) {
       if (err?.status === 409) {
         setAlreadyRated(true);
-        setSaveError('Bu buyurtma allaqachon baholangan');
-      } else if (err?.status === 401 || err?.status === 403) {
-        setSaveError('Sessiya tugagan. Qayta kiring.');
+        setSaveError(t('orders.ratingAlreadyRated'));
       } else {
-        setSaveError(err?.message || 'Saqlashda xatolik yuz berdi');
+        setSaveError(
+          localizeError(err, t, {
+            byStatus: { 401: 'common.errorSessionExpired', 403: 'common.errorSessionExpired' },
+            fallback: 'orders.ratingSaveFailed',
+          }),
+        );
       }
     } finally {
       setSaving(false);
@@ -166,7 +183,7 @@ export default function RatingScreen() {
       <Screen>
         <View style={styles.state}>
           <ActivityIndicator color={PURPLE} size="large" />
-          <Text style={styles.stateText}>Yuklanmoqda...</Text>
+          <Text style={styles.stateText}>{t('common.loading')}</Text>
         </View>
       </Screen>
     );
@@ -179,14 +196,13 @@ export default function RatingScreen() {
           <MaterialCommunityIcons name="clipboard-text-off-outline" size={44} color={MUTED} />
           <Text style={styles.stateTitle}>{loadError}</Text>
           <Text style={styles.stateText}>
-            Xodim (employee) identifikatori tizimda yo‘q — faqat yakunlangan buyurtma filialini
-            baholash mumkin.
+            {t('orders.ratingLoadFailedHint')}
           </Text>
           <Pressable style={styles.primaryBtn} onPress={() => void load()}>
-            <Text style={styles.primaryBtnText}>Qayta urinish</Text>
+            <Text style={styles.primaryBtnText}>{t('common.retry')}</Text>
           </Pressable>
           <Pressable style={styles.secondaryBtn} onPress={() => router.push('/(tabs)/purchases')}>
-            <Text style={styles.secondaryBtnText}>Buyurtmalarga o‘tish</Text>
+            <Text style={styles.secondaryBtnText}>{t('orders.goToOrders')}</Text>
           </Pressable>
         </View>
       </Screen>
@@ -198,13 +214,12 @@ export default function RatingScreen() {
       <Screen>
         <View style={styles.state}>
           <MaterialCommunityIcons name="star-off-outline" size={44} color={MUTED} />
-          <Text style={styles.stateTitle}>Baholash uchun mos buyurtma topilmadi.</Text>
+          <Text style={styles.stateTitle}>{t('orders.ratingNoEligible')}</Text>
           <Text style={styles.stateText}>
-            Faqat yakunlangan va hali baholanmagan buyurtmalar uchun filial xizmatini baholash mumkin.
-            Alohida xodim baholash hozircha mavjud emas.
+            {t('orders.ratingNoEligibleText')}
           </Text>
           <Pressable style={styles.primaryBtn} onPress={() => router.push('/(tabs)/purchases')}>
-            <Text style={styles.primaryBtnText}>Buyurtmalarga o‘tish</Text>
+            <Text style={styles.primaryBtnText}>{t('orders.goToOrders')}</Text>
           </Pressable>
         </View>
       </Screen>
@@ -219,13 +234,12 @@ export default function RatingScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.lead}>
-          Filial xizmatini baholang. Xodim tanlash mavjud emas — tizimda buyurtmaga bog‘langan
-          xodim yo‘q.
+          {t('orders.ratingLead')}
         </Text>
 
         {eligible.length > 1 && !alreadyRated ? (
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Buyurtmani tanlang</Text>
+            <Text style={styles.sectionLabel}>{t('orders.ratingChooseOrder')}</Text>
             {eligible.map((o) => {
               const active = selected?.id === o.id;
               return (
@@ -236,7 +250,7 @@ export default function RatingScreen() {
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={styles.orderCode}>{o.code}</Text>
-                    <Text style={styles.orderBranch}>{o.branchName}</Text>
+                    <Text style={styles.orderBranch}>{branchTitle(o)}</Text>
                   </View>
                   {active ? <Feather name="check-circle" size={18} color={PURPLE} /> : null}
                 </Pressable>
@@ -250,23 +264,30 @@ export default function RatingScreen() {
             <View style={styles.avatar}>
               <MaterialCommunityIcons name="storefront-outline" size={36} color={PURPLE} />
             </View>
-            <Text style={styles.targetTitle}>Filial xizmati</Text>
-            <Text style={styles.targetMeta}>{selected.branchName}</Text>
-            <Text style={styles.targetCode}>Buyurtma: {selected.code}</Text>
+            <Text style={styles.targetTitle}>{t('orders.ratingTargetTitle')}</Text>
+            <Text style={styles.targetMeta}>{branchTitle(selected)}</Text>
+            <Text style={styles.targetCode}>{t('orders.ratingOrderCode', { code: selected.code })}</Text>
           </View>
         ) : null}
 
         {alreadyRated ? (
           <View style={styles.successBox}>
             <Feather name="check-circle" size={16} color="#15803D" />
-            <Text style={styles.successText}>Bu buyurtma allaqachon baholangan</Text>
+            <Text style={styles.successText}>{t('orders.ratingAlreadyRated')}</Text>
           </View>
         ) : (
           <>
-            <Text style={styles.question}>{t('selectRating')}</Text>
+            <Text style={styles.question}>{t('orders.ratingQuestion')}</Text>
             <View style={styles.stars}>
               {[1, 2, 3, 4, 5].map((item) => (
-                <Pressable key={item} onPress={() => setRating(item)} hitSlop={6}>
+                <Pressable
+                  key={item}
+                  onPress={() => setRating(item)}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: item <= rating }}
+                  accessibilityLabel={t('orders.ratingStarA11y', { value: item })}
+                >
                   <Feather
                     name="star"
                     size={34}
@@ -279,14 +300,14 @@ export default function RatingScreen() {
 
             <View style={styles.tags}>
               {TAGS.map((tag) => {
-                const active = tags.includes(tag);
+                const active = tags.includes(tag.value);
                 return (
                   <Pressable
-                    key={tag}
-                    onPress={() => toggleTag(tag)}
+                    key={tag.value}
+                    onPress={() => toggleTag(tag.value)}
                     style={[styles.tag, active && styles.tagActive]}
                   >
-                    <Text style={[styles.tagText, active && styles.tagTextActive]}>{tag}</Text>
+                    <Text style={[styles.tagText, active && styles.tagTextActive]}>{t(tag.labelKey)}</Text>
                   </Pressable>
                 );
               })}
@@ -295,7 +316,7 @@ export default function RatingScreen() {
             <TextInput
               value={comment}
               onChangeText={setComment}
-              placeholder="Izoh qoldirish (ixtiyoriy)"
+              placeholder={t('orders.ratingCommentPlaceholder')}
               placeholderTextColor={MUTED}
               multiline
               numberOfLines={5}
@@ -314,7 +335,7 @@ export default function RatingScreen() {
             {success ? (
               <View style={styles.successBox}>
                 <Feather name="check-circle" size={16} color="#15803D" />
-                <Text style={styles.successText}>{t('thankYou')}</Text>
+                <Text style={styles.successText}>{t('orders.ratingThankYou')}</Text>
               </View>
             ) : null}
 
@@ -327,7 +348,7 @@ export default function RatingScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  <Text style={styles.submitText}>{t('send')}</Text>
+                  <Text style={styles.submitText}>{t('common.send')}</Text>
                   <Feather name="arrow-right" size={17} color="#fff" />
                 </>
               )}

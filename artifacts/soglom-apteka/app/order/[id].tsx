@@ -3,7 +3,6 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   Platform,
   Pressable,
@@ -15,11 +14,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { formatUzs } from '@/components/AppUI';
-import { api, type ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
+import { confirmAction, notify } from '@/lib/dialogs';
+import { localizeError } from '@/lib/i18n/errors';
 import {
+  deliveryStatusLabel,
   formatCountdown,
   fulfillmentLabel,
+  fulfillmentTypeLabel,
   paymentLabel,
   reservationLabel,
 } from '@/lib/orderLabels';
@@ -34,15 +36,6 @@ const LAVENDER = '#F1EBFF';
 const OK = '#3D7A55';
 const BAD = '#B91C1C';
 const WARN = '#B45309';
-
-function toast(title: string, msg: string) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    window.alert(`${title}\n${msg}`);
-  } else {
-    Alert.alert(title, msg);
-  }
-}
 
 function StatusRow({
   label,
@@ -77,7 +70,7 @@ export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { refresh } = useApp();
+  const { refresh, t, fmt } = useApp();
   const narrow = width < 390;
   const contentWidth = Math.min(width, 440);
 
@@ -99,7 +92,7 @@ export default function OrderScreen() {
     if (loadingRef.current && !opts?.forceSkeleton) return;
     const orderId = Number(id);
     if (!Number.isFinite(orderId) || orderId <= 0) {
-      setError('Buyurtma topilmadi');
+      setError(t('common.errorNotFound'));
       setLoading(false);
       return;
     }
@@ -119,7 +112,7 @@ export default function OrderScreen() {
       }
     } catch (e) {
       if (gen !== loadGen.current) return;
-      setError(e instanceof Error ? e.message : 'Buyurtma yuklanmadi');
+      setError(localizeError(e, t, { fallback: 'orders.detailLoadFailed' }));
       if (!orderRef.current) setOrder(null);
     } finally {
       if (gen === loadGen.current) {
@@ -128,7 +121,7 @@ export default function OrderScreen() {
         loadingRef.current = false;
       }
     }
-  }, [id]);
+  }, [id, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -163,8 +156,8 @@ export default function OrderScreen() {
       if (left <= 0) void load();
     };
     tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
   }, [order?.reservedUntil, order?.reservationActive, order?.id, load]);
 
   const goBack = () => {
@@ -172,12 +165,12 @@ export default function OrderScreen() {
     else router.replace('/(tabs)/purchases');
   };
 
-  const onCancel = () => {
+  const onCancel = async () => {
     if (!order?.canCancel || cancellingRef.current || cancelling) return;
     const message =
       order.paymentStatus === 'PAID'
-        ? 'Buyurtmani bekor qilasizmi?\n\nZaxira va cashback serverda qayta hisoblanadi. To‘lov avtomatik qaytarilmaydi (PSP refund alohida).'
-        : 'Buyurtmani bekor qilasizmi?\n\nZaxira va cashback o‘zgarishlari serverda bajariladi.';
+        ? t('orders.cancelConfirmPaid')
+        : t('orders.cancelConfirmUnpaid');
 
     const run = async () => {
       cancellingRef.current = true;
@@ -186,10 +179,9 @@ export default function OrderScreen() {
         await api.cancelOrder(order.id);
         await refresh();
         await load({ forceSkeleton: false });
-        toast('Bekor qilindi', 'Buyurtma holati serverdan yangilandi.');
+        notify(t('orders.cancelSuccessTitle'), t('orders.cancelSuccessMessage'));
       } catch (e) {
-        const err = e as ApiError;
-        toast('Xatolik', err.message || 'Bekor qilib bo‘lmadi');
+        notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'orders.cancelFailed' }));
         await load({ forceSkeleton: false });
       } finally {
         cancellingRef.current = false;
@@ -197,15 +189,14 @@ export default function OrderScreen() {
       }
     };
 
-    if (Platform.OS === 'web') {
-      // eslint-disable-next-line no-alert
-      if (window.confirm(message)) void run();
-      return;
-    }
-    Alert.alert('Bekor qilish', message, [
-      { text: 'Yo‘q', style: 'cancel' },
-      { text: 'Bekor qilish', style: 'destructive', onPress: () => void run() },
-    ]);
+    const ok = await confirmAction({
+      title: t('orders.cancelConfirmTitle'),
+      message,
+      confirmText: t('orders.cancelOrder'),
+      cancelText: t('common.no'),
+      destructive: true,
+    });
+    if (ok) void run();
   };
 
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 12) : Math.max(insets.top, 8);
@@ -218,13 +209,13 @@ export default function OrderScreen() {
         style={styles.iconBtn}
         onPress={goBack}
         accessibilityRole="button"
-        accessibilityLabel="Orqaga"
+        accessibilityLabel={t('common.back')}
       >
         <Feather name="chevron-left" size={22} color={PURPLE_DEEP} />
       </Pressable>
       <View style={styles.headerCenter}>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          Buyurtma
+          {t('orders.orderLabel')}
         </Text>
         {order?.code ? (
           <Text style={styles.headerSub} numberOfLines={1}>
@@ -237,7 +228,7 @@ export default function OrderScreen() {
         onPress={() => void load()}
         disabled={refreshing || loading}
         accessibilityRole="button"
-        accessibilityLabel="Buyurtmani yangilash"
+        accessibilityLabel={t('orders.detailRefreshA11y')}
         accessibilityState={{ disabled: refreshing || loading }}
       >
         {refreshing ? (
@@ -255,7 +246,7 @@ export default function OrderScreen() {
         {header}
         <View style={styles.state}>
           <ActivityIndicator color={PURPLE} size="large" />
-          <Text style={styles.stateHint}>Buyurtma yuklanmoqda…</Text>
+          <Text style={styles.stateHint}>{t('orders.detailLoading')}</Text>
         </View>
       </View>
     );
@@ -267,17 +258,17 @@ export default function OrderScreen() {
         {header}
         <View style={styles.state}>
           <Feather name="cloud-off" size={36} color={MUTED} />
-          <Text style={styles.stateTitle}>Buyurtmani yuklab bo‘lmadi</Text>
+          <Text style={styles.stateTitle}>{t('orders.detailLoadFailed')}</Text>
           <Text style={styles.stateHint}>
-            Internetni tekshirib, qayta urinib ko‘ring.
+            {t('orders.checkInternetHint')}
           </Text>
           <Pressable
             style={styles.primaryBtn}
             onPress={() => void load({ forceSkeleton: true })}
             accessibilityRole="button"
-            accessibilityLabel="Qayta urinish"
+            accessibilityLabel={t('common.retry')}
           >
-            <Text style={styles.primaryBtnText}>Qayta urinish</Text>
+            <Text style={styles.primaryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       </View>
@@ -344,67 +335,71 @@ export default function OrderScreen() {
       >
         {/* Current status — honest single card, no fake timeline */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Buyurtma holati</Text>
+          <Text style={styles.cardTitle}>{t('orders.statusCardTitle')}</Text>
           <StatusRow
-            label="Holat"
-            value={fulfillmentLabel(order.fulfillmentStatus)}
+            label={t('orders.statusRowFulfillment')}
+            value={fulfillmentLabel(t, order.fulfillmentStatus)}
             tone={fulfillTone}
           />
-          <StatusRow label="To‘lov" value={paymentLabel(order.paymentStatus)} tone={payTone} />
+          <StatusRow
+            label={t('orders.statusRowPayment')}
+            value={paymentLabel(t, order.paymentStatus)}
+            tone={payTone}
+          />
           {showReservation ? (
             <StatusRow
-              label="Zaxira"
-              value={reservationLabel(order.reservationStatus, resExpired)}
+              label={t('orders.statusRowReservation')}
+              value={reservationLabel(t, order.reservationStatus, resExpired)}
               tone={resTone}
             />
           ) : null}
           {pay === 'PENDING' ? (
             <Text style={styles.noteWarn}>
-              Buyurtma qabul qilingani to‘lov amalga oshganini anglatmaydi.
+              {t('orders.notePaymentPending')}
             </Text>
           ) : null}
           {pay === 'FAILED' ? (
             <Text style={styles.noteBad}>
-              To‘lov amalga oshmadi. Online to‘lov hozircha mavjud emas — filialda to‘lang.
+              {t('orders.notePaymentFailed')}
             </Text>
           ) : null}
         </View>
 
         {order.reservationActive && order.reservedUntil && msLeft != null && msLeft > 0 ? (
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>Bron tugashiga (taxminiy)</Text>
+            <Text style={styles.cardLabel}>{t('orders.countdownLabel')}</Text>
             <Text style={styles.countdown}>{formatCountdown(msLeft)}</Text>
-            <Text style={styles.meta}>Server muddati asosiy — qurilma taymeri faqat UX.</Text>
+            <Text style={styles.meta}>{t('orders.countdownNote')}</Text>
           </View>
         ) : null}
 
         {resExpired && fulfill !== 'CANCELLED' && fulfill !== 'COMPLETED' ? (
           <View style={styles.warnCard}>
             <Text style={styles.warnText}>
-              Mahsulot band qilish muddati tugagan. Yangi buyurtma uchun katalogga qayting.
+              {t('orders.reservationExpiredWarn')}
             </Text>
           </View>
         ) : null}
 
         {/* Fulfillment */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Olish usuli</Text>
+          <Text style={styles.cardTitle}>{t('orders.fulfillmentCardTitle')}</Text>
           <Text style={styles.bodyStrong}>
-            {isDelivery ? 'Yetkazib berish' : 'Filialdan olib ketish'}
+            {fulfillmentTypeLabel(t, isDelivery ? 'delivery' : 'pickup')}
           </Text>
           {isDelivery ? (
             <>
               {order.address ? (
                 <Text style={styles.meta} numberOfLines={3}>
-                  Manzil: {String(order.address)}
+                  {t('orders.addressLine', { address: String(order.address) })}
                 </Text>
               ) : null}
               <Text style={styles.meta}>
-                Yetkazib berish holati buyurtma jarayonida yangilanadi.
+                {t('orders.deliveryUpdatesNote')}
               </Text>
               {order.delivery?.status ? (
                 <Text style={styles.meta}>
-                  Holat: {String(order.delivery.status)}
+                  {t('orders.deliveryStatusLine', { status: deliveryStatusLabel(t, order.delivery.status) })}
                   {order.delivery.timeWindow ? ` · ${String(order.delivery.timeWindow)}` : ''}
                 </Text>
               ) : null}
@@ -415,7 +410,7 @@ export default function OrderScreen() {
         {/* Branch */}
         {order.branch?.name ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Filial</Text>
+            <Text style={styles.cardTitle}>{t('orders.branchCardTitle')}</Text>
             <Text style={styles.bodyStrong} numberOfLines={2}>
               {String(order.branch.name)}
             </Text>
@@ -438,12 +433,12 @@ export default function OrderScreen() {
             <Text style={styles.qrCode} numberOfLines={1}>
               {String(order.qrPayload)}
             </Text>
-            <Text style={styles.qrHint}>Kassada shu kodni ko‘rsating</Text>
+            <Text style={styles.qrHint}>{t('orders.qrHint')}</Text>
           </View>
         ) : null}
 
         {/* Items */}
-        <Text style={styles.sectionTitle}>Mahsulotlar</Text>
+        <Text style={styles.sectionTitle}>{t('orders.items')}</Text>
         {items.map((item: any) => {
           const qty = Math.max(1, Number(item.quantity) || 1);
           const unit = Number(item.price) || 0;
@@ -452,14 +447,14 @@ export default function OrderScreen() {
             <View key={item.id ?? `${item.productId}-${item.title}`} style={styles.lineCard}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.lineName} numberOfLines={2}>
-                  {String(item.title || 'Mahsulot')}
+                  {String(item.title || t('orders.itemUntitled'))}
                 </Text>
                 <Text style={styles.lineMeta}>
-                  {qty} dona × {formatUzs(unit)}
+                  {t('orders.lineQtyPrice', { qty, price: fmt.money(unit) })}
                 </Text>
               </View>
               <Text style={styles.lineTotal} numberOfLines={1}>
-                {formatUzs(line)}
+                {fmt.money(line)}
               </Text>
             </View>
           );
@@ -467,35 +462,35 @@ export default function OrderScreen() {
 
         {/* Money + cashback */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Hisob</Text>
+          <Text style={styles.cardTitle}>{t('orders.summaryTitle')}</Text>
           <View style={styles.moneyRow}>
-            <Text style={styles.moneyLabel}>Mahsulotlar</Text>
-            <Text style={styles.moneyValue}>{formatUzs(Number(order.subtotal) || 0)}</Text>
+            <Text style={styles.moneyLabel}>{t('orders.items')}</Text>
+            <Text style={styles.moneyValue}>{fmt.money(Number(order.subtotal) || 0)}</Text>
           </View>
           {Number(order.deliveryFee) > 0 ? (
             <View style={styles.moneyRow}>
-              <Text style={styles.moneyLabel}>Yetkazib berish</Text>
-              <Text style={styles.moneyValue}>{formatUzs(Number(order.deliveryFee) || 0)}</Text>
+              <Text style={styles.moneyLabel}>{t('orders.summaryDelivery')}</Text>
+              <Text style={styles.moneyValue}>{fmt.money(Number(order.deliveryFee) || 0)}</Text>
             </View>
           ) : null}
           {usedCashback > 0 ? (
             <View style={styles.moneyRow}>
-              <Text style={styles.moneyLabel}>Cashback ishlatildi</Text>
-              <Text style={[styles.moneyValue, { color: WARN }]}>−{formatUzs(usedCashback)}</Text>
+              <Text style={styles.moneyLabel}>{t('orders.summaryCashbackUsed')}</Text>
+              <Text style={[styles.moneyValue, { color: WARN }]}>−{fmt.money(usedCashback)}</Text>
             </View>
           ) : null}
           <View style={styles.divider} />
           <View style={styles.moneyRow}>
-            <Text style={styles.moneyTotalLabel}>Jami</Text>
-            <Text style={styles.moneyTotalValue}>{formatUzs(Number(order.total) || 0)}</Text>
+            <Text style={styles.moneyTotalLabel}>{t('orders.summaryTotal')}</Text>
+            <Text style={styles.moneyTotalValue}>{fmt.money(Number(order.total) || 0)}</Text>
           </View>
           {showEarned ? (
             <Text style={styles.earnNote}>
-              Cashback olindi: +{formatUzs(Number(order.cashbackEarned) || 0)}
+              {t('orders.cashbackEarnedLine', { amount: fmt.money(Number(order.cashbackEarned) || 0) })}
             </Text>
           ) : Number(order.cashbackEarned) > 0 && fulfill !== 'COMPLETED' ? (
             <Text style={styles.meta}>
-              Cashback buyurtma yakunlangach hisoblanadi
+              {t('orders.cashbackPending')}
             </Text>
           ) : null}
         </View>
@@ -505,15 +500,15 @@ export default function OrderScreen() {
           <Pressable
             style={[styles.cancelBtn, cancelling && { opacity: 0.55 }]}
             disabled={cancelling}
-            onPress={onCancel}
+            onPress={() => void onCancel()}
             accessibilityRole="button"
             accessibilityState={{ disabled: cancelling }}
-            accessibilityLabel="Buyurtmani bekor qilish"
+            accessibilityLabel={t('orders.cancelOrderA11y')}
           >
             {cancelling ? (
               <ActivityIndicator color={BAD} />
             ) : (
-              <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+              <Text style={styles.cancelBtnText}>{t('orders.cancelOrder')}</Text>
             )}
           </Pressable>
         ) : null}
@@ -525,14 +520,14 @@ export default function OrderScreen() {
               router.push({ pathname: '/rating', params: { orderId: String(order.id) } })
             }
             accessibilityRole="button"
-            accessibilityLabel="Filial xizmatini baholash"
+            accessibilityLabel={t('orders.rateCta')}
           >
-            <Text style={styles.primaryBtnText}>Filial xizmatini baholash</Text>
+            <Text style={styles.primaryBtnText}>{t('orders.rateCta')}</Text>
           </Pressable>
         ) : null}
         {order.alreadyRated ? (
           <Text style={[styles.meta, { textAlign: 'center', marginTop: 8 }]}>
-            Bu buyurtma baholangan
+            {t('orders.alreadyRatedNote')}
           </Text>
         ) : null}
 
@@ -540,17 +535,17 @@ export default function OrderScreen() {
           style={styles.linkBtn}
           onPress={() => router.replace('/(tabs)/purchases')}
           accessibilityRole="button"
-          accessibilityLabel="Buyurtmalar ro‘yxatiga qaytish"
+          accessibilityLabel={t('orders.backToOrdersA11y')}
         >
-          <Text style={styles.linkBtnText}>Buyurtmalar ro‘yxati</Text>
+          <Text style={styles.linkBtnText}>{t('orders.backToOrders')}</Text>
         </Pressable>
         <Pressable
           style={[styles.linkBtn, { marginBottom: 8 }]}
           onPress={() => router.replace('/(tabs)/catalog')}
           accessibilityRole="button"
-          accessibilityLabel="Katalogga qaytish"
+          accessibilityLabel={t('orders.backToCatalog')}
         >
-          <Text style={styles.linkBtnText}>Katalogga qaytish</Text>
+          <Text style={styles.linkBtnText}>{t('orders.backToCatalog')}</Text>
         </Pressable>
       </ScrollView>
     </View>

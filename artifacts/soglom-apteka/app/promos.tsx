@@ -10,7 +10,9 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '@/components/AppUI';
+import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
+import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -32,9 +34,10 @@ function isIconName(name: string): name is React.ComponentProps<typeof MaterialC
 }
 
 export default function PromosScreen() {
+  const { t } = useApp();
   const [promos, setPromos] = useState<Promo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ cause: unknown } | null>(null);
   const loadGenRef = useRef(0);
 
   const load = useCallback(() => {
@@ -61,10 +64,10 @@ export default function PromosScreen() {
             .filter((p) => p.id && p.title),
         );
       })
-      .catch((err: Error) => {
+      .catch((err: unknown) => {
         if (gen !== loadGenRef.current) return;
         setPromos([]);
-        setError(err.message || 'Aksiyalarni yuklab bo‘lmadi');
+        setError({ cause: err });
       })
       .finally(() => {
         if (gen === loadGenRef.current) setLoading(false);
@@ -81,34 +84,33 @@ export default function PromosScreen() {
   return (
     <Screen>
       <View style={styles.heading}>
-        <Text style={styles.title}>Maxsus takliflar</Text>
-        <Text style={styles.subtitle}>
-          Marketing takliflari — yakuniy narx katalogda. Chegirma yoki cashback avtomatik
-          qo‘llanilmaydi.
-        </Text>
+        <Text style={styles.title}>{t('home.promosTitle')}</Text>
+        <Text style={styles.subtitle}>{t('home.promosSubtitle')}</Text>
       </View>
 
       {loading ? (
         <View style={styles.state}>
           <ActivityIndicator color={PURPLE} size="large" />
-          <Text style={styles.stateText}>Yuklanmoqda...</Text>
+          <Text style={styles.stateText}>{t('common.loading')}</Text>
         </View>
       ) : error ? (
         <View style={styles.state}>
           <Feather name="cloud-off" size={40} color={MUTED} />
-          <Text style={styles.stateTitle}>Aksiyalarni yuklab bo‘lmadi</Text>
-          <Text style={styles.stateText}>{error}</Text>
+          <Text style={styles.stateTitle}>{t('home.promosLoadFailed')}</Text>
+          <Text style={styles.stateText}>
+            {localizeError(error.cause, t, { fallback: 'home.promosLoadFailed' })}
+          </Text>
           <Pressable style={styles.retryBtn} onPress={load}>
-            <Text style={styles.retryBtnText}>Qayta urinish</Text>
+            <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       ) : promos.length === 0 ? (
         <View style={styles.state}>
           <MaterialCommunityIcons name="tag-off-outline" size={44} color={MUTED} />
-          <Text style={styles.stateTitle}>Hozircha aksiyalar mavjud emas</Text>
-          <Text style={styles.stateText}>Yangi takliflar paydo bo‘lganda shu yerda ko‘rinadi.</Text>
+          <Text style={styles.stateTitle}>{t('home.promosEmptyTitle')}</Text>
+          <Text style={styles.stateText}>{t('home.promosEmptyText')}</Text>
           <Pressable style={styles.retryBtn} onPress={load}>
-            <Text style={styles.retryBtnText}>Yangilash</Text>
+            <Text style={styles.retryBtnText}>{t('common.refresh')}</Text>
           </Pressable>
         </View>
       ) : (
@@ -124,7 +126,7 @@ export default function PromosScreen() {
                   { backgroundColor: promo.background || FALLBACK_BG, opacity: pressed ? 0.78 : 1 },
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel={`${promo.title}. Marketing taklifi — narx katalogda`}
+                accessibilityLabel={t('home.promoA11y', { title: promo.title })}
               >
                 <View style={styles.promoCopy}>
                   {promo.tag ? (
@@ -134,9 +136,9 @@ export default function PromosScreen() {
                   ) : null}
                   <Text style={styles.promoTitle}>{promo.title}</Text>
                   {promo.subtitle ? <Text style={styles.promoSubtitle}>{promo.subtitle}</Text> : null}
-                  <Text style={styles.promoHonest}>Marketing taklifi — narx katalogda</Text>
+                  <Text style={styles.promoHonest}>{t('home.promoDisclaimer')}</Text>
                   <Text style={styles.open}>
-                    Katalogga o‘tish <Feather name="arrow-right" size={13} color={PURPLE} />
+                    {t('home.promoOpenCatalog')} <Feather name="arrow-right" size={13} color={PURPLE} />
                   </Text>
                 </View>
                 <View style={styles.promoArt}>

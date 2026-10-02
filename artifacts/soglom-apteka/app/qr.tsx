@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatUzs } from '@/components/AppUI';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
+import type { TFunction } from '@/lib/i18n';
+import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -48,12 +49,12 @@ function qrLog(instanceId: string, event: string, detail?: string) {
   console.log(`[QR] ${event}${detail ? ` ${detail}` : ''} #${instanceId}`);
 }
 
-const StableQR = memo(function StableQR({ value, size }: { value: string; size: number }) {
+const StableQR = memo(function StableQR({ value, size, label }: { value: string; size: number; label: string }) {
   return (
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel="Vaksina Med loyalty QR kodi. Kassada skanerlash uchun ko‘rsating."
+      accessibilityLabel={label}
     >
       <QRCode value={value} size={size} color={PURPLE_DEEP} backgroundColor="#FFFFFF" ecl="M" quietZone={10} />
     </View>
@@ -65,10 +66,12 @@ const QRExpiryTimer = memo(function QRExpiryTimer({
   expiresAtMs,
   ttlTotal,
   onExpire,
+  t,
 }: {
   expiresAtMs: number;
   ttlTotal: number;
   onExpire: () => void;
+  t: TFunction;
 }) {
   const [secondsLeft, setSecondsLeft] = useState(() =>
     Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)),
@@ -94,7 +97,7 @@ const QRExpiryTimer = memo(function QRExpiryTimer({
 
   const progress = ttlTotal > 0 ? Math.min(1, Math.max(0, secondsLeft / ttlTotal)) : 0;
   const label =
-    secondsLeft > 0 ? `QR amal qiladi: ${secondsLeft} soniya` : 'QR yangilanmoqda…';
+    secondsLeft > 0 ? t('home.qrValidFor', { seconds: secondsLeft }) : t('home.qrRenewing');
 
   return (
     <View
@@ -146,7 +149,7 @@ export default function QrScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const narrow = width < 390;
-  const { user, isAuthenticated } = useApp();
+  const { t, fmt, user, isAuthenticated } = useApp();
 
   const instanceIdRef = useRef(`i${++qrInstanceSeq}`);
   const instanceId = instanceIdRef.current;
@@ -156,7 +159,7 @@ export default function QrScreen() {
   const [ttlTotal, setTtlTotal] = useState(DEFAULT_TTL);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<{ cause: unknown } | null>(null);
 
   const busy = useRef(false);
   const mounted = useRef(true);
@@ -205,7 +208,7 @@ export default function QrScreen() {
     cardRef.current = null;
     setCard(null);
     setExpiresAtMs(0);
-    setError('');
+    setError(null);
   }, []);
 
   const loadCard = useCallback(
@@ -220,16 +223,16 @@ export default function QrScreen() {
       qrLog(instanceId, 'POS_CARD_FETCH', reason);
       try {
         if (reason === 'manual') setRefreshing(true);
-        setError('');
+        setError(null);
         const data = await api.posCard();
         if (!mounted.current) return;
         qrLog(instanceId, 'POS_CARD_RESPONSE', data?.qrPayload ? 'ok' : 'empty');
         applyCard(data);
         fetchedForIdentityRef.current = identityRef.current;
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!mounted.current) return;
         clearCard();
-        setError(e?.message || 'QR yuklanmadi');
+        setError({ cause: e });
       } finally {
         busy.current = false;
         if (mounted.current) {
@@ -287,7 +290,7 @@ export default function QrScreen() {
   // Prefer card payload for display — avoid AppContext churn affecting stats.
   const name = card?.name?.trim() || '—';
   const firstName = name.split(/\s+/)[0] || name;
-  const cash = formatUzs(Math.max(0, Math.floor(Number(card?.balance) || 0)));
+  const cash = fmt.money(Math.max(0, Math.floor(Number(card?.balance) || 0)));
   const tier = card?.tier?.trim() || '—';
   const rate = card?.cashbackRateLabel || '—';
   const memberCode = card?.cardNumber || '';
@@ -308,44 +311,46 @@ export default function QrScreen() {
             style={styles.backBtn}
             onPress={goBack}
             accessibilityRole="button"
-            accessibilityLabel="Orqaga"
+            accessibilityLabel={t('common.back')}
           >
             <Feather name="chevron-left" size={20} color={PURPLE_DEEP} />
-            <Text style={styles.backLabel}>Orqaga</Text>
+            <Text style={styles.backLabel}>{t('common.back')}</Text>
           </Pressable>
           <Text style={styles.navTitle} numberOfLines={1}>
-            Mening QR kodim
+            {t('common.navMyQr')}
           </Text>
           <View style={styles.navSpacer} />
         </View>
 
-        <Text style={styles.kicker}>VAKSINA MED · LOYALTY</Text>
-        <Text style={styles.subtitle}>Kassada QR kodni ko‘rsating</Text>
+        <Text style={styles.kicker}>{t('home.qrKicker')}</Text>
+        <Text style={styles.subtitle}>{t('home.qrSubtitle')}</Text>
 
         <View style={styles.qrCard}>
           {loading && !card ? (
             <View style={styles.qrCenter}>
               <ActivityIndicator color={PURPLE} size="large" />
-              <Text style={styles.loadingText}>QR yuklanmoqda…</Text>
+              <Text style={styles.loadingText}>{t('home.qrLoading')}</Text>
             </View>
           ) : error && !card ? (
             <View style={styles.qrCenter}>
               <MaterialCommunityIcons name="qrcode-remove" size={36} color="#B91C1C" />
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={styles.errorText}>
+                {localizeError(error.cause, t, { fallback: 'home.qrLoadFailed' })}
+              </Text>
               <Pressable
                 style={styles.retryBtn}
                 onPress={onManualRefresh}
                 accessibilityRole="button"
-                accessibilityLabel="Qayta urinish"
+                accessibilityLabel={t('common.retry')}
               >
-                <Text style={styles.retryText}>Qayta urinish</Text>
+                <Text style={styles.retryText}>{t('common.retry')}</Text>
               </Pressable>
             </View>
           ) : card ? (
             <>
               <View style={styles.qrPad}>
                 <View style={{ width: qrSize, height: qrSize, alignItems: 'center', justifyContent: 'center' }}>
-                  <StableQR value={card.qrPayload} size={qrSize} />
+                  <StableQR value={card.qrPayload} size={qrSize} label={t('home.qrImageA11y')} />
                 </View>
               </View>
 
@@ -354,6 +359,7 @@ export default function QrScreen() {
                   expiresAtMs={expiresAtMs}
                   ttlTotal={ttlTotal}
                   onExpire={onExpire}
+                  t={t}
                 />
               ) : null}
 
@@ -361,7 +367,7 @@ export default function QrScreen() {
                 <Text
                   style={styles.memberCode}
                   numberOfLines={1}
-                  accessibilityLabel={`A’zolik kodi ${memberCode}`}
+                  accessibilityLabel={t('home.qrMemberCodeA11y', { code: memberCode })}
                 >
                   {memberCode}
                 </Text>
@@ -371,26 +377,22 @@ export default function QrScreen() {
         </View>
 
         <View style={styles.statsGrid}>
-          <StatTile label="Mijoz" value={firstName} icon="account" />
-          <StatTile label="Cashback" value={cash} icon="wallet-outline" />
-          <StatTile label="Daraja" value={tier} icon="crown-outline" />
-          <StatTile label="Foiz" value={rate} icon="percent" />
+          <StatTile label={t('home.qrStatCustomer')} value={firstName} icon="account" />
+          <StatTile label={t('common.navCashback')} value={cash} icon="wallet-outline" />
+          <StatTile label={t('home.qrStatTier')} value={tier} icon="crown-outline" />
+          <StatTile label={t('home.qrStatRate')} value={rate} icon="percent" />
         </View>
 
         <View style={styles.note} accessibilityRole="text">
           <Feather name="shield" size={16} color={PURPLE} />
-          <Text style={styles.noteText}>
-            QR kod xavfsizlik uchun muntazam yangilanadi. Kassada faqat ekrandagi QR ni skanerlang.
-            Kassada ishlatish va hisoblash — shu QR orqali; yagona cashback balansi barcha
-            ruxsat etilgan xarid kanallaridan.
-          </Text>
+          <Text style={styles.noteText}>{t('home.qrNote')}</Text>
         </View>
 
         <Pressable
           onPress={onManualRefresh}
           disabled={refreshing || !isAuthenticated}
           accessibilityRole="button"
-          accessibilityLabel="QR ni yangilash"
+          accessibilityLabel={t('home.qrRefresh')}
           style={({ pressed }) => [
             styles.refreshBtn,
             (pressed || refreshing) && { opacity: 0.88 },
@@ -402,7 +404,7 @@ export default function QrScreen() {
             <Feather name="refresh-cw" size={17} color="#fff" />
           )}
           <Text style={styles.refreshText}>
-            {refreshing ? 'Yangilanmoqda…' : 'QR ni yangilash'}
+            {refreshing ? t('home.qrRefreshing') : t('home.qrRefresh')}
           </Text>
         </Pressable>
       </ScrollView>

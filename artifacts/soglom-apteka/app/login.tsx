@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { api, type ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
+import { localizeError } from '@/lib/i18n/errors';
 import {
   formatLocalPhoneDisplay,
   isValidLocalPhone,
@@ -35,25 +36,10 @@ const inputWebFix =
       } as object)
     : ({ outlineStyle: 'none' } as object);
 
-function mapLoginError(err: ApiError): string {
-  const status = err.status;
-  const raw = String(err.message || '');
-  if (!status && /Serverga ulanib|network|Failed to fetch/i.test(raw)) {
-    return 'Serverga ulanib bo‘lmadi. Internet yoki API holatini tekshiring.';
-  }
-  if (status === 429) {
-    return 'Juda ko‘p urinish. Birozdan keyin qayta urinib ko‘ring.';
-  }
-  if (status === 401 || /noto‘g‘ri|parol|telefon/i.test(raw)) {
-    return 'Telefon yoki parol noto‘g‘ri';
-  }
-  return raw || 'Kirish amalga oshmadi. Qayta urinib ko‘ring.';
-}
-
 /** Kirish: telefon + parol (SMS faqat ro‘yxatda). Auth arxitekturasi o‘zgarmaydi. */
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { refresh } = useApp();
+  const { refresh, t } = useApp();
   const submittingRef = useRef(false);
 
   const [phone, setPhone] = useState('');
@@ -76,11 +62,11 @@ export default function LoginScreen() {
     if (local !== phone) setPhone(local);
 
     if (!isValidLocalPhone(local)) {
-      setError('Telefon raqamni to‘liq kiriting (9 raqam).');
+      setError(t('auth.phoneIncomplete'));
       return;
     }
     if (password.length < PASSWORD_MIN) {
-      setError(`Parol kamida ${PASSWORD_MIN} belgi`);
+      setError(t('auth.passwordTooShort', { min: PASSWORD_MIN }));
       return;
     }
 
@@ -91,7 +77,10 @@ export default function LoginScreen() {
       await refresh();
       router.replace('/(tabs)');
     } catch (err: unknown) {
-      setError(mapLoginError(err as ApiError));
+      setError(localizeError(err, t, {
+        byStatus: { 401: 'auth.loginInvalidCredentials' },
+        fallback: 'auth.loginFailed',
+      }));
     } finally {
       setLoading(false);
       submittingRef.current = false;
@@ -130,30 +119,30 @@ export default function LoginScreen() {
               style={styles.back}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Orqaga"
+              accessibilityLabel={t('common.back')}
             >
               <Feather name="chevron-left" size={20} color="#FFCC00" />
             </Pressable>
           </View>
 
           <Text style={styles.brand}>VAKSINA MED</Text>
-          <Text style={styles.hello}>Hisobga kirish</Text>
-          <Text style={styles.lead}>Ro‘yxatdan o‘tgan telefon va parolingiz bilan kiring</Text>
+          <Text style={styles.hello}>{t('auth.loginTitle')}</Text>
+          <Text style={styles.lead}>{t('auth.loginLead')}</Text>
 
           <View style={styles.card}>
-            <Text style={styles.label}>Telefon (login)</Text>
+            <Text style={styles.label}>{t('auth.loginPhoneLabel')}</Text>
             <View style={styles.field}>
               <View style={styles.fieldIcon}>
                 <Feather name="smartphone" size={16} color="#5C328E" />
               </View>
-              <Text style={styles.prefix} accessibilityLabel="Mamlakat kodi plus 998">
+              <Text style={styles.prefix} accessibilityLabel={t('auth.phonePrefixA11y')}>
                 +998
               </Text>
               <TextInput
                 value={phoneDisplay}
-                onChangeText={(t) => setPhone(normalizeLocalPhone(t))}
+                onChangeText={(text) => setPhone(normalizeLocalPhone(text))}
                 keyboardType="number-pad"
-                placeholder="Telefon raqamingiz"
+                placeholder={t('auth.phonePlaceholder')}
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
                 maxLength={13}
@@ -161,11 +150,11 @@ export default function LoginScreen() {
                 textContentType="telephoneNumber"
                 returnKeyType="next"
                 editable={!loading}
-                accessibilityLabel="Telefon raqam"
+                accessibilityLabel={t('auth.phoneA11y')}
               />
             </View>
 
-            <Text style={[styles.label, { marginTop: 14 }]}>Parol</Text>
+            <Text style={[styles.label, { marginTop: 14 }]}>{t('auth.passwordLabel')}</Text>
             <View style={styles.field}>
               <View style={styles.fieldIcon}>
                 <Feather name="lock" size={16} color="#5C328E" />
@@ -174,14 +163,14 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPass}
-                placeholder="Parolni kiriting"
+                placeholder={t('auth.passwordPlaceholder')}
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
                 autoComplete="password"
                 textContentType="password"
                 returnKeyType="done"
                 editable={!loading}
-                accessibilityLabel="Parol"
+                accessibilityLabel={t('auth.passwordLabel')}
                 onSubmitEditing={() => void submit()}
               />
               <Pressable
@@ -189,12 +178,12 @@ export default function LoginScreen() {
                 hitSlop={10}
                 style={styles.eyeBtn}
                 accessibilityRole="button"
-                accessibilityLabel={showPass ? 'Parolni yashirish' : 'Parolni ko‘rsatish'}
+                accessibilityLabel={showPass ? t('auth.passwordHide') : t('auth.passwordShow')}
               >
                 <Feather name={showPass ? 'eye-off' : 'eye'} size={18} color="#94A3B8" />
               </Pressable>
             </View>
-            <Text style={styles.hint}>Kamida {PASSWORD_MIN} belgi</Text>
+            <Text style={styles.hint}>{t('auth.passwordHint', { min: PASSWORD_MIN })}</Text>
 
             {error ? (
               <View style={styles.errorBox} accessibilityLiveRegion="polite">
@@ -208,7 +197,7 @@ export default function LoginScreen() {
               onPress={() => void submit()}
               style={[styles.btn, !canSubmit && styles.btnDisabled]}
               accessibilityRole="button"
-              accessibilityLabel="Kirish"
+              accessibilityLabel={t('common.loginAction')}
               accessibilityState={{ disabled: !canSubmit, busy: loading }}
             >
               {canSubmit || loading ? (
@@ -217,14 +206,14 @@ export default function LoginScreen() {
                     <ActivityIndicator color="#120724" />
                   ) : (
                     <>
-                      <Text style={styles.btnText}>Kirish</Text>
+                      <Text style={styles.btnText}>{t('common.loginAction')}</Text>
                       <Feather name="arrow-right" size={18} color="#120724" />
                     </>
                   )}
                 </LinearGradient>
               ) : (
                 <View style={[styles.btnGrad, styles.btnGradDisabled]}>
-                  <Text style={styles.btnTextDisabled}>Kirish</Text>
+                  <Text style={styles.btnTextDisabled}>{t('common.loginAction')}</Text>
                   <Feather name="arrow-right" size={18} color="#A8B0C0" />
                 </View>
               )}
@@ -232,13 +221,13 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerMuted}>Hisobingiz yo‘qmi?</Text>
+            <Text style={styles.footerMuted}>{t('auth.loginNoAccount')}</Text>
             <Pressable
               onPress={() => router.push('/register')}
               accessibilityRole="button"
-              accessibilityLabel="Ro‘yxatdan o‘ting"
+              accessibilityLabel={t('auth.loginRegisterLink')}
             >
-              <Text style={styles.footerLink}> Ro‘yxatdan o‘ting</Text>
+              <Text style={styles.footerLink}> {t('auth.loginRegisterLink')}</Text>
             </Pressable>
           </View>
         </ScrollView>

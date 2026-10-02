@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useApp } from '@/context/AppContext';
 import type { LatLng, RouteInfo } from '@/lib/maps';
 import { hasValidCoords, openYandexRoute } from '@/lib/maps';
 
@@ -37,6 +38,7 @@ export default function BranchMap({
   onRequestRoute,
   height = 300,
 }: Props) {
+  const { t } = useApp();
   const mappable = branches.filter((b) => hasValidCoords(b));
   const selected = mappable.find((item) => item.id === selectedId) || null;
 
@@ -44,15 +46,12 @@ export default function BranchMap({
     <View style={[styles.wrap, { minHeight: height }]}>
       <View style={styles.header}>
         <Feather name="map" size={28} color="#5C328E" />
-        <Text style={styles.title}>Filiallar xaritasi</Text>
-        <Text style={styles.sub}>
-          Interaktiv xarita webda ishlaydi. Native uchun `react-native-maps` (yoki Mapbox)
-          paketini qo‘shish kerak — hozircha o‘rnatilmagan.
-        </Text>
+        <Text style={styles.title}>{t('branches.mapNativeTitle')}</Text>
+        <Text style={styles.sub}>{t('branches.mapNativeNote')}</Text>
       </View>
 
       {mappable.length === 0 ? (
-        <Text style={styles.empty}>Xaritada joylashuvi mavjud emas</Text>
+        <Text style={styles.empty}>{t('branches.mapNoCoords')}</Text>
       ) : (
         <ScrollView
           horizontal
@@ -86,8 +85,10 @@ export default function BranchMap({
           </Text>
           {route?.distanceKm != null ? (
             <Text style={styles.routeMeta}>
-              {route.source === 'osrm' ? 'Yo‘l' : 'Masofa'}: {route.distanceKm} km
-              {route.durationMin != null ? ` · ~${route.durationMin} daqiqa` : ''}
+              {route.source === 'osrm'
+                ? t('branches.routeByRoad', { km: route.distanceKm })
+                : t('branches.routeStraight', { km: route.distanceKm })}
+              {route.durationMin != null ? ` · ${t('branches.routeDurationMin', { min: route.durationMin })}` : ''}
             </Text>
           ) : null}
           <Pressable
@@ -98,7 +99,7 @@ export default function BranchMap({
             }}
           >
             <Feather name="navigation" size={16} color="#120724" />
-            <Text style={styles.btnText}>Xaritada ochish</Text>
+            <Text style={styles.btnText}>{t('common.openMap')}</Text>
           </Pressable>
         </View>
       ) : null}

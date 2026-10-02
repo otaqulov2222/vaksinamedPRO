@@ -3,7 +3,6 @@ import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -16,8 +15,12 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { useApp } from '@/context/AppContext';
-import { ProgressLine, Screen, formatUzs } from '@/components/AppUI';
+import { localizedName } from '@/lib/i18n/data';
+import { ProgressLine, Screen } from '@/components/AppUI';
 import { api } from '@/lib/api';
+import { notify } from '@/lib/dialogs';
+import type { TFunction, TranslationKey } from '@/lib/i18n';
+import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -33,17 +36,8 @@ const SCREEN_PAD = 20;
 /** Vertical rhythm between major Home sections */
 const SPACE = 16;
 
-function toast(title: string, msg: string) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    window.alert(`${title}\n${msg}`);
-  } else {
-    Alert.alert(title, msg);
-  }
-}
-
-function shortBranch(name?: string) {
-  return String(name || '').replace(/^Vaksina Med\s*[·•]\s*/i, '').trim() || 'Filial';
+function shortBranch(t: TFunction, name?: string) {
+  return String(name || '').replace(/^Vaksina Med\s*[·•]\s*/i, '').trim() || t('home.branchLabel');
 }
 
 function productIconName(icon?: string): React.ComponentProps<typeof MaterialCommunityIcons>['name'] {
@@ -54,24 +48,30 @@ function productIconName(icon?: string): React.ComponentProps<typeof MaterialCom
 }
 
 /** Hours display only — never claims live open/closed without a schedule engine. */
-function branchHoursLabel(branch: { hours?: string; is24h?: boolean } | null): string {
-  if (!branch) return 'Ish vaqti noma’lum';
+function branchHoursLabel(t: TFunction, branch: { hours?: string; is24h?: boolean } | null): string {
+  if (!branch) return t('home.hoursUnknown');
   if (branch.is24h) return '24/7';
   const hours = String(branch.hours || '').trim();
-  if (!hours) return 'Ish vaqti noma’lum';
-  if (/24\s*[\/·\-]\s*7|24\s*soat|круглосуточ/i.test(hours)) return '24/7';
+  if (!hours) return t('home.hoursUnknown');
+  if (/24\s*[\/·\-]\s*7|24\s*soat|круглосуточ/i.test(hours)) return '24/7'; // i18n-ignore: parses server-provided hours
   return hours;
 }
 
-const QUICK = [
-  { icon: 'pill' as const, label: 'Dori qidirish', to: '/(tabs)/catalog', clearQ: true, bg: '#FFF4CC' },
-  { icon: 'map-marker-outline' as const, label: 'Dorixonalar', to: '/branches', bg: LAVENDER },
-  { icon: 'qrcode-scan' as const, label: 'Mening QR kodim', to: '/qr', bg: LAVENDER },
-  { icon: 'truck-delivery-outline' as const, label: 'Yetkazib berish', to: '/cart', bg: LAVENDER },
+const QUICK: {
+  icon: 'pill' | 'map-marker-outline' | 'qrcode-scan' | 'truck-delivery-outline';
+  labelKey: TranslationKey;
+  to: string;
+  clearQ?: boolean;
+  bg: string;
+}[] = [
+  { icon: 'pill', labelKey: 'home.quickSearch', to: '/(tabs)/catalog', clearQ: true, bg: '#FFF4CC' },
+  { icon: 'map-marker-outline', labelKey: 'common.navBranches', to: '/branches', bg: LAVENDER },
+  { icon: 'qrcode-scan', labelKey: 'common.navMyQr', to: '/qr', bg: LAVENDER },
+  { icon: 'truck-delivery-outline', labelKey: 'home.quickDelivery', to: '/cart', bg: LAVENDER },
 ];
 
 export default function HomeScreen() {
-  const { t, balance, user, cartCount, refresh } = useApp();
+  const { t, fmt, language, balance, user, cartCount, refresh } = useApp();
   const { width: windowW } = useWindowDimensions();
   const contentW = Math.max(280, Math.round(windowW - SCREEN_PAD * 2));
   const productCardW = Math.min(168, Math.max(148, Math.round((contentW - 12) / 2.2)));
@@ -175,20 +175,20 @@ export default function HomeScreen() {
       try {
         await api.addToCart(productId, 1);
         await refresh();
-        toast('Savat', `${productName || 'Mahsulot'} qo‘shildi`);
+        notify(t('common.navCart'), t('home.addedToCart', { name: productName || t('common.navProduct') }));
       } catch (e) {
         // Badge unchanged — refresh only ran on success above.
-        toast('Xatolik', e instanceof Error ? e.message : 'Savatga qo‘shilmadi');
+        notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'home.addToCartFailed' }));
       } finally {
         setAddingId(null);
       }
     },
-    [addingId, refresh],
+    [addingId, refresh, t],
   );
 
   const displayProducts = products.map((p) => ({
     id: p.id,
-    name: String(p.nameUz || p.nameRu || ''),
+    name: localizedName(language, p),
     price: Number(p.price || 0),
     icon: String(p.icon || 'pill'),
     manufacturer: String(p.manufacturer || ''),
@@ -203,14 +203,14 @@ export default function HomeScreen() {
           style={styles.headerLogo}
           resizeMode="contain"
           fadeDuration={0}
-          accessibilityLabel="Vaksina Med"
+          accessibilityLabel={t('common.appName')}
         />
         <View style={styles.headerActions}>
           <Pressable
             style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
             onPress={() => router.push('/notifications')}
             accessibilityRole="button"
-            accessibilityLabel="Bildirishnomalar"
+            accessibilityLabel={t('common.navNotifications')}
             hitSlop={4}
           >
             <Feather name="bell" size={20} color={PURPLE_DEEP} />
@@ -219,7 +219,9 @@ export default function HomeScreen() {
             style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
             onPress={() => router.push('/cart')}
             accessibilityRole="button"
-            accessibilityLabel={cartCount > 0 ? `Savat, ${cartCount} ta tur` : 'Savat'}
+            accessibilityLabel={
+              cartCount > 0 ? t('home.cartWithCountA11y', { count: cartCount }) : t('common.navCart')
+            }
             hitSlop={4}
           >
             <Feather name="shopping-cart" size={20} color={PURPLE_DEEP} />
@@ -233,9 +235,9 @@ export default function HomeScreen() {
       </View>
 
       <Text style={styles.greet} numberOfLines={1}>
-        Salom, {user.name?.trim() || 'mehmon'} 👋
+        {t('home.greeting', { name: user.name?.trim() || t('home.guestName') })}
       </Text>
-      <Text style={styles.greetSub}>Bugun sizga nima kerak?</Text>
+      <Text style={styles.greetSub}>{t('home.greetingSubtitle')}</Text>
 
       {/* SEARCH */}
       <View style={styles.searchBox}>
@@ -243,19 +245,19 @@ export default function HomeScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Dori yoki mahsulot qidirish..."
+          placeholder={t('home.searchPlaceholder')}
           placeholderTextColor={MUTED}
           style={styles.searchInput}
           returnKeyType="search"
           onSubmitEditing={onSearch}
           underlineColorAndroid="transparent"
-          accessibilityLabel="Dori yoki mahsulot qidirish"
+          accessibilityLabel={t('home.searchA11y')}
         />
         <Pressable
           onPress={() => router.push('/qr')}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="Mening QR kodim"
+          accessibilityLabel={t('common.navMyQr')}
           style={({ pressed }) => [styles.searchQrBtn, pressed && styles.pressed]}
         >
           <MaterialCommunityIcons name="qrcode" size={22} color={PURPLE} />
@@ -265,7 +267,7 @@ export default function HomeScreen() {
       {/* HERO — approved full banner; entire card opens Catalog (no overlay text/CTA) */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Vaksina Med — Sog‘liqni asrab hayot zavqini ulashamiz. Katalogga o‘tish."
+        accessibilityLabel={t('home.heroA11y')}
         onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
         style={({ pressed }) => [styles.heroWrap, { height: heroSize.h }, pressed && styles.pressed]}
         onLayout={(e) => {
@@ -288,9 +290,9 @@ export default function HomeScreen() {
       <View style={styles.quickRow}>
         {QUICK.map((item) => (
           <Pressable
-            key={item.label}
+            key={item.labelKey}
             onPress={() => {
-              if ('clearQ' in item && item.clearQ) {
+              if (item.clearQ) {
                 router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any);
                 return;
               }
@@ -300,15 +302,15 @@ export default function HomeScreen() {
             accessibilityRole="button"
             accessibilityLabel={
               item.to === '/cart'
-                ? 'Yetkazib berish — avval savatni ochish'
-                : item.label
+                ? t('home.quickDeliveryA11y')
+                : t(item.labelKey)
             }
           >
             <View style={[styles.quickIcon, { backgroundColor: item.bg }]}>
               <MaterialCommunityIcons name={item.icon} size={24} color={PURPLE} />
             </View>
             <Text style={styles.quickLabel} numberOfLines={2}>
-              {item.label}
+              {t(item.labelKey)}
             </Text>
           </Pressable>
         ))}
@@ -317,14 +319,16 @@ export default function HomeScreen() {
       {/* BALANCE + NEAREST */}
       <View style={[styles.twoCol, { gap: colGap }]}>
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>{t('balance')}</Text>
+          <Text style={styles.cardLabel}>{t('home.balanceLabel')}</Text>
           <Text style={styles.balance} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
-            {formatUzs(balance)}
+            {fmt.money(balance)}
           </Text>
           <View style={styles.tierRow}>
             <MaterialCommunityIcons name="medal-outline" size={15} color="#C9A227" />
             <Text style={styles.tier}>
-              {String(user.tier || '').trim() ? `${user.tier} daraja` : 'Daraja mavjud emas'}
+              {String(user.tier || '').trim()
+                ? t('home.tierName', { tier: String(user.tier).trim() })
+                : t('home.tierNone')}
             </Text>
           </View>
           {nextTierTarget != null ? (
@@ -334,36 +338,40 @@ export default function HomeScreen() {
           ) : null}
           <Text style={styles.progressCaption}>
             {String(user?.tier || '').toLowerCase().includes('plat')
-              ? 'Eng yuqori daraja'
+              ? t('home.tierTop')
               : left != null
-                ? `${t('nextLevel')}: ${formatUzs(left)} (xaridlar)`
-                : 'Keyingi daraja chegarasi serverdan'}
+                ? t('home.nextTierLeft', { amount: fmt.money(left) })
+                : t('home.nextTierUnknown')}
           </Text>
           <View style={styles.cardFooter}>
             <Pressable
               onPress={() => router.push('/checkout')}
               style={({ pressed }) => [styles.primaryCardBtn, pressed && styles.pressed]}
-              accessibilityLabel="Cashbackni xaridlarda ishlatish"
+              accessibilityLabel={t('home.spendCashbackA11y')}
             >
-              <Text style={styles.primaryCardBtnText}>{t('spend')}</Text>
+              <Text style={styles.primaryCardBtnText}>{t('home.spendCashback')}</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push('/cashback')}
               style={({ pressed }) => [styles.secondaryCardBtn, pressed && styles.pressed]}
-              accessibilityLabel={t('history')}
+              accessibilityLabel={t('home.cashbackHistory')}
             >
-              <Text style={styles.secondaryCardBtnText}>{t('history')}</Text>
+              <Text style={styles.secondaryCardBtnText}>{t('home.cashbackHistory')}</Text>
             </Pressable>
           </View>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.cardLabel}>
-            {nearestLoading ? 'Filial' : nearestLocated ? t('nearby') : 'Filial'}
+            {nearestLoading
+              ? t('home.branchLabel')
+              : nearestLocated
+                ? t('home.nearestBranchLabel')
+                : t('home.branchLabel')}
           </Text>
           <View
             style={styles.nearPhotoWrap}
-            accessibilityLabel="Dorixona umumiy ko‘rinishi — aniq filial fotosurati emas"
+            accessibilityLabel={t('home.nearPhotoA11y')}
           >
             <Image
               source={require('../../assets/images/home-near-photo.jpg')}
@@ -373,28 +381,28 @@ export default function HomeScreen() {
               resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
             />
             <View style={styles.nearPhotoCaption} pointerEvents="none">
-              <Text style={styles.nearPhotoCaptionText}>Umumiy ko‘rinish</Text>
+              <Text style={styles.nearPhotoCaptionText}>{t('home.nearPhotoCaption')}</Text>
             </View>
           </View>
           {nearestLoading ? (
             <View style={styles.nearLoadingRow}>
               <ActivityIndicator size="small" color={PURPLE} />
-              <Text style={styles.nearMeta}>Filial yuklanmoqda...</Text>
+              <Text style={styles.nearMeta}>{t('home.branchLoading')}</Text>
             </View>
           ) : (
             <>
               <Text style={styles.nearName} numberOfLines={2}>
-                {nearest ? `VAKSINA MED — ${shortBranch(nearest.name)}` : 'Filiallar'}
+                {nearest ? `VAKSINA MED — ${shortBranch(t, nearest.name)}` : t('home.branchesFallback')}
               </Text>
               <View style={styles.openRow}>
                 <View style={[styles.hoursDot, !nearest && { backgroundColor: '#CBD5E1' }]} />
                 <Text style={styles.hoursText} numberOfLines={1}>
-                  {branchHoursLabel(nearest)}
+                  {branchHoursLabel(t, nearest)}
                 </Text>
               </View>
               {nearestLocated && nearest?.distanceKm != null ? (
                 <Text style={styles.nearMeta} numberOfLines={1}>
-                  {nearest.distanceKm} km · yaqin
+                  {t('home.distanceNear', { distance: nearest.distanceKm })}
                 </Text>
               ) : nearest?.address ? (
                 <Text style={styles.nearMeta} numberOfLines={2}>
@@ -402,12 +410,12 @@ export default function HomeScreen() {
                 </Text>
               ) : (
                 <Text style={styles.nearMeta} numberOfLines={2}>
-                  Filiallar ro‘yxatini oching
+                  {t('home.openBranchList')}
                 </Text>
               )}
               {!nearestLocated && nearest ? (
                 <Text style={styles.nearDisclaimer} numberOfLines={2}>
-                  Masofa faqat joylashuv ruxsati berilganda ko‘rsatiladi.
+                  {t('home.distanceDisclaimer')}
                 </Text>
               ) : null}
             </>
@@ -416,9 +424,9 @@ export default function HomeScreen() {
             <Pressable
               onPress={() => router.push('/branches')}
               style={({ pressed }) => [styles.secondaryCardBtn, pressed && styles.pressed]}
-              accessibilityLabel="Filiallarni ko‘rish"
+              accessibilityLabel={t('home.viewBranches')}
             >
-              <Text style={styles.secondaryCardBtnText}>Filiallarni ko‘rish →</Text>
+              <Text style={styles.secondaryCardBtnText}>{t('home.viewBranches')} →</Text>
             </Pressable>
           </View>
         </View>
@@ -426,13 +434,13 @@ export default function HomeScreen() {
 
       <View style={styles.sectionRow}>
         <Text style={styles.section} numberOfLines={1}>
-          Tanlangan mahsulotlar
+          {t('home.featuredProducts')}
         </Text>
         <Pressable
           onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
           hitSlop={8}
         >
-          <Text style={styles.link}>Barchasini ko‘rish →</Text>
+          <Text style={styles.link}>{t('common.showAll')} →</Text>
         </Pressable>
       </View>
 
@@ -460,20 +468,20 @@ export default function HomeScreen() {
       ) : productsError ? (
         <View style={styles.productsState}>
           <MaterialCommunityIcons name="cloud-off-outline" size={32} color="#94A3B8" />
-          <Text style={styles.productsStateTitle}>Mahsulotlarni yuklab bo‘lmadi</Text>
+          <Text style={styles.productsStateTitle}>{t('home.productsLoadFailed')}</Text>
           <Pressable style={styles.retryBtn} onPress={loadProducts}>
-            <Text style={styles.retryBtnText}>Qayta urinish</Text>
+            <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       ) : displayProducts.length === 0 ? (
         <View style={styles.productsState}>
           <MaterialCommunityIcons name="package-variant" size={32} color="#94A3B8" />
-          <Text style={styles.productsStateTitle}>Hozircha mahsulotlar yo‘q</Text>
+          <Text style={styles.productsStateTitle}>{t('home.productsEmpty')}</Text>
           <Pressable
             style={styles.retryBtn}
             onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
           >
-            <Text style={styles.retryBtnText}>Katalogni ko‘rish</Text>
+            <Text style={styles.retryBtnText}>{t('home.browseCatalog')}</Text>
           </Pressable>
         </View>
       ) : (
@@ -491,7 +499,7 @@ export default function HomeScreen() {
                 style={({ pressed }) => [styles.productCardMain, pressed && styles.pressed]}
                 onPress={() => router.push(`/product/${p.id}` as any)}
                 accessibilityRole="button"
-                accessibilityLabel={`${p.name}, ${formatUzs(p.price)}`}
+                accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
               >
                 <View style={styles.productImgWrap}>
                   <MaterialCommunityIcons name={productIconName(p.icon)} size={44} color={PURPLE} />
@@ -510,10 +518,10 @@ export default function HomeScreen() {
                   style={styles.productPriceHit}
                   onPress={() => router.push(`/product/${p.id}` as any)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${p.name}, ${formatUzs(p.price)}`}
+                  accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
                 >
                   <Text style={styles.productPrice} numberOfLines={1}>
-                    {formatUzs(p.price)}
+                    {fmt.money(p.price)}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -522,7 +530,7 @@ export default function HomeScreen() {
                   onPress={() => void addToCart(Number(p.id), p.name)}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel={`${p.name} ni savatga qo‘shish`}
+                  accessibilityLabel={t('home.addToCartA11y', { name: p.name })}
                 >
                   {addingId === String(p.id) ? (
                     <ActivityIndicator size="small" color="#fff" />

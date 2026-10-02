@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useApp } from '@/context/AppContext';
 
 const PURPLE = '#5C328E';
 const PURPLE_DEEP = '#2A104E';
@@ -26,6 +27,7 @@ const MAX_FRAME = 430;
  */
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useApp();
   const { height: winH } = useWindowDimensions();
   const fade = useRef(new Animated.Value(0)).current;
   const rise = useRef(new Animated.Value(10)).current;
@@ -52,7 +54,7 @@ export default function WelcomeScreen() {
           contentPosition="top center"
           transition={0}
           accessibilityIgnoresInvertColors
-          accessibilityLabel="Vaksina Med"
+          accessibilityLabel={t('common.appName')}
         />
 
         <View
@@ -71,8 +73,8 @@ export default function WelcomeScreen() {
           >
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Ro‘yxatdan o‘tish"
-              accessibilityHint="Ro‘yxatdan o‘tish sahifasiga o‘tadi"
+              accessibilityLabel={t('auth.registerAction')}
+              accessibilityHint={t('auth.welcomeRegisterHint')}
               onPress={() => router.push('/register')}
               style={({ pressed }) => [
                 styles.btnPrimary,
@@ -80,14 +82,14 @@ export default function WelcomeScreen() {
                 pressed && styles.btnPrimaryPressed,
               ]}
             >
-              <Text style={styles.btnPrimaryText}>Ro‘yxatdan o‘tish</Text>
+              <Text style={styles.btnPrimaryText}>{t('auth.registerAction')}</Text>
               <Feather name="arrow-right" size={18} color={PURPLE_DEEP} />
             </Pressable>
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Kirish"
-              accessibilityHint="Kirish sahifasiga o‘tadi"
+              accessibilityLabel={t('common.loginAction')}
+              accessibilityHint={t('auth.welcomeLoginHint')}
               onPress={() => router.push('/login')}
               style={({ pressed }) => [
                 styles.btnSecondary,
@@ -95,7 +97,7 @@ export default function WelcomeScreen() {
                 pressed && styles.btnSecondaryPressed,
               ]}
             >
-              <Text style={styles.btnSecondaryText}>Kirish</Text>
+              <Text style={styles.btnSecondaryText}>{t('common.loginAction')}</Text>
             </Pressable>
           </Animated.View>
         </View>

@@ -1,21 +1,39 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
-import { useColors } from '@/hooks/useColors';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Platform, Pressable, StyleSheet, View, type ColorValue } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { router } from 'expo-router';
+import { QrIcon } from '@/components/LineIcons';
+import { useApp } from '@/context/AppContext';
+
+const PRIMARY = '#4B248A';
+const DEEP = '#351765';
+const PURPLE_LIGHT = '#F1EBFF';
+const YELLOW = '#FFD233';
+const INACTIVE = 'rgba(107,114,128,0.8)';
+
+type IconName = React.ComponentProps<typeof Feather>['name'];
+
+function TabIcon({ name, color, focused }: { name: IconName; color: ColorValue; focused: boolean }) {
+  return (
+    <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
+      <Feather name={name} size={20} color={color} />
+    </View>
+  );
+}
 
 function CenterQrButton() {
+  const { t } = useApp();
   return (
     <View style={styles.centerQrSlot} pointerEvents="box-none">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="QR kod"
+        accessibilityLabel={t('common.navQr')}
         onPress={() => router.push('/qr')}
-        style={({ pressed }) => [styles.centerQrButton, { opacity: pressed ? 0.9 : 1 }]}
+        style={({ pressed }) => [styles.centerQrButton, pressed && styles.centerQrPressed]}
       >
         <View style={styles.qrButtonInner} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <MaterialCommunityIcons name="qrcode" size={24} color="#120724" />
+          <QrIcon size={24} color={DEEP} strokeWidth={2} />
         </View>
       </Pressable>
     </View>
@@ -23,20 +41,21 @@ function CenterQrButton() {
 }
 
 export default function TabLayout() {
-  const colors = useColors();
+  const { t } = useApp();
   const isWeb = Platform.OS === 'web';
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarActiveTintColor: PRIMARY,
+        tabBarInactiveTintColor: INACTIVE,
         tabBarStyle: {
-          backgroundColor: colors.card,
-          borderTopColor: '#E8E4F0',
+          backgroundColor: '#FFFFFF',
+          borderTopColor: 'rgba(23,22,44,0.06)',
           borderTopWidth: StyleSheet.hairlineWidth,
           elevation: 0,
           shadowOpacity: 0,
+          boxShadow: '0px -8px 24px rgba(53,23,101,0.06)',
           height: isWeb ? 80 : 64,
           paddingTop: 6,
           paddingBottom: isWeb ? 12 : 4,
@@ -46,6 +65,12 @@ export default function TabLayout() {
           fontSize: 11,
           lineHeight: 14,
           marginBottom: isWeb ? 8 : 2,
+          // The tab button pads 5px per side and RN-web caps one-line text at max-width 100%;
+          // long labels (uz "Buyurtmalar") need the full tab width at 360px.
+          alignSelf: 'stretch',
+          marginHorizontal: -5,
+          maxWidth: 200,
+          textAlign: 'center',
         },
         tabBarIconStyle: {
           marginTop: 2,
@@ -55,21 +80,21 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Bosh sahifa',
-          tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
+          title: t('common.navHome'),
+          tabBarIcon: ({ color, focused }) => <TabIcon name="home" color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="catalog"
         options={{
-          title: 'Katalog',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="view-grid" size={22} color={color} />,
+          title: t('common.navCatalog'),
+          tabBarIcon: ({ color, focused }) => <TabIcon name="grid" color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="bonuses"
         options={{
-          title: 'QR kod',
+          title: t('common.navQr'),
           tabBarLabel: () => null,
           tabBarIcon: () => null,
           tabBarButton: () => <CenterQrButton />,
@@ -78,15 +103,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="purchases"
         options={{
-          title: 'Buyurtmalar',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="medical-bag" size={22} color={color} />,
+          title: t('common.navOrders'),
+          tabBarIcon: ({ color, focused }) => <TabIcon name="shopping-bag" color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profil',
-          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
+          title: t('common.navProfile'),
+          tabBarIcon: ({ color, focused }) => <TabIcon name="user" color={color} focused={focused} />,
         }}
       />
     </Tabs>
@@ -94,28 +119,31 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  tabIcon: { width: 44, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  tabIconActive: { backgroundColor: PURPLE_LIGHT },
   centerQrSlot: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   centerQrButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -16,
-    backgroundColor: '#FFCC00',
-    borderWidth: 3,
-    borderColor: '#fcfaff',
+    marginTop: -20,
+    backgroundColor: '#FFFFFF',
+    boxShadow: '0px 2px 4px rgba(53,23,101,0.08), 0px 10px 22px rgba(53,23,101,0.20)',
   },
+  centerQrPressed: { transform: [{ scale: 0.96 }] },
   qrButtonInner: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFCC00',
+    backgroundColor: YELLOW,
+    boxShadow: '0px 1px 0px rgba(255,255,255,0.55) inset, 0px -2px 6px rgba(53,23,101,0.08) inset',
   },
 });

@@ -5,9 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,20 +17,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BranchMap from '@/components/BranchMap';
 import { useApp } from '@/context/AppContext';
 import { api, type ApiError } from '@/lib/api';
+import { notify } from '@/lib/dialogs';
+import type { TFunction } from '@/lib/i18n';
+import { localizeError } from '@/lib/i18n/errors';
 import { fetchDrivingRoute, hasValidCoords, openYandexRoute, type LatLng, type RouteInfo } from '@/lib/maps';
 
-function pickError(err: unknown) {
-  const e = err as ApiError;
-  return e?.message || (err instanceof Error ? err.message : 'Filial tanlanmadi');
+function pickError(err: unknown, t: TFunction) {
+  return localizeError(err, t, {
+    byCode: {
+      BRANCH_REQUIRED: 'branches.branchRequired',
+      BRANCH_NOT_FOUND: 'branches.branchNotFound',
+      BRANCH_CLOSED: 'branches.branchClosed',
+    },
+    fallback: 'branches.pickFailed',
+  });
 }
 
 function shortName(name: string) {
   return String(name).replace(/^Vaksina Med\s*[·•]\s*/i, '').trim();
 }
 
-function formatDistance(km: number | null | undefined) {
+function formatDistance(t: TFunction, km: number | null | undefined) {
   if (km == null || !Number.isFinite(Number(km))) return null;
-  return `${Number(km)} km`;
+  return t('branches.distanceKm', { km: Number(km) });
 }
 
 type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable';
@@ -42,7 +49,7 @@ export default function BranchesScreen() {
   const from = String(params.from || '').toLowerCase();
   const productIdParam = String(params.productId || '');
   const insets = useSafeAreaInsets();
-  const { refresh } = useApp();
+  const { refresh, t } = useApp();
   const [query, setQuery] = useState('');
   const [region, setRegion] = useState('');
   const [branches, setBranches] = useState<any[]>([]);
@@ -54,7 +61,7 @@ export default function BranchesScreen() {
   const [route, setRoute] = useState<RouteInfo | null>(null);
   const [routing, setRouting] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{ err: unknown } | null>(null);
   const [picking, setPicking] = useState(false);
   const pickingRef = useRef(false);
 
@@ -114,7 +121,7 @@ export default function BranchesScreen() {
       })
       .catch((err: Error) => {
         setBranches([]);
-        setLoadError(err.message || 'Filiallarni yuklab bo‘lmadi');
+        setLoadError({ err });
       })
       .finally(() => setLoading(false));
   }, [query, region, userLocation?.lat, userLocation?.lng]);
@@ -131,7 +138,7 @@ export default function BranchesScreen() {
       setSelectedId(Number(branch.id));
       setRoute(null);
       if (!hasValidCoords(branch)) {
-        Alert.alert('Xarita', 'Bu filialning koordinatasi mavjud emas.');
+        notify(t('branches.mapTitle'), t('branches.noCoordsMessage'));
         return;
       }
       setRouting(true);
@@ -147,24 +154,21 @@ export default function BranchesScreen() {
         setRouting(false);
       }
     },
-    [userLocation],
+    [userLocation, t],
   );
 
   const goNearest = useCallback(async () => {
     if (!userLocation) {
-      Alert.alert(
-        'Joylashuv',
-        'Eng yaqin filialni aniqlash uchun joylashuv ruxsati kerak. Filiallar ro‘yxatidan tanlashingiz mumkin.',
-      );
+      notify(t('branches.locationTitle'), t('branches.locationRequiredMessage'));
       return;
     }
     const nearest = branches.find((b) => b.distanceKm != null && hasValidCoords(b));
     if (!nearest) {
-      Alert.alert('Filial', 'Yaqin filial topilmadi.');
+      notify(t('branches.branchTitle'), t('branches.nearestNotFound'));
       return;
     }
     await drawRoute(nearest, true);
-  }, [branches, drawRoute, userLocation]);
+  }, [branches, drawRoute, userLocation, t]);
 
   const pickForCart = useCallback(
     async (branch: any) => {
@@ -191,27 +195,21 @@ export default function BranchesScreen() {
         }
       } catch (err) {
         const e = err as ApiError;
-        const title = e?.code === 'BRANCH_CLOSED' ? 'Filial' : 'Xatolik';
-        const message = pickError(err);
-        if (Platform.OS === 'web') {
-          // eslint-disable-next-line no-alert
-          window.alert(`${title}\n${message}`);
-        } else {
-          Alert.alert(title, message);
-        }
+        const title = e?.code === 'BRANCH_CLOSED' ? t('branches.branchTitle') : t('common.errorTitle');
+        notify(title, pickError(err, t));
       } finally {
         pickingRef.current = false;
         setPicking(false);
       }
     },
-    [picking, refresh, from, productIdParam],
+    [picking, refresh, from, productIdParam, t],
   );
 
   const locBanner =
     locStatus === 'denied'
-      ? 'Joylashuv ruxsati berilmagan — masofa ko‘rsatilmaydi. Filial tanlash ishlaydi.'
+      ? t('branches.locationDenied')
       : locStatus === 'unavailable'
-        ? 'Joylashuvni aniqlab bo‘lmadi — masofa ko‘rsatilmaydi.'
+        ? t('branches.locationUnavailable')
         : null;
 
   return (
@@ -221,7 +219,7 @@ export default function BranchesScreen() {
       showsVerticalScrollIndicator={false}
     >
       <LinearGradient colors={['#FFF9E6', '#FFFFFF', '#FFFFFF']} style={styles.heroCard}>
-        <Text style={styles.heroTitle}>Har bir filial — o‘z nuqtasida</Text>
+        <Text style={styles.heroTitle}>{t('branches.heroTitle')}</Text>
         <Pressable onPress={() => void goNearest()} style={styles.nearestBtn}>
           {routing ? (
             <ActivityIndicator color="#120724" />
@@ -229,7 +227,7 @@ export default function BranchesScreen() {
             <Feather name="navigation" size={16} color="#120724" />
           )}
           <Text style={styles.nearestBtnText}>
-            {userLocation ? 'Eng yaqin filial' : 'Filial tanlang'}
+            {userLocation ? t('branches.nearestBranch') : t('branches.chooseBranch')}
           </Text>
         </Pressable>
 
@@ -250,7 +248,7 @@ export default function BranchesScreen() {
           />
         </View>
         {branches.length > 0 && mappableCount === 0 ? (
-          <Text style={styles.locBanner}>Xaritada joylashuvi mavjud emas</Text>
+          <Text style={styles.locBanner}>{t('branches.mapNoCoords')}</Text>
         ) : null}
       </LinearGradient>
 
@@ -259,7 +257,7 @@ export default function BranchesScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Filial, tuman, ko‘cha…"
+          placeholder={t('branches.searchPlaceholder')}
           placeholderTextColor="#94A3B8"
           style={styles.searchInput}
         />
@@ -273,7 +271,7 @@ export default function BranchesScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         <Pressable onPress={() => setRegion('')} style={[styles.chip, !region && styles.chipOn]}>
           <Text style={[styles.chipText, !region && styles.chipTextOn]}>
-            Barchasi · {networkTotal}
+            {t('branches.allRegions', { count: networkTotal })}
           </Text>
         </Pressable>
         {regions.map((item) => {
@@ -289,20 +287,22 @@ export default function BranchesScreen() {
       {loading ? (
         <View style={styles.stateBox}>
           <ActivityIndicator color="#5C328E" />
-          <Text style={styles.stateText}>Yuklanmoqda...</Text>
+          <Text style={styles.stateText}>{t('common.loading')}</Text>
         </View>
       ) : loadError ? (
         <View style={styles.stateBox}>
           <Feather name="cloud-off" size={28} color="#94A3B8" />
-          <Text style={styles.stateTitle}>{loadError}</Text>
+          <Text style={styles.stateTitle}>
+            {localizeError(loadError.err, t, { fallback: 'branches.loadFailed' })}
+          </Text>
           <Pressable style={styles.retryBtn} onPress={loadBranches}>
-            <Text style={styles.retryBtnText}>Qayta urinish</Text>
+            <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       ) : branches.length === 0 ? (
         <View style={styles.stateBox}>
           <Feather name="map-pin" size={28} color="#94A3B8" />
-          <Text style={styles.stateTitle}>Filial topilmadi</Text>
+          <Text style={styles.stateTitle}>{t('branches.emptyTitle')}</Text>
         </View>
       ) : null}
 
@@ -318,14 +318,16 @@ export default function BranchesScreen() {
                 {selected.address}
               </Text>
             </View>
-            {formatDistance(selected.distanceKm) ? (
-              <Text style={styles.selectedKm}>{formatDistance(selected.distanceKm)}</Text>
+            {formatDistance(t, selected.distanceKm) ? (
+              <Text style={styles.selectedKm}>{formatDistance(t, selected.distanceKm)}</Text>
             ) : null}
           </View>
           {route?.distanceKm != null ? (
             <Text style={styles.routeHint}>
-              {route.source === 'osrm' ? 'Yo‘l' : 'Masofa'}: {route.distanceKm} km
-              {route.durationMin != null ? ` · ~${route.durationMin} daqiqa` : ''}
+              {route.source === 'osrm'
+                ? t('branches.routeByRoad', { km: route.distanceKm })
+                : t('branches.routeStraight', { km: route.distanceKm })}
+              {route.durationMin != null ? ` · ${t('branches.routeDurationMin', { min: route.durationMin })}` : ''}
             </Text>
           ) : null}
           <View style={styles.ctaRow}>
@@ -335,10 +337,10 @@ export default function BranchesScreen() {
               style={[styles.ctaYellow, { opacity: routing || !hasValidCoords(selected) ? 0.55 : 1 }]}
               accessibilityRole="button"
               accessibilityState={{ disabled: routing || !hasValidCoords(selected) }}
-              accessibilityLabel={`${shortName(selected.name)} — yo‘nalishni ko‘rsatish`}
+              accessibilityLabel={t('branches.routeA11y', { name: shortName(selected.name) })}
             >
               <Feather name="navigation" size={15} color="#120724" />
-              <Text style={styles.ctaYellowText}>Yo‘lni ko‘rsatish</Text>
+              <Text style={styles.ctaYellowText}>{t('branches.showRoute')}</Text>
             </Pressable>
             <Pressable
               onPress={() => void pickForCart(selected)}
@@ -346,14 +348,14 @@ export default function BranchesScreen() {
               style={[styles.ctaPurple, picking && { opacity: 0.7 }]}
               accessibilityRole="button"
               accessibilityState={{ disabled: picking }}
-              accessibilityLabel={`${shortName(selected.name)} filialini tanlash`}
+              accessibilityLabel={t('branches.selectA11y', { name: shortName(selected.name) })}
             >
               {picking ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
                   <Feather name="check" size={15} color="#fff" />
-                  <Text style={styles.ctaPurpleText}>Tanlash</Text>
+                  <Text style={styles.ctaPurpleText}>{t('branches.select')}</Text>
                 </>
               )}
             </Pressable>
@@ -362,7 +364,7 @@ export default function BranchesScreen() {
                 onPress={() => void Linking.openURL(`tel:${String(selected.phone).replace(/[^\d+]/g, '')}`)}
                 style={styles.ctaCall}
                 accessibilityRole="button"
-                accessibilityLabel={`${shortName(selected.name)} ga qo‘ng‘iroq qilish`}
+                accessibilityLabel={t('branches.callA11y', { name: shortName(selected.name) })}
               >
                 <Feather name="phone" size={15} color="#5C328E" />
               </Pressable>
@@ -371,12 +373,12 @@ export default function BranchesScreen() {
         </View>
       ) : null}
 
-      <Text style={styles.listHeading}>Dorixonalar ro‘yxati</Text>
+      <Text style={styles.listHeading}>{t('branches.listHeading')}</Text>
 
       {branches.map((branch, index) => {
         const active = Number(branch.id) === Number(selected?.id);
         const open24 = branch.is24h || String(branch.hours || '').includes('24');
-        const dist = formatDistance(branch.distanceKm);
+        const dist = formatDistance(t, branch.distanceKm);
         const name = shortName(branch.name);
         return (
           <View
@@ -387,7 +389,7 @@ export default function BranchesScreen() {
               onPress={() => void drawRoute(branch, false)}
               style={styles.rowMain}
               accessibilityRole="button"
-              accessibilityLabel={`${name} filialini tanlash${dist ? `, ${dist}` : ''}`}
+              accessibilityLabel={`${t('branches.selectA11y', { name })}${dist ? `, ${dist}` : ''}`}
               accessibilityState={{ selected: active }}
             >
               <View style={[styles.rowNum, active && styles.rowNumOn]}>
@@ -416,7 +418,7 @@ export default function BranchesScreen() {
                 style={styles.miniNav}
                 hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel={`${name} — yo‘nalishni ko‘rsatish`}
+                accessibilityLabel={t('branches.routeA11y', { name })}
               >
                 <Feather name="navigation" size={12} color="#120724" />
               </Pressable>

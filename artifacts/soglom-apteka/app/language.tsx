@@ -22,10 +22,10 @@ export default function LanguageScreen() {
   return (
     <Screen>
       <View style={[styles.hero, { backgroundColor: colors.secondary }]}>
-        <Text style={[styles.title, { color: colors.foreground }]}>{t('chooseLanguage')}</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-          Tanlangan til saqlanadi. Ba’zi ekranlar hali to‘liq tarjima qilinmagan.
+        <Text style={[styles.title, { color: colors.foreground }]} accessibilityRole="header">
+          {t('common.chooseLanguage')}
         </Text>
+        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{t('common.languageSubtitle')}</Text>
       </View>
 
       <View style={styles.options}>
@@ -42,9 +42,14 @@ export default function LanguageScreen() {
                   borderColor: selected ? colors.primary : colors.border,
                 },
               ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              accessibilityLabel={`Til: ${option.nativeName}${selected ? ', tanlangan' : ''}`}
+              accessibilityRole="radio"
+              accessibilityState={{ selected, checked: selected }}
+              accessibilityLabel={
+                selected
+                  ? t('common.languageOptionSelectedA11y', { name: option.nativeName })
+                  : t('common.languageOptionA11y', { name: option.nativeName })
+              }
+              testID={`language-option-${option.code}`}
             >
               <LanguageFlag language={option.code} size={22} />
               <View style={styles.optionText}>
@@ -52,7 +57,7 @@ export default function LanguageScreen() {
                   {option.nativeName}
                 </Text>
                 <Text style={[styles.optionSubtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-                  {option.shortCode} · {option.displayName}
+                  {option.shortCode} · {t(option.nameKey)}
                 </Text>
               </View>
               {selected ? (

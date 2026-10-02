@@ -1,29 +1,31 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApp } from '@/context/AppContext';
-import { Screen, SectionTitle, formatUzs } from '@/components/AppUI';
+import { Screen, SectionTitle } from '@/components/AppUI';
 import { useColors } from '@/hooks/useColors';
+import { notify } from '@/lib/dialogs';
 
 export default function BonusesScreen() {
   const colors = useColors();
-  const { t, balance, rewards, redeemedRewards, redeemReward, loading } = useApp();
+  const { t, fmt, balance, rewards, redeemedRewards, redeemReward, loading } = useApp();
   const handleRedeem = async (reward: (typeof rewards)[number]) => {
     if (redeemedRewards.includes(reward.id)) return;
     const success = await redeemReward(reward);
-    Alert.alert(success ? t('redeemed') : t('noData'), success ? reward.title : `Kamida ${formatUzs(reward.points)} kerak`);
+    if (success) notify(t('home.rewardRedeemed'), reward.title);
+    else notify(t('home.rewardRedeemFailed'), t('home.rewardMinRequired', { amount: fmt.money(reward.points) }));
   };
   return (
     <Screen>
-      <View style={styles.top}><View><Text style={[styles.kicker, { color: colors.mutedForeground }]}>{t('bonuses')}</Text><Text style={[styles.title, { color: colors.foreground }]}>Mukofotlar</Text></View><View style={[styles.pointsBadge, { backgroundColor: '#fff1c9' }]}><MaterialCommunityIcons name="star-four-points" size={16} color="#db9e14" /><Text style={styles.pointsText}>{balance}</Text></View></View>
-      <View style={[styles.intro, { backgroundColor: colors.secondary }]}><View style={[styles.introIcon, { backgroundColor: colors.primary }]}><Feather name="gift" size={21} color="#fff" /></View><View style={{ flex: 1 }}><Text style={[styles.introTitle, { color: colors.foreground }]}>Ballaringizni sovg‘alarga almashtiring</Text><Text style={[styles.introText, { color: colors.mutedForeground }]}>Har bir xarid sizni yangi mukofotga yaqinlashtiradi</Text></View></View>
-      <SectionTitle title="Mukofotlar katalogi" />
+      <View style={styles.top}><View><Text style={[styles.kicker, { color: colors.mutedForeground }]}>{t('home.bonusesKicker')}</Text><Text style={[styles.title, { color: colors.foreground }]}>{t('home.rewardsTitle')}</Text></View><View style={[styles.pointsBadge, { backgroundColor: '#fff1c9' }]}><MaterialCommunityIcons name="star-four-points" size={16} color="#db9e14" /><Text style={styles.pointsText}>{balance}</Text></View></View>
+      <View style={[styles.intro, { backgroundColor: colors.secondary }]}><View style={[styles.introIcon, { backgroundColor: colors.primary }]}><Feather name="gift" size={21} color="#fff" /></View><View style={{ flex: 1 }}><Text style={[styles.introTitle, { color: colors.foreground }]}>{t('home.rewardsIntroTitle')}</Text><Text style={[styles.introText, { color: colors.mutedForeground }]}>{t('home.rewardsIntroText')}</Text></View></View>
+      <SectionTitle title={t('home.rewardsCatalog')} />
       {loading ? (
-        <Text style={{ color: colors.mutedForeground, marginTop: 8 }}>Yuklanmoqda...</Text>
+        <Text style={{ color: colors.mutedForeground, marginTop: 8 }}>{t('common.loading')}</Text>
       ) : !rewards.length ? (
-        <Text style={{ color: colors.mutedForeground, marginTop: 8 }}>Hozircha mukofotlar yo‘q yoki serverdan kelmadi.</Text>
+        <Text style={{ color: colors.mutedForeground, marginTop: 8 }}>{t('home.rewardsEmpty')}</Text>
       ) : (
-        <View style={styles.grid}>{rewards.map((reward) => { const redeemed = redeemedRewards.includes(reward.id); return <View key={reward.id} style={[styles.reward, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.rewardArt, { backgroundColor: reward.accent }]}><MaterialCommunityIcons name={reward.icon as keyof typeof MaterialCommunityIcons.glyphMap} size={37} color={colors.primary} /></View><Text style={[styles.rewardTitle, { color: colors.foreground }]} numberOfLines={2}>{reward.title}</Text><Text style={[styles.rewardSubtitle, { color: colors.mutedForeground }]}>{reward.subtitle}</Text><View style={styles.rewardFooter}><View style={styles.cost}><MaterialCommunityIcons name="star-four-points" size={13} color="#dfa81e" /><Text style={[styles.costText, { color: colors.foreground }]}>{reward.points}</Text></View><Pressable disabled={redeemed} onPress={() => handleRedeem(reward)} style={[styles.redeem, { backgroundColor: redeemed ? colors.muted : colors.primary }]}><Text style={[styles.redeemText, { color: redeemed ? colors.mutedForeground : '#fff' }]}>{redeemed ? '✓' : t('redeem')}</Text></Pressable></View></View>; })}</View>
+        <View style={styles.grid}>{rewards.map((reward) => { const redeemed = redeemedRewards.includes(reward.id); return <View key={reward.id} style={[styles.reward, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.rewardArt, { backgroundColor: reward.accent }]}><MaterialCommunityIcons name={reward.icon as keyof typeof MaterialCommunityIcons.glyphMap} size={37} color={colors.primary} /></View><Text style={[styles.rewardTitle, { color: colors.foreground }]} numberOfLines={2}>{reward.title}</Text><Text style={[styles.rewardSubtitle, { color: colors.mutedForeground }]}>{reward.subtitle}</Text><View style={styles.rewardFooter}><View style={styles.cost}><MaterialCommunityIcons name="star-four-points" size={13} color="#dfa81e" /><Text style={[styles.costText, { color: colors.foreground }]}>{reward.points}</Text></View><Pressable disabled={redeemed} onPress={() => handleRedeem(reward)} style={[styles.redeem, { backgroundColor: redeemed ? colors.muted : colors.primary }]}><Text style={[styles.redeemText, { color: redeemed ? colors.mutedForeground : '#fff' }]}>{redeemed ? '✓' : t('home.rewardRedeem')}</Text></Pressable></View></View>; })}</View>
       )}
     </Screen>
   );

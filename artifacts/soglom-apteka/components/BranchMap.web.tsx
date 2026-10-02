@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useApp } from '@/context/AppContext';
 import type { LatLng, RouteInfo } from '@/lib/maps';
 import { hasValidCoords } from '@/lib/maps';
 
@@ -108,6 +109,7 @@ export default function BranchMap({
   height = 320,
   countryView = true,
 }: Props) {
+  const { t } = useApp();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapRef = useRef<View>(null);
   const mapRef = useRef<any>(null);
@@ -164,7 +166,7 @@ export default function BranchMap({
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', // i18n-ignore: map data licence attribution
       }).addTo(map);
 
       mapRef.current = map;
@@ -341,13 +343,13 @@ export default function BranchMap({
       <div ref={containerRef as any} style={{ width: '100%', height: '100%', borderRadius: 18 }} />
       {mappable.length === 0 ? (
         <View style={[styles.emptyOverlay, styles.emptyWrap]} pointerEvents="none">
-          <Text style={styles.emptyText}>Xaritada joylashuvi mavjud emas</Text>
+          <Text style={styles.emptyText}>{t('branches.mapNoCoords')}</Text>
         </View>
       ) : null}
       {!active && mappable.length > 0 ? (
         <Pressable
           onPress={activate}
-          accessibilityLabel="Xaritani faollashtirish"
+          accessibilityLabel={t('branches.mapActivateA11y')}
           style={[styles.lockOverlay, { touchAction: 'pan-y' } as any]}
         />
       ) : null}

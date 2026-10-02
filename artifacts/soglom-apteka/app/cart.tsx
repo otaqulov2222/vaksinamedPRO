@@ -4,7 +4,6 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -15,7 +14,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
+import { localizedName } from '@/lib/i18n/data';
 import { api, type ApiError } from '@/lib/api';
+import { confirmAction, notify } from '@/lib/dialogs';
+import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -34,76 +36,7 @@ const FOCUS_FRESH_MS = 400;
 
 type PriceSnap = Record<string, number>;
 type BusyAction = 'inc' | 'dec' | 'remove';
-type PreflightChoice = 'continue' | 'cancel';
-
-const priceUz = (n: number) =>
-  `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
-
-function toast(title: string, msg: string) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    window.alert(`${title}\n${msg}`);
-  } else {
-    Alert.alert(title, msg);
-  }
-}
-
-/**
- * Binary confirm with identical semantics on web and native:
- * - Confirm / OK → true
- * - Cancel → false
- * Never map Cancel to a destructive or “continue” action.
- */
-function askConfirm(opts: {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  cancelLabel?: string;
-  destructive?: boolean;
-}): Promise<boolean> {
-  const cancelLabel = opts.cancelLabel ?? 'Bekor qilish';
-  if (Platform.OS === 'web') {
-    // window.confirm: OK=true, Cancel=false — labels must match that mapping.
-    // eslint-disable-next-line no-alert
-    const ok = window.confirm(
-      `${opts.title}\n\n${opts.message}\n\nOK — ${opts.confirmLabel}\nCancel — ${cancelLabel}`,
-    );
-    return Promise.resolve(Boolean(ok));
-  }
-  return new Promise((resolve) => {
-    Alert.alert(opts.title, opts.message, [
-      { text: cancelLabel, style: 'cancel', onPress: () => resolve(false) },
-      {
-        text: opts.confirmLabel,
-        style: opts.destructive ? 'destructive' : 'default',
-        onPress: () => resolve(true),
-      },
-    ]);
-  });
-}
-
-/** Stock warning before checkout: Continue vs Cancel (same OK/Cancel mapping on web). */
-function askContinueOrCancel(opts: {
-  title: string;
-  message: string;
-  continueLabel: string;
-  cancelLabel?: string;
-}): Promise<PreflightChoice> {
-  const cancelLabel = opts.cancelLabel ?? 'Bekor qilish';
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    const ok = window.confirm(
-      `${opts.title}\n\n${opts.message}\n\nOK — ${opts.continueLabel}\nCancel — ${cancelLabel}`,
-    );
-    return Promise.resolve(ok ? 'continue' : 'cancel');
-  }
-  return new Promise((resolve) => {
-    Alert.alert(opts.title, opts.message, [
-      { text: cancelLabel, style: 'cancel', onPress: () => resolve('cancel') },
-      { text: opts.continueLabel, onPress: () => resolve('continue') },
-    ]);
-  });
-}
+type CartNotice = { code: string; message: string; productId?: number; cartItemId?: number };
 
 async function readSnap(): Promise<PriceSnap> {
   try {
@@ -137,7 +70,7 @@ function SkeletonBlock({ style }: { style?: object }) {
 export default function CartScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { syncCartCount } = useApp();
+  const { syncCartCount, t, fmt, language } = useApp();
   const narrow = width < 380;
   const contentWidth = Math.min(width, 480);
 
@@ -147,7 +80,7 @@ export default function CartScreen() {
   const [busyMap, setBusyMap] = useState<Record<number, BusyAction>>({});
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [priceFlags, setPriceFlags] = useState<Record<string, { previous: number; current: number }>>({});
-  const [notices, setNotices] = useState<Array<{ code: string; message: string }>>([]);
+  const [notices, setNotices] = useState<CartNotice[]>([]);
   const [footerHeight, setFooterHeight] = useState(0); // sticky footer clearance
 
   const loadGen = useRef(0);
@@ -205,15 +138,15 @@ export default function CartScreen() {
         if (gen !== loadGen.current) return;
         if (!cartRef.current) {
           setCart(null);
-          setError(e instanceof Error ? e.message : 'Savatni yuklab bo‘lmadi');
+          setError(localizeError(e, t));
         } else {
-          toast('Xatolik', e instanceof Error ? e.message : 'Savatni yangilab bo‘lmadi');
+          notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'cart.cartRefreshFailed' }));
         }
       } finally {
         if (gen === loadGen.current) setLoading(false);
       }
     },
-    [applyPayload],
+    [applyPayload, t],
   );
 
   useFocusEffect(
@@ -253,9 +186,10 @@ export default function CartScreen() {
       await applyPayload(data);
     } catch (e) {
       const err = e as ApiError;
-      toast(
-        err.code === 'STOCK_UNAVAILABLE' ? 'Qoldiq' : 'Xatolik',
-        err.message || 'Miqdor yangilanmadi',
+      const stock = err.code === 'STOCK_UNAVAILABLE';
+      notify(
+        stock ? t('cart.stockTitle') : t('common.errorTitle'),
+        localizeError(err, t, { fallback: stock ? 'cart.stockUnavailable' : 'cart.cartQtyUpdateFailed' }),
       );
       // Keep prior UI until server refresh — do not pretend success.
       await load({ forceSkeleton: false, force: true });
@@ -272,8 +206,7 @@ export default function CartScreen() {
       const data = await api.removeCartItem(id);
       await applyPayload(data);
     } catch (e) {
-      const err = e as ApiError;
-      toast('Xatolik', err.message || 'Mahsulot o‘chirilmadi');
+      notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'cart.cartRemoveFailed' }));
       await load({ forceSkeleton: false, force: true });
     } finally {
       endItemBusy(id);
@@ -285,11 +218,11 @@ export default function CartScreen() {
     if (!Number.isFinite(id)) return;
     if (busyItemsRef.current.has(id)) return;
 
-    const confirmed = await askConfirm({
-      title: 'Mahsulotni o‘chirish',
-      message: 'Bu mahsulotni savatdan o‘chirmoqchimisiz?',
-      confirmLabel: 'O‘chirish',
-      cancelLabel: 'Bekor qilish',
+    const confirmed = await confirmAction({
+      title: t('cart.cartRemoveTitle'),
+      message: t('cart.cartRemoveMessage'),
+      confirmText: t('cart.cartRemoveConfirm'),
+      cancelText: t('common.cancel'),
       destructive: true,
     });
     if (!confirmed) return;
@@ -313,12 +246,11 @@ export default function CartScreen() {
       const hasBranch = Boolean(cart?.branch?.id ?? cart?.cart?.branchId);
       if (!hasBranch) {
         // Cancel stays on cart; Confirm opens branch picker — never continue without branch.
-        const goBranch = await askConfirm({
-          title: 'Filial',
-          message:
-            'Filial tanlanmagan. Buyurtmani rasmiylashtirishdan oldin filialni tanlang.',
-          confirmLabel: 'Filial tanlash',
-          cancelLabel: 'Bekor qilish',
+        const goBranch = await confirmAction({
+          title: t('cart.branchLabel'),
+          message: t('cart.cartBranchRequiredMessage'),
+          confirmText: t('cart.chooseBranch'),
+          cancelText: t('common.cancel'),
         });
         if (goBranch) {
           router.push({ pathname: '/branches', params: { from: 'cart' } });
@@ -328,18 +260,18 @@ export default function CartScreen() {
 
       const stockIssue = items.some((item: any) => Boolean(item.stockInsufficient));
       if (stockIssue) {
-        const choice = await askContinueOrCancel({
-          title: 'Qoldiq',
-          message: 'Ba’zi mahsulotlar tanlangan filialda yetarli emas.',
-          continueLabel: 'Davom etish',
-          cancelLabel: 'Bekor qilish',
+        const proceed = await confirmAction({
+          title: t('cart.stockTitle'),
+          message: t('cart.stockShortMessage'),
+          confirmText: t('common.continue'),
+          cancelText: t('common.cancel'),
         });
-        if (choice === 'cancel') return;
+        if (!proceed) return;
       }
 
       router.push('/checkout');
     } catch (e) {
-      toast('Xatolik', e instanceof Error ? e.message : 'Checkout ochilmadi');
+      notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'cart.cartCheckoutOpenFailed' }));
     } finally {
       setTimeout(() => {
         checkoutLock.current = false;
@@ -364,10 +296,26 @@ export default function CartScreen() {
     : 24 + bottomPad;
   const subtotalNum = Number(cart?.subtotal);
   const subtotalKnown = Number.isFinite(subtotalNum) && subtotalNum >= 0;
-  const subtotalLabel = subtotalKnown ? priceUz(subtotalNum) : '—';
+  const subtotalLabel = subtotalKnown ? fmt.money(subtotalNum) : t('common.dash');
   const headerSubtitle = hasItems
-    ? `Tanlagan mahsulotlaringiz · ${items.length} ta tur`
-    : 'Savatda hozircha mahsulot yo‘q';
+    ? t('cart.cartSubtitleItems', { count: items.length })
+    : t('cart.cartSubtitleEmpty');
+
+  const noticeText = (n: CartNotice) => {
+    if (n.code === 'PRODUCT_REMOVED') return t('cart.cartNoticeProductRemoved');
+    if (n.code === 'STOCK_CHANGED') {
+      const match = items.find((item: any) =>
+        n.cartItemId != null
+          ? Number(item.id) === Number(n.cartItemId)
+          : n.productId != null && Number(item.productId ?? item.product?.id) === Number(n.productId),
+      );
+      const avail = match?.available;
+      return avail != null && Number.isFinite(Number(avail))
+        ? t('cart.cartStockChangedQty', { count: Math.max(0, Number(avail)) })
+        : t('cart.cartStockChanged');
+    }
+    return n.message;
+  };
 
   const openBranches = () => {
     router.push({ pathname: '/branches', params: { from: 'cart' } });
@@ -379,13 +327,13 @@ export default function CartScreen() {
         style={styles.iconBtn}
         onPress={goBack}
         accessibilityRole="button"
-        accessibilityLabel="Orqaga"
+        accessibilityLabel={t('common.back')}
       >
         <Feather name="chevron-left" size={22} color={PURPLE_DEEP} />
       </Pressable>
       <View style={styles.headerCenter}>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          Savat
+          {t('common.navCart')}
         </Text>
         <Text style={styles.headerSub} numberOfLines={2}>
           {headerSubtitle}
@@ -423,15 +371,15 @@ export default function CartScreen() {
           <View style={styles.stateIcon}>
             <MaterialCommunityIcons name="cloud-off-outline" size={32} color={MUTED} />
           </View>
-          <Text style={styles.stateTitle}>Savatni yuklab bo‘lmadi</Text>
+          <Text style={styles.stateTitle}>{t('cart.cartLoadFailed')}</Text>
           <Text style={styles.stateHint}>{error}</Text>
           <Pressable
             style={styles.primaryBtn}
             onPress={() => void load({ forceSkeleton: true, force: true })}
             accessibilityRole="button"
-            accessibilityLabel="Qayta urinish"
+            accessibilityLabel={t('common.retry')}
           >
-            <Text style={styles.primaryBtnText}>Qayta urinish</Text>
+            <Text style={styles.primaryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       </View>
@@ -464,7 +412,7 @@ export default function CartScreen() {
             <View style={styles.branchBody}>
               {cart?.branch?.name ? (
                 <>
-                  <Text style={styles.branchLabel}>Filial</Text>
+                  <Text style={styles.branchLabel}>{t('cart.branchLabel')}</Text>
                   <Text style={styles.branchName} numberOfLines={2}>
                     {String(cart.branch.name)}
                   </Text>
@@ -476,9 +424,9 @@ export default function CartScreen() {
                 </>
               ) : (
                 <>
-                  <Text style={styles.branchWarn}>Filial tanlanmagan</Text>
+                  <Text style={styles.branchWarn}>{t('cart.branchNotSelected')}</Text>
                   <Text style={styles.branchHint} numberOfLines={2}>
-                    Qoldiq filial tanlangandan keyin aniqlanadi.
+                    {t('cart.cartBranchStockHint')}
                   </Text>
                 </>
               )}
@@ -487,10 +435,10 @@ export default function CartScreen() {
               style={styles.branchAction}
               onPress={openBranches}
               accessibilityRole="button"
-              accessibilityLabel={cart?.branch?.name ? 'Filialni o‘zgartirish' : 'Filial tanlash'}
+              accessibilityLabel={cart?.branch?.name ? t('cart.changeBranchA11y') : t('cart.chooseBranch')}
             >
               <Text style={styles.branchActionText} numberOfLines={1}>
-                {cart?.branch?.name ? 'O‘zgartirish' : 'Tanlash'}
+                {cart?.branch?.name ? t('cart.change') : t('cart.cartChoose')}
               </Text>
             </Pressable>
           </View>
@@ -499,7 +447,7 @@ export default function CartScreen() {
         {notices.map((n, i) => (
           <View key={`${n.code}-${i}`} style={styles.notice}>
             <Feather name="info" size={14} color={WARN} />
-            <Text style={styles.noticeText}>{n.message}</Text>
+            <Text style={styles.noticeText}>{noticeText(n)}</Text>
           </View>
         ))}
 
@@ -508,24 +456,24 @@ export default function CartScreen() {
             <View style={styles.emptyIcon}>
               <Feather name="shopping-cart" size={26} color={PURPLE} />
             </View>
-            <Text style={styles.emptyTitle}>Savat bo‘sh</Text>
+            <Text style={styles.emptyTitle}>{t('cart.cartEmptyTitle')}</Text>
             <Text style={styles.emptyHint}>
-              Mahsulot tanlang va buyurtmangizni shu yerda rasmiylashtiring.
+              {t('cart.cartEmptyHint')}
             </Text>
             <Pressable
               style={styles.primaryBtn}
               onPress={() => router.replace({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
               accessibilityRole="button"
-              accessibilityLabel="Mahsulot tanlash"
+              accessibilityLabel={t('cart.cartBrowseProducts')}
             >
-              <Text style={styles.primaryBtnText}>Mahsulot tanlash</Text>
+              <Text style={styles.primaryBtnText}>{t('cart.cartBrowseProducts')}</Text>
             </Pressable>
           </View>
         ) : (
           <View style={styles.list}>
             {items.map((item: any) => {
               const product = item.product || {};
-              const name = String(product.nameUz || product.nameRu || 'Mahsulot');
+              const name = (localizedName(language, product) || t('cart.productFallbackName'));
               const manufacturer = String(product.manufacturer || '').trim();
               const unit = String(product.unit || '').trim();
               const metaLine = [manufacturer, unit].filter(Boolean).join(' · ');
@@ -553,7 +501,7 @@ export default function CartScreen() {
                       style={styles.productHit}
                       onPress={() => openProduct(product)}
                       accessibilityRole="button"
-                      accessibilityLabel={`${name} — mahsulotni ko‘rish`}
+                      accessibilityLabel={t('cart.cartOpenProductA11y', { name })}
                     >
                       <View
                         style={styles.itemIcon}
@@ -576,7 +524,7 @@ export default function CartScreen() {
                           </Text>
                         ) : null}
                         <Text style={styles.itemUnitPrice} numberOfLines={1}>
-                          {priceUz(unitPrice)}
+                          {fmt.money(unitPrice)}
                         </Text>
                       </View>
                     </Pressable>
@@ -586,7 +534,7 @@ export default function CartScreen() {
                       disabled={itemBusy}
                       accessibilityRole="button"
                       accessibilityState={{ disabled: itemBusy }}
-                      accessibilityLabel="Mahsulotni savatdan o‘chirish"
+                      accessibilityLabel={t('cart.cartRemoveItemA11y')}
                     >
                       {busyAction === 'remove' ? (
                         <ActivityIndicator size="small" color={BAD} />
@@ -598,22 +546,28 @@ export default function CartScreen() {
 
                   {flag ? (
                     <Text style={styles.priceFlag} accessibilityLiveRegion="polite">
-                      Narx o‘zgargan: {priceUz(flag.previous)} → {priceUz(flag.current)}
+                      {t('cart.cartPriceChanged', {
+                        previous: fmt.money(flag.previous),
+                        current: fmt.money(flag.current),
+                      })}
                     </Text>
                   ) : null}
 
                   {item.stockInsufficient && known ? (
                     <Text style={styles.stockBad} accessibilityLiveRegion="polite">
-                      Mavjud miqdor o‘zgargan
-                      {availableKnownQty != null ? ` (mavjud: ${availableKnownQty} dona)` : ''}
+                      {availableKnownQty != null
+                        ? t('cart.cartStockChangedQty', { count: availableKnownQty })
+                        : t('cart.cartStockChanged')}
                     </Text>
                   ) : availableKnownQty != null ? (
-                    <Text style={styles.stockOk}>Mavjud: {availableKnownQty} dona</Text>
+                    <Text style={styles.stockOk}>
+                      {t('cart.cartStockAvailable', { count: availableKnownQty })}
+                    </Text>
                   ) : !known ? (
                     <View style={styles.stockWarnBlock} accessibilityLiveRegion="polite">
-                      <Text style={styles.stockWarn}>Filial tanlanmagan</Text>
+                      <Text style={styles.stockWarn}>{t('cart.branchNotSelected')}</Text>
                       <Text style={styles.stockWarnHint}>
-                        Qoldiq filial tanlangandan keyin aniqlanadi.
+                        {t('cart.cartBranchStockHint')}
                       </Text>
                     </View>
                   ) : null}
@@ -626,7 +580,7 @@ export default function CartScreen() {
                         disabled={minusDisabled}
                         accessibilityRole="button"
                         accessibilityState={{ disabled: minusDisabled }}
-                        accessibilityLabel="Mahsulot sonini kamaytirish"
+                        accessibilityLabel={t('cart.cartDecreaseA11y')}
                         hitSlop={4}
                       >
                         {busyAction === 'dec' ? (
@@ -641,7 +595,7 @@ export default function CartScreen() {
                       </Pressable>
                       <Text
                         style={styles.qtyValue}
-                        accessibilityLabel={`Miqdor ${qty}`}
+                        accessibilityLabel={t('cart.cartQtyA11y', { count: qty })}
                         accessibilityRole="text"
                       >
                         {qty}
@@ -652,7 +606,7 @@ export default function CartScreen() {
                         disabled={plusDisabled}
                         accessibilityRole="button"
                         accessibilityState={{ disabled: plusDisabled }}
-                        accessibilityLabel="Mahsulot sonini oshirish"
+                        accessibilityLabel={t('cart.cartIncreaseA11y')}
                         hitSlop={4}
                       >
                         {busyAction === 'inc' ? (
@@ -667,7 +621,7 @@ export default function CartScreen() {
                       </Pressable>
                     </View>
                     <Text style={styles.lineTotal} numberOfLines={1}>
-                      {priceUz(lineTotal)}
+                      {fmt.money(lineTotal)}
                     </Text>
                   </View>
                 </View>
@@ -678,22 +632,22 @@ export default function CartScreen() {
 
         {hasItems ? (
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Hisob (taxminiy)</Text>
+            <Text style={styles.summaryTitle}>{t('cart.summaryTitle')}</Text>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Mahsulotlar</Text>
+              <Text style={styles.summaryLabel}>{t('cart.summaryItems')}</Text>
               <Text style={styles.summaryValue} numberOfLines={1}>
                 {subtotalLabel}
               </Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryTotalLabel}>Jami</Text>
+              <Text style={styles.summaryTotalLabel}>{t('cart.cartTotal')}</Text>
               <Text style={styles.summaryTotalValue} numberOfLines={1}>
                 {subtotalLabel}
               </Text>
             </View>
             <Text style={styles.summaryNote}>
-              Cashback va yetkazish — rasmiylashtirishda. Yakuniy summa serverda hisoblanadi.
+              {t('cart.cartSummaryNote')}
             </Text>
           </View>
         ) : null}
@@ -709,7 +663,7 @@ export default function CartScreen() {
         >
           <View style={[styles.footerInner, { maxWidth: contentWidth - sidePad * 2, width: '100%' }]}>
             <View style={styles.footerSum}>
-              <Text style={styles.footerSumLabel}>Oraliq jami</Text>
+              <Text style={styles.footerSumLabel}>{t('cart.cartSubtotal')}</Text>
               <Text style={styles.footerSumValue} numberOfLines={1}>
                 {subtotalLabel}
               </Text>
@@ -720,13 +674,13 @@ export default function CartScreen() {
               disabled={checkoutBusy}
               accessibilityRole="button"
               accessibilityState={{ disabled: checkoutBusy }}
-              accessibilityLabel="Rasmiylashtirish"
+              accessibilityLabel={t('cart.cartCheckoutCta')}
             >
               {checkoutBusy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.ctaText} numberOfLines={1}>
-                  Rasmiylashtirish
+                  {t('cart.cartCheckoutCta')}
                 </Text>
               )}
             </Pressable>

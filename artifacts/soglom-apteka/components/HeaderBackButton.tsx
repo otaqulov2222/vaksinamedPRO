@@ -2,6 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useApp } from '@/context/AppContext';
 
 type Props = {
   fallback?: Href;
@@ -10,7 +11,9 @@ type Props = {
 };
 
 /** Barcha stack bo‘limlarda ko‘rinadigan orqaga tugmasi (web + mobile). */
-export function HeaderBackButton({ fallback = '/(tabs)', label = 'Orqaga', tint = '#5C328E' }: Props) {
+export function HeaderBackButton({ fallback = '/(tabs)', label: labelProp, tint = '#5C328E' }: Props) {
+  const { t } = useApp();
+  const label = labelProp ?? t('common.back');
   const goBack = () => {
     if (router.canGoBack()) {
       router.back();

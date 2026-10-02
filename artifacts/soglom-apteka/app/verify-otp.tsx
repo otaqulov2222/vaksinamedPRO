@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { api, type ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
+import { localizeError } from '@/lib/i18n/errors';
 import { formatLocalPhoneMasked, normalizeLocalPhone } from '@/lib/phone';
 import { clearRegisterDraft, peekRegisterDraft } from '@/lib/registerDraft';
 
@@ -28,34 +29,13 @@ const inputWebFix =
     ? ({ outlineStyle: 'none' } as object)
     : ({ outlineStyle: 'none' } as object);
 
-function mapOtpError(err: ApiError, kind: 'verify' | 'resend'): string {
-  const status = err.status;
-  const raw = String(err.message || '');
-  if (status === 429 || /60 soniya|qayta urinib|rate/i.test(raw)) {
-    return 'Kod allaqachon yuborilgan. 60 soniyadan keyin qayta urinib ko‘ring.';
-  }
-  if (status === 503 || status === 502 || /sms|eskiz|yuborilmadi|provider/i.test(raw)) {
-    return 'SMS yuborib bo‘lmadi. Keyinroq qayta urinib ko‘ring.';
-  }
-  if (!status && /Serverga ulanib|network|Failed to fetch/i.test(raw)) {
-    return 'Serverga ulanib bo‘lmadi. Internet yoki API holatini tekshiring.';
-  }
-  if (kind === 'verify') {
-    if (status === 401 || /noto‘g‘ri|muddati|expired|invalid/i.test(raw)) {
-      return 'Kod noto‘g‘ri yoki muddati tugagan';
-    }
-    return 'Tasdiqlash amalga oshmadi. Qayta urinib ko‘ring.';
-  }
-  return 'Kodni qayta yuborib bo‘lmadi. Qayta urinib ko‘ring.';
-}
-
 /**
  * OTP verify — visual/security polish only.
  * Server remains authoritative; no TTL/hash/rate-limit changes.
  */
 export default function VerifyOtpScreen() {
   const insets = useSafeAreaInsets();
-  const { refresh } = useApp();
+  const { refresh, t } = useApp();
   const params = useLocalSearchParams<{
     phone?: string;
     purpose?: string;
@@ -107,11 +87,11 @@ export default function VerifyOtpScreen() {
     setError(null);
     setResendOk(false);
     if (!codeComplete) {
-      setError('6 xonali kodni kiriting');
+      setError(t('auth.otpEnterCode', { length: OTP_LEN }));
       return;
     }
     if (!phoneLocal) {
-      setError('Telefon raqam topilmadi. Orqaga qaytib qayta urinib ko‘ring.');
+      setError(t('auth.otpPhoneMissing'));
       return;
     }
 
@@ -130,7 +110,13 @@ export default function VerifyOtpScreen() {
       await refresh();
       router.replace('/(tabs)');
     } catch (err: unknown) {
-      setError(mapOtpError(err as ApiError, 'verify'));
+      setError(localizeError(err, t, {
+        byStatus: {
+          401: 'auth.otpInvalid',
+          409: 'auth.phoneTaken',
+        },
+        fallback: 'auth.otpVerifyFailed',
+      }));
     } finally {
       setVerifying(false);
       verifyingRef.current = false;
@@ -140,7 +126,7 @@ export default function VerifyOtpScreen() {
   const resend = async () => {
     if (seconds > 0 || resendingRef.current || busy) return;
     if (!phoneLocal) {
-      setError('Telefon raqam topilmadi. Orqaga qaytib qayta urinib ko‘ring.');
+      setError(t('auth.otpPhoneMissing'));
       return;
     }
     setError(null);
@@ -152,7 +138,16 @@ export default function VerifyOtpScreen() {
       setSeconds(RESEND_COOLDOWN_SEC);
       setResendOk(true);
     } catch (err: unknown) {
-      setError(mapOtpError(err as ApiError, 'resend'));
+      setError(localizeError(err, t, {
+        byStatus: {
+          404: 'auth.phoneNotRegistered',
+          409: 'auth.phoneTaken',
+          429: 'auth.otpRecentlySent',
+          502: 'auth.smsSendFailed',
+          503: 'auth.smsSendFailed',
+        },
+        fallback: 'auth.otpResendFailed',
+      }));
     } finally {
       setResending(false);
       resendingRef.current = false;
@@ -191,14 +186,14 @@ export default function VerifyOtpScreen() {
             style={styles.back}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Orqaga"
+            accessibilityLabel={t('common.back')}
           >
             <Feather name="chevron-left" size={20} color="#FFCC00" />
           </Pressable>
 
-          <Text style={styles.title}>SMS kod</Text>
+          <Text style={styles.title}>{t('auth.otpTitle')}</Text>
           <Text style={styles.sub}>
-            {phoneLabel} raqamiga yuborilgan {OTP_LEN} xonali kodni kiriting
+            {t('auth.otpSubtitle', { phone: phoneLabel, length: OTP_LEN })}
           </Text>
 
           <View style={styles.cardWrap}>
@@ -225,7 +220,7 @@ export default function VerifyOtpScreen() {
                 textContentType="oneTimeCode"
                 autoComplete="sms-otp"
                 importantForAutofill="yes"
-                accessibilityLabel={`${OTP_LEN} xonali SMS kod`}
+                accessibilityLabel={t('auth.otpCodeA11y', { length: OTP_LEN })}
                 onSubmitEditing={() => {
                   if (canVerify) void verify();
                 }}
@@ -240,7 +235,7 @@ export default function VerifyOtpScreen() {
 
               {resendOk && !error ? (
                 <Text style={styles.resendOk} accessibilityLiveRegion="polite">
-                  Yangi kod yuborildi
+                  {t('auth.otpResent')}
                 </Text>
               ) : null}
 
@@ -249,7 +244,7 @@ export default function VerifyOtpScreen() {
                 onPress={() => void verify()}
                 style={[styles.btn, !canVerify && styles.btnDisabled]}
                 accessibilityRole="button"
-                accessibilityLabel="Tasdiqlash"
+                accessibilityLabel={t('common.confirm')}
                 accessibilityState={{ disabled: !canVerify, busy: verifying }}
               >
                 {canVerify || verifying ? (
@@ -258,14 +253,14 @@ export default function VerifyOtpScreen() {
                       <ActivityIndicator color="#120724" />
                     ) : (
                       <>
-                        <Text style={styles.btnText}>Tasdiqlash</Text>
+                        <Text style={styles.btnText}>{t('common.confirm')}</Text>
                         <Feather name="arrow-right" size={18} color="#120724" />
                       </>
                     )}
                   </LinearGradient>
                 ) : (
                   <View style={[styles.btnGrad, styles.btnGradDisabled]}>
-                    <Text style={styles.btnTextDisabled}>Tasdiqlash</Text>
+                    <Text style={styles.btnTextDisabled}>{t('common.confirm')}</Text>
                     <Feather name="arrow-right" size={18} color="#A8B0C0" />
                   </View>
                 )}
@@ -278,8 +273,8 @@ export default function VerifyOtpScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={
                   seconds > 0
-                    ? `Qayta yuborish ${seconds} soniyadan keyin`
-                    : 'Kodni qayta yuborish'
+                    ? t('auth.otpResendCountdownA11y', { seconds })
+                    : t('auth.otpResend')
                 }
                 accessibilityState={{ disabled: seconds > 0 || busy, busy: resending }}
               >
@@ -287,7 +282,9 @@ export default function VerifyOtpScreen() {
                   <ActivityIndicator color="#5C328E" />
                 ) : (
                   <Text style={[styles.resendText, (seconds > 0 || busy) && styles.resendMuted]}>
-                    {seconds > 0 ? `Qayta yuborish: ${seconds}s` : 'Kodni qayta yuborish'}
+                    {seconds > 0
+                      ? t('auth.otpResendCountdown', { seconds })
+                      : t('auth.otpResend')}
                   </Text>
                 )}
               </Pressable>

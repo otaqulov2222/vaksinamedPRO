@@ -15,7 +15,9 @@ import {
   type TextInput as TextInputType,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useApp } from '@/context/AppContext';
 import { api, type ApiError } from '@/lib/api';
+import { localizeError } from '@/lib/i18n/errors';
 import {
   formatLocalPhoneDisplay,
   isValidLocalPhone,
@@ -35,47 +37,16 @@ const inputWebFix =
       } as object)
     : ({ outlineStyle: 'none' } as object);
 
+const NAME_MIN = 2;
 const NAME_MAX = 80;
 const PASSWORD_MIN = 6;
 
 type FieldKey = 'name' | 'phone' | 'password';
 
-function mapRegisterError(err: ApiError): { message: string; alreadyRegistered: boolean } {
-  const status = err.status;
-  const raw = String(err.message || '');
-  if (status === 409 || /allaqachon|ro‘yxatdan o‘tgan|royxatdan otgan/i.test(raw)) {
-    return {
-      message: 'Bu raqam allaqachon ro‘yxatdan o‘tgan. Kirish qiling.',
-      alreadyRegistered: true,
-    };
-  }
-  if (status === 429 || /60 soniya|qayta urinib|rate/i.test(raw)) {
-    return {
-      message: 'Kod allaqachon yuborilgan. 60 soniyadan keyin qayta urinib ko‘ring.',
-      alreadyRegistered: false,
-    };
-  }
-  if (status === 503 || /sms|eskiz|yuborilmadi/i.test(raw)) {
-    return {
-      message: raw || 'SMS yuborib bo‘lmadi. Keyinroq qayta urinib ko‘ring.',
-      alreadyRegistered: false,
-    };
-  }
-  if (!status && /Serverga ulanib|network|Failed to fetch/i.test(raw)) {
-    return {
-      message: 'Serverga ulanib bo‘lmadi. Internet yoki API holatini tekshiring.',
-      alreadyRegistered: false,
-    };
-  }
-  return {
-    message: raw || 'Xatolik yuz berdi. Qayta urinib ko‘ring.',
-    alreadyRegistered: false,
-  };
-}
-
 /** Ro‘yxat: ism + telefon + parol → SMS tasdiq (OTP). Auth shartnomasi o‘zgarmaydi. */
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useApp();
   const scrollRef = useRef<ScrollView>(null);
   const phoneRef = useRef<TextInputType>(null);
   const passwordRef = useRef<TextInputType>(null);
@@ -91,7 +62,7 @@ export default function RegisterScreen() {
   const [focused, setFocused] = useState<FieldKey | null>(null);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
 
-  const nameOk = firstName.trim().length >= 2 && firstName.trim().length <= NAME_MAX;
+  const nameOk = firstName.trim().length >= NAME_MIN && firstName.trim().length <= NAME_MAX;
   const phoneOk = isValidLocalPhone(phone);
   const passwordOk = password.length >= PASSWORD_MIN;
   const formOk = nameOk && phoneOk && passwordOk;
@@ -108,13 +79,13 @@ export default function RegisterScreen() {
   const validateLocal = (): boolean => {
     const next: Partial<Record<FieldKey, string>> = {};
     const name = firstName.trim();
-    if (name.length < 2) next.name = 'Ismingizni kiriting (kamida 2 belgi)';
-    else if (name.length > NAME_MAX) next.name = `Ism ${NAME_MAX} belgidan oshmasin`;
+    if (name.length < NAME_MIN) next.name = t('auth.registerNameTooShort', { min: NAME_MIN });
+    else if (name.length > NAME_MAX) next.name = t('auth.registerNameTooLong', { max: NAME_MAX });
     if (!isValidLocalPhone(phone)) {
-      next.phone = 'Telefon raqamni to‘liq kiriting (9 raqam).';
+      next.phone = t('auth.phoneIncomplete');
     }
     if (password.length < PASSWORD_MIN) {
-      next.password = `Parol kamida ${PASSWORD_MIN} ta belgi bo‘lsin`;
+      next.password = t('auth.passwordTooShort', { min: PASSWORD_MIN });
     }
     setFieldErrors(next);
     if (Object.keys(next).length) {
@@ -153,9 +124,16 @@ export default function RegisterScreen() {
         },
       });
     } catch (err: unknown) {
-      const mapped = mapRegisterError(err as ApiError);
-      setAlreadyRegistered(mapped.alreadyRegistered);
-      setError(mapped.message);
+      setAlreadyRegistered((err as ApiError)?.status === 409);
+      setError(localizeError(err, t, {
+        byStatus: {
+          409: 'auth.phoneTaken',
+          429: 'auth.otpRecentlySent',
+          502: 'auth.smsSendFailed',
+          503: 'auth.smsSendFailed',
+        },
+        fallback: 'auth.registerFailed',
+      }));
     } finally {
       setLoading(false);
       submittingRef.current = false;
@@ -195,21 +173,21 @@ export default function RegisterScreen() {
               style={styles.back}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Orqaga"
+              accessibilityLabel={t('common.back')}
             >
               <Feather name="chevron-left" size={20} color="#FFCC00" />
             </Pressable>
           </View>
 
-          <Text style={styles.brand}>YANGI HISOB</Text>
-          <Text style={styles.hello}>Ro‘yxatdan o‘ting</Text>
+          <Text style={styles.brand}>{t('auth.registerEyebrow')}</Text>
+          <Text style={styles.hello}>{t('auth.registerTitle')}</Text>
           <Text style={styles.lead}>
-            Telefon SMS bilan tasdiqlanadi. Keyin shu parol bilan kirasiz.
+            {t('auth.registerLead')}
           </Text>
 
           <View style={styles.card}>
             <Text style={styles.label} accessibilityRole="text">
-              Ismingiz
+              {t('auth.registerNameLabel')}
             </Text>
             <View style={[styles.field, { borderColor: fieldBorder('name') }]}>
               <View style={styles.fieldIcon}>
@@ -217,13 +195,13 @@ export default function RegisterScreen() {
               </View>
               <TextInput
                 value={firstName}
-                onChangeText={(t) => {
-                  setFirstName(t);
+                onChangeText={(text) => {
+                  setFirstName(text);
                   if (fieldErrors.name) setFieldErrors((e) => ({ ...e, name: undefined }));
                 }}
                 onFocus={() => setFocused('name')}
                 onBlur={() => setFocused(null)}
-                placeholder="Ismingiz"
+                placeholder={t('auth.registerNameLabel')}
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
                 autoComplete="given-name"
@@ -232,31 +210,31 @@ export default function RegisterScreen() {
                 returnKeyType="next"
                 maxLength={NAME_MAX}
                 editable={!loading}
-                accessibilityLabel="Ismingiz"
+                accessibilityLabel={t('auth.registerNameLabel')}
                 onSubmitEditing={() => phoneRef.current?.focus()}
               />
             </View>
             {fieldErrors.name ? <Text style={styles.fieldError}>{fieldErrors.name}</Text> : null}
 
-            <Text style={[styles.label, { marginTop: 14 }]}>Telefon</Text>
+            <Text style={[styles.label, { marginTop: 14 }]}>{t('auth.registerPhoneLabel')}</Text>
             <View style={[styles.field, { borderColor: fieldBorder('phone') }]}>
               <View style={styles.fieldIcon}>
                 <Feather name="smartphone" size={16} color="#5C328E" />
               </View>
-              <Text style={styles.prefix} accessibilityLabel="Mamlakat kodi plus 998">
+              <Text style={styles.prefix} accessibilityLabel={t('auth.phonePrefixA11y')}>
                 +998
               </Text>
               <TextInput
                 ref={phoneRef}
                 value={phoneDisplay}
-                onChangeText={(t) => {
-                  setPhone(normalizeLocalPhone(t));
+                onChangeText={(text) => {
+                  setPhone(normalizeLocalPhone(text));
                   if (fieldErrors.phone) setFieldErrors((e) => ({ ...e, phone: undefined }));
                 }}
                 onFocus={() => setFocused('phone')}
                 onBlur={() => setFocused(null)}
                 keyboardType="number-pad"
-                placeholder="Telefon raqamingiz"
+                placeholder={t('auth.phonePlaceholder')}
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
                 maxLength={13}
@@ -264,13 +242,13 @@ export default function RegisterScreen() {
                 textContentType="telephoneNumber"
                 returnKeyType="next"
                 editable={!loading}
-                accessibilityLabel="Telefon raqam"
+                accessibilityLabel={t('auth.phoneA11y')}
                 onSubmitEditing={() => passwordRef.current?.focus()}
               />
             </View>
             {fieldErrors.phone ? <Text style={styles.fieldError}>{fieldErrors.phone}</Text> : null}
 
-            <Text style={[styles.label, { marginTop: 14 }]}>Parol (keyin kirish uchun)</Text>
+            <Text style={[styles.label, { marginTop: 14 }]}>{t('auth.registerPasswordLabel')}</Text>
             <View style={[styles.field, { borderColor: fieldBorder('password') }]}>
               <View style={styles.fieldIcon}>
                 <Feather name="lock" size={16} color="#5C328E" />
@@ -278,8 +256,8 @@ export default function RegisterScreen() {
               <TextInput
                 ref={passwordRef}
                 value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
+                onChangeText={(text) => {
+                  setPassword(text);
                   if (fieldErrors.password) setFieldErrors((e) => ({ ...e, password: undefined }));
                 }}
                 onFocus={() => {
@@ -288,7 +266,7 @@ export default function RegisterScreen() {
                 }}
                 onBlur={() => setFocused(null)}
                 secureTextEntry={!showPass}
-                placeholder="Parolni kiriting"
+                placeholder={t('auth.passwordPlaceholder')}
                 placeholderTextColor="#A8B0C0"
                 style={[styles.input, inputWebFix]}
                 autoComplete="new-password"
@@ -296,7 +274,7 @@ export default function RegisterScreen() {
                 returnKeyType="done"
                 editable={!loading}
                 // Do not trim — backend counts raw length including spaces
-                accessibilityLabel="Parol"
+                accessibilityLabel={t('auth.passwordLabel')}
                 onSubmitEditing={() => void submit()}
               />
               <Pressable
@@ -304,12 +282,12 @@ export default function RegisterScreen() {
                 hitSlop={10}
                 style={styles.eyeBtn}
                 accessibilityRole="button"
-                accessibilityLabel={showPass ? 'Parolni yashirish' : 'Parolni ko‘rsatish'}
+                accessibilityLabel={showPass ? t('auth.passwordHide') : t('auth.passwordShow')}
               >
                 <Feather name={showPass ? 'eye-off' : 'eye'} size={18} color="#94A3B8" />
               </Pressable>
             </View>
-            <Text style={styles.hint}>Kamida {PASSWORD_MIN} belgi</Text>
+            <Text style={styles.hint}>{t('auth.passwordHint', { min: PASSWORD_MIN })}</Text>
             {fieldErrors.password ? (
               <Text style={styles.fieldError}>{fieldErrors.password}</Text>
             ) : null}
@@ -326,9 +304,9 @@ export default function RegisterScreen() {
                 onPress={() => router.push('/login')}
                 style={styles.btnLoginAlt}
                 accessibilityRole="button"
-                accessibilityLabel="Kirish sahifasiga o‘tish"
+                accessibilityLabel={t('auth.registerGoToLogin')}
               >
-                <Text style={styles.btnLoginAltText}>Kirish sahifasiga o‘tish</Text>
+                <Text style={styles.btnLoginAltText}>{t('auth.registerGoToLogin')}</Text>
                 <Feather name="arrow-right" size={16} color="#5C328E" />
               </Pressable>
             ) : null}
@@ -338,7 +316,7 @@ export default function RegisterScreen() {
               onPress={() => void submit()}
               style={[styles.btn, !canSubmit && styles.btnDisabled]}
               accessibilityRole="button"
-              accessibilityLabel="SMS kodni olish"
+              accessibilityLabel={t('auth.registerGetCode')}
               accessibilityState={{ disabled: !canSubmit, busy: loading }}
             >
               {canSubmit ? (
@@ -347,14 +325,14 @@ export default function RegisterScreen() {
                     <ActivityIndicator color="#120724" />
                   ) : (
                     <>
-                      <Text style={styles.btnText}>SMS kodni olish</Text>
+                      <Text style={styles.btnText}>{t('auth.registerGetCode')}</Text>
                       <Feather name="arrow-right" size={18} color="#120724" />
                     </>
                   )}
                 </LinearGradient>
               ) : (
                 <View style={[styles.btnGrad, styles.btnGradDisabled]}>
-                  <Text style={styles.btnTextDisabled}>SMS kodni olish</Text>
+                  <Text style={styles.btnTextDisabled}>{t('auth.registerGetCode')}</Text>
                   <Feather name="arrow-right" size={18} color="#A8B0C0" />
                 </View>
               )}
@@ -362,19 +340,19 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerMuted}>Allaqachon hisobingiz bormi?</Text>
+            <Text style={styles.footerMuted}>{t('auth.registerHaveAccount')}</Text>
             <Pressable
               onPress={() => router.push('/login')}
               accessibilityRole="button"
-              accessibilityLabel="Kirish"
+              accessibilityLabel={t('common.loginAction')}
             >
-              <Text style={styles.footerLink}> Kirish</Text>
+              <Text style={styles.footerLink}> {t('common.loginAction')}</Text>
             </Pressable>
           </View>
 
           {/* No privacy/terms URLs configured in the app — text only, no fake links */}
           <Text style={styles.legal}>
-            Davom etib, maxfiylik siyosati va foydalanish shartlariga rozilik bildirasiz.
+            {t('auth.registerLegal')}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

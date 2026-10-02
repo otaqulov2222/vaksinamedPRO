@@ -22,10 +22,16 @@ export function LanguageFlag({ language, size = 16 }: Props) {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      {language === 'uz' ? <UzFlag /> : language === 'ru' ? <RuFlag /> : <EnFlag />}
+      {FLAGS[language] ?? <EnFlag />}
     </View>
   );
 }
+
+const FLAGS: Record<Language, React.ReactElement> = {
+  uz: <UzFlag />,
+  ru: <RuFlag />,
+  en: <EnFlag />,
+};
 
 function UzFlag() {
   // Uzbekistan: sky blue / white / green with thin red fimbriations.

@@ -14,7 +14,7 @@ import {
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider, useApp } from '@/context/AppContext';
-import { ActivityIndicator, Platform, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 SplashScreen.preventAutoHideAsync();
@@ -30,7 +30,6 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
 const queryClient = new QueryClient();
 
 const stackScreenOptions = {
-  headerBackTitle: 'Orqaga',
   headerBackVisible: true,
   headerTintColor: '#5C328E',
   headerTitleAlign: 'center' as const,
@@ -46,15 +45,16 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   const router = useRouter();
 
+  const inAuthGroup = segments[0] === 'welcome' || segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'verify-otp';
+
   useEffect(() => {
     if (loading) return;
-    const inAuthGroup = segments[0] === 'welcome' || segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'verify-otp';
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/welcome');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [loading, isAuthenticated, segments]);
+  }, [loading, isAuthenticated, inAuthGroup]);
 
   if (loading) {
     return (
@@ -64,10 +64,25 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  // The navigator stays mounted so the redirect can run; protected content is covered until it does
+  // (e.g. after logout or browser Back into a protected URL).
+  const blocked = !isAuthenticated && !inAuthGroup;
+  return (
+    <>
+      {children}
+      {blocked ? (
+        <View
+          style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#2A104E' }]}
+        >
+          <ActivityIndicator color="#FFCC00" size="large" />
+        </View>
+      ) : null}
+    </>
+  );
 }
 
 function RootLayoutNav() {
+  const { t } = useApp();
   return (
     <AuthGate>
       <Stack screenOptions={stackScreenOptions}>
@@ -76,46 +91,46 @@ function RootLayoutNav() {
         <Stack.Screen name="register" options={{ headerShown: false }} />
         <Stack.Screen name="verify-otp" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, headerLeft: undefined }} />
-        <Stack.Screen name="qr" options={{ headerShown: false, title: 'Mening QR kodim' }} />
+        <Stack.Screen name="qr" options={{ headerShown: false, title: t('common.navMyQr') }} />
         {/* Cashback is a stack child (not a tab) so Back preserves Profile/Help/Home origin. */}
-        <Stack.Screen name="cashback" options={{ headerShown: false, title: 'Cashback' }} />
+        <Stack.Screen name="cashback" options={{ headerShown: false, title: t('common.navCashback') }} />
         <Stack.Screen
           name="branches"
-          options={{ title: 'Dorixonalar', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+          options={{ title: t('common.navBranches'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
         />
         <Stack.Screen
           name="promos"
-          options={{ title: 'Aksiyalar', headerLeft: () => <HeaderBackButton fallback="/(tabs)" /> }}
+          options={{ title: t('common.navPromos'), headerLeft: () => <HeaderBackButton fallback="/(tabs)" /> }}
         />
         <Stack.Screen
           name="rating"
-          options={{ title: 'Xizmatni baholash', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+          options={{ title: t('common.navRating'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
         />
         <Stack.Screen
           name="language"
-          options={{ title: 'Til', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+          options={{ title: t('common.navLanguage'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
         />
         <Stack.Screen
           name="edit-profile"
-          options={{ title: 'Profilni tahrirlash', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+          options={{ title: t('common.navEditProfile'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
         />
         <Stack.Screen
           name="notifications"
-          options={{ title: 'Bildirishnomalar', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+          options={{ title: t('common.navNotifications'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
         />
         <Stack.Screen
           name="help"
-          options={{ title: 'Yordam markazi', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+          options={{ title: t('common.navHelp'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
         />
         <Stack.Screen
           name="about"
-          options={{ title: 'Ilova haqida', headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+          options={{ title: t('common.navAbout'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
         />
-        <Stack.Screen name="cart" options={{ headerShown: false, title: 'Savat' }} />
-        <Stack.Screen name="checkout" options={{ headerShown: false, title: 'Rasmiylashtirish' }} />
-        <Stack.Screen name="product/[id]" options={{ headerShown: false, title: 'Mahsulot' }} />
-        <Stack.Screen name="order/[id]" options={{ headerShown: false, title: 'Buyurtma holati' }} />
-        <Stack.Screen name="+not-found" options={{ title: 'Sahifa topilmadi' }} />
+        <Stack.Screen name="cart" options={{ headerShown: false, title: t('common.navCart') }} />
+        <Stack.Screen name="checkout" options={{ headerShown: false, title: t('common.navCheckout') }} />
+        <Stack.Screen name="product/[id]" options={{ headerShown: false, title: t('common.navProduct') }} />
+        <Stack.Screen name="order/[id]" options={{ headerShown: false, title: t('common.navOrderStatus') }} />
+        <Stack.Screen name="+not-found" options={{ title: t('common.navNotFound') }} />
       </Stack>
     </AuthGate>
   );

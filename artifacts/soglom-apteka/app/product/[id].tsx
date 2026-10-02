@@ -3,7 +3,6 @@ import { useFocusEffect, useLocalSearchParams, router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -14,7 +13,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
+import { localizedName } from '@/lib/i18n/data';
 import { api } from '@/lib/api';
+import { notify } from '@/lib/dialogs';
+import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -26,18 +28,6 @@ const LAVENDER = '#F1EBFF';
 const YELLOW = '#FFCC00';
 const OK = '#3D7A55';
 const BAD = '#B91C1C';
-
-const priceUz = (n: number) =>
-  `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
-
-function toast(title: string, msg: string) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    window.alert(`${title}\n${msg}`);
-  } else {
-    Alert.alert(title, msg);
-  }
-}
 
 type BranchMeta = {
   id: number | null;
@@ -70,14 +60,15 @@ export default function ProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { refresh, cartCount } = useApp();
+  const { refresh, cartCount, t, fmt, language } = useApp();
   const narrow = width < 380;
   const contentWidth = Math.min(width, 480);
 
   const [data, setData] = useState<any>(null);
   const [branchMeta, setBranchMeta] = useState<BranchMeta>({ id: null, name: null, address: null });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  /** Raw load error; localized at render so the message follows language changes. */
+  const [error, setError] = useState<unknown>(null);
   const [notFound, setNotFound] = useState(false);
   const [adding, setAdding] = useState(false);
   const [qty, setQty] = useState(1);
@@ -95,7 +86,7 @@ export default function ProductScreen() {
     const productKey = String(id ?? '');
     if (!Number.isInteger(productId) || productId <= 0) {
       setData(null);
-      setError('Mahsulot topilmadi');
+      setError({ status: 404 });
       setNotFound(true);
       setLoading(false);
       return;
@@ -152,7 +143,7 @@ export default function ProductScreen() {
       productKeyRef.current = '';
       const is404 = err?.status === 404 || err?.code === 'PRODUCT_NOT_FOUND';
       setNotFound(is404);
-      setError(is404 ? 'Mahsulot topilmadi' : err?.message || 'Mahsulotni yuklab bo‘lmadi');
+      setError(err ?? {});
     } finally {
       if (gen === loadGen.current) setLoading(false);
     }
@@ -205,7 +196,7 @@ export default function ProductScreen() {
     if (!Number.isInteger(productId) || productId <= 0) return;
     const amount = Math.max(1, qty);
     if (maxQty != null && amount > maxQty) {
-      toast('Savat', 'Filialdagi mavjud miqdordan oshib ketdi.');
+      notify(t('common.navCart'), t('catalog.exceedsStock'));
       return;
     }
     addingLock.current = true;
@@ -213,10 +204,19 @@ export default function ProductScreen() {
     try {
       await api.addToCart(productId, amount);
       await refresh();
-      toast('Savat', `${product.nameUz} qo‘shildi`);
+      notify(t('common.navCart'), t('catalog.addedToCart', { name: localizedName(language, product) }));
       router.push('/cart');
     } catch (err) {
-      toast('Xatolik', err instanceof Error ? err.message : 'Savatga qo‘shilmadi');
+      notify(
+        t('common.errorTitle'),
+        localizeError(err, t, {
+          byCode: {
+            STOCK_UNAVAILABLE: 'catalog.errorStockUnavailable',
+            PRODUCT_NOT_FOUND: 'catalog.productNotFound',
+          },
+          fallback: 'catalog.addToCartFailed',
+        }),
+      );
     } finally {
       addingLock.current = false;
       setAdding(false);
@@ -239,18 +239,18 @@ export default function ProductScreen() {
         style={styles.iconBtn}
         onPress={goBack}
         accessibilityRole="button"
-        accessibilityLabel="Orqaga"
+        accessibilityLabel={t('common.back')}
       >
         <Feather name="chevron-left" size={22} color={PURPLE_DEEP} />
       </Pressable>
       <Text style={styles.headerTitle} numberOfLines={1}>
-        Mahsulot
+        {t('common.navProduct')}
       </Text>
       <Pressable
         style={styles.iconBtn}
         onPress={() => router.push('/cart')}
         accessibilityRole="button"
-        accessibilityLabel={cartCount > 0 ? `Savat, ${cartCount} ta tur` : 'Savat'}
+        accessibilityLabel={cartCount > 0 ? t('catalog.cartA11yCount', { count: cartCount }) : t('common.navCart')}
       >
         <Feather name="shopping-cart" size={18} color={PURPLE_DEEP} />
         {cartCount > 0 ? (
@@ -284,6 +284,9 @@ export default function ProductScreen() {
   }
 
   if (error || !product) {
+    const errorMessage = notFound || !error
+      ? t('catalog.productNotFound')
+      : localizeError(error, t, { fallback: 'catalog.productLoadFailed' });
     return (
       <View style={styles.root}>
         {header}
@@ -293,24 +296,24 @@ export default function ProductScreen() {
             size={44}
             color={MUTED}
           />
-          <Text style={styles.stateTitle}>{error || 'Mahsulot topilmadi'}</Text>
+          <Text style={styles.stateTitle}>{errorMessage}</Text>
           {notFound ? (
             <Pressable
               style={styles.primaryBtn}
               onPress={() => router.replace({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
               accessibilityRole="button"
-              accessibilityLabel="Katalogga qaytish"
+              accessibilityLabel={t('catalog.backToCatalog')}
             >
-              <Text style={styles.primaryBtnText}>Katalogga qaytish</Text>
+              <Text style={styles.primaryBtnText}>{t('catalog.backToCatalog')}</Text>
             </Pressable>
           ) : (
             <Pressable
               style={styles.primaryBtn}
               onPress={() => void load(true)}
               accessibilityRole="button"
-              accessibilityLabel="Qayta urinish"
+              accessibilityLabel={t('common.retry')}
             >
-              <Text style={styles.primaryBtnText}>Qayta urinish</Text>
+              <Text style={styles.primaryBtnText}>{t('common.retry')}</Text>
             </Pressable>
           )}
         </View>
@@ -344,7 +347,7 @@ export default function ProductScreen() {
         <View
           style={[styles.visual, narrow && styles.visualNarrow]}
           accessibilityRole="image"
-          accessibilityLabel={`${product.nameUz} ikonkasi`}
+          accessibilityLabel={t('catalog.productIconA11y', { name: localizedName(language, product) })}
         >
           <View style={styles.iconBubble}>
             <MaterialCommunityIcons
@@ -355,7 +358,7 @@ export default function ProductScreen() {
           </View>
         </View>
 
-        <Text style={[styles.name, narrow && styles.nameNarrow]}>{product.nameUz}</Text>
+        <Text style={[styles.name, narrow && styles.nameNarrow]}>{localizedName(language, product)}</Text>
 
         {manufacturer ? <Text style={styles.manufacturer}>{manufacturer}</Text> : null}
 
@@ -365,21 +368,21 @@ export default function ProductScreen() {
           </Text>
         ) : null}
 
-        <Text style={styles.price}>{priceUz(Number(product.price) || 0)}</Text>
+        <Text style={styles.price}>{fmt.money(Number(product.price) || 0)}</Text>
 
         {product.requiresPrescription ? (
           <View style={styles.rxBadge}>
             <MaterialCommunityIcons name="clipboard-text-outline" size={16} color={PURPLE} />
-            <Text style={styles.rxBadgeText}>Retsept talab qilinadi</Text>
+            <Text style={styles.rxBadgeText}>{t('catalog.rxRequired')}</Text>
           </View>
         ) : null}
 
         <View style={styles.stockCard}>
           {stock.kind === 'no_branch' ? (
             <>
-              <Text style={styles.stockLabel}>Filial tanlanmagan</Text>
+              <Text style={styles.stockLabel}>{t('catalog.stockNoBranch')}</Text>
               <Text style={styles.stockHint}>
-                Qoldiq filial tanlangandan keyin aniqlanadi.
+                {t('catalog.stockAfterBranchHint')}
               </Text>
               <Pressable
                 style={styles.branchBtn}
@@ -390,10 +393,10 @@ export default function ProductScreen() {
                   })
                 }
                 accessibilityRole="button"
-                accessibilityLabel="Filial tanlash — qoldiqni ko‘rish uchun"
+                accessibilityLabel={t('catalog.selectBranchA11y')}
               >
                 <Feather name="map-pin" size={14} color={PURPLE} />
-                <Text style={styles.branchBtnText}>Filial tanlash</Text>
+                <Text style={styles.branchBtnText}>{t('catalog.selectBranch')}</Text>
               </Pressable>
             </>
           ) : (
@@ -411,13 +414,13 @@ export default function ProductScreen() {
               {stock.kind === 'available' ? (
                 <>
                   <Text style={[styles.stockLabel, styles.stockOk, branchMeta.name ? { marginTop: 8 } : null]}>
-                    Mavjud
+                    {t('catalog.stockAvailable')}
                   </Text>
-                  <Text style={styles.stockHint}>{stock.qty} dona</Text>
+                  <Text style={styles.stockHint}>{t('catalog.stockQty', { count: fmt.number(stock.qty) })}</Text>
                 </>
               ) : (
                 <Text style={[styles.stockLabel, styles.stockBad, branchMeta.name ? { marginTop: 8 } : null]}>
-                  Mavjud emas
+                  {t('catalog.stockUnavailable')}
                 </Text>
               )}
               <Pressable
@@ -429,9 +432,9 @@ export default function ProductScreen() {
                   })
                 }
                 accessibilityRole="button"
-                accessibilityLabel="Filialni o‘zgartirish"
+                accessibilityLabel={t('catalog.changeBranch')}
               >
-                <Text style={styles.branchBtnGhostText}>Filialni o‘zgartirish</Text>
+                <Text style={styles.branchBtnGhostText}>{t('catalog.changeBranch')}</Text>
               </Pressable>
             </>
           )}
@@ -439,21 +442,21 @@ export default function ProductScreen() {
 
         {description ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Mahsulot haqida</Text>
+            <Text style={styles.sectionTitle}>{t('catalog.aboutProduct')}</Text>
             <Text style={styles.description}>{description}</Text>
           </View>
         ) : null}
 
         {analogs.length ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>O‘xshash mahsulotlar</Text>
+            <Text style={styles.sectionTitle}>{t('catalog.similarProducts')}</Text>
             {analogs.map((item: any) => (
               <Pressable
                 key={item.id}
                 onPress={() => router.push(`/product/${item.id}`)}
                 style={styles.analogRow}
                 accessibilityRole="button"
-                accessibilityLabel={String(item.nameUz || '')}
+                accessibilityLabel={localizedName(language, item)}
               >
                 <View style={styles.analogIcon}>
                   <MaterialCommunityIcons
@@ -468,7 +471,7 @@ export default function ProductScreen() {
                 </View>
                 <View style={styles.analogBody}>
                   <Text style={styles.analogName} numberOfLines={2}>
-                    {item.nameUz}
+                    {localizedName(language, item)}
                   </Text>
                   {item.manufacturer ? (
                     <Text style={styles.analogMeta} numberOfLines={1}>
@@ -476,7 +479,7 @@ export default function ProductScreen() {
                     </Text>
                   ) : null}
                 </View>
-                <Text style={styles.analogPrice}>{priceUz(Number(item.price) || 0)}</Text>
+                <Text style={styles.analogPrice}>{fmt.money(Number(item.price) || 0)}</Text>
               </Pressable>
             ))}
           </View>
@@ -492,11 +495,11 @@ export default function ProductScreen() {
                 onPress={onDec}
                 disabled={qty <= 1 || adding}
                 accessibilityRole="button"
-                accessibilityLabel="Miqdorni kamaytirish"
+                accessibilityLabel={t('catalog.qtyDecreaseA11y')}
               >
                 <Feather name="minus" size={16} color={PURPLE_DEEP} />
               </Pressable>
-              <Text style={styles.qtyValue} accessibilityLabel={`Miqdor ${qty}`}>
+              <Text style={styles.qtyValue} accessibilityLabel={t('catalog.qtyA11y', { count: qty })}>
                 {qty}
               </Text>
               <Pressable
@@ -507,7 +510,7 @@ export default function ProductScreen() {
                 onPress={onInc}
                 disabled={adding || (maxQty != null && qty >= maxQty)}
                 accessibilityRole="button"
-                accessibilityLabel="Miqdorni oshirish"
+                accessibilityLabel={t('catalog.qtyIncreaseA11y')}
               >
                 <Feather name="plus" size={16} color={PURPLE_DEEP} />
               </Pressable>
@@ -520,7 +523,7 @@ export default function ProductScreen() {
             disabled={!canAdd || adding}
             accessibilityRole="button"
             accessibilityState={{ disabled: !canAdd || adding }}
-            accessibilityLabel={canAdd ? 'Savatga qo‘shish' : 'Mavjud emas'}
+            accessibilityLabel={canAdd ? t('catalog.addToCart') : t('catalog.stockUnavailable')}
           >
             {adding ? (
               <ActivityIndicator color="#fff" />
@@ -528,7 +531,7 @@ export default function ProductScreen() {
               <>
                 <Feather name="shopping-cart" size={16} color="#fff" />
                 <Text style={styles.ctaText} numberOfLines={1}>
-                  {canAdd ? 'Savatga qo‘shish' : 'Mavjud emas'}
+                  {canAdd ? t('catalog.addToCart') : t('catalog.stockUnavailable')}
                 </Text>
               </>
             )}

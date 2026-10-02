@@ -5,8 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 
-export const formatUzs = (value: number) => `${new Intl.NumberFormat('uz-UZ').format(value)} so‘m`;
-
 export function Screen({ children, scroll = true }: PropsWithChildren<{ scroll?: boolean }>) {
   const colors = useColors();
   const insets = useSafeAreaInsets();

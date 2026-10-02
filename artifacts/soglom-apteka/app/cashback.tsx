@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { formatUzs } from '@/components/AppUI';
 import { api } from '@/lib/api';
+import { cashbackEntryLabel, cashbackSourceLabel } from '@/lib/cashbackLabels';
+import type { TFunction } from '@/lib/i18n';
+import type { Formatters } from '@/lib/i18n/format';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -44,55 +46,66 @@ function ledgerKindOf(raw?: string): LedgerKind {
 /**
  * Display-only mapping from server kind + signed cashback field.
  * Does not recalculate balance; preserves server amount magnitude.
- * Prefer server sourceLabel when present — never invent channel from branch alone.
+ * Source label is the localized mirror of the server sourceLabel (present only when the server knows the channel)
+ * — never invent channel from branch alone.
  */
-function ledgerPresentation(item: {
-  kind?: string;
-  title?: string;
-  cashback?: number;
-  sourceLabel?: string;
-}) {
+function ledgerPresentation(
+  t: TFunction,
+  item: {
+    kind?: string;
+    cashback?: number;
+    sourceLabel?: string;
+    sourceType?: string | null;
+    entryType?: string;
+  },
+) {
   const kind = ledgerKindOf(item.kind);
   const raw = Number(item.cashback);
   const amount = Number.isFinite(raw) ? raw : 0;
   const abs = Math.abs(amount);
-  const sourceLabel = String(item.sourceLabel || '').trim();
+  const hasSource = Boolean(item.sourceType || String(item.sourceLabel || '').trim());
+  const entryType = item.entryType || (kind === 'use' ? 'USE' : kind === 'void' ? 'REVERSAL' : 'EARN');
+  const sourceLabel = hasSource ? cashbackSourceLabel(t, item.sourceType, entryType) : '';
+  const entryLabel = cashbackEntryLabel(t, kind);
 
   if (kind === 'earn') {
     return {
       kind,
-      title: sourceLabel || String(item.title || '').trim() || 'Cashback tushdi',
+      title: sourceLabel || entryLabel,
+      sourceText: sourceLabel,
       abs,
       prefix: '+' as const,
       color: GREEN,
       iconBg: '#F3E8FF',
       icon: 'shopping-outline' as const,
-      a11yVerb: 'Cashback tushdi',
+      a11yVerb: entryLabel,
     };
   }
   if (kind === 'use') {
     return {
       kind,
-      title: 'Cashback ishlatildi',
+      title: entryLabel,
+      sourceText: sourceLabel,
       abs,
       prefix: '−' as const,
       color: USE_AMBER,
       iconBg: '#FFF7ED',
       icon: 'credit-card-outline' as const,
-      a11yVerb: 'Cashback ishlatildi',
+      a11yVerb: entryLabel,
       sourceLine: sourceLabel,
     };
   }
   const prefix = amount > 0 ? ('+' as const) : amount < 0 ? ('−' as const) : ('' as const);
   return {
     kind,
-    title: sourceLabel || String(item.title || '').trim() || 'Cashback bekor qilindi',
+    title: sourceLabel || entryLabel,
+    sourceText: sourceLabel,
     abs,
     prefix,
     color: VOID_SLATE,
     iconBg: '#F1F5F9',
     icon: 'close-circle-outline' as const,
-    a11yVerb: 'Cashback bekor qilindi',
+    a11yVerb: entryLabel,
   };
 }
 
@@ -104,21 +117,17 @@ function tierKeyOf(tier?: string) {
   return 'default';
 }
 
-function formatWhen(raw?: string) {
+function formatWhen(fmt: Formatters, raw?: string) {
   if (!raw) return '';
   if (!/^\d{4}-\d{2}/.test(raw) && raw.length > 6) return raw;
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return String(raw);
-  const months = [
-    'yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun',
-    'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr',
-  ];
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return fmt.date(d, { withTime: true });
 }
 
 export default function CashbackScreen() {
   const insets = useSafeAreaInsets();
-  const { balance, transactions, user, refresh } = useApp();
+  const { balance, transactions, user, refresh, t, fmt } = useApp();
   const params = useLocalSearchParams<{ focus?: string }>();
   const focusTier = String(params.focus || '').toLowerCase() === 'tier';
   const [rules, setRules] = useState<any>(null);
@@ -155,7 +164,7 @@ export default function CashbackScreen() {
   }, [focusTier, rules]);
 
   const tierKey = tierKeyOf(user?.tier);
-  const currentTierLabel = String(user?.tier || '').trim() || 'Daraja mavjud emas';
+  const currentTierLabel = String(user?.tier || '').trim() || t('cashback.tierNone');
 
   // Match Home: next tier from API rules relative to current tier — never invent thresholds.
   const nextFromRules = useMemo(() => {
@@ -229,7 +238,7 @@ export default function CashbackScreen() {
   }, [rules, tierKey, currentTierLabel]);
 
   const list = showAll ? transactions : transactions.slice(0, 4);
-  const balanceText = formatUzs(Math.max(0, Math.floor(Number(balance) || 0)));
+  const balanceText = fmt.money(Math.max(0, Math.floor(Number(balance) || 0)));
   const atTop =
     Array.isArray(rules?.tiers) &&
     rules.tiers.length > 0 &&
@@ -257,24 +266,24 @@ export default function CashbackScreen() {
             style={styles.navBtn}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Orqaga"
+            accessibilityLabel={t('common.back')}
           >
             <Feather name="arrow-left" size={20} color={PURPLE_DEEP} />
           </Pressable>
-          <Text style={styles.navTitle}>Cashback</Text>
+          <Text style={styles.navTitle}>{t('common.navCashback')}</Text>
           <Pressable
             onPress={() => router.push('/qr')}
             style={styles.navBtn}
             accessibilityRole="button"
-            accessibilityLabel="Mening QR kodim"
+            accessibilityLabel={t('common.navMyQr')}
           >
             <MaterialCommunityIcons name="qrcode" size={20} color={PURPLE} />
           </Pressable>
         </View>
 
-        <Text style={styles.title}>Cashback</Text>
-        <Text style={styles.subtitle}>Yagona balans</Text>
-        <Text style={styles.subtitleMuted}>Barcha qo‘llab-quvvatlanadigan xarid kanallari</Text>
+        <Text style={styles.title}>{t('common.navCashback')}</Text>
+        <Text style={styles.subtitle}>{t('cashback.subtitle')}</Text>
+        <Text style={styles.subtitleMuted}>{t('cashback.subtitleMuted')}</Text>
 
         <LinearGradient
           colors={['#5C2AD6', '#4520B0', '#32168A']}
@@ -286,15 +295,15 @@ export default function CashbackScreen() {
             <Text
               style={styles.cardLabel}
               accessibilityRole="text"
-              accessibilityLabel={`Mavjud cashback balansi, ${balanceText}`}
+              accessibilityLabel={t('cashback.balanceA11y', { amount: balanceText })}
             >
-              Mavjud balans
+              {t('cashback.balanceLabel')}
             </Text>
             <Pressable
               style={styles.useBtn}
               onPress={() => router.push('/(tabs)/catalog')}
               accessibilityRole="button"
-              accessibilityLabel="Cashbackni xaridlarda ishlatish"
+              accessibilityLabel={t('cashback.useInPurchasesA11y')}
             >
               <MaterialCommunityIcons
                 name="credit-card-outline"
@@ -302,7 +311,7 @@ export default function CashbackScreen() {
                 color="#fff"
                 importantForAccessibility="no"
               />
-              <Text style={styles.useBtnText}>Xaridlarda ishlatish</Text>
+              <Text style={styles.useBtnText}>{t('cashback.useInPurchases')}</Text>
               <Feather name="chevron-right" size={13} color="#fff" importantForAccessibility="no" />
             </Pressable>
           </View>
@@ -334,8 +343,8 @@ export default function CashbackScreen() {
               accessibilityRole="progressbar"
               accessibilityLabel={
                 next != null && left != null
-                  ? `${next.label} darajagacha progress`
-                  : 'Daraja progressi'
+                  ? t('cashback.tierProgressToA11y', { tier: next.label })
+                  : t('cashback.tierProgressA11y')
               }
               accessibilityValue={{ min: 0, max: 100, now: Math.round((progress || 0) * 100) }}
             >
@@ -344,10 +353,10 @@ export default function CashbackScreen() {
           ) : null}
           <Text style={styles.barHint}>
             {atTop
-              ? 'Siz eng yuqori darajadasiz'
+              ? t('cashback.tierTop')
               : next != null && left != null
-                ? `${next.label} darajagacha yana ${formatUzs(left)} (xaridlar)`
-                : 'Keyingi daraja chegarasi serverdan'}
+                ? t('cashback.tierRemaining', { tier: next.label, amount: fmt.money(left) })
+                : t('cashback.tierThresholdPending')}
           </Text>
         </LinearGradient>
 
@@ -356,35 +365,38 @@ export default function CashbackScreen() {
           onLayout={(e) => {
             tierY.current = e.nativeEvent.layout.y;
           }}
-          accessibilityLabel={focusTier ? 'Daraja tafsilotlari' : undefined}
+          accessibilityLabel={focusTier ? t('cashback.tierDetailsA11y') : undefined}
         >
-          {tiers.map((t) => {
-            const on = t.matchKey === tierKey || t.label === currentTierLabel;
-            const darajaLabel =
-              t.matchKey === 'silver'
-                ? 'Daraja: Silver'
-                : t.matchKey === 'gold'
-                  ? 'Gold darajasi'
-                  : t.matchKey === 'platinum'
-                    ? 'Platinum darajasi'
-                    : `Daraja: ${t.label}`;
+          {tiers.map((tier) => {
+            const on = tier.matchKey === tierKey || tier.label === currentTierLabel;
+            const tierName =
+              tier.matchKey === 'silver'
+                ? 'Silver' // i18n-ignore: tier brand name
+                : tier.matchKey === 'gold'
+                  ? 'Gold' // i18n-ignore: tier brand name
+                  : tier.matchKey === 'platinum'
+                    ? 'Platinum' // i18n-ignore: tier brand name
+                    : tier.label;
+            const darajaLabel = t('cashback.tierA11y', { tier: tierName });
             return (
               <View
-                key={t.key}
+                key={tier.key}
                 style={[styles.tier, on && styles.tierOn, tiers.length === 1 && styles.tierSingle]}
                 accessible
-                accessibilityLabel={`${darajaLabel}${t.rate ? `, ${t.rate}` : ''}${on ? ', joriy' : ''}`}
+                accessibilityLabel={`${darajaLabel}${tier.rate ? `, ${tier.rate}` : ''}${
+                  on ? `, ${t('cashback.tierCurrentA11y')}` : ''
+                }`}
               >
                 <View
-                  style={[styles.tierIcon, { backgroundColor: t.iconBg }]}
+                  style={[styles.tierIcon, { backgroundColor: tier.iconBg }]}
                   importantForAccessibility="no-hide-descendants"
                 >
-                  <MaterialCommunityIcons name={t.icon} size={20} color={t.color} />
+                  <MaterialCommunityIcons name={tier.icon} size={20} color={tier.color} />
                 </View>
                 <Text style={styles.tierName} numberOfLines={1}>
-                  {t.label}
+                  {tier.label}
                 </Text>
-                <Text style={[styles.tierRate, on && { color: GOLD }]}>{t.rate ?? '—'}</Text>
+                <Text style={[styles.tierRate, on && { color: GOLD }]}>{tier.rate ?? '—'}</Text>
               </View>
             );
           })}
@@ -395,13 +407,8 @@ export default function CashbackScreen() {
             <Text style={styles.infoPctText}>%</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.infoTitle}>
-              Bitta balans — ilova, kassa va boshqa ruxsat etilgan xaridlar.
-            </Text>
-            <Text style={styles.infoSub}>
-              Cashback yakunlangan tijorat xaridlaridan hisoblanadi (to‘lov usuli emas). Ishlatish —
-              rasmiylashtirishda yoki kassada QR orqali. Balans faqat server hisobidan.
-            </Text>
+            <Text style={styles.infoTitle}>{t('cashback.infoTitle')}</Text>
+            <Text style={styles.infoSub}>{t('cashback.infoBody')}</Text>
           </View>
         </View>
 
@@ -409,9 +416,9 @@ export default function CashbackScreen() {
           <Text
             style={styles.secTitle}
             accessibilityRole="header"
-            accessibilityLabel="Cashback tarixi"
+            accessibilityLabel={t('cashback.historyA11y')}
           >
-            So‘nggi cashbacklar
+            {t('cashback.historyTitle')}
           </Text>
           <Pressable
             style={styles.seeAll}
@@ -422,13 +429,17 @@ export default function CashbackScreen() {
             accessibilityLabel={
               transactions.length
                 ? showAll
-                  ? 'Tarixni yopish'
-                  : 'Barcha cashbacklarni ko‘rish'
-                : 'Xarid qilish'
+                  ? t('cashback.historyCollapseA11y')
+                  : t('cashback.historyShowAllA11y')
+                : t('cashback.shopAction')
             }
           >
             <Text style={styles.seeAllText}>
-              {transactions.length ? (showAll ? 'Yopish' : 'Barchasini ko‘rish') : 'Xarid qilish'}
+              {transactions.length
+                ? showAll
+                  ? t('common.showLess')
+                  : t('common.showAll')
+                : t('cashback.shopAction')}
             </Text>
             <Feather name="chevron-right" size={14} color={PURPLE} importantForAccessibility="no" />
           </Pressable>
@@ -439,26 +450,23 @@ export default function CashbackScreen() {
             <View style={styles.emptyIcon} importantForAccessibility="no-hide-descendants">
               <MaterialCommunityIcons name="shopping-outline" size={26} color="#A78BFA" />
             </View>
-            <Text style={styles.emptyTitle}>Hali cashback yo‘q</Text>
-            <Text style={styles.emptyText}>
-              Yakunlangan xaridlar (ilova yoki kassa) cashbacki shu yerda ko‘rinadi. Namuna yozuvlar
-              yo‘q.
-            </Text>
+            <Text style={styles.emptyTitle}>{t('cashback.emptyTitle')}</Text>
+            <Text style={styles.emptyText}>{t('cashback.emptyText')}</Text>
           </View>
         ) : (
           list.map((item) => {
-            const row = ledgerPresentation(item);
-            const amt = formatUzs(row.abs);
+            const row = ledgerPresentation(t, item);
+            const amt = fmt.money(row.abs);
             const signed = row.prefix ? `${row.prefix}${amt}` : amt;
             const branch = String(item.branchName || item.branch || '').trim();
-            const when = formatWhen(item.createdAt || item.date);
-            const orderBit = item.orderCode ? `Buyurtma ${item.orderCode}` : '';
-            const receiptBit = item.receiptId ? `Chek ${item.receiptId}` : '';
+            const when = formatWhen(fmt, item.createdAt || item.date);
+            const orderBit = item.orderCode ? t('cashback.historyOrder', { code: item.orderCode }) : '';
+            const receiptBit = item.receiptId ? t('cashback.historyReceipt', { id: item.receiptId }) : '';
             const sourceBit =
               row.kind === 'use' && 'sourceLine' in row && row.sourceLine
                 ? String(row.sourceLine)
-                : row.kind !== 'use' && item.sourceLabel && item.sourceLabel !== row.title
-                  ? String(item.sourceLabel)
+                : row.kind !== 'use' && row.sourceText && row.sourceText !== row.title
+                  ? row.sourceText
                   : '';
             // Real metadata only — never invent FOM/POS from branch presence.
             const metaParts = [
@@ -504,14 +512,14 @@ export default function CashbackScreen() {
           style={styles.promo}
           onPress={() => router.push('/(tabs)/catalog')}
           accessibilityRole="button"
-          accessibilityLabel="Katalogda xarid qilish"
+          accessibilityLabel={t('cashback.promoA11y')}
         >
           <View style={styles.promoGift} importantForAccessibility="no-hide-descendants">
             <MaterialCommunityIcons name="gift" size={28} color={PURPLE} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.promoKicker}>XARID</Text>
-            <Text style={styles.promoTitle}>Mahsulot tanlang — cashback xaridlaringizdan</Text>
+            <Text style={styles.promoKicker}>{t('cashback.promoKicker')}</Text>
+            <Text style={styles.promoTitle}>{t('cashback.promoTitle')}</Text>
           </View>
           <View style={styles.promoArrow} importantForAccessibility="no-hide-descendants">
             <Feather name="arrow-right" size={18} color={PURPLE} />

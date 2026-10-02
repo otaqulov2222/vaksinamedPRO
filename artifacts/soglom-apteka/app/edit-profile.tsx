@@ -3,7 +3,6 @@ import { router, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,6 +15,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
+import { confirmAction } from '@/lib/dialogs';
+import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -39,7 +40,7 @@ function formatPhone(phone: string) {
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { refresh } = useApp();
+  const { refresh, t } = useApp();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -55,8 +56,11 @@ export default function EditProfileScreen() {
 
   const dirty = firstName.trim() !== initialFirst || lastName.trim() !== initialLast;
   const allowLeaveRef = useRef(false);
+  const tRef = useRef(t);
+  tRef.current = t;
 
   const load = useCallback(() => {
+    const t = tRef.current;
     setLoading(true);
     setLoadError(null);
     setSaveError(null);
@@ -74,9 +78,9 @@ export default function EditProfileScreen() {
       })
       .catch((err: Error & { status?: number }) => {
         if (err.status === 401 || err.status === 403) {
-          setLoadError('Sessiya tugagan. Qayta kiring.');
+          setLoadError(t('common.errorSessionExpired'));
         } else {
-          setLoadError(err.message || 'Profilni yuklab bo‘lmadi');
+          setLoadError(localizeError(err, t, { fallback: 'profile.editLoadFailed' }));
         }
       })
       .finally(() => setLoading(false));
@@ -90,26 +94,27 @@ export default function EditProfileScreen() {
     const unsub = navigation.addListener('beforeRemove', (e: { preventDefault: () => void; data: { action: unknown } }) => {
       if (allowLeaveRef.current || !dirty || saving) return;
       e.preventDefault();
-      Alert.alert('Saqlanmagan o‘zgarishlar', 'Profilni saqlamasdan chiqasizmi?', [
-        { text: 'Qolish', style: 'cancel' },
-        {
-          text: 'Chiqish',
-          style: 'destructive',
-          onPress: () => {
-            allowLeaveRef.current = true;
-            navigation.dispatch(e.data.action as never);
-          },
-        },
-      ]);
+      void (async () => {
+        const ok = await confirmAction({
+          title: t('common.unsavedTitle'),
+          message: t('common.unsavedMessage'),
+          confirmText: t('common.leave'),
+          cancelText: t('common.stay'),
+          destructive: true,
+        });
+        if (!ok) return;
+        allowLeaveRef.current = true;
+        navigation.dispatch(e.data.action as never);
+      })();
     });
     return unsub;
-  }, [navigation, dirty, saving]);
+  }, [navigation, dirty, saving, t]);
 
   const validate = (): string | null => {
     const fn = firstName.trim();
-    if (fn.length < 2) return 'Ism kamida 2 ta belgidan iborat bo‘lsin';
-    if (fn.length > 80) return 'Ism juda uzun';
-    if (lastName.trim().length > 80) return 'Familiya juda uzun';
+    if (fn.length < 2) return t('profile.editTooShortFirst');
+    if (fn.length > 80) return t('profile.editTooLongFirst');
+    if (lastName.trim().length > 80) return t('profile.editTooLongLast');
     return null;
   };
 
@@ -144,9 +149,9 @@ export default function EditProfileScreen() {
       }, 450);
     } catch (err: any) {
       if (err?.status === 401 || err?.status === 403) {
-        setSaveError('Sessiya tugagan. Qayta kiring.');
+        setSaveError(t('common.errorSessionExpired'));
       } else {
-        setSaveError(err?.message || 'Saqlashda xatolik yuz berdi');
+        setSaveError(localizeError(err, t, { fallback: 'profile.editSaveFailed' }));
       }
     } finally {
       setSaving(false);
@@ -161,15 +166,15 @@ export default function EditProfileScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={PURPLE} size="large" />
-          <Text style={styles.centerText}>Yuklanmoqda...</Text>
+          <Text style={styles.centerText}>{t('common.loading')}</Text>
         </View>
       ) : loadError ? (
         <View style={styles.center}>
           <Feather name="cloud-off" size={40} color={MUTED} />
-          <Text style={styles.centerTitle}>Profil ochilmadi</Text>
+          <Text style={styles.centerTitle}>{t('profile.editLoadFailedTitle')}</Text>
           <Text style={styles.centerText}>{loadError}</Text>
           <Pressable style={styles.primaryBtn} onPress={load}>
-            <Text style={styles.primaryBtnText}>Qayta urinish</Text>
+            <Text style={styles.primaryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
       ) : (
@@ -178,10 +183,10 @@ export default function EditProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.lead}>Faqat tizimda saqlangan maydonlarni tahrirlang.</Text>
+          <Text style={styles.lead}>{t('profile.editLead')}</Text>
 
           <View style={styles.card}>
-            <Text style={styles.label}>Ism</Text>
+            <Text style={styles.label}>{t('profile.editFirstName')}</Text>
             <TextInput
               value={firstName}
               onChangeText={(v) => {
@@ -189,7 +194,7 @@ export default function EditProfileScreen() {
                 setSuccess(false);
                 setSaveError(null);
               }}
-              placeholder="Ismingiz"
+              placeholder={t('profile.editFirstNamePlaceholder')}
               placeholderTextColor={MUTED}
               style={styles.input}
               autoCapitalize="words"
@@ -197,7 +202,7 @@ export default function EditProfileScreen() {
               maxLength={80}
             />
 
-            <Text style={[styles.label, { marginTop: 14 }]}>Familiya</Text>
+            <Text style={[styles.label, { marginTop: 14 }]}>{t('profile.editLastName')}</Text>
             <TextInput
               value={lastName}
               onChangeText={(v) => {
@@ -205,7 +210,7 @@ export default function EditProfileScreen() {
                 setSuccess(false);
                 setSaveError(null);
               }}
-              placeholder="Familiyangiz (ixtiyoriy)"
+              placeholder={t('profile.editLastNamePlaceholder')}
               placeholderTextColor={MUTED}
               style={styles.input}
               autoCapitalize="words"
@@ -213,12 +218,12 @@ export default function EditProfileScreen() {
               maxLength={80}
             />
 
-            <Text style={[styles.label, { marginTop: 14 }]}>Telefon</Text>
+            <Text style={[styles.label, { marginTop: 14 }]}>{t('profile.editPhone')}</Text>
             <View style={styles.readOnly}>
               <Text style={styles.readOnlyText}>{formatPhone(phone)}</Text>
               <Feather name="lock" size={16} color={MUTED} />
             </View>
-            <Text style={styles.hint}>Telefon raqam hisob identifikatori — o‘zgartirib bo‘lmaydi.</Text>
+            <Text style={styles.hint}>{t('profile.editPhoneHint')}</Text>
           </View>
 
           {saveError ? (
@@ -231,7 +236,7 @@ export default function EditProfileScreen() {
           {success ? (
             <View style={styles.successBox}>
               <Feather name="check-circle" size={16} color="#15803D" />
-              <Text style={styles.successText}>Profil saqlandi</Text>
+              <Text style={styles.successText}>{t('profile.editSaved')}</Text>
             </View>
           ) : null}
 
@@ -243,7 +248,7 @@ export default function EditProfileScreen() {
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryBtnText}>{dirty ? 'Saqlash' : 'O‘zgarish yo‘q'}</Text>
+              <Text style={styles.primaryBtnText}>{dirty ? t('common.save') : t('profile.editNoChanges')}</Text>
             )}
           </Pressable>
         </ScrollView>

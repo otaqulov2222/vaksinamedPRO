@@ -13,12 +13,16 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatUzs } from '@/components/AppUI';
+import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
+import type { TranslationKey } from '@/lib/i18n';
+import { localizeError } from '@/lib/i18n/errors';
+import type { Formatters } from '@/lib/i18n/format';
 import {
   isFulfillmentCancelled,
   isFulfillmentDelivered,
   fulfillmentLabel,
+  fulfillmentTypeLabel,
   paymentLabelShort,
   reservationLabelShort,
 } from '@/lib/orderLabels';
@@ -36,11 +40,11 @@ const WARN = '#B45309';
 
 type FilterKey = 'all' | 'progress' | 'completed' | 'cancelled';
 
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'Barchasi' },
-  { key: 'progress', label: 'Jarayonda' },
-  { key: 'completed', label: 'Yakunlangan' },
-  { key: 'cancelled', label: 'Bekor qilingan' },
+const FILTERS: { key: FilterKey; labelKey: TranslationKey }[] = [
+  { key: 'all', labelKey: 'common.all' },
+  { key: 'progress', labelKey: 'orders.filterProgress' },
+  { key: 'completed', labelKey: 'orders.filterCompleted' },
+  { key: 'cancelled', labelKey: 'orders.filterCancelled' },
 ];
 
 function isCompleted(order: any) {
@@ -53,32 +57,11 @@ function isProgress(order: any) {
   return !isCompleted(order) && !isCancelled(order);
 }
 
-function formatWhen(raw?: string) {
+function formatWhen(fmt: Formatters, raw?: string) {
   if (!raw) return '';
   const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return String(raw);
-  const months = [
-    'yanvar',
-    'fevral',
-    'mart',
-    'aprel',
-    'may',
-    'iyun',
-    'iyul',
-    'avgust',
-    'sentabr',
-    'oktabr',
-    'noyabr',
-    'dekabr',
-  ];
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const year = d.getFullYear();
-  const dayMonth = `${d.getDate()} ${months[d.getMonth()]}`;
-  if (year !== new Date().getFullYear()) {
-    return `${dayMonth} ${year} · ${hh}:${mm}`;
-  }
-  return `${dayMonth} · ${hh}:${mm}`;
+  if (Number.isNaN(d.getTime())) return '';
+  return fmt.date(d, { withYear: d.getFullYear() !== new Date().getFullYear(), withTime: true });
 }
 
 function fulfillTone(status?: string): 'ok' | 'warn' | 'bad' | 'purple' | 'neutral' {
@@ -151,6 +134,7 @@ function SkeletonCard() {
 }
 
 function OrderCard({ order }: { order: any }) {
+  const { t, fmt } = useApp();
   const items: any[] = Array.isArray(order.items) ? order.items : [];
   const itemCount = items.length;
   const qtyTotal =
@@ -161,34 +145,34 @@ function OrderCard({ order }: { order: any }) {
 
   const pay = String(order.paymentStatus || '');
   const fulfill = String(order.fulfillmentStatus || '');
-  const payShort = paymentLabelShort(order.paymentStatus);
-  const fulfillText = fulfillmentLabel(order.fulfillmentStatus);
+  const payShort = paymentLabelShort(t, order.paymentStatus);
+  const fulfillText = fulfillmentLabel(t, order.fulfillmentStatus);
   const resExpired = Boolean(order.reservationExpired);
-  const resShort = reservationLabelShort(order.reservationStatus, resExpired);
+  const resShort = reservationLabelShort(t, order.reservationStatus, resExpired);
 
-  const isDelivery = String(order.fulfillment || '').toLowerCase() === 'delivery';
-  const methodLabel = isDelivery ? 'Yetkazib berish' : 'Filialdan olib ketish';
+  const methodLabel = fulfillmentTypeLabel(t, order.fulfillment);
   const branchName = order.branch?.name ? String(order.branch.name) : '';
   const usedCb = Number(order.cashbackUsed) || 0;
   const earnedCb = Number(order.cashbackEarned) || 0;
   const completed = isCompleted(order);
   const code = String(order.code || '').trim();
-  const totalLabel = formatUzs(Math.max(0, Math.floor(Number(order.total) || 0)));
-  const when = formatWhen(order.createdAt);
+  const totalLabel = fmt.money(Math.max(0, Math.floor(Number(order.total) || 0)));
+  const when = formatWhen(fmt, order.createdAt);
+  const orderTitle = code ? t('orders.orderRef', { code }) : t('orders.orderLabel');
 
   const productLine = firstTitle
     ? firstTitle
     : qtyTotal > 0
-      ? `${qtyTotal} ta mahsulot`
-      : 'Mahsulotlar';
-  const moreLine = moreItems > 0 ? `+ yana ${moreItems} ta mahsulot` : null;
+      ? t('orders.itemsCount', { count: qtyTotal })
+      : t('orders.items');
+  const moreLine = moreItems > 0 ? t('orders.moreItems', { count: moreItems }) : null;
 
   const placeLine = [branchName, methodLabel].filter(Boolean).join(' · ');
 
   const a11y = [
-    code ? `Buyurtma #${code}` : 'Buyurtma',
+    orderTitle,
     fulfillText,
-    `jami ${totalLabel}`,
+    t('orders.totalA11y', { total: totalLabel }),
   ]
     .filter(Boolean)
     .join(', ');
@@ -207,7 +191,7 @@ function OrderCard({ order }: { order: any }) {
       <View style={styles.cardTop}>
         <View style={styles.cardTopLeft}>
           <Text style={styles.orderRef} numberOfLines={1}>
-            {code ? `Buyurtma #${code}` : 'Buyurtma'}
+            {orderTitle}
           </Text>
           {when ? (
             <Text style={styles.orderWhen} numberOfLines={1}>
@@ -243,7 +227,7 @@ function OrderCard({ order }: { order: any }) {
           ) : null}
           {qtyTotal > 0 ? (
             <Text style={styles.metaText} numberOfLines={1}>
-              {qtyTotal} ta mahsulot
+              {t('orders.itemsCount', { count: qtyTotal })}
             </Text>
           ) : null}
         </View>
@@ -261,16 +245,16 @@ function OrderCard({ order }: { order: any }) {
 
       {usedCb > 0 ? (
         <Text style={styles.cashNote} numberOfLines={1}>
-          Cashback ishlatildi: −{formatUzs(usedCb)}
+          {t('orders.cashbackUsedLine', { amount: fmt.money(usedCb) })}
         </Text>
       ) : null}
       {completed && earnedCb > 0 ? (
         <Text style={styles.cashEarn} numberOfLines={1}>
-          Cashback olindi: +{formatUzs(earnedCb)}
+          {t('orders.cashbackEarnedLine', { amount: fmt.money(earnedCb) })}
         </Text>
       ) : earnedCb > 0 && !completed ? (
         <Text style={styles.cashPending} numberOfLines={1}>
-          Cashback buyurtma yakunlangach hisoblanadi
+          {t('orders.cashbackPending')}
         </Text>
       ) : null}
     </Pressable>
@@ -278,6 +262,7 @@ function OrderCard({ order }: { order: any }) {
 }
 
 export default function PurchasesScreen() {
+  const { t } = useApp();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const narrow = width < 390;
@@ -316,7 +301,7 @@ export default function PurchasesScreen() {
     } catch (e) {
       if (gen !== loadGen.current) return;
       if (!silent && !hasData) setOrders([]);
-      setLoadError(e instanceof Error ? e.message : 'Buyurtmalarni yuklashda xatolik yuz berdi.');
+      setLoadError(localizeError(e, t, { fallback: 'orders.listLoadFailed' }));
     } finally {
       if (gen === loadGen.current) {
         setLoading(false);
@@ -324,7 +309,7 @@ export default function PurchasesScreen() {
         loadingRef.current = false;
       }
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -371,9 +356,9 @@ export default function PurchasesScreen() {
   const header = (
     <View style={styles.header}>
       <View style={styles.headerText}>
-        <Text style={styles.pageTitle}>Buyurtmalar</Text>
+        <Text style={styles.pageTitle}>{t('common.navOrders')}</Text>
         <Text style={styles.pageSubtitle}>
-          Buyurtmalaringiz va ularning holati shu yerda
+          {t('orders.listSubtitle')}
         </Text>
       </View>
     </View>
@@ -417,18 +402,18 @@ export default function PurchasesScreen() {
               <View style={styles.stateIcon}>
                 <Feather name="cloud-off" size={22} color={MUTED} />
               </View>
-              <Text style={styles.stateTitle}>Buyurtmalarni yuklab bo‘lmadi</Text>
+              <Text style={styles.stateTitle}>{t('orders.listLoadFailed')}</Text>
               <Text style={styles.stateText}>
-                Internetni tekshirib, qayta urinib ko‘ring.
+                {t('orders.checkInternetHint')}
               </Text>
               <Pressable
                 onPress={() => void load()}
                 style={({ pressed }) => [styles.retryBtn, pressed && styles.pressedSoft]}
                 accessibilityRole="button"
-                accessibilityLabel="Qayta urinish"
+                accessibilityLabel={t('common.retry')}
               >
                 <Feather name="refresh-cw" size={15} color="#FFFFFF" />
-                <Text style={styles.retryText}>Qayta urinish</Text>
+                <Text style={styles.retryText}>{t('common.retry')}</Text>
               </Pressable>
             </View>
           </>
@@ -445,18 +430,18 @@ export default function PurchasesScreen() {
                 accessibilityElementsHidden
                 importantForAccessibility="no-hide-descendants"
               />
-              <Text style={styles.emptyTitle}>Buyurtmalar hali yo‘q</Text>
+              <Text style={styles.emptyTitle}>{t('orders.emptyTitle')}</Text>
               <Text style={styles.emptyText}>
-                Mahsulot tanlab, birinchi buyurtmangizni rasmiylashtiring.
+                {t('orders.emptyText')}
               </Text>
               <Pressable
                 onPress={() => router.push('/(tabs)/catalog')}
                 style={({ pressed }) => [styles.primaryCta, pressed && styles.pressedSoft]}
                 accessibilityRole="button"
-                accessibilityLabel="Mahsulot tanlash"
+                accessibilityLabel={t('orders.emptyCta')}
               >
                 <MaterialCommunityIcons name="shopping-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.primaryCtaText}>Mahsulot tanlash</Text>
+                <Text style={styles.primaryCtaText}>{t('orders.emptyCta')}</Text>
               </Pressable>
             </View>
           </>
@@ -473,6 +458,7 @@ export default function PurchasesScreen() {
               {FILTERS.map((f) => {
                 const active = filter === f.key;
                 const n = countFor(f.key);
+                const label = t(f.labelKey);
                 return (
                   <Pressable
                     key={f.key}
@@ -480,9 +466,9 @@ export default function PurchasesScreen() {
                     onPress={() => setFilter(f.key)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
-                    accessibilityLabel={`${f.label}, ${n} ta`}
+                    accessibilityLabel={t('orders.filterA11y', { label, count: n })}
                   >
-                    <Text style={[styles.filterLabel, active && styles.filterLabelOn]}>{f.label}</Text>
+                    <Text style={[styles.filterLabel, active && styles.filterLabelOn]}>{label}</Text>
                     <View style={[styles.filterBadge, active && styles.filterBadgeOn]}>
                       <Text style={[styles.filterBadgeText, active && styles.filterBadgeTextOn]}>
                         {n}
@@ -495,8 +481,8 @@ export default function PurchasesScreen() {
 
             {visible.length === 0 ? (
               <View style={styles.stateCard}>
-                <Text style={styles.stateTitle}>Buyurtmalar topilmadi</Text>
-                <Text style={styles.stateText}>Boshqa filtrni tanlab ko‘ring.</Text>
+                <Text style={styles.stateTitle}>{t('orders.filterEmptyTitle')}</Text>
+                <Text style={styles.stateText}>{t('orders.filterEmptyText')}</Text>
               </View>
             ) : (
               <View style={styles.list}>
@@ -508,7 +494,7 @@ export default function PurchasesScreen() {
 
             {loadError ? (
               <Text style={styles.inlineError} numberOfLines={2}>
-                Yangilashda xatolik. Pastga tortib qayta urinib ko‘ring.
+                {t('orders.listRefreshFailed')}
               </Text>
             ) : null}
           </>

@@ -3,6 +3,8 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useApp } from '@/context/AppContext';
+import type { TranslationKey } from '@/lib/i18n';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -17,75 +19,76 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 type FaqItem = {
   key: string;
-  title: string;
-  body: string;
-  cta?: { label: string; to: string };
+  title: TranslationKey;
+  body: TranslationKey;
+  cta?: { label: TranslationKey; to: string };
 };
 
 /** FAQ content reflects features already present in the app — no invented contacts. */
 const FAQ: FaqItem[] = [
   {
     key: 'orders',
-    title: 'Buyurtma bo‘yicha yordam',
-    body: 'Buyurtmalar bo‘limida buyurtma holatini ko‘rishingiz mumkin. Buyurtmani bekor qilish imkoniyati mavjud bo‘lsa, buyurtma kartochkasidan amalga oshiriladi.',
-    cta: { label: 'Buyurtmalarga o‘tish', to: '/(tabs)/purchases' },
+    title: 'profile.helpOrdersTitle',
+    body: 'profile.helpOrdersBody',
+    cta: { label: 'profile.helpOrdersCta', to: '/(tabs)/purchases' },
   },
   {
     key: 'delivery',
-    title: 'Yetkazib berish',
-    body: 'Buyurtmani rasmiylashtirishda filialdan olish yoki yetkazib berish usulini tanlash mumkin. Aniq muddat va narx buyurtma jarayonida ko‘rsatiladi.',
-    cta: { label: 'Savatga o‘tish', to: '/cart' },
+    title: 'profile.helpDeliveryTitle',
+    body: 'profile.helpDeliveryBody',
+    cta: { label: 'profile.helpDeliveryCta', to: '/cart' },
   },
   {
     key: 'payment',
-    title: 'To‘lov',
-    body: 'Hozircha filialda to‘lash (FOM) va yetkazib berganda to‘lash (COD) mavjud. Onlayn Payme/Click production muhitida o‘chirilgan — yoqilmaguncha ilovada ishlamaydi.',
-    cta: { label: 'Rasmiylashtirish', to: '/checkout' },
+    title: 'profile.helpPaymentTitle',
+    body: 'profile.helpPaymentBody',
+    cta: { label: 'profile.helpPaymentCta', to: '/checkout' },
   },
   {
     key: 'cashback',
-    title: 'Cashback',
-    body: 'Cashback balansi, daraja va tarixni Cashback bo‘limida ko‘ring. Bitta balans — yakunlangan xaridlardan (ilova yoki kassa); to‘lov usuli emas.',
-    cta: { label: 'Cashbackni ochish', to: '/cashback' },
+    title: 'common.navCashback',
+    body: 'profile.helpCashbackBody',
+    cta: { label: 'profile.helpCashbackCta', to: '/cashback' },
   },
   {
     key: 'branches',
-    title: 'Filiallar',
-    body: 'Yaqin dorixonani xarita va ro‘yxat orqali topishingiz mumkin. Joylashuv ruxsati berilsa, masofa bo‘yicha tartiblanadi.',
-    cta: { label: 'Dorixonalarni ochish', to: '/branches' },
+    title: 'profile.helpBranchesTitle',
+    body: 'profile.helpBranchesBody',
+    cta: { label: 'profile.helpBranchesCta', to: '/branches' },
   },
   {
     key: 'rating',
-    title: 'Xizmatni baholash',
-    body: 'Yakunlangan buyurtma uchun filial xizmatini baholashingiz mumkin. Alohida xodim tanlash hozircha mavjud emas — buyurtmaga bog‘langan xodim identifikatori yo‘q.',
-    cta: { label: 'Baholashga o‘tish', to: '/rating' },
+    title: 'common.navRating',
+    body: 'profile.helpRatingBody',
+    cta: { label: 'profile.helpRatingCta', to: '/rating' },
   },
 ];
 
 function FaqRow({ item, open, onToggle }: { item: FaqItem; open: boolean; onToggle: () => void }) {
+  const { t } = useApp();
   return (
     <View style={styles.faqBlock}>
       <Pressable
         onPress={onToggle}
         style={({ pressed }) => [styles.faqHead, pressed && { opacity: 0.75 }]}
         accessibilityRole="button"
-        accessibilityLabel={item.title}
+        accessibilityLabel={t(item.title)}
         accessibilityState={{ expanded: open }}
       >
-        <Text style={styles.faqTitle}>{item.title}</Text>
+        <Text style={styles.faqTitle}>{t(item.title)}</Text>
         <Feather name={open ? 'chevron-up' : 'chevron-down'} size={18} color={MUTED} />
       </Pressable>
       {open ? (
         <View style={styles.faqBody}>
-          <Text style={styles.faqText}>{item.body}</Text>
+          <Text style={styles.faqText}>{t(item.body)}</Text>
           {item.cta ? (
             <Pressable
               style={styles.cta}
               onPress={() => router.push(item.cta!.to as any)}
               accessibilityRole="button"
-              accessibilityLabel={item.cta.label}
+              accessibilityLabel={t(item.cta.label)}
             >
-              <Text style={styles.ctaText}>{item.cta.label}</Text>
+              <Text style={styles.ctaText}>{t(item.cta.label)}</Text>
               <Feather name="arrow-right" size={14} color={PURPLE} importantForAccessibility="no" />
             </Pressable>
           ) : null}
@@ -97,6 +100,7 @@ function FaqRow({ item, open, onToggle }: { item: FaqItem; open: boolean; onTogg
 
 export default function HelpScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useApp();
   const [openKey, setOpenKey] = useState<string | null>('orders');
 
   const toggle = (key: string) => {
@@ -114,11 +118,8 @@ export default function HelpScreen() {
         <View style={styles.iconWrap}>
           <Feather name="help-circle" size={28} color={PURPLE} />
         </View>
-        <Text style={styles.title}>Yordam markazi</Text>
-        <Text style={styles.subtitle}>
-          Ilovadagi asosiy bo‘limlar bo‘yicha qisqa yo‘riqnoma. Aloqa raqami yoki email
-          konfiguratsiyada belgilangan emas — shuning uchun bu yerda soxta kontaktlar yo‘q.
-        </Text>
+        <Text style={styles.title}>{t('common.navHelp')}</Text>
+        <Text style={styles.subtitle}>{t('profile.helpSubtitle')}</Text>
       </View>
 
       <View style={styles.card}>
@@ -132,13 +133,11 @@ export default function HelpScreen() {
 
       <View style={styles.note}>
         <MaterialCommunityIcons name="information-outline" size={18} color={MUTED} />
-        <Text style={styles.noteText}>
-          Qo‘shimcha yordam kerak bo‘lsa, yaqin Vaksina Med filialiga murojaat qiling.
-        </Text>
+        <Text style={styles.noteText}>{t('profile.helpNote')}</Text>
       </View>
 
       <Pressable style={styles.primaryBtn} onPress={() => router.push('/branches')}>
-        <Text style={styles.primaryBtnText}>Filiallarni ko‘rish</Text>
+        <Text style={styles.primaryBtnText}>{t('profile.helpBranchesButton')}</Text>
       </Pressable>
     </ScrollView>
   );

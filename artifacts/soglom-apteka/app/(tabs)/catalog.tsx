@@ -3,7 +3,6 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -16,7 +15,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
+import { localizedName } from '@/lib/i18n/data';
 import { api } from '@/lib/api';
+import { notify } from '@/lib/dialogs';
+import type { TFunction, TranslationKey } from '@/lib/i18n';
+import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -29,17 +32,14 @@ const CAT_BG = '#F1EBFF';
 const YELLOW = '#FFCC00';
 const BAD_RED = '#B91C1C';
 
-const priceUz = (n: number) =>
-  `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so'm`;
-
 type CatId = string;
 type SortKey = 'default' | 'price_asc' | 'price_desc' | 'name';
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'default', label: 'Odatiy' },
-  { key: 'price_asc', label: 'Narx: arzon' },
-  { key: 'price_desc', label: 'Narx: qimmat' },
-  { key: 'name', label: 'Nom: A–Z' },
+const SORT_OPTIONS: { key: SortKey; labelKey: TranslationKey }[] = [
+  { key: 'default', labelKey: 'catalog.sortDefault' },
+  { key: 'price_asc', labelKey: 'catalog.sortPriceAsc' },
+  { key: 'price_desc', labelKey: 'catalog.sortPriceDesc' },
+  { key: 'name', labelKey: 'catalog.sortName' },
 ];
 
 /** Real list fields from GET /api/catalog/products (+ branch stock when scoped). */
@@ -58,15 +58,6 @@ type Product = {
 
 const PAGE_SIZE = 20;
 
-function toast(title: string, msg: string) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    window.alert(`${title}\n${msg}`);
-  } else {
-    Alert.alert(title, msg);
-  }
-}
-
 function routeQueryValue(params: { q?: string | string[] }): string {
   if (typeof params.q === 'string') return params.q;
   if (Array.isArray(params.q) && typeof params.q[0] === 'string') return params.q[0];
@@ -75,20 +66,21 @@ function routeQueryValue(params: { q?: string | string[] }): string {
 
 /** Honest stock copy — never invents availability. */
 function stockPresentation(
+  t: TFunction,
   item: Product,
   hasBranch: boolean,
 ): { text: string; tone: 'ok' | 'bad' | 'neutral'; canAdd: boolean } {
   if (!hasBranch) {
-    return { text: 'Filial tanlanmagan', tone: 'neutral', canAdd: true };
+    return { text: t('catalog.stockNoBranch'), tone: 'neutral', canAdd: true };
   }
   if (!item.availabilityKnown) {
-    return { text: 'Mavjudlik tekshirilmoqda', tone: 'neutral', canAdd: true };
+    return { text: t('catalog.stockChecking'), tone: 'neutral', canAdd: true };
   }
   const qty = Math.max(0, Number(item.availableQuantity) || 0);
   if (qty > 0) {
-    return { text: 'Filialda mavjud', tone: 'ok', canAdd: true };
+    return { text: t('catalog.stockInBranch'), tone: 'ok', canAdd: true };
   }
-  return { text: 'Filialda mavjud emas', tone: 'bad', canAdd: false };
+  return { text: t('catalog.stockNotInBranch'), tone: 'bad', canAdd: false };
 }
 
 function productIconName(icon: string) {
@@ -112,9 +104,13 @@ function ProductCard({
   onAdd: () => void;
   adding: boolean;
 }) {
-  const stock = stockPresentation(item, hasBranch);
+  const { t, fmt } = useApp();
+  const stock = stockPresentation(t, item, hasBranch);
   const addDisabled = adding || !stock.canAdd;
   const showRx = Boolean(item.requiresPrescription);
+  const priceText = fmt.money(item.price);
+  const stockHint = !hasBranch ? `\n${t('catalog.stockAfterBranchHint')}` : '';
+  const addA11y = stock.canAdd ? t('catalog.addToCart') : t('catalog.addToCartUnavailableA11y');
 
   if (list) {
     return (
@@ -137,7 +133,7 @@ function ProductCard({
               </Text>
               {showRx ? (
                 <View style={styles.rxChip} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                  <Text style={styles.rxChipText}>Rx</Text>
+                  <Text style={styles.rxChipText}>{t('catalog.rxShort')}</Text>
                 </View>
               ) : null}
             </View>
@@ -153,7 +149,7 @@ function ProductCard({
               numberOfLines={2}
             >
               {stock.text}
-              {!hasBranch ? '\nQoldiq filial tanlangandan keyin aniqlanadi.' : ''}
+              {stockHint}
             </Text>
           </View>
         </Pressable>
@@ -162,10 +158,10 @@ function ProductCard({
             style={styles.priceCol}
             onPress={onOpen}
             accessibilityRole="button"
-            accessibilityLabel={`${item.nameUz}, ${priceUz(item.price)}`}
+            accessibilityLabel={`${item.nameUz}, ${priceText}`}
           >
             <Text style={styles.cardPrice} numberOfLines={1}>
-              {priceUz(item.price)}
+              {priceText}
             </Text>
           </Pressable>
           <Pressable
@@ -174,9 +170,7 @@ function ProductCard({
             onPress={onAdd}
             accessibilityRole="button"
             accessibilityState={{ disabled: addDisabled }}
-            accessibilityLabel={
-              stock.canAdd ? 'Savatga qo‘shish' : 'Filialda mavjud emas — savatga qo‘shib bo‘lmaydi'
-            }
+            accessibilityLabel={addA11y}
           >
             {adding ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -203,7 +197,7 @@ function ProductCard({
           </View>
           {showRx ? (
             <View style={styles.rxCorner} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              <Text style={styles.rxChipText}>Rx</Text>
+              <Text style={styles.rxChipText}>{t('catalog.rxShort')}</Text>
             </View>
           ) : (
             <View style={styles.mediaAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
@@ -229,7 +223,7 @@ function ProductCard({
             numberOfLines={2}
           >
             {stock.text}
-            {!hasBranch ? '\nQoldiq filial tanlangandan keyin aniqlanadi.' : ''}
+            {stockHint}
           </Text>
         </View>
       </Pressable>
@@ -239,10 +233,10 @@ function ProductCard({
           style={styles.priceCol}
           onPress={onOpen}
           accessibilityRole="button"
-          accessibilityLabel={`${item.nameUz}, ${priceUz(item.price)}`}
+          accessibilityLabel={`${item.nameUz}, ${priceText}`}
         >
-          <Text style={styles.cardPrice} numberOfLines={1}>
-            {priceUz(item.price)}
+          <Text style={styles.cardPrice} numberOfLines={2}>
+            {priceText}
           </Text>
         </Pressable>
         <Pressable
@@ -251,9 +245,7 @@ function ProductCard({
           onPress={onAdd}
           accessibilityRole="button"
           accessibilityState={{ disabled: addDisabled }}
-          accessibilityLabel={
-            stock.canAdd ? 'Savatga qo‘shish' : 'Filialda mavjud emas — savatga qo‘shib bo‘lmaydi'
-          }
+          accessibilityLabel={addA11y}
         >
           {adding ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -281,6 +273,7 @@ function Sheet({
   onSelect: (key: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useApp();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.sheetBackdrop}>
@@ -288,7 +281,7 @@ function Sheet({
           style={StyleSheet.absoluteFill}
           onPress={onClose}
           accessibilityRole="button"
-          accessibilityLabel="Yopish"
+          accessibilityLabel={t('common.close')}
         />
         <View style={styles.sheetCard}>
           <Text style={styles.sheetTitle}>{title}</Text>
@@ -310,8 +303,8 @@ function Sheet({
               </Pressable>
             );
           })}
-          <Pressable style={styles.sheetCancel} onPress={onClose} accessibilityRole="button" accessibilityLabel="Yopish">
-            <Text style={styles.sheetCancelText}>Yopish</Text>
+          <Pressable style={styles.sheetCancel} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')}>
+            <Text style={styles.sheetCancelText}>{t('common.close')}</Text>
           </Pressable>
         </View>
       </View>
@@ -323,7 +316,7 @@ export default function CatalogScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ q?: string | string[] }>();
-  const { refresh, cartCount } = useApp();
+  const { refresh, cartCount, t, fmt, language } = useApp();
   const narrow = width < 380;
 
   const initialQ = routeQueryValue(params);
@@ -510,7 +503,7 @@ export default function CatalogScreen() {
   const allProducts = useMemo((): Product[] => {
     return apiProducts.map((p) => ({
       id: p.id,
-      nameUz: String(p.nameUz || p.nameRu || ''),
+      nameUz: localizedName(language, p),
       manufacturer: String(p.manufacturer || ''),
       category: String(p.category || ''),
       price: Number(p.price || 0),
@@ -520,17 +513,22 @@ export default function CatalogScreen() {
       availableQuantity: p.availableQuantity != null ? Number(p.availableQuantity) : null,
       availabilityKnown: Boolean(p.availabilityKnown),
     }));
-  }, [apiProducts]);
+  }, [apiProducts, language]);
 
   const products = allProducts;
 
   const categoryChips = useMemo(
-    () => [{ id: 'all', label: 'Barchasi' }, ...apiCategories.map((c) => ({ id: c, label: c }))],
-    [apiCategories],
+    () => [{ id: 'all', label: t('common.all') }, ...apiCategories.map((c) => ({ id: c, label: c }))],
+    [apiCategories, t],
+  );
+
+  const sortOptions = useMemo(
+    () => SORT_OPTIONS.map((o) => ({ key: o.key, label: t(o.labelKey) })),
+    [t],
   );
 
   const hasActiveSearch = Boolean(debouncedQuery) || cat !== 'all';
-  const sortLabel = SORT_OPTIONS.find((s) => s.key === sort)?.label || 'Saralash';
+  const sortLabel = sortOptions.find((s) => s.key === sort)?.label || t('catalog.sortTitle');
   const hasBranch = branchId != null;
 
   const goBack = () => {
@@ -543,33 +541,42 @@ export default function CatalogScreen() {
       router.push(`/product/${p.id}`);
       return;
     }
-    toast(p.nameUz, `${p.manufacturer}\n${priceUz(p.price)}`);
-  }, []);
+    notify(p.nameUz, `${p.manufacturer}\n${fmt.money(p.price)}`);
+  }, [fmt]);
 
   const addToCart = useCallback(
     async (p: Product) => {
       const key = String(p.id);
       if (!/^\d+$/.test(key) && typeof p.id !== 'number') {
-        toast('Savat', 'Mahsulotni savatga qo‘shish uchun tizimga kiring yoki API ishlashi kerak.');
+        notify(t('common.navCart'), t('catalog.addRequiresLogin'));
         return;
       }
-      const stock = stockPresentation(p, hasBranch);
+      const stock = stockPresentation(t, p, hasBranch);
       if (!stock.canAdd) {
-        toast('Savat', 'Bu filialda mahsulot mavjud emas.');
+        notify(t('common.navCart'), t('catalog.notInBranchMessage'));
         return;
       }
       setAddingId(key);
       try {
         await api.addToCart(Number(p.id));
         await refresh();
-        toast('Savat', `${p.nameUz} qo‘shildi`);
+        notify(t('common.navCart'), t('catalog.addedToCart', { name: p.nameUz }));
       } catch (e) {
-        toast('Xatolik', e instanceof Error ? e.message : 'Savatga qo‘shilmadi');
+        notify(
+          t('common.errorTitle'),
+          localizeError(e, t, {
+            byCode: {
+              STOCK_UNAVAILABLE: 'catalog.errorStockUnavailable',
+              PRODUCT_NOT_FOUND: 'catalog.productNotFound',
+            },
+            fallback: 'catalog.addToCartFailed',
+          }),
+        );
       } finally {
         setAddingId(null);
       }
     },
-    [hasBranch, refresh],
+    [hasBranch, refresh, t],
   );
 
   const clearSearch = () => {
@@ -615,21 +622,21 @@ export default function CatalogScreen() {
         scrollEventThrottle={200}
       >
         <View style={styles.header}>
-          <Pressable style={styles.iconBtn} onPress={goBack} accessibilityLabel="Orqaga">
+          <Pressable style={styles.iconBtn} onPress={goBack} accessibilityLabel={t('common.back')}>
             <Feather name="chevron-left" size={22} color={PURPLE_DEEP} />
           </Pressable>
           <View style={styles.headerText}>
             <Text style={styles.title} numberOfLines={1}>
-              Katalog
+              {t('common.navCatalog')}
             </Text>
             <Text style={styles.subtitle} numberOfLines={1}>
-              Kerakli dori — bir zumda
+              {t('catalog.catalogSubtitle')}
             </Text>
           </View>
           <Pressable
             style={styles.iconBtn}
             onPress={() => router.push('/cart')}
-            accessibilityLabel={cartCount > 0 ? `Savat, ${cartCount} ta tur` : 'Savat'}
+            accessibilityLabel={cartCount > 0 ? t('catalog.cartA11yCount', { count: cartCount }) : t('common.navCart')}
           >
             <Feather name="shopping-cart" size={18} color={PURPLE_DEEP} />
             {cartCount > 0 ? (
@@ -645,23 +652,23 @@ export default function CatalogScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Dori yoki mahsulot qidirish..."
+            placeholder={t('catalog.searchPlaceholder')}
             placeholderTextColor="#A8B0C0"
             style={styles.searchInput}
             returnKeyType="search"
             onSubmitEditing={onSearchSubmit}
             clearButtonMode="while-editing"
-            accessibilityLabel="Dori yoki mahsulot qidirish"
+            accessibilityLabel={t('catalog.searchA11y')}
           />
           {query ? (
-            <Pressable onPress={clearSearch} hitSlop={8} accessibilityLabel="Tozalash">
+            <Pressable onPress={clearSearch} hitSlop={8} accessibilityLabel={t('catalog.clearSearchA11y')}>
               <Feather name="x" size={18} color={MUTED} />
             </Pressable>
           ) : null}
           <Pressable
             onPress={() => router.push('/qr')}
             hitSlop={6}
-            accessibilityLabel="Mening QR kodim"
+            accessibilityLabel={t('common.navMyQr')}
             style={styles.searchQrBtn}
           >
             <MaterialCommunityIcons name="line-scan" size={22} color={PURPLE_DEEP} />
@@ -670,9 +677,9 @@ export default function CatalogScreen() {
 
         {catError ? (
           <View style={styles.catErrorRow}>
-            <Text style={styles.catErrorText}>Kategoriyalarni yuklab bo‘lmadi</Text>
+            <Text style={styles.catErrorText}>{t('catalog.categoriesLoadFailed')}</Text>
             <Pressable onPress={loadCategories} hitSlop={8} accessibilityRole="button">
-              <Text style={styles.catErrorRetry}>Qayta urinish</Text>
+              <Text style={styles.catErrorRetry}>{t('common.retry')}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -719,11 +726,11 @@ export default function CatalogScreen() {
             style={[styles.toolChip, narrow && styles.toolChipNarrow]}
             onPress={() => setSortOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Saralash: ${sort === 'default' ? 'Odatiy' : sortLabel}`}
+            accessibilityLabel={t('catalog.sortA11y', { label: sortLabel })}
           >
             <MaterialCommunityIcons name="swap-vertical" size={16} color={PURPLE_DEEP} />
             <Text style={styles.toolText} numberOfLines={1}>
-              {sort === 'default' ? 'Saralash' : sortLabel}
+              {sort === 'default' ? t('catalog.sortTitle') : sortLabel}
             </Text>
             <Feather name="chevron-down" size={14} color={MUTED} />
           </Pressable>
@@ -734,7 +741,7 @@ export default function CatalogScreen() {
               onPress={() => setViewMode('grid')}
               accessibilityRole="button"
               accessibilityState={{ selected: viewMode === 'grid' }}
-              accessibilityLabel="Katak ko‘rinish"
+              accessibilityLabel={t('catalog.viewGridA11y')}
             >
               <MaterialCommunityIcons name="view-grid" size={16} color={viewMode === 'grid' ? '#fff' : PURPLE_DEEP} />
             </Pressable>
@@ -743,7 +750,7 @@ export default function CatalogScreen() {
               onPress={() => setViewMode('list')}
               accessibilityRole="button"
               accessibilityState={{ selected: viewMode === 'list' }}
-              accessibilityLabel="Ro‘yxat ko‘rinish"
+              accessibilityLabel={t('catalog.viewListA11y')}
             >
               <MaterialCommunityIcons
                 name="format-list-bulleted"
@@ -757,41 +764,41 @@ export default function CatalogScreen() {
         {loading ? (
           <View style={styles.empty}>
             <ActivityIndicator color={PURPLE} />
-            <Text style={styles.emptyText}>Yuklanmoqda...</Text>
+            <Text style={styles.emptyText}>{t('common.loading')}</Text>
           </View>
         ) : loadError ? (
           <View style={styles.empty}>
             <MaterialCommunityIcons name="cloud-off-outline" size={40} color={MUTED} />
-            <Text style={styles.emptyTitle}>Mahsulotlarni yuklab bo‘lmadi</Text>
+            <Text style={styles.emptyTitle}>{t('catalog.loadFailedTitle')}</Text>
             <Text style={styles.emptyText}>
               {query.trim()
-                ? `Qidiruv saqlanadi: «${query.trim()}». Qayta urinib ko‘ring.`
-                : 'Internet aloqasini tekshiring va qayta urinib ko‘ring'}
+                ? t('catalog.loadFailedWithQuery', { query: query.trim() })
+                : t('catalog.loadFailedHint')}
             </Text>
             <Pressable style={styles.resetBtn} onPress={() => loadProducts('reset')}>
-              <Text style={styles.resetBtnText}>Qayta urinish</Text>
+              <Text style={styles.resetBtnText}>{t('common.retry')}</Text>
             </Pressable>
           </View>
         ) : products.length === 0 ? (
           <View style={styles.empty}>
             <MaterialCommunityIcons name="package-variant" size={40} color={MUTED} />
             <Text style={styles.emptyTitle}>
-              {hasActiveSearch ? 'Mahsulot topilmadi' : 'Mahsulotlar topilmadi'}
+              {hasActiveSearch ? t('catalog.emptySearchTitle') : t('catalog.emptyTitle')}
             </Text>
             <Text style={styles.emptyText}>
               {hasActiveSearch
                 ? debouncedQuery
-                  ? `«${debouncedQuery}» bo‘yicha natija yo‘q. Boshqa kategoriya yoki qidiruvni sinab ko‘ring.`
-                  : 'Tanlangan kategoriya bo‘yicha mahsulot yo‘q.'
-                : 'Katalog hozircha bo‘sh. Keyinroq qayta urinib ko‘ring.'}
+                  ? t('catalog.emptyQueryText', { query: debouncedQuery })
+                  : t('catalog.emptyCategoryText')
+                : t('catalog.emptyCatalogText')}
             </Text>
             {hasActiveSearch ? (
               <Pressable style={styles.resetBtn} onPress={clearFilters}>
-                <Text style={styles.resetBtnText}>Filtrlarni tozalash</Text>
+                <Text style={styles.resetBtnText}>{t('catalog.clearFilters')}</Text>
               </Pressable>
             ) : (
               <Pressable style={styles.resetBtn} onPress={() => loadProducts('reset')}>
-                <Text style={styles.resetBtnText}>Qayta urinish</Text>
+                <Text style={styles.resetBtnText}>{t('common.retry')}</Text>
               </Pressable>
             )}
           </View>
@@ -799,8 +806,8 @@ export default function CatalogScreen() {
           <View style={[styles.grid, viewMode === 'list' && styles.list, { rowGap: gridGap }]}>
             <Text style={styles.branchHint}>
               {hasBranch
-                ? `Mavjudlik savat filialiga bog‘langan · jami: ${total}`
-                : 'Filial tanlanmagan. Qoldiq filial tanlangandan keyin aniqlanadi.'}
+                ? t('catalog.branchHintScoped', { total: fmt.number(total) })
+                : t('catalog.branchHintNone')}
             </Text>
             {products.map((p) => (
               <View
@@ -827,11 +834,11 @@ export default function CatalogScreen() {
                 style={[styles.resetBtn, { width: '100%', marginTop: 8 }]}
                 onPress={() => loadProducts('more')}
               >
-                <Text style={styles.resetBtnText}>Keyingi sahifani qayta yuklash</Text>
+                <Text style={styles.resetBtnText}>{t('catalog.loadMoreRetry')}</Text>
               </Pressable>
             ) : null}
             {!hasMore && products.length > 0 ? (
-              <Text style={styles.endList}>Ro‘yxat tugadi</Text>
+              <Text style={styles.endList}>{t('catalog.endOfList')}</Text>
             ) : null}
           </View>
         )}
@@ -839,8 +846,8 @@ export default function CatalogScreen() {
 
       <Sheet
         visible={sortOpen}
-        title="Saralash"
-        options={SORT_OPTIONS}
+        title={t('catalog.sortTitle')}
+        options={sortOptions}
         selected={sort}
         onSelect={(k) => setSort(k as SortKey)}
         onClose={() => setSortOpen(false)}
