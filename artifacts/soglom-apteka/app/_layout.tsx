@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -18,6 +18,36 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 SplashScreen.preventAutoHideAsync();
+try {
+  SplashScreen.setOptions({ duration: 320, fade: true });
+} catch {
+  // Older native binaries without setOptions keep the default hide.
+}
+
+const LAUNCH_BG = '#F8F5FF';
+/** Safety net: never keep the native splash up if the session check stalls. */
+const SPLASH_FALLBACK_MS = 5000;
+
+let splashHidden = false;
+function hideSplash() {
+  if (splashHidden) return;
+  splashHidden = true;
+  void SplashScreen.hideAsync().catch(() => undefined);
+}
+
+/** Matches the native splash; the spinner only appears if the wait is noticeable. */
+function LaunchCover({ overlay = false }: { overlay?: boolean }) {
+  const [showSpinner, setShowSpinner] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setShowSpinner(true), 600);
+    return () => clearTimeout(id);
+  }, []);
+  return (
+    <View style={[overlay ? StyleSheet.absoluteFill : styles.fill, styles.cover]}>
+      {showSpinner ? <ActivityIndicator color="#4B248A" size="small" /> : null}
+    </View>
+  );
+}
 
 if (Platform.OS === 'web' && typeof window !== 'undefined') {
   const webApp = (window as any).Telegram?.WebApp;
@@ -40,43 +70,45 @@ const stackScreenOptions = {
   headerLeft: () => <HeaderBackButton />,
 };
 
+const authScreenOptions = {
+  headerShown: false,
+  contentStyle: { backgroundColor: LAUNCH_BG },
+};
+const welcomeScreenOptions = { ...authScreenOptions, animation: 'fade' as const };
+
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { loading, isAuthenticated } = useApp();
   const segments = useSegments();
   const router = useRouter();
 
   const inAuthGroup = segments[0] === 'welcome' || segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'verify-otp';
+  // Language can be chosen before signing in (Welcome language pill); it holds no account data.
+  const isPublic = segments[0] === 'language';
 
   useEffect(() => {
     if (loading) return;
-    if (!isAuthenticated && !inAuthGroup) {
+    if (!isAuthenticated && !inAuthGroup && !isPublic) {
       router.replace('/welcome');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [loading, isAuthenticated, inAuthGroup]);
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#2A104E' }}>
-        <ActivityIndicator color="#FFCC00" size="large" />
-      </View>
-    );
-  }
+  }, [loading, isAuthenticated, inAuthGroup, isPublic]);
 
   // The navigator stays mounted so the redirect can run; protected content is covered until it does
   // (e.g. after logout or browser Back into a protected URL).
-  const blocked = !isAuthenticated && !inAuthGroup;
+  const blocked = !isAuthenticated && !inAuthGroup && !isPublic;
+  const settled = !loading && !blocked && !(isAuthenticated && inAuthGroup);
+
+  useEffect(() => {
+    if (settled) hideSplash();
+  }, [settled]);
+
+  if (loading) return <LaunchCover />;
+
   return (
     <>
       {children}
-      {blocked ? (
-        <View
-          style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#2A104E' }]}
-        >
-          <ActivityIndicator color="#FFCC00" size="large" />
-        </View>
-      ) : null}
+      {blocked ? <LaunchCover overlay /> : null}
     </>
   );
 }
@@ -86,10 +118,10 @@ function RootLayoutNav() {
   return (
     <AuthGate>
       <Stack screenOptions={stackScreenOptions}>
-        <Stack.Screen name="welcome" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="register" options={{ headerShown: false }} />
-        <Stack.Screen name="verify-otp" options={{ headerShown: false }} />
+        <Stack.Screen name="welcome" options={welcomeScreenOptions} />
+        <Stack.Screen name="login" options={authScreenOptions} />
+        <Stack.Screen name="register" options={authScreenOptions} />
+        <Stack.Screen name="verify-otp" options={authScreenOptions} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, headerLeft: undefined }} />
         <Stack.Screen name="qr" options={{ headerShown: false, title: t('common.navMyQr') }} />
         {/* Cashback is a stack child (not a tab) so Back preserves Profile/Help/Home origin. */}
@@ -145,10 +177,9 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, fontError]);
+    const id = setTimeout(hideSplash, SPLASH_FALLBACK_MS);
+    return () => clearTimeout(id);
+  }, []);
 
   if (!fontsLoaded && !fontError) return null;
 
@@ -168,3 +199,8 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  cover: { alignItems: 'center', justifyContent: 'center', backgroundColor: LAUNCH_BG },
+});

@@ -18,7 +18,7 @@ import { interpolate } from '../lib/i18n/core';
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
 /** Values that are legitimately identical across languages (brands, symbols, loanwords). */
-const IDENTICAL_ALLOWED = /^(OK|Payme|Click|Cashback|Bonus|Professional|Vaksina Med|VAKSINA MED.*|—|Rx|QR|24\/7|English|Gold|Silver|Platinum|Telegram|.*\{\w+\}.*%?)$/;
+const IDENTICAL_ALLOWED = /^(OK|Payme|Click|Cashback|Bonus|Professional|Vaksina Med|VAKSINA MED.*|—|Rx|QR|24\/7|English|Gold|Silver|Platinum|Telegram|СОХРАНЯЯ ЗДОРОВЬЕ,\nДАРИМ РАДОСТЬ ЖИЗНИ!|.*\{\w+\}.*%?)$/;
 
 describe('i18n catalog completeness', () => {
   const uz = translationTable('uz');

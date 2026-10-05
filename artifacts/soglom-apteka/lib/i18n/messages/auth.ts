@@ -1,10 +1,10 @@
-﻿import { defineMessages } from '../core';
+import { defineMessages } from '../core';
 
 export default defineMessages({
   uz: {
+    brandTagline: 'СОХРАНЯЯ ЗДОРОВЬЕ,\nДАРИМ РАДОСТЬ ЖИЗНИ!',
     registerAction: 'Ro‘yxatdan o‘tish',
     phonePrefixA11y: 'Mamlakat kodi plus 998',
-    phonePlaceholder: 'Telefon raqamingiz',
     phoneA11y: 'Telefon raqam',
     phoneIncomplete: 'Telefon raqamni to‘liq kiriting (9 raqam).',
     passwordLabel: 'Parol',
@@ -21,16 +21,13 @@ export default defineMessages({
     welcomeRegisterHint: 'Ro‘yxatdan o‘tish sahifasiga o‘tadi',
     welcomeLoginHint: 'Kirish sahifasiga o‘tadi',
 
-    loginTitle: 'Hisobga kirish',
     loginLead: 'Ro‘yxatdan o‘tgan telefon va parolingiz bilan kiring',
-    loginPhoneLabel: 'Telefon (login)',
+    loginPhoneLabel: 'Telefon raqami',
     loginNoAccount: 'Hisobingiz yo‘qmi?',
     loginRegisterLink: 'Ro‘yxatdan o‘ting',
     loginInvalidCredentials: 'Telefon yoki parol noto‘g‘ri',
     loginFailed: 'Kirish amalga oshmadi. Qayta urinib ko‘ring.',
 
-    registerEyebrow: 'YANGI HISOB',
-    registerTitle: 'Ro‘yxatdan o‘ting',
     registerLead: 'Telefon SMS bilan tasdiqlanadi. Keyin shu parol bilan kirasiz.',
     registerNameLabel: 'Ismingiz',
     registerPhoneLabel: 'Telefon',
@@ -57,9 +54,9 @@ export default defineMessages({
     otpResendFailed: 'Kodni qayta yuborib bo‘lmadi. Qayta urinib ko‘ring.',
   },
   ru: {
+    brandTagline: 'СОХРАНЯЯ ЗДОРОВЬЕ,\nДАРИМ РАДОСТЬ ЖИЗНИ!',
     registerAction: 'Регистрация',
     phonePrefixA11y: 'Код страны плюс 998',
-    phonePlaceholder: 'Ваш номер телефона',
     phoneA11y: 'Номер телефона',
     phoneIncomplete: 'Введите номер телефона полностью (9 цифр).',
     passwordLabel: 'Пароль',
@@ -76,16 +73,13 @@ export default defineMessages({
     welcomeRegisterHint: 'Открывает страницу регистрации',
     welcomeLoginHint: 'Открывает страницу входа',
 
-    loginTitle: 'Вход в аккаунт',
     loginLead: 'Войдите с телефоном и паролем, указанными при регистрации',
-    loginPhoneLabel: 'Телефон (логин)',
+    loginPhoneLabel: 'Номер телефона',
     loginNoAccount: 'Нет аккаунта?',
     loginRegisterLink: 'Зарегистрируйтесь',
     loginInvalidCredentials: 'Неверный телефон или пароль',
     loginFailed: 'Не удалось войти. Попробуйте ещё раз.',
 
-    registerEyebrow: 'НОВЫЙ АККАУНТ',
-    registerTitle: 'Регистрация',
     registerLead: 'Телефон подтверждается по SMS. Затем вы входите с этим паролем.',
     registerNameLabel: 'Ваше имя',
     registerPhoneLabel: 'Телефон',
@@ -112,9 +106,9 @@ export default defineMessages({
     otpResendFailed: 'Не удалось отправить код повторно. Попробуйте ещё раз.',
   },
   en: {
-    registerAction: 'Sign up',
+    brandTagline: 'СОХРАНЯЯ ЗДОРОВЬЕ,\nДАРИМ РАДОСТЬ ЖИЗНИ!',
+    registerAction: 'Create account',
     phonePrefixA11y: 'Country code plus 998',
-    phonePlaceholder: 'Your phone number',
     phoneA11y: 'Phone number',
     phoneIncomplete: 'Enter the full phone number (9 digits).',
     passwordLabel: 'Password',
@@ -131,16 +125,13 @@ export default defineMessages({
     welcomeRegisterHint: 'Opens the sign-up page',
     welcomeLoginHint: 'Opens the login page',
 
-    loginTitle: 'Log in to your account',
     loginLead: 'Log in with the phone number and password you registered with',
-    loginPhoneLabel: 'Phone (login)',
+    loginPhoneLabel: 'Phone number',
     loginNoAccount: 'Don’t have an account?',
     loginRegisterLink: 'Sign up',
     loginInvalidCredentials: 'Incorrect phone number or password',
     loginFailed: 'Could not log in. Please try again.',
 
-    registerEyebrow: 'NEW ACCOUNT',
-    registerTitle: 'Create an account',
     registerLead: 'Your phone is confirmed by SMS. Then you log in with this password.',
     registerNameLabel: 'Your name',
     registerPhoneLabel: 'Phone',

@@ -11,6 +11,13 @@ const MONTHS: Record<Language, readonly string[]> = {
   en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
 };
 
+/** Statement-style abbreviations; iyun/iyul need distinct forms, so these are not truncations of MONTHS. */
+const MONTHS_SHORT: Record<Language, readonly string[]> = {
+  uz: ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'],
+  ru: ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+};
+
 export function formatNumber(value: number, language: Language): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return '0';
@@ -39,7 +46,8 @@ export function formatTime(input: string | number | Date | null | undefined): st
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-export type DateFormatOptions = { withYear?: boolean; withTime?: boolean };
+/** `short`: ledger column form "05 okt" (day + abbreviated month, no year or time). */
+export type DateFormatOptions = { withYear?: boolean; withTime?: boolean; short?: boolean };
 
 export function formatDate(
   input: string | number | Date | null | undefined,
@@ -48,6 +56,7 @@ export function formatDate(
 ): string {
   const d = toDate(input);
   if (!d) return '';
+  if (options.short) return `${pad2(d.getDate())} ${MONTHS_SHORT[language][d.getMonth()]}`;
   const { withYear = true, withTime = false } = options;
   const day = d.getDate();
   const month = MONTHS[language][d.getMonth()];

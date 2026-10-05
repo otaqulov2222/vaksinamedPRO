@@ -12,7 +12,7 @@ import { api } from '@/lib/api';
 import { confirmAction } from '@/lib/dialogs';
 import { buildProfileSummary, EMPTY_VALUE, matchTierRate } from '@/lib/profileSummary';
 
-// Brand palette; every other tone on this screen is one of these at reduced opacity.
+// Brand palette; the remaining tones below are fixed tints or reduced-opacity variants of it.
 const PRIMARY = '#4B248A';
 const DEEP = '#351765';
 const PURPLE_LIGHT = '#F1EBFF';
@@ -24,13 +24,16 @@ const INK = '#17162C';
 const SECONDARY = '#6B7280';
 const DANGER = '#DC2626';
 
-const MUTED = 'rgba(107,114,128,0.6)';
-const HAIRLINE = 'rgba(23,22,44,0.06)';
-const DIVIDER = 'rgba(23,22,44,0.08)';
-const PURPLE_EDGE = 'rgba(75,36,138,0.10)';
+const MUTED = 'rgba(107,114,128,0.55)';
+const HAIRLINE = 'rgba(23,22,44,0.05)';
+const DIVIDER = '#EDEAF3';
+const EDIT_BG = '#F7F3FF';
+const EDIT_EDGE = '#E9E2F5';
+const DANGER_EDGE = 'rgba(220,38,38,0.14)';
+const DANGER_TINT = 'rgba(220,38,38,0.07)';
 
 const SHADOW_CONTROL = '0px 1px 2px rgba(23,22,44,0.04), 0px 4px 12px rgba(53,23,101,0.06)';
-const SHADOW_GROUP = '0px 1px 2px rgba(23,22,44,0.03), 0px 8px 24px rgba(53,23,101,0.05)';
+const SHADOW_GROUP = '0px 1px 2px rgba(23,22,44,0.03), 0px 6px 20px rgba(53,23,101,0.04)';
 
 type IconName = React.ComponentProps<typeof Feather>['name'];
 
@@ -63,7 +66,7 @@ function MenuRow({
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
       <View style={[styles.rowIcon, accent && styles.rowIconAccent]} importantForAccessibility="no-hide-descendants">
-        {icon === 'wallet' ? <WalletIcon size={18} color={color} strokeWidth={2} /> : <Feather name={icon} size={18} color={color} />}
+        {icon === 'wallet' ? <WalletIcon size={19} color={color} strokeWidth={2} /> : <Feather name={icon} size={19} color={color} />}
       </View>
       <View style={[styles.rowBody, !last && styles.divider]}>
         <Text style={styles.rowTitle} numberOfLines={1}>
@@ -74,7 +77,7 @@ function MenuRow({
             {value}
           </Text>
         ) : null}
-        <Feather name="chevron-right" size={18} color={MUTED} importantForAccessibility="no" />
+        <Feather name="chevron-right" size={16} color={MUTED} importantForAccessibility="no" />
       </View>
     </Pressable>
   );
@@ -231,7 +234,7 @@ export default function ProfileScreen() {
             testID="profile-edit"
             style={({ pressed }) => [styles.edit, pressed && styles.editPressed]}
           >
-            <Feather name="edit-3" size={16} color={PRIMARY} />
+            <Feather name="edit-3" size={17} color={PRIMARY} />
             <Text style={styles.editText} numberOfLines={1}>
               {t('common.navEditProfile')}
             </Text>
@@ -302,7 +305,9 @@ export default function ProfileScreen() {
           testID="profile-logout"
           style={({ pressed }) => [styles.logout, (pressed || loggingOut) && styles.logoutPressed]}
         >
-          <Feather name="log-out" size={17} color={DANGER} />
+          <View style={styles.logoutIcon} importantForAccessibility="no-hide-descendants">
+            <Feather name="log-out" size={18} color={DANGER} />
+          </View>
           <Text style={styles.logoutText} numberOfLines={1}>
             {loggingOut ? t('common.loggingOut') : t('common.logout')}
           </Text>
@@ -321,10 +326,10 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  atmosphere: { position: 'absolute', top: 0, left: 0, right: 0, height: 320 },
+  atmosphere: { position: 'absolute', top: 0, left: 0, right: 0, height: 280 },
   controlPressed: { opacity: 0.8 },
 
-  topBar: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  topBar: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   topTitle: { flexShrink: 1, fontFamily: 'Inter_700Bold', fontSize: 24, lineHeight: 30, color: INK, letterSpacing: -0.6 },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bell: {
@@ -350,37 +355,36 @@ const styles = StyleSheet.create({
   },
   identity: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 3,
     borderColor: SURFACE,
     backgroundColor: PRIMARY,
     overflow: 'hidden',
-    boxShadow: '0px 0px 0px 1px rgba(75,36,138,0.10), 0px 6px 14px rgba(53,23,101,0.20)',
+    boxShadow: '0px 0px 0px 1px rgba(75,36,138,0.10), 0px 6px 14px rgba(53,23,101,0.18)',
   },
   avatarFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   avatarLetter: { fontFamily: 'Inter_700Bold', fontSize: 22, lineHeight: 26, color: SURFACE, textAlign: 'center' },
   identityText: { flex: 1, minWidth: 0 },
-  name: { fontFamily: 'Inter_700Bold', fontSize: 22, lineHeight: 28, color: INK, letterSpacing: -0.5 },
-  phone: { marginTop: 2, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: SECONDARY, letterSpacing: 0.2 },
+  name: { fontFamily: 'Inter_700Bold', fontSize: 26, lineHeight: 31, color: INK, letterSpacing: -0.7 },
+  phone: { marginTop: 1, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: SECONDARY, letterSpacing: 0.2 },
 
-  memberRow: { marginTop: 14, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, rowGap: 8 },
+  memberRow: { marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     minHeight: 32,
-    paddingLeft: 4,
-    paddingRight: 10,
+    paddingLeft: 5,
+    paddingRight: 9,
     borderRadius: 16,
     backgroundColor: SURFACE,
     borderWidth: 1,
-    borderColor: 'rgba(255,210,51,0.6)',
-    boxShadow: '0px 2px 8px rgba(255,210,51,0.16)',
+    borderColor: 'rgba(255,210,51,0.55)',
   },
-  chipNone: { borderColor: HAIRLINE, boxShadow: 'none' },
-  chipMedal: { width: 24, height: 24, borderRadius: 12, backgroundColor: DEEP, alignItems: 'center', justifyContent: 'center' },
+  chipNone: { borderColor: HAIRLINE },
+  chipMedal: { width: 22, height: 22, borderRadius: 11, backgroundColor: DEEP, alignItems: 'center', justifyContent: 'center' },
   chipMedalNone: { backgroundColor: PURPLE_LIGHT },
   chipText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 17, color: DEEP, letterSpacing: -0.1 },
   chipTextNone: { color: SECONDARY },
@@ -389,20 +393,20 @@ const styles = StyleSheet.create({
   rateText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 17, color: PRIMARY },
 
   edit: {
-    marginTop: 16,
-    minHeight: 44,
+    marginTop: 14,
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: SOFT,
+    borderRadius: 13,
+    backgroundColor: EDIT_BG,
     borderWidth: 1,
-    borderColor: PURPLE_EDGE,
+    borderColor: EDIT_EDGE,
   },
   editPressed: { backgroundColor: PURPLE_LIGHT },
-  editText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, color: PRIMARY },
+  editText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, color: DEEP },
 
   menu: {
     marginTop: 16,
@@ -416,33 +420,34 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, gap: 14 },
   rowPressed: { backgroundColor: SOFT },
   rowIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: PURPLE_LIGHT, alignItems: 'center', justifyContent: 'center' },
-  rowIconAccent: { backgroundColor: 'rgba(255,210,51,0.24)' },
+  rowIconAccent: { backgroundColor: 'rgba(255,210,51,0.26)' },
   rowBody: {
     flex: 1,
     minWidth: 0,
     minHeight: 56,
+    marginRight: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingRight: 14,
   },
-  divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: DIVIDER },
+  divider: { borderBottomWidth: 1, borderBottomColor: DIVIDER },
   rowTitle: { flex: 1, minWidth: 0, fontFamily: 'Inter_500Medium', fontSize: 16, lineHeight: 22, color: INK, letterSpacing: -0.2 },
-  rowValue: { flexShrink: 0, fontFamily: 'Inter_600SemiBold', fontSize: 14, lineHeight: 20, color: PRIMARY },
+  rowValue: { flexShrink: 0, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, color: SECONDARY },
 
   logout: {
     marginTop: 16,
     minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 14,
     paddingHorizontal: 16,
-    borderRadius: 16,
+    paddingVertical: 8,
+    borderRadius: 18,
     backgroundColor: SURFACE,
     borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.16)',
+    borderColor: DANGER_EDGE,
   },
-  logoutPressed: { backgroundColor: 'rgba(220,38,38,0.05)' },
+  logoutPressed: { backgroundColor: 'rgba(220,38,38,0.04)' },
+  logoutIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: DANGER_TINT, alignItems: 'center', justifyContent: 'center' },
   logoutText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, color: DANGER },
 });

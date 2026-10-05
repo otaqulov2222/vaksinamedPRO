@@ -10,13 +10,13 @@ import { LANGUAGES, type Language } from '@/lib/languages';
 
 export default function LanguageScreen() {
   const colors = useColors();
-  const { t, language, setLanguage } = useApp();
+  const { t, language, setLanguage, isAuthenticated } = useApp();
 
   const onSelect = (value: Language) => {
     setLanguage(value);
-    // Preserve Profile (or prior stack parent). Never jump to Home.
+    // Preserve Profile / Welcome (or prior stack parent). Never jump to Home.
     if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/profile');
+    else router.replace(isAuthenticated ? '/(tabs)/profile' : '/welcome');
   };
 
   return (

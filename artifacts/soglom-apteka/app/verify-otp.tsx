@@ -1,20 +1,18 @@
-import { Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Animated, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import {
+  AUTH_COLORS as C,
+  AuthBackdrop,
+  AuthButton,
+  AuthHeader,
+  BrandMark,
+  FormError,
+  useEntryAnimation,
+} from '@/components/AuthUI';
 import { api } from '@/lib/api';
 import { localizeError } from '@/lib/i18n/errors';
 import { formatLocalPhoneMasked, normalizeLocalPhone } from '@/lib/phone';
@@ -23,11 +21,9 @@ import { clearRegisterDraft, peekRegisterDraft } from '@/lib/registerDraft';
 const OTP_LEN = 6;
 /** UI countdown aligned with existing server 60s recent-OTP gate — do not invent a new value. */
 const RESEND_COOLDOWN_SEC = 60;
+const FIELD_EDGE = '#E5E0EE';
 
-const inputWebFix =
-  Platform.OS === 'web'
-    ? ({ outlineStyle: 'none' } as object)
-    : ({ outlineStyle: 'none' } as object);
+const inputWebFix = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null;
 
 /**
  * OTP verify — visual/security polish only.
@@ -36,6 +32,7 @@ const inputWebFix =
 export default function VerifyOtpScreen() {
   const insets = useSafeAreaInsets();
   const { refresh, t } = useApp();
+  const entry = useEntryAnimation();
   const params = useLocalSearchParams<{
     phone?: string;
     purpose?: string;
@@ -63,7 +60,6 @@ export default function VerifyOtpScreen() {
 
   const verifyingRef = useRef(false);
   const resendingRef = useRef(false);
-  const scrollRef = useRef<ScrollView>(null);
 
   const codeComplete = code.length === OTP_LEN;
   const busy = verifying || resending;
@@ -159,246 +155,147 @@ export default function VerifyOtpScreen() {
     else router.replace(purpose === 'register' ? '/register' : '/login');
   };
 
+  const resendDisabled = seconds > 0 || busy;
+
   return (
     <View style={styles.root}>
-      <LinearGradient colors={['#2A104E', '#4A2878', '#F7F5F2']} style={styles.hero} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top, 8) : 0}
+      <AuthBackdrop variant="quiet" />
+      <KeyboardAwareScrollViewCompat
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: Platform.OS === 'web' ? 16 : Math.max(insets.top, 12) + 4,
+            paddingBottom: Math.max(insets.bottom, 16) + 24,
+          },
+        ]}
+        bottomOffset={140}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          ref={scrollRef}
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scroll,
-            {
-              paddingTop: Math.max(insets.top, 8) + 4,
-              paddingBottom: Math.max(insets.bottom, 16) + 24,
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
-          <Pressable
-            onPress={goBack}
-            style={styles.back}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-          >
-            <Feather name="chevron-left" size={20} color="#FFCC00" />
-          </Pressable>
+        <Animated.View style={entry}>
+          <AuthHeader title={t('auth.otpTitle')} onBack={goBack} backLabel={t('common.back')} />
 
-          <Text style={styles.title}>{t('auth.otpTitle')}</Text>
-          <Text style={styles.sub}>
-            {t('auth.otpSubtitle', { phone: phoneLabel, length: OTP_LEN })}
+          <BrandMark size={56} style={styles.brand} />
+          <Text style={styles.lead}>
+            {t('auth.otpSubtitle', { phone: phoneLabel.replace(/ /g, '\u00A0'), length: OTP_LEN })}
           </Text>
 
-          <View style={styles.cardWrap}>
-            <View style={styles.card}>
-              <TextInput
-                value={code}
-                onChangeText={onChangeCode}
-                onFocus={() => {
-                  setFocused(true);
-                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-                }}
-                onBlur={() => setFocused(false)}
-                keyboardType="number-pad"
-                placeholder="• • • • • •"
-                placeholderTextColor="#C4B5D6"
-                style={[
-                  styles.codeInput,
-                  inputWebFix,
-                  { borderColor: error ? '#F87171' : focused ? '#5C328E' : '#EDE4F7' },
-                ]}
-                maxLength={OTP_LEN}
-                autoFocus
-                editable={!verifying}
-                textContentType="oneTimeCode"
-                autoComplete="sms-otp"
-                importantForAutofill="yes"
-                accessibilityLabel={t('auth.otpCodeA11y', { length: OTP_LEN })}
-                onSubmitEditing={() => {
-                  if (canVerify) void verify();
-                }}
-              />
+          <TextInput
+            value={code}
+            onChangeText={onChangeCode}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            keyboardType="number-pad"
+            placeholder="• • • • • •"
+            placeholderTextColor="rgba(75,36,138,0.3)"
+            style={[
+              styles.codeInput,
+              inputWebFix,
+              { borderColor: error ? C.danger : focused ? C.primary : FIELD_EDGE },
+              focused && !error && styles.codeFocused,
+            ]}
+            maxLength={OTP_LEN}
+            autoFocus
+            editable={!verifying}
+            textContentType="oneTimeCode"
+            autoComplete="sms-otp"
+            importantForAutofill="yes"
+            accessibilityLabel={t('auth.otpCodeA11y', { length: OTP_LEN })}
+            onSubmitEditing={() => {
+              if (canVerify) void verify();
+            }}
+          />
 
-              {error ? (
-                <View style={styles.errorBox} accessibilityLiveRegion="polite">
-                  <Feather name="alert-circle" size={16} color="#B91C1C" />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
-
-              {resendOk && !error ? (
-                <Text style={styles.resendOk} accessibilityLiveRegion="polite">
-                  {t('auth.otpResent')}
-                </Text>
-              ) : null}
-
-              <Pressable
-                disabled={!canVerify}
-                onPress={() => void verify()}
-                style={[styles.btn, !canVerify && styles.btnDisabled]}
-                accessibilityRole="button"
-                accessibilityLabel={t('common.confirm')}
-                accessibilityState={{ disabled: !canVerify, busy: verifying }}
-              >
-                {canVerify || verifying ? (
-                  <LinearGradient colors={['#FFCC00', '#F0B800']} style={styles.btnGrad}>
-                    {verifying ? (
-                      <ActivityIndicator color="#120724" />
-                    ) : (
-                      <>
-                        <Text style={styles.btnText}>{t('common.confirm')}</Text>
-                        <Feather name="arrow-right" size={18} color="#120724" />
-                      </>
-                    )}
-                  </LinearGradient>
-                ) : (
-                  <View style={[styles.btnGrad, styles.btnGradDisabled]}>
-                    <Text style={styles.btnTextDisabled}>{t('common.confirm')}</Text>
-                    <Feather name="arrow-right" size={18} color="#A8B0C0" />
-                  </View>
-                )}
-              </Pressable>
-
-              <Pressable
-                disabled={seconds > 0 || busy}
-                onPress={() => void resend()}
-                style={styles.resend}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  seconds > 0
-                    ? t('auth.otpResendCountdownA11y', { seconds })
-                    : t('auth.otpResend')
-                }
-                accessibilityState={{ disabled: seconds > 0 || busy, busy: resending }}
-              >
-                {resending ? (
-                  <ActivityIndicator color="#5C328E" />
-                ) : (
-                  <Text style={[styles.resendText, (seconds > 0 || busy) && styles.resendMuted]}>
-                    {seconds > 0
-                      ? t('auth.otpResendCountdown', { seconds })
-                      : t('auth.otpResend')}
-                  </Text>
-                )}
-              </Pressable>
+          {error ? (
+            <View style={styles.message}>
+              <FormError message={error} />
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          ) : null}
+
+          {resendOk && !error ? (
+            <Text style={styles.resendOk} accessibilityLiveRegion="polite">
+              {t('auth.otpResent')}
+            </Text>
+          ) : null}
+
+          <AuthButton
+            variant="purple"
+            label={t('common.confirm')}
+            onPress={() => void verify()}
+            loading={verifying}
+            disabled={!canVerify}
+            style={styles.cta}
+          />
+
+          <Pressable
+            disabled={resendDisabled}
+            onPress={() => void resend()}
+            style={styles.resend}
+            accessibilityRole="button"
+            accessibilityLabel={
+              seconds > 0
+                ? t('auth.otpResendCountdownA11y', { seconds })
+                : t('auth.otpResend')
+            }
+            accessibilityState={{ disabled: resendDisabled, busy: resending }}
+          >
+            {resending ? (
+              <ActivityIndicator color={C.primary} />
+            ) : (
+              <Text style={[styles.resendText, resendDisabled && styles.resendMuted]}>
+                {seconds > 0
+                  ? t('auth.otpResendCountdown', { seconds })
+                  : t('auth.otpResend')}
+              </Text>
+            )}
+          </Pressable>
+        </Animated.View>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, width: '100%', backgroundColor: '#F7F5F2', overflow: 'hidden' },
-  flex: { flex: 1 },
-  hero: { position: 'absolute', top: 0, left: 0, right: 0, height: 240 },
-  scrollView: { flex: 1, width: '100%' },
-  scroll: {
-    paddingHorizontal: 20,
-    flexGrow: 1,
-  },
-  back: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  title: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 26 },
-  sub: {
-    color: 'rgba(255,255,255,0.75)',
+  root: { flex: 1, backgroundColor: C.soft, overflow: 'hidden' },
+  scroll: { flex: 1 },
+  content: { flexGrow: 1, width: '100%', maxWidth: 440, alignSelf: 'center', paddingHorizontal: 24 },
+  brand: { marginTop: 24 },
+  lead: {
+    marginTop: 14,
+    marginBottom: 24,
+    alignSelf: 'center',
+    maxWidth: 320,
+    textAlign: 'center',
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    marginTop: 8,
-    marginBottom: 14,
-    lineHeight: 20,
-  },
-  cardWrap: {
-    flexGrow: 1,
-    justifyContent: 'flex-start',
-    paddingTop: 4,
-    paddingBottom: 8,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 18,
-    shadowColor: '#2A104E',
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 6,
+    fontSize: 14.5,
+    lineHeight: 21,
+    color: C.secondary,
   },
   codeInput: {
+    minHeight: 64,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    backgroundColor: C.surface,
     fontFamily: 'Inter_700Bold',
     fontSize: 28,
     letterSpacing: 10,
     textAlign: 'center',
-    color: '#2A104E',
-    backgroundColor: '#F8F5FC',
-    borderRadius: 16,
-    minHeight: 64,
-    borderWidth: 1.5,
-    paddingHorizontal: 12,
+    color: C.ink,
   },
-  errorBox: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 12,
-    padding: 12,
-  },
-  errorText: {
-    flex: 1,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: '#B91C1C',
-    lineHeight: 18,
-    textAlign: 'left',
-  },
+  codeFocused: { boxShadow: '0px 0px 0px 3px rgba(75,36,138,0.10)' },
+  message: { marginTop: 16 },
   resendOk: {
-    marginTop: 12,
+    marginTop: 14,
     textAlign: 'center',
     fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: '#0D9488',
+    fontSize: 13.5,
+    color: '#16A34A',
   },
-  btn: { marginTop: 16, borderRadius: 16, overflow: 'hidden' },
-  btnDisabled: { opacity: 1 },
-  btnGrad: {
-    minHeight: 52,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  btnGradDisabled: {
-    backgroundColor: '#E8E4F0',
-  },
-  btnText: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#120724' },
-  btnTextDisabled: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#94A3B8' },
-  resend: {
-    marginTop: 12,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-  },
-  resendText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#5C328E' },
-  resendMuted: { color: '#94A3B8' },
+  cta: { marginTop: 24 },
+  resend: { marginTop: 8, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  resendText: { fontFamily: 'Inter_600SemiBold', fontSize: 14, color: C.primary },
+  resendMuted: { color: C.secondary },
 });
