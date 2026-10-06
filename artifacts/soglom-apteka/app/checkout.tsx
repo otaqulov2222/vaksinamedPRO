@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -22,6 +22,8 @@ import { confirmAction, notify } from '@/lib/dialogs';
 import type { TranslationKey } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
 import { fulfillmentTypeLabel, paymentMethodLabel } from '@/lib/orderLabels';
+import DeliveryMapPickerModal from '@/components/DeliveryMapPickerModal';
+import type { DeliveryAddressSelection, LatLng } from '@/lib/maps';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -77,7 +79,17 @@ export default function CheckoutScreen() {
   const [branchId, setBranchId] = useState<number | null>(null);
   const [fulfillment, setFulfillment] = useState<'pickup' | 'delivery'>('pickup');
   const [paymentMethod, setPaymentMethod] = useState('pay_at_branch');
-  const [address, setAddress] = useState('');
+  const [addrDistrict, setAddrDistrict] = useState('');
+  const [addrStreet, setAddrStreet] = useState('');
+  const [addrHouse, setAddrHouse] = useState('');
+  const [addrApartment, setAddrApartment] = useState('');
+  const [addrEntrance, setAddrEntrance] = useState('');
+  const [addrFloor, setAddrFloor] = useState('');
+  const [addrLandmark, setAddrLandmark] = useState('');
+  const [addrComment, setAddrComment] = useState('');
+  const [addrCoords, setAddrCoords] = useState<LatLng | null>(null);
+  const [mapAddressResolved, setMapAddressResolved] = useState<string>('');
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [useCashback, setUseCashback] = useState(false);
   const [cart, setCart] = useState<any>(null);
   const [rules, setRules] = useState<any>(null);
@@ -194,16 +206,6 @@ export default function CheckoutScreen() {
       hint: t('cart.checkoutPayAtBranchHint'),
       enabled: true,
     },
-    ...(fulfillment === 'delivery'
-      ? [
-          {
-            value: 'cod',
-            label: paymentMethodLabel(t, 'cod'),
-            hint: t('cart.checkoutCodHint'),
-            enabled: true,
-          },
-        ]
-      : []),
     {
       value: 'payme',
       label: paymentMethodLabel(t, 'payme'),
@@ -216,14 +218,46 @@ export default function CheckoutScreen() {
       hint: t('cart.checkoutMethodUnavailable', { method: paymentMethodLabel(t, 'click') }),
       enabled: false,
     },
-  ];
+  ].filter((opt) => opt.enabled);
+
+  const handleMapConfirm = useCallback((selection: DeliveryAddressSelection) => {
+    setAddrCoords({ lat: selection.latitude, lng: selection.longitude });
+    setMapAddressResolved(selection.formattedAddress);
+    if (selection.district) setAddrDistrict(selection.district);
+    if (selection.street) setAddrStreet(selection.street);
+    if (selection.house) setAddrHouse(selection.house);
+  }, []);
+
+  // Structured address assembly for canonical delivery payload
+  const formattedAddress = useMemo(() => {
+    const parts: string[] = [];
+    if (mapAddressResolved.trim()) {
+      parts.push(mapAddressResolved.trim());
+    } else {
+      const mainParts = [addrDistrict.trim(), addrStreet.trim(), addrHouse.trim() ? `${addrHouse.trim()}-uy` : ''].filter(Boolean); // i18n-ignore
+      if (mainParts.length) parts.push(mainParts.join(', '));
+    }
+    const extraParts = [
+      addrApartment.trim() ? `${addrApartment.trim()}-xonadon` : '', // i18n-ignore
+      addrEntrance.trim() ? `${addrEntrance.trim()}-yo'lak` : '', // i18n-ignore
+      addrFloor.trim() ? `${addrFloor.trim()}-qavat` : '', // i18n-ignore
+    ].filter(Boolean);
+    if (extraParts.length) parts.push(extraParts.join(', '));
+    if (addrLandmark.trim()) parts.push(`Mo‘ljal: ${addrLandmark.trim()}`); // i18n-ignore
+    if (addrComment.trim()) parts.push(`Izoh: ${addrComment.trim()}`); // i18n-ignore
+    return parts.join(' | ');
+  }, [mapAddressResolved, addrDistrict, addrStreet, addrHouse, addrApartment, addrEntrance, addrFloor, addrLandmark, addrComment]);
+
+  const hasValidDeliveryAddress =
+    (Boolean(mapAddressResolved.trim()) || (addrDistrict.trim().length > 0 && addrStreet.trim().length > 0 && addrHouse.trim().length > 0)) &&
+    formattedAddress.length >= MIN_ADDRESS_LENGTH;
 
   const canSubmit =
     hasItems
     && branchId != null
     && !submitting
     && !(fulfillment === 'delivery' && !deliveryFeeKnown)
-    && !(fulfillment === 'delivery' && address.trim().length < MIN_ADDRESS_LENGTH);
+    && !(fulfillment === 'delivery' && !hasValidDeliveryAddress);
 
   const explainBlocked = () => {
     if (!hasItems) {
@@ -238,7 +272,7 @@ export default function CheckoutScreen() {
       notify(t('cart.checkoutDeliveryTitle'), t('cart.checkoutDeliveryFeeFailed'));
       return;
     }
-    if (fulfillment === 'delivery' && address.trim().length < MIN_ADDRESS_LENGTH) {
+    if (fulfillment === 'delivery' && !hasValidDeliveryAddress) {
       notify(t('cart.checkoutAddressTitle'), t('cart.checkoutAddressRequired'));
       return;
     }
@@ -263,7 +297,7 @@ export default function CheckoutScreen() {
       notify(t('cart.checkoutDeliveryTitle'), t('cart.checkoutDeliveryFeeFailed'));
       return;
     }
-    if (fulfillment === 'delivery' && address.trim().length < MIN_ADDRESS_LENGTH) {
+    if (fulfillment === 'delivery' && !hasValidDeliveryAddress) {
       notify(t('cart.checkoutAddressTitle'), t('cart.checkoutAddressRequired'));
       return;
     }
@@ -300,7 +334,7 @@ export default function CheckoutScreen() {
           branchId,
           fulfillment,
           paymentMethod,
-          address,
+          address: formattedAddress,
           useCashback: Boolean(useCashback && showCashback),
           // Existing optional field — honest label, not a scheduled ETA/window.
           ...(fulfillment === 'delivery' ? { window: DELIVERY_TIMING_HONEST } : {}),
@@ -460,10 +494,6 @@ export default function CheckoutScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <Text style={styles.pageHint}>
-          {t('cart.checkoutPageHint')}
-        </Text>
-
         {/* Branch — same /branches picker as Cart */}
         <View style={styles.card}>
           <Text style={styles.cardLabel}>{t('cart.branchLabel')}</Text>
@@ -627,17 +657,141 @@ export default function CheckoutScreen() {
                 )}
               </View>
             </View>
+
             <Text style={styles.fieldLabel}>{t('cart.checkoutAddressLabel')}</Text>
+
+            {/* Map Address Picker CTA & Resolved Card */}
+            {mapAddressResolved ? (
+              <View style={styles.resolvedAddressCard}>
+                <View style={styles.resolvedAddressHeader}>
+                  <View style={styles.resolvedIconWrap}>
+                    <Feather name="map-pin" size={18} color={PURPLE} />
+                  </View>
+                  <View style={styles.resolvedTextWrap}>
+                    <Text style={styles.resolvedLabel}>{t('cart.checkoutSelectedAddress')}</Text>
+                    <Text style={styles.resolvedAddressText} numberOfLines={2}>
+                      {mapAddressResolved}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={styles.changeAddressBtn}
+                  onPress={() => setShowMapPicker(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('cart.checkoutChangeAddress')}
+                >
+                  <Feather name="edit-2" size={14} color={PURPLE} />
+                  <Text style={styles.changeAddressBtnText}>{t('cart.checkoutChangeAddress')}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.pickMapBtn}
+                onPress={() => setShowMapPicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t('cart.checkoutPickOnMap')}
+              >
+                <Feather name="map" size={18} color={PURPLE} />
+                <Text style={styles.pickMapBtnText}>{t('cart.checkoutPickOnMap')}</Text>
+              </Pressable>
+            )}
+
+            {!mapAddressResolved ? (
+              <>
+                <TextInput
+                  value={addrDistrict}
+                  onChangeText={setAddrDistrict}
+                  placeholder={t('cart.checkoutAddrDistrict')}
+                  placeholderTextColor={MUTED}
+                  style={styles.input}
+                  accessibilityLabel={t('cart.checkoutAddrDistrict')}
+                  autoCorrect={false}
+                />
+
+                <TextInput
+                  value={addrStreet}
+                  onChangeText={setAddrStreet}
+                  placeholder={t('cart.checkoutAddrStreet')}
+                  placeholderTextColor={MUTED}
+                  style={styles.input}
+                  accessibilityLabel={t('cart.checkoutAddrStreet')}
+                  autoCorrect={false}
+                />
+              </>
+            ) : null}
+
+            <View style={styles.multiFieldRow}>
+              <View style={styles.multiFieldThird}>
+                <TextInput
+                  value={addrHouse}
+                  onChangeText={setAddrHouse}
+                  placeholder={t('cart.checkoutAddrHouse')}
+                  placeholderTextColor={MUTED}
+                  style={styles.input}
+                  accessibilityLabel={t('cart.checkoutAddrHouse')}
+                  autoCorrect={false}
+                />
+              </View>
+              <View style={styles.multiFieldThird}>
+                <TextInput
+                  value={addrApartment}
+                  onChangeText={setAddrApartment}
+                  placeholder={t('cart.checkoutAddrApartment')}
+                  placeholderTextColor={MUTED}
+                  style={styles.input}
+                  accessibilityLabel={t('cart.checkoutAddrApartment')}
+                  autoCorrect={false}
+                />
+              </View>
+              <View style={styles.multiFieldThird}>
+                <TextInput
+                  value={addrEntrance}
+                  onChangeText={setAddrEntrance}
+                  placeholder={t('cart.checkoutAddrEntrance')}
+                  placeholderTextColor={MUTED}
+                  style={styles.input}
+                  accessibilityLabel={t('cart.checkoutAddrEntrance')}
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+
+            <View style={styles.multiFieldRow}>
+              <View style={styles.multiFieldHalf}>
+                <TextInput
+                  value={addrFloor}
+                  onChangeText={setAddrFloor}
+                  placeholder={t('cart.checkoutAddrFloor')}
+                  placeholderTextColor={MUTED}
+                  style={styles.input}
+                  accessibilityLabel={t('cart.checkoutAddrFloor')}
+                  autoCorrect={false}
+                />
+              </View>
+              <View style={styles.multiFieldHalf}>
+                <TextInput
+                  value={addrLandmark}
+                  onChangeText={setAddrLandmark}
+                  placeholder={t('cart.checkoutAddrLandmark')}
+                  placeholderTextColor={MUTED}
+                  style={styles.input}
+                  accessibilityLabel={t('cart.checkoutAddrLandmark')}
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+
             <TextInput
-              value={address}
-              onChangeText={setAddress}
-              placeholder={t('cart.checkoutAddressPlaceholder')}
+              value={addrComment}
+              onChangeText={setAddrComment}
+              placeholder={t('cart.checkoutAddrComment')}
               placeholderTextColor={MUTED}
               style={styles.input}
-              accessibilityLabel={t('cart.checkoutAddressLabel')}
+              accessibilityLabel={t('cart.checkoutAddrComment')}
               autoCorrect={false}
             />
-            {address.trim().length > 0 && address.trim().length < MIN_ADDRESS_LENGTH ? (
+
+            {!hasValidDeliveryAddress && (addrDistrict.length > 0 || addrStreet.length > 0 || addrHouse.length > 0) ? (
               <Text style={styles.inlineHintWarn}>
                 {t('cart.checkoutAddressTooShort', { min: MIN_ADDRESS_LENGTH })}
               </Text>
@@ -659,18 +813,13 @@ export default function CheckoutScreen() {
               >
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.cashbackTitle}>{t('cart.checkoutUseCashback')}</Text>
-                  <Text style={styles.cashbackMeta} numberOfLines={2}>
+                  <Text style={styles.cashbackMeta} numberOfLines={1}>
                     {t('cart.checkoutCashbackAvailable', { amount: fmt.money(balanceNum) })}
-                    {maxSpendPercent != null
-                      ? ` · ${t('cart.checkoutCashbackMaxPercent', { percent: maxSpendPercent })}`
-                      : ''}
                   </Text>
                   {useCashback && cashbackUsed > 0 ? (
-                    <Text style={styles.cashbackPreview}>
+                    <Text style={styles.cashbackPreview} numberOfLines={1}>
                       {t('cart.checkoutCashbackPreview', { amount: fmt.money(cashbackUsed) })}
                     </Text>
-                  ) : useCashback ? (
-                    <Text style={styles.cashbackMeta}>{t('cart.checkoutCashbackServerFinal')}</Text>
                   ) : null}
                 </View>
                 <View
@@ -681,15 +830,11 @@ export default function CheckoutScreen() {
                   <View style={[styles.toggleThumb, useCashback && styles.toggleThumbOn]} />
                 </View>
               </Pressable>
-              {maxSpendPercent != null ? (
-                <Text style={styles.cashbackHint}>
-                  {t('cart.checkoutCashbackHintCap', { percent: maxSpendPercent })}
-                </Text>
-              ) : (
-                <Text style={styles.cashbackHint}>
-                  {t('cart.checkoutCashbackHint')}
-                </Text>
-              )}
+              <Text style={styles.cashbackHint}>
+                {maxSpendPercent != null
+                  ? t('cart.checkoutCashbackHintCap', { percent: maxSpendPercent })
+                  : t('cart.checkoutCashbackHint')}
+              </Text>
             </View>
           </>
         ) : null}
@@ -760,9 +905,6 @@ export default function CheckoutScreen() {
           ) : null}
           <View style={styles.summaryDivider} />
           <SummaryRow label={t('cart.checkoutTotalEstimate')} value={fmt.money(totalPreview)} bold />
-          <Text style={styles.summaryNote}>
-            {t('cart.checkoutSummaryNote')}
-          </Text>
         </View>
 
         {hasItems ? (
@@ -815,6 +957,15 @@ export default function CheckoutScreen() {
           </View>
         </View>
       ) : null}
+
+      {/* Delivery Map Picker Modal */}
+      <DeliveryMapPickerModal
+        visible={showMapPicker}
+        onClose={() => setShowMapPicker(false)}
+        onConfirm={handleMapConfirm}
+        initialCoords={addrCoords}
+        initialAddress={mapAddressResolved}
+      />
     </View>
   );
 }
@@ -1113,6 +1264,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: PURPLE_DEEP,
   },
+  multiFieldRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  multiFieldThird: {
+    flex: 1,
+  },
+  multiFieldHalf: {
+    flex: 1,
+  },
 
   optionRow: {
     flexDirection: 'row',
@@ -1290,6 +1451,75 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: PURPLE,
     flexShrink: 1,
+  },
+  pickMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F8F5FF',
+    borderWidth: 1.5,
+    borderColor: '#5C328E',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  pickMapBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: '#5C328E',
+  },
+  resolvedAddressCard: {
+    backgroundColor: '#F8F5FF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    gap: 10,
+  },
+  resolvedAddressHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  resolvedIconWrap: {
+    marginTop: 2,
+  },
+  resolvedTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  resolvedLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: MUTED,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  resolvedAddressText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+    lineHeight: 18,
+  },
+  changeAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-end',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  changeAddressBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#5C328E',
   },
   cta: {
     minHeight: 52,

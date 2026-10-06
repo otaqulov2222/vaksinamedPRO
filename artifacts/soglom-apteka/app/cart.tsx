@@ -662,12 +662,6 @@ export default function CartScreen() {
           }}
         >
           <View style={[styles.footerInner, { maxWidth: contentWidth - sidePad * 2, width: '100%' }]}>
-            <View style={styles.footerSum}>
-              <Text style={styles.footerSumLabel}>{t('cart.cartSubtotal')}</Text>
-              <Text style={styles.footerSumValue} numberOfLines={1}>
-                {subtotalLabel}
-              </Text>
-            </View>
             <Pressable
               style={[styles.cta, checkoutBusy && styles.ctaBusy]}
               onPress={() => void goCheckout()}

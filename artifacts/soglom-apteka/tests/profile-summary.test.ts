@@ -83,3 +83,39 @@ describe('profile summary view-model', () => {
     assert.equal(matchTierRate(undefined, 'Silver'), null);
   });
 });
+
+describe('product detail add-to-cart behavior', () => {
+  const { readFileSync } = require('node:fs');
+  const { join } = require('node:path');
+  const filePath = join(__dirname, '../app/product/[id].tsx');
+  const source = readFileSync(filePath, 'utf8');
+
+  it('successful add-to-cart does NOT automatically navigate to /cart', () => {
+    const onAddMatch = source.match(/const onAdd = async \(\) => {([\s\S]*?)\n  };/);
+    assert.ok(onAddMatch, 'onAdd function must exist in product/[id].tsx');
+    const onAddBody = onAddMatch[1];
+
+    assert.doesNotMatch(
+      onAddBody,
+      /router\.(push|replace)\(['"]\/cart['"]\)/,
+      'onAdd must not automatically navigate to /cart upon success',
+    );
+    assert.match(onAddBody, /await api\.addToCart\(/, 'onAdd must call api.addToCart');
+    assert.match(onAddBody, /await refresh\(\)/, 'onAdd must call refresh to update cart badge');
+    assert.match(onAddBody, /setAddedBanner\(true\)/, 'onAdd must display in-page success banner');
+  });
+
+  it('provides an optional manual link to open cart', () => {
+    assert.match(
+      source,
+      /router\.push\(['"]\/cart['"]\)/,
+      'Manual link to open /cart must exist in ProductScreen',
+    );
+    assert.match(
+      source,
+      /catalog\.viewCart/,
+      'Must use catalog.viewCart localization for optional cart button',
+    );
+  });
+});
+

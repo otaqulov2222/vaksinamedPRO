@@ -189,6 +189,21 @@ export const api = {
   cancelOrder: (id: number) => request<any>(`/api/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({}) }),
   rateStaff: (body: { orderId: number; rating: number; tags?: string[]; comment?: string }) =>
     request<any>('/api/ratings', { method: 'POST', body: JSON.stringify(body) }),
+  reverseGeocode: (lat: number, lng: number, lang = 'uz_UZ') => {
+    const params = new URLSearchParams({ lat: String(lat), lng: String(lng), lang });
+    return request<{
+      formattedAddress: string | null;
+      district: string | null;
+      street: string | null;
+      house: string | null;
+      locality: string | null;
+      kind: string | null;
+      precision: string | null;
+      coordinates: { lat: number; lng: number };
+      provider: string;
+      found?: boolean;
+    }>(`/api/maps/geocode?${params}`, {}, false);
+  },
 };
 
 export { API_URL, newIdempotencyKey };

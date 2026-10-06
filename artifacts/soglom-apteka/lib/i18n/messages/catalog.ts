@@ -1,4 +1,4 @@
-﻿import { defineMessages } from '../core';
+import { defineMessages } from '../core';
 
 export default defineMessages({
   uz: {
@@ -48,6 +48,8 @@ export default defineMessages({
     addRequiresLogin: 'Mahsulotni savatga qo‘shish uchun tizimga kiring yoki API ishlashi kerak.',
     notInBranchMessage: 'Bu filialda mahsulot mavjud emas.',
     addedToCart: '{name} qo‘shildi',
+    addedToCartShort: 'Mahsulot savatga qo‘shildi',
+    viewCart: 'Savatni ko‘rish',
     addToCartFailed: 'Savatga qo‘shilmadi',
     errorStockUnavailable: 'Filialda yetarli qoldiq yo‘q',
     exceedsStock: 'Filialdagi mavjud miqdordan oshib ketdi.',
@@ -112,6 +114,8 @@ export default defineMessages({
     addRequiresLogin: 'Чтобы добавить товар в корзину, войдите в аккаунт или попробуйте позже.',
     notInBranchMessage: 'Этого товара нет в выбранной аптеке.',
     addedToCart: 'Добавлено в корзину: {name}',
+    addedToCartShort: 'Товар добавлен в корзину',
+    viewCart: 'Открыть корзину',
     addToCartFailed: 'Не удалось добавить в корзину',
     errorStockUnavailable: 'Недостаточно товара в аптеке',
     exceedsStock: 'Превышено количество, доступное в аптеке.',
@@ -176,6 +180,8 @@ export default defineMessages({
     addRequiresLogin: 'To add this product to the cart, log in or try again later.',
     notInBranchMessage: 'This product is not available at this pharmacy.',
     addedToCart: 'Added to cart: {name}',
+    addedToCartShort: 'Product added to cart',
+    viewCart: 'View cart',
     addToCartFailed: 'Could not add to cart',
     errorStockUnavailable: 'Not enough stock at the pharmacy',
     exceedsStock: 'Exceeds the quantity available at the pharmacy.',

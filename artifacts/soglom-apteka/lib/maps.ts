@@ -3,6 +3,22 @@ import { API_URL } from '@/lib/api';
 
 export type LatLng = { lat: number; lng: number };
 
+export const TASHKENT_DEFAULT: LatLng = { lat: 41.311081, lng: 69.240562 };
+
+export type DeliveryAddressSelection = {
+  formattedAddress: string;
+  latitude: number;
+  longitude: number;
+  district?: string | null;
+  street?: string | null;
+  house?: string | null;
+  apartment?: string | null;
+  entrance?: string | null;
+  floor?: string | null;
+  landmark?: string | null;
+  courierNote?: string | null;
+};
+
 export type RouteInfo = {
   distanceKm: number;
   /** Only set when a routing provider returns duration — never invented from straight-line. */

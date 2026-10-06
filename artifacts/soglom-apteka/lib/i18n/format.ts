@@ -5,6 +5,16 @@ import { translate } from './index';
 
 const GROUP_SEPARATOR: Record<Language, string> = { uz: '\u00A0', ru: '\u00A0', en: ',' };
 
+export const YANDEX_LOCALES: Record<Language, string> = {
+  uz: 'uz_UZ',
+  ru: 'ru_RU',
+  en: 'en_US',
+};
+
+export function toGeocodeLocale(language: Language): string {
+  return YANDEX_LOCALES[language] || 'uz_UZ';
+}
+
 const MONTHS: Record<Language, readonly string[]> = {
   uz: ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'],
   ru: ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'],

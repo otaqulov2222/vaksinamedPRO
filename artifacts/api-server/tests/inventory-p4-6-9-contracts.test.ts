@@ -57,4 +57,15 @@ describe("P4.6–P4.9 API inventory contracts", () => {
     assert.match(text, /Duplicate stock/);
     assert.match(text, /FOM inventory writers remain OFF/i);
   });
+
+  it("Phase A Safe Core: pickup reservation TTL is 24 hours and paid expiry is safe", () => {
+    const cb = readFileSync(path.join(root, "src/lib/cashback.ts"), "utf8");
+    assert.match(cb, /export const RESERVE_HOURS = 24;/);
+    const inv = readFileSync(path.join(root, "src/lib/inventory.ts"), "utf8");
+    assert.match(inv, /PAID_PICKUP_EXPIRED_STAFF_REQUIRED/);
+    assert.match(inv, /toStatus === "EXPIRED" && row\.order_id/);
+    assert.match(inv, /linkedOrder\.paymentStatus === "PAID"/);
+    // Worker sweep immunity: expiresAt is cleared to null so subsequent sweeps ignore it
+    assert.match(inv, /set\(\{\s*expiresAt:\s*null,\s*updatedAt:\s*new Date\(\)\s*\}\)/);
+  });
 });

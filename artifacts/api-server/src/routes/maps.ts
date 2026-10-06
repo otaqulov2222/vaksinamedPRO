@@ -35,4 +35,83 @@ router.get("/maps/route", async (req, res, next) => {
   }
 });
 
+router.get("/maps/geocode", async (req, res, next) => {
+  try {
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+    const lang = typeof req.query.lang === "string" ? req.query.lang : "uz_UZ";
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ message: "Koordinatalar noto‘g‘ri", code: "INVALID_COORDINATES" });
+    }
+
+    const apiKey = process.env.YANDEX_MAPS_API_KEY || process.env.YANDEX_GEOCODER_API_KEY || "";
+    if (!apiKey) {
+      // Graceful fallback when API key is not configured in environment
+      return res.json({
+        formattedAddress: null,
+        district: null,
+        street: null,
+        house: null,
+        locality: null,
+        coordinates: { lat, lng },
+        provider: "none",
+        configured: false,
+      });
+    }
+
+    // Yandex Geocoder requires: geocode=lng,lat
+    const yandexUrl = `https://geocode-maps.yandex.ru/1.x/?apikey=${encodeURIComponent(apiKey)}&geocode=${lng},${lat}&format=json&lang=${encodeURIComponent(lang)}&results=1`;
+    const response = await fetch(yandexUrl, { signal: AbortSignal.timeout(6000) });
+    if (!response.ok) {
+      if (response.status === 429) {
+        return res.status(429).json({ message: "Geokoder so‘rovlar chegarasiga yetdi", code: "RATE_LIMITED" });
+      }
+      return res.status(502).json({ message: "Geokoder xizmati vaqtincha ishlamayapti", code: "GEOCODER_UNAVAILABLE" });
+    }
+
+    const data = await response.json();
+    const geoObject = data?.response?.GeoObjectCollection?.featureMember?.[0]?.GeoObject;
+    if (!geoObject) {
+      return res.json({
+        formattedAddress: null,
+        district: null,
+        street: null,
+        house: null,
+        locality: null,
+        coordinates: { lat, lng },
+        provider: "yandex",
+        found: false,
+      });
+    }
+
+    const meta = geoObject.metaDataProperty?.GeocoderMetaData;
+    const formattedAddress = meta?.text || geoObject.name || null;
+    const components: Array<{ kind: string; name: string }> = meta?.Address?.Components || [];
+
+    const getKind = (kind: string) => components.find((c) => c.kind === kind)?.name || null;
+    const locality = getKind("locality");
+    const district = getKind("district") || getKind("sub_locality");
+    const street = getKind("street");
+    const house = getKind("house");
+
+    return res.json({
+      formattedAddress,
+      district,
+      street,
+      house,
+      locality,
+      kind: meta?.kind || null,
+      precision: meta?.precision || null,
+      coordinates: { lat, lng },
+      provider: "yandex",
+      found: true,
+    });
+  } catch (error: any) {
+    if (error?.name === "TimeoutError") {
+      return res.status(504).json({ message: "Geokoder javob bermadi", code: "GEOCODER_TIMEOUT" });
+    }
+    return next(error);
+  }
+});
+
 export default router;

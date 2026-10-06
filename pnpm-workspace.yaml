@@ -73,6 +73,7 @@ onlyBuiltDependencies:
   - esbuild
   - msw
   - unrs-resolver
+  - '@embedded-postgres/windows-x64'
 
 overrides:
   # replit uses linux-x64 only, we can exclude all other platforms
@@ -161,3 +162,4 @@ allowBuilds:
   "@swc/core": true
   msw: true
   unrs-resolver: true
+  '@embedded-postgres/windows-x64': true

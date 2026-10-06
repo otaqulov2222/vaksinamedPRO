@@ -16,7 +16,7 @@ export const DEFAULT_MAX_SPEND_RATIO = 0.3;
 /** @deprecated Prefer getMaxSpendRatio() / computeCashback({ maxSpendRatio }) — kept as default constant. */
 export const MAX_SPEND_RATIO = DEFAULT_MAX_SPEND_RATIO;
 export const DELIVERY_FEE = 15_000;
-export const RESERVE_HOURS = 2;
+export const RESERVE_HOURS = 24;
 
 /** Legacy flat rate (faqat fallback) */
 export const CASHBACK_RATE = 0.05;

@@ -7,6 +7,7 @@ import {
   reservations,
   type Reservation,
 } from "@workspace/db";
+import { emitAlert, ALERT } from "./alerts";
 
 /** Keep orders.reservation_status mirror in sync when reservation leaves ACTIVE. */
 async function syncOrderReservationMirror(
@@ -221,6 +222,39 @@ export async function releaseReservation(
     }
     if (row.status !== "ACTIVE") {
       throw badRequest("Bron holati noto‘g‘ri", 409);
+    }
+
+    // PHASE A SAFE CORE: If reservation expiration is triggered for a PAID order,
+    // NEVER silently release inventory or cancel the order.
+    // Emit alert for staff escalation, clear expiresAt so worker sweep does not repeatedly process it,
+    // and preserve the active reservation / stock lock.
+    if (toStatus === "EXPIRED" && row.order_id) {
+      const orderRows = await tx.select().from(orders).where(eq(orders.id, row.order_id)).limit(1);
+      const linkedOrder = orderRows[0];
+      if (
+        linkedOrder &&
+        (linkedOrder.paymentStatus === "PAID" || linkedOrder.paymentStatus === "PARTIALLY_REFUNDED")
+      ) {
+        emitAlert(ALERT.PAID_PICKUP_EXPIRED_STAFF_REQUIRED, {
+          reservationId,
+          orderId: row.order_id,
+          orderCode: linkedOrder.code,
+          paymentStatus: linkedOrder.paymentStatus,
+          fulfillmentStatus: linkedOrder.fulfillmentStatus,
+          branchId: row.branch_id,
+          reason: opts.reason || "paid_pickup_expiry_intercepted",
+        });
+        // Smallest safe change: clear expiresAt on the reservation so repeated worker sweeps
+        // do not repeatedly re-examine/alert the same record, while preserving status = ACTIVE
+        // and keeping product_stocks.reserved_quantity intact.
+        await tx
+          .update(reservations)
+          .set({ expiresAt: null, updatedAt: new Date() })
+          .where(eq(reservations.id, reservationId));
+
+        const bundle = await loadReservationBundle(tx, reservationId);
+        return { reservation: bundle!.reservation, released: false };
+      }
     }
 
     const items = await tx.select().from(reservationItems).where(eq(reservationItems.reservationId, reservationId));

@@ -190,6 +190,15 @@ export default function ProductScreen() {
       return q + 1;
     });
 
+  const [addedBanner, setAddedBanner] = useState(false);
+  const bannerTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    };
+  }, []);
+
   const onAdd = async () => {
     if (!product || !canAdd || adding || addingLock.current) return;
     const productId = Number(product.id);
@@ -204,8 +213,11 @@ export default function ProductScreen() {
     try {
       await api.addToCart(productId, amount);
       await refresh();
-      notify(t('common.navCart'), t('catalog.addedToCart', { name: localizedName(language, product) }));
-      router.push('/cart');
+      setAddedBanner(true);
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+      bannerTimerRef.current = setTimeout(() => {
+        setAddedBanner(false);
+      }, 4000);
     } catch (err) {
       notify(
         t('common.errorTitle'),
@@ -487,7 +499,28 @@ export default function ProductScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: bottomPad, paddingHorizontal: sidePad }]}>
-        <View style={[styles.footerInner, { maxWidth: contentWidth - sidePad * 2, width: '100%' }]}>
+        <View style={{ maxWidth: contentWidth - sidePad * 2, width: '100%', gap: 10 }}>
+          {addedBanner ? (
+            <View style={styles.bannerRow} accessibilityRole="alert">
+              <View style={styles.bannerLeft}>
+                <Feather name="check" size={15} color={OK} />
+                <Text style={styles.bannerText} numberOfLines={1}>
+                  {t('catalog.addedToCartShort')}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => router.push('/cart')}
+                style={styles.bannerLink}
+                accessibilityRole="button"
+                accessibilityLabel={t('catalog.viewCart')}
+              >
+                <Text style={styles.bannerLinkText}>{t('catalog.viewCart')}</Text>
+                <Feather name="chevron-right" size={14} color={PURPLE} />
+              </Pressable>
+            </View>
+          ) : null}
+
+          <View style={styles.footerInner}>
           {canAdd ? (
             <View style={styles.qtyWrap}>
               <Pressable
@@ -518,6 +551,7 @@ export default function ProductScreen() {
           ) : null}
 
           <Pressable
+            testID="add-to-cart-btn"
             style={[styles.cta, (!canAdd || adding) && styles.ctaDisabled]}
             onPress={() => void onAdd()}
             disabled={!canAdd || adding}
@@ -536,6 +570,7 @@ export default function ProductScreen() {
               </>
             )}
           </Pressable>
+        </View>
         </View>
       </View>
     </View>
@@ -803,6 +838,42 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: -2 },
     elevation: 8,
+  },
+  bannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  bannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+  },
+  bannerText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: OK,
+    flex: 1,
+  },
+  bannerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 2,
+    paddingLeft: 8,
+  },
+  bannerLinkText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: PURPLE,
   },
   footerInner: {
     flexDirection: 'row',

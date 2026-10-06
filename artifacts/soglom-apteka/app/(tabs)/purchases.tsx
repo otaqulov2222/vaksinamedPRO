@@ -24,7 +24,6 @@ import {
   fulfillmentLabel,
   fulfillmentTypeLabel,
   paymentLabelShort,
-  reservationLabelShort,
 } from '@/lib/orderLabels';
 
 const PURPLE = '#6A22D6';
@@ -82,16 +81,6 @@ function paymentTone(status?: string): 'ok' | 'warn' | 'bad' | 'neutral' {
   return 'neutral';
 }
 
-function reservationTone(status?: string, expired?: boolean): 'ok' | 'warn' | 'bad' | 'purple' | 'neutral' {
-  if (expired) return 'warn';
-  const s = String(status || '').toUpperCase();
-  if (s === 'FULFILLED') return 'ok';
-  if (s === 'ACTIVE') return 'purple';
-  if (s === 'EXPIRED') return 'warn';
-  if (s === 'CANCELLED') return 'bad';
-  return 'neutral';
-}
-
 function StatusChip({
   label,
   tone,
@@ -143,18 +132,11 @@ function OrderCard({ order }: { order: any }) {
   const firstTitle = String(first?.title || first?.nameUz || '').trim();
   const moreItems = Math.max(0, itemCount - 1);
 
-  const pay = String(order.paymentStatus || '');
+  const pay = String(order.paymentStatus || '').toUpperCase();
   const fulfill = String(order.fulfillmentStatus || '');
-  const payShort = paymentLabelShort(t, order.paymentStatus);
   const fulfillText = fulfillmentLabel(t, order.fulfillmentStatus);
-  const resExpired = Boolean(order.reservationExpired);
-  const resShort = reservationLabelShort(t, order.reservationStatus, resExpired);
-
   const methodLabel = fulfillmentTypeLabel(t, order.fulfillment);
   const branchName = order.branch?.name ? String(order.branch.name) : '';
-  const usedCb = Number(order.cashbackUsed) || 0;
-  const earnedCb = Number(order.cashbackEarned) || 0;
-  const completed = isCompleted(order);
   const code = String(order.code || '').trim();
   const totalLabel = fmt.money(Math.max(0, Math.floor(Number(order.total) || 0)));
   const when = formatWhen(fmt, order.createdAt);
@@ -169,9 +151,14 @@ function OrderCard({ order }: { order: any }) {
 
   const placeLine = [branchName, methodLabel].filter(Boolean).join(' · ');
 
+  // Show secondary payment chip ONLY when customer action/attention is required
+  const needsPaymentAttention = pay === 'PENDING' || pay === 'FAILED';
+  const payUrgentLabel = needsPaymentAttention ? paymentLabelShort(t, order.paymentStatus) : null;
+
   const a11y = [
     orderTitle,
     fulfillText,
+    payUrgentLabel,
     t('orders.totalA11y', { total: totalLabel }),
   ]
     .filter(Boolean)
@@ -236,26 +223,10 @@ function OrderCard({ order }: { order: any }) {
         </Text>
       </View>
 
-      <View style={styles.axisRow}>
-        {payShort ? <StatusChip label={payShort} tone={paymentTone(pay)} /> : null}
-        {resShort ? (
-          <StatusChip label={resShort} tone={reservationTone(order.reservationStatus, resExpired)} />
-        ) : null}
-      </View>
-
-      {usedCb > 0 ? (
-        <Text style={styles.cashNote} numberOfLines={1}>
-          {t('orders.cashbackUsedLine', { amount: fmt.money(usedCb) })}
-        </Text>
-      ) : null}
-      {completed && earnedCb > 0 ? (
-        <Text style={styles.cashEarn} numberOfLines={1}>
-          {t('orders.cashbackEarnedLine', { amount: fmt.money(earnedCb) })}
-        </Text>
-      ) : earnedCb > 0 && !completed ? (
-        <Text style={styles.cashPending} numberOfLines={1}>
-          {t('orders.cashbackPending')}
-        </Text>
+      {payUrgentLabel ? (
+        <View style={styles.axisRow}>
+          <StatusChip label={payUrgentLabel} tone={paymentTone(pay)} />
+        </View>
       ) : null}
     </Pressable>
   );
