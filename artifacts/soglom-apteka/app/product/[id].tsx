@@ -353,7 +353,12 @@ export default function ProductScreen() {
             paddingBottom: footerReserve,
           },
         ]}
+        horizontal={false}
+        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
         keyboardShouldPersistTaps="handled"
       >
         <View
@@ -581,9 +586,12 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: BG,
+    width: '100%',
+    maxWidth: '100%',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  scroll: { flex: 1, width: '100%' },
+  scroll: { flex: 1, width: '100%', maxWidth: '100%' },
   content: {
     alignSelf: 'center',
     paddingTop: 12,

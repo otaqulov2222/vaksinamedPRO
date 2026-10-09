@@ -199,30 +199,35 @@ export default function CheckoutScreen() {
 
   const stockIssues = items.filter((item: any) => Boolean(item.stockInsufficient));
 
-  const paymentOptions: Array<{ value: string; label: string; enabled: boolean; hint?: string }> = [
-    {
-      value: 'pay_at_branch',
-      label: paymentMethodLabel(t, 'pay_at_branch'),
-      hint: t('cart.checkoutPayAtBranchHint'),
-      enabled: true,
-    },
-    {
-      value: 'payme',
-      label: paymentMethodLabel(t, 'payme'),
-      hint: t('cart.checkoutMethodUnavailable', { method: paymentMethodLabel(t, 'payme') }),
-      enabled: false,
-    },
-    {
-      value: 'click',
-      label: paymentMethodLabel(t, 'click'),
-      hint: t('cart.checkoutMethodUnavailable', { method: paymentMethodLabel(t, 'click') }),
-      enabled: false,
-    },
-  ].filter((opt) => opt.enabled);
+  const paymentOptions: Array<{ value: string; label: string; enabled: boolean; hint?: string }> = (
+    fulfillment === 'delivery'
+      ? [
+          {
+            value: 'payme',
+            label: t('cart.checkoutOnlinePayment'),
+            hint: t('cart.checkoutOnlinePaymentHint'),
+            enabled: true,
+          },
+        ]
+      : [
+          {
+            value: 'pay_at_branch',
+            label: paymentMethodLabel(t, 'pay_at_branch'),
+            hint: t('cart.checkoutPayAtBranchHint'),
+            enabled: true,
+          },
+        ]
+  ).filter((opt) => opt.enabled);
 
   const handleMapConfirm = useCallback((selection: DeliveryAddressSelection) => {
     setAddrCoords({ lat: selection.latitude, lng: selection.longitude });
-    setMapAddressResolved(selection.formattedAddress);
+    const rawCoordPattern = /^-?\d+\.\d+,\s*-?\d+\.\d+$/;
+    const addr = selection.formattedAddress?.trim() || '';
+    if (addr && !rawCoordPattern.test(addr)) {
+      setMapAddressResolved(addr);
+    } else {
+      setMapAddressResolved('');
+    }
     if (selection.district) setAddrDistrict(selection.district);
     if (selection.street) setAddrStreet(selection.street);
     if (selection.house) setAddrHouse(selection.house);
@@ -231,15 +236,22 @@ export default function CheckoutScreen() {
   // Structured address assembly for canonical delivery payload
   const formattedAddress = useMemo(() => {
     const parts: string[] = [];
-    if (mapAddressResolved.trim()) {
-      parts.push(mapAddressResolved.trim());
+    const rawCoordPattern = /^-?\d+\.\d+,\s*-?\d+\.\d+$/;
+    const housePart = addrHouse.trim() ? `${addrHouse.trim()}-uy` : ''; // i18n-ignore
+    if (mapAddressResolved.trim() && !rawCoordPattern.test(mapAddressResolved.trim())) {
+      const resolved = mapAddressResolved.trim();
+      if (housePart && !resolved.includes(addrHouse.trim())) {
+        parts.push(`${resolved}, ${housePart}`);
+      } else {
+        parts.push(resolved);
+      }
     } else {
-      const mainParts = [addrDistrict.trim(), addrStreet.trim(), addrHouse.trim() ? `${addrHouse.trim()}-uy` : ''].filter(Boolean); // i18n-ignore
+      const mainParts = [addrDistrict.trim(), addrStreet.trim(), housePart].filter(Boolean); // i18n-ignore
       if (mainParts.length) parts.push(mainParts.join(', '));
     }
     const extraParts = [
       addrApartment.trim() ? `${addrApartment.trim()}-xonadon` : '', // i18n-ignore
-      addrEntrance.trim() ? `${addrEntrance.trim()}-yo'lak` : '', // i18n-ignore
+      addrEntrance.trim() ? `${addrEntrance.trim()}-kirish` : '', // i18n-ignore
       addrFloor.trim() ? `${addrFloor.trim()}-qavat` : '', // i18n-ignore
     ].filter(Boolean);
     if (extraParts.length) parts.push(extraParts.join(', '));
@@ -249,8 +261,10 @@ export default function CheckoutScreen() {
   }, [mapAddressResolved, addrDistrict, addrStreet, addrHouse, addrApartment, addrEntrance, addrFloor, addrLandmark, addrComment]);
 
   const hasValidDeliveryAddress =
-    (Boolean(mapAddressResolved.trim()) || (addrDistrict.trim().length > 0 && addrStreet.trim().length > 0 && addrHouse.trim().length > 0)) &&
-    formattedAddress.length >= MIN_ADDRESS_LENGTH;
+    (
+      (Boolean(mapAddressResolved.trim()) && addrHouse.trim().length > 0) ||
+      (addrDistrict.trim().length > 0 && addrStreet.trim().length > 0 && addrHouse.trim().length > 0)
+    ) && formattedAddress.length >= MIN_ADDRESS_LENGTH;
 
   const canSubmit =
     hasItems
@@ -273,6 +287,11 @@ export default function CheckoutScreen() {
       return;
     }
     if (fulfillment === 'delivery' && !hasValidDeliveryAddress) {
+      const hasBaseLocation = Boolean(mapAddressResolved.trim()) || (addrDistrict.trim().length > 0 && addrStreet.trim().length > 0);
+      if (hasBaseLocation && !addrHouse.trim()) {
+        notify(t('cart.checkoutAddressTitle'), t('cart.checkoutHouseRequired'));
+        return;
+      }
       notify(t('cart.checkoutAddressTitle'), t('cart.checkoutAddressRequired'));
       return;
     }
@@ -490,7 +509,12 @@ export default function CheckoutScreen() {
             paddingBottom: hasItems ? 8 : 24 + bottomPad,
           },
         ]}
+        horizontal={false}
+        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
@@ -602,7 +626,7 @@ export default function CheckoutScreen() {
             style={[styles.pill, fulfillment === 'pickup' && styles.pillActive]}
             onPress={() => {
               setFulfillment('pickup');
-              if (paymentMethod === 'cod') setPaymentMethod('pay_at_branch');
+              setPaymentMethod('pay_at_branch');
             }}
             accessibilityRole="button"
             accessibilityState={{ selected: fulfillment === 'pickup' }}
@@ -614,7 +638,10 @@ export default function CheckoutScreen() {
           </Pressable>
           <Pressable
             style={[styles.pill, fulfillment === 'delivery' && styles.pillActive]}
-            onPress={() => setFulfillment('delivery')}
+            onPress={() => {
+              setFulfillment('delivery');
+              setPaymentMethod('payme');
+            }}
             accessibilityRole="button"
             accessibilityState={{ selected: fulfillment === 'delivery' }}
             accessibilityLabel={fulfillmentTypeLabel(t, 'delivery')}
@@ -725,10 +752,10 @@ export default function CheckoutScreen() {
                 <TextInput
                   value={addrHouse}
                   onChangeText={setAddrHouse}
-                  placeholder={t('cart.checkoutAddrHouse')}
+                  placeholder={`${t('cart.checkoutAddrHouse')} *`}
                   placeholderTextColor={MUTED}
                   style={styles.input}
-                  accessibilityLabel={t('cart.checkoutAddrHouse')}
+                  accessibilityLabel={`${t('cart.checkoutAddrHouse')} *`}
                   autoCorrect={false}
                 />
               </View>
@@ -1004,8 +1031,15 @@ function SummaryRow({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG, alignItems: 'center' },
-  scroll: { flex: 1, width: '100%' },
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+    width: '100%',
+    maxWidth: '100%',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  scroll: { flex: 1, width: '100%', maxWidth: '100%' },
   content: { alignSelf: 'center', paddingTop: 10 },
 
   header: {

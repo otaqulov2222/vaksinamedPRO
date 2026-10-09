@@ -30,7 +30,7 @@ export default defineMessages({
     reservationShort_EXPIRED: 'Muddati tugagan',
     reservationShort_CANCELLED: 'Band bekor',
 
-    delivery_pending: 'Kuryer kutilmoqda',
+    delivery_pending: 'Yetkazib berish kutilmoqda',
     delivery_assigned: 'Kuryer biriktirildi',
     delivery_picked_up: 'Kuryer buyurtmani oldi',
     delivery_on_the_way: 'Yo‘lda',
@@ -50,7 +50,7 @@ export default defineMessages({
 
     cashbackEntry_EARN: 'Cashback tushdi',
     cashbackEntry_USE: 'Cashback ishlatildi',
-    cashbackEntry_REVERSAL: 'Cashback bekor qilindi',
+    cashbackEntry_REVERSAL: 'Cashback qaytarildi',
     cashbackEntry_ADJUSTMENT: 'Cashback tuzatildi',
 
     cashbackSource_SYSTEM: 'Bonus',
@@ -89,7 +89,7 @@ export default defineMessages({
     reservationShort_EXPIRED: 'Срок истёк',
     reservationShort_CANCELLED: 'Бронь отменена',
 
-    delivery_pending: 'Ожидает курьера',
+    delivery_pending: 'Ожидает отправки',
     delivery_assigned: 'Курьер назначен',
     delivery_picked_up: 'Курьер забрал заказ',
     delivery_on_the_way: 'В пути',
@@ -148,7 +148,7 @@ export default defineMessages({
     reservationShort_EXPIRED: 'Expired',
     reservationShort_CANCELLED: 'Reservation cancelled',
 
-    delivery_pending: 'Waiting for a courier',
+    delivery_pending: 'Awaiting delivery dispatch',
     delivery_assigned: 'Courier assigned',
     delivery_picked_up: 'Courier picked up the order',
     delivery_on_the_way: 'On the way',

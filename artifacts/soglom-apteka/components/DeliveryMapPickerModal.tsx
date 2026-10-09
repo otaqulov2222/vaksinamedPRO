@@ -58,9 +58,36 @@ export default function DeliveryMapPickerModal({
 
   const debounceTimer = useRef<any>(null);
   const requestIdRef = useRef(0);
+  const lastGeocodedCoordsRef = useRef<LatLng | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      if (initialCoords && hasValidCoords(initialCoords)) {
+        setCurrentCoords(initialCoords);
+        if (initialAddress) {
+          setResolvedAddress(initialAddress);
+        } else {
+          void doReverseGeocode(initialCoords);
+        }
+      } else {
+        // Priority 1: device location if already granted; Priority 2: Tashkent default
+        setCurrentCoords(TASHKENT_DEFAULT);
+        void doReverseGeocode(TASHKENT_DEFAULT);
+      }
+    }
+  }, [visible, initialCoords?.lat, initialCoords?.lng, initialAddress]);
 
   const doReverseGeocode = useCallback(
     async (coords: LatLng) => {
+      if (!hasValidCoords(coords)) return;
+      if (
+        lastGeocodedCoordsRef.current &&
+        Math.abs(lastGeocodedCoordsRef.current.lat - coords.lat) < 0.00001 &&
+        Math.abs(lastGeocodedCoordsRef.current.lng - coords.lng) < 0.00001
+      ) {
+        return;
+      }
+      lastGeocodedCoordsRef.current = coords;
       const reqId = ++requestIdRef.current;
       setGeocoding(true);
       setGeocodeFailed(false);
@@ -122,8 +149,10 @@ export default function DeliveryMapPickerModal({
   };
 
   const handleConfirm = () => {
+    const cleanAddress = resolvedAddress.trim();
+    if (!cleanAddress) return;
     onConfirm({
-      formattedAddress: resolvedAddress.trim() || `${currentCoords.lat.toFixed(6)}, ${currentCoords.lng.toFixed(6)}`,
+      formattedAddress: cleanAddress,
       latitude: currentCoords.lat,
       longitude: currentCoords.lng,
       district: resolvedDistrict,
@@ -134,6 +163,8 @@ export default function DeliveryMapPickerModal({
   };
 
   if (!visible) return null;
+
+  const canConfirm = !geocoding && !geocodeFailed && Boolean(resolvedAddress.trim());
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -199,22 +230,26 @@ export default function DeliveryMapPickerModal({
                 <ActivityIndicator size="small" color={PURPLE} />
                 <Text style={styles.locatingText}>{t('cart.checkoutMapLocating')}</Text>
               </View>
-            ) : geocodeFailed ? (
+            ) : geocodeFailed || !resolvedAddress.trim() ? (
               <Text style={styles.failText}>{t('cart.checkoutMapGeocodeFailed')}</Text>
             ) : (
               <Text style={styles.addressText} numberOfLines={3}>
-                {resolvedAddress || `${currentCoords.lat.toFixed(6)}, ${currentCoords.lng.toFixed(6)}`}
+                {resolvedAddress.trim()}
               </Text>
             )}
           </View>
 
           <Pressable
-            style={[styles.confirmBtn, geocoding && styles.confirmBtnDisabled]}
+            style={[styles.confirmBtn, !canConfirm && styles.confirmBtnDisabled]}
+            disabled={!canConfirm}
             onPress={handleConfirm}
             accessibilityRole="button"
+            accessibilityState={{ disabled: !canConfirm }}
             accessibilityLabel={t('cart.checkoutMapSelectLocation')}
           >
-            <Text style={styles.confirmBtnText}>{t('cart.checkoutMapSelectLocation')}</Text>
+            <Text style={[styles.confirmBtnText, !canConfirm && styles.confirmBtnTextDisabled]}>
+              {t('cart.checkoutMapSelectLocation')}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -359,11 +394,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   confirmBtnDisabled: {
-    opacity: 0.6,
+    backgroundColor: '#E5E7EB',
+    opacity: 1,
   },
   confirmBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  confirmBtnTextDisabled: {
+    color: '#9CA3AF',
   },
 });

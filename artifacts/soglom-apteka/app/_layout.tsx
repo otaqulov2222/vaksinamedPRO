@@ -49,13 +49,51 @@ function LaunchCover({ overlay = false }: { overlay?: boolean }) {
   );
 }
 
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
+// Enforce zero margin/padding reset on html, body, #root to guarantee 100% viewport coverage
+function applyWebViewportLock() {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
   const webApp = (window as any).Telegram?.WebApp;
   if (webApp) {
     webApp.ready?.();
     webApp.expand?.();
   }
+  const styleEl = document.getElementById('vaksinamed-viewport-lock');
+  if (!styleEl) {
+    const style = document.createElement('style');
+    style.id = 'vaksinamed-viewport-lock';
+    style.textContent = `
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        overflow-x: hidden !important;
+        background-color: #F7F5F2 !important;
+      }
+      #root {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        overflow-x: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+      }
+      #root > div {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+      }
+      *, *::before, *::after {
+        box-sizing: border-box !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
 }
+applyWebViewportLock();
 
 const queryClient = new QueryClient();
 
@@ -169,6 +207,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  applyWebViewportLock();
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,

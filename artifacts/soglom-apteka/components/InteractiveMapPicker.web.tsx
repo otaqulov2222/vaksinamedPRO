@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { StyleSheet, View, type DimensionValue } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View, type DimensionValue } from 'react-native';
+import { useApp } from '@/context/AppContext';
 import type { LatLng } from '@/lib/maps';
-import { TASHKENT_DEFAULT } from '@/lib/maps';
+import { TASHKENT_DEFAULT, hasValidCoords } from '@/lib/maps';
 
 type Props = {
   initialCenter?: LatLng | null;
@@ -9,15 +10,64 @@ type Props = {
   height?: DimensionValue;
 };
 
-function ensureLeafletAssets() {
-  if (typeof document === 'undefined') return;
-  if (!document.getElementById('leaflet-css')) {
-    const link = document.createElement('link');
-    link.id = 'leaflet-css';
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link);
+declare global {
+  interface Window {
+    ymaps?: any;
+    __ymapsPromise?: Promise<any>;
   }
+}
+
+function getYmapsLang(lang: string): string {
+  switch (lang) {
+    case 'ru':
+      return 'ru_RU';
+    case 'en':
+      return 'en_US';
+    case 'uz':
+    default:
+      return 'uz_UZ';
+  }
+}
+
+function loadYandexMapsApi(lang: string): Promise<any> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('No window')); // i18n-ignore
+  if (window.ymaps && window.ymaps.Map) {
+    return new Promise((resolve) => window.ymaps.ready(() => resolve(window.ymaps)));
+  }
+  if (window.__ymapsPromise) {
+    return window.__ymapsPromise;
+  }
+
+  window.__ymapsPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById('yandex-maps-js-sdk') as HTMLScriptElement | null;
+    if (existing && window.ymaps) {
+      window.ymaps.ready(() => resolve(window.ymaps));
+      return;
+    }
+
+    const ymapsLang = getYmapsLang(lang);
+    const script = document.createElement('script');
+    script.id = 'yandex-maps-js-sdk';
+    script.type = 'text/javascript';
+    script.src = `https://api-maps.yandex.ru/2.1/?lang=${encodeURIComponent(ymapsLang)}&coordorder=latlong`;
+    script.async = true;
+
+    script.onload = () => {
+      if (window.ymaps) {
+        window.ymaps.ready(() => resolve(window.ymaps));
+      } else {
+        reject(new Error('Yandex Maps SDK failed to initialize')); // i18n-ignore
+      }
+    };
+
+    script.onerror = () => {
+      reject(new Error('Failed to load Yandex Maps script')); // i18n-ignore
+    };
+
+    document.head.appendChild(script);
+  });
+
+  return window.__ymapsPromise;
 }
 
 export default function InteractiveMapPicker({
@@ -25,65 +75,104 @@ export default function InteractiveMapPicker({
   onLocationChange,
   height = '100%',
 }: Props) {
+  const { language, t } = useApp();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const onLocationChangeRef = useRef(onLocationChange);
   onLocationChangeRef.current = onLocationChange;
+  const [mapReady, setMapReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    if (mapRef.current && initialCenter && hasValidCoords(initialCenter)) {
+      const c = mapRef.current.getCenter();
+      const dist = Math.abs(c[0] - initialCenter.lat) + Math.abs(c[1] - initialCenter.lng);
+      if (dist > 0.0001) {
+        mapRef.current.setCenter([initialCenter.lat, initialCenter.lng], mapRef.current.getZoom() || 16, {
+          duration: 250,
+          checkZoomRange: true,
+        });
+      }
+    }
+  }, [initialCenter?.lat, initialCenter?.lng]);
 
   useEffect(() => {
     let cancelled = false;
-    ensureLeafletAssets();
 
-    async function initMap() {
-      const L = (await import('leaflet')).default;
-      if (cancelled || !containerRef.current || mapRef.current) return;
+    async function initYandexMap() {
+      try {
+        const ymaps = await loadYandexMapsApi(language);
+        if (cancelled || !containerRef.current || mapRef.current) return;
 
-      const center = initialCenter || TASHKENT_DEFAULT;
-      const map = L.map(containerRef.current, {
-        zoomControl: false,
-        attributionControl: true,
-      }).setView([center.lat, center.lng], 16);
+        const center = initialCenter && hasValidCoords(initialCenter) ? initialCenter : TASHKENT_DEFAULT;
 
-      L.control.zoom({ position: 'topright' }).addTo(map);
+        const map = new ymaps.Map(
+          containerRef.current,
+          {
+            center: [center.lat, center.lng],
+            zoom: 16,
+            controls: ['zoomControl'],
+          },
+          {
+            suppressMapOpenBlock: true,
+            yandexMapDisablePoiInteractivity: false,
+          },
+        );
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap', // i18n-ignore
-      }).addTo(map);
+        mapRef.current = map;
 
-      mapRef.current = map;
+        const handleMove = () => {
+          if (!mapRef.current) return;
+          const c = mapRef.current.getCenter();
+          if (Array.isArray(c) && c.length >= 2) {
+            onLocationChangeRef.current({ lat: c[0], lng: c[1] });
+          }
+        };
 
-      map.on('moveend', () => {
-        const c = map.getCenter();
-        onLocationChangeRef.current({ lat: c.lat, lng: c.lng });
-      });
+        map.events.add('actionend', handleMove);
+        map.events.add('boundschange', handleMove);
 
-      onLocationChangeRef.current({ lat: center.lat, lng: center.lng });
-
-      setTimeout(() => {
-        if (!cancelled && mapRef.current) {
-          mapRef.current.invalidateSize();
+        // Initial trigger
+        onLocationChangeRef.current({ lat: center.lat, lng: center.lng });
+        setMapReady(true);
+      } catch {
+        if (!cancelled) {
+          setLoadError(true);
         }
-      }, 150);
+      }
     }
 
-    void initMap();
+    void initYandexMap();
 
     return () => {
       cancelled = true;
       if (mapRef.current) {
-        mapRef.current.remove();
+        try {
+          mapRef.current.destroy();
+        } catch {
+          // ignore cleanup error
+        }
         mapRef.current = null;
       }
     };
-  }, []);
+  }, [language]);
 
   return (
     <View style={[styles.container, { height }]}>
       <div
         ref={containerRef}
-        style={{ width: '100%', height: '100%', outline: 'none' }}
+        style={{ width: '100%', height: '100%', outline: 'none', position: 'relative' }}
       />
+      {!mapReady && !loadError && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#5C328E" />
+        </View>
+      )}
+      {loadError && (
+        <View style={styles.errorOverlay}>
+          <Text style={styles.errorText}>{t('cart.checkoutMapGeocodeFailed')}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -92,6 +181,27 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     overflow: 'hidden',
+    backgroundColor: '#EBE6DC',
+    position: 'relative',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#F3F0EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  errorOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#F3F0EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    zIndex: 5,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
   },
 });

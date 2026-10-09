@@ -213,11 +213,18 @@ export default function BranchesScreen() {
         : null;
 
   return (
-    <ScrollView
-      style={styles.page}
-      contentContainerStyle={[styles.pageContent, { paddingBottom: Math.max(insets.bottom, 24) }]}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.pageRoot}>
+      <ScrollView
+        style={styles.page}
+        contentContainerStyle={[styles.pageContent, { paddingBottom: Math.max(insets.bottom, 24) }]}
+        horizontal={false}
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
+        keyboardShouldPersistTaps="handled"
+      >
       <LinearGradient colors={['#FFF9E6', '#FFFFFF', '#FFFFFF']} style={styles.heroCard}>
         <Text style={styles.heroTitle}>{t('branches.heroTitle')}</Text>
         <Pressable onPress={() => void goNearest()} style={styles.nearestBtn}>
@@ -426,12 +433,20 @@ export default function BranchesScreen() {
           </View>
         );
       })}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#F7F5F2' },
+  pageRoot: {
+    flex: 1,
+    backgroundColor: '#F7F5F2',
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  page: { flex: 1, width: '100%', maxWidth: '100%', backgroundColor: '#F7F5F2' },
   pageContent: { padding: 16, gap: 12 },
   heroCard: {
     borderRadius: 24,

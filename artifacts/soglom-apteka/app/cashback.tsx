@@ -228,7 +228,13 @@ export default function CashbackScreen() {
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingBottom: 40 + Math.max(insets.bottom, 8) }]}
+        horizontal={false}
+        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
+        keyboardShouldPersistTaps="handled"
         scrollEventThrottle={16}
         onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 44)}
       >
@@ -425,9 +431,11 @@ export default function CashbackScreen() {
                       {meta}
                     </Text>
                   </View>
-                  <Text style={[styles.rowAmount, { color: row.color }]} numberOfLines={1}>
-                    {signed}
-                  </Text>
+                  <View style={styles.rowAmountContainer}>
+                    <Text style={[styles.rowAmount, { color: row.color }]} numberOfLines={1}>
+                      {signed}
+                    </Text>
+                  </View>
                 </View>
               );
             })
@@ -620,7 +628,13 @@ export default function CashbackScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
 
   /* NATIVE HEADER */
   bar: {
@@ -944,6 +958,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
+    paddingRight: 6,
   },
   rowTitle: {
     fontFamily: 'Inter_600SemiBold',
@@ -960,8 +975,13 @@ const styles = StyleSheet.create({
     color: MUTED,
     ...NUMERIC,
   },
-  rowAmount: {
+  rowAmountContainer: {
     flexShrink: 0,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingLeft: 4,
+  },
+  rowAmount: {
     textAlign: 'right',
     fontFamily: 'Inter_700Bold',
     fontSize: 15,

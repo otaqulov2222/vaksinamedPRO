@@ -58,3 +58,6 @@ artifacts/admin-web/.tmp-visual/
 
 # local image-upscale tooling
 artifacts/soglom-apteka/assets/images/_upscale/
+
+# local expo build output
+artifacts/soglom-apteka/static-build/

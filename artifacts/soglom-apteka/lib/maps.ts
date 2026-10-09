@@ -1,4 +1,3 @@
-import { Linking, Platform } from 'react-native';
 import { API_URL } from '@/lib/api';
 
 export type LatLng = { lat: number; lng: number };
@@ -44,10 +43,11 @@ export function yandexRouteUrl(from: LatLng, to: LatLng) {
 /** Open external maps. Without a real user origin, open destination point only — never invent from. */
 export async function openYandexRoute(from: LatLng | null, to: LatLng) {
   const url = from && hasValidCoords(from) ? yandexRouteUrl(from, to) : yandexPointUrl(to);
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     window.open(url, '_blank', 'noopener,noreferrer');
     return;
   }
+  const { Linking } = await import('react-native');
   await Linking.openURL(url);
 }
 

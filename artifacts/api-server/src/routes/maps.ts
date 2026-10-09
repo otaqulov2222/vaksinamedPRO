@@ -46,7 +46,51 @@ router.get("/maps/geocode", async (req, res, next) => {
 
     const apiKey = process.env.YANDEX_MAPS_API_KEY || process.env.YANDEX_GEOCODER_API_KEY || "";
     if (!apiKey) {
-      // Graceful fallback when API key is not configured in environment
+      // Development/test isolated fallback via OpenStreetMap Nominatim
+      try {
+        const osmUrl = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
+        const osmRes = await fetch(osmUrl, {
+          headers: { "User-Agent": "VaksinaMed-Delivery/1.0" },
+          signal: AbortSignal.timeout(6000),
+        });
+        if (osmRes.ok) {
+          const osmData = await osmRes.json();
+          const addr = osmData?.address || {};
+          const street = addr.road || addr.street || addr.pedestrian || addr.footway || null;
+          const house = addr.house_number || null;
+          const district = addr.city_district || addr.district || addr.suburb || addr.borough || addr.neighbourhood || null;
+          const locality = addr.city || addr.town || addr.village || addr.county || "Toshkent";
+
+          const parts = [
+            locality,
+            district,
+            street,
+            house ? `${house}-uy` : null,
+          ].filter(Boolean);
+
+          const formattedAddress = parts.length >= 2 ? parts.join(", ") : (osmData?.display_name || null);
+
+          if (formattedAddress) {
+            return res.json({
+              formattedAddress,
+              district,
+              street,
+              house,
+              locality,
+              kind: house ? "house" : street ? "street" : "district",
+              precision: house ? "exact" : "approximate",
+              coordinates: { lat, lng },
+              provider: "osm_fallback_dev_only",
+              configured: false,
+              yandexMapsApiKeyMissing: true,
+              found: true,
+            });
+          }
+        }
+      } catch {
+        // fall through to null result
+      }
+
       return res.json({
         formattedAddress: null,
         district: null,
@@ -56,17 +100,19 @@ router.get("/maps/geocode", async (req, res, next) => {
         coordinates: { lat, lng },
         provider: "none",
         configured: false,
+        yandexMapsApiKeyMissing: true,
+        found: false,
       });
     }
 
-    // Yandex Geocoder requires: geocode=lng,lat
+    // Production Yandex Geocoder API: geocode=lng,lat
     const yandexUrl = `https://geocode-maps.yandex.ru/1.x/?apikey=${encodeURIComponent(apiKey)}&geocode=${lng},${lat}&format=json&lang=${encodeURIComponent(lang)}&results=1`;
     const response = await fetch(yandexUrl, { signal: AbortSignal.timeout(6000) });
     if (!response.ok) {
       if (response.status === 429) {
-        return res.status(429).json({ message: "Geokoder so‘rovlar chegarasiga yetdi", code: "RATE_LIMITED" });
+        return res.status(429).json({ message: "Geokoder so‘rovlar chegarasiga yetdi", code: "RATE_LIMITED", provider: "yandex" });
       }
-      return res.status(502).json({ message: "Geokoder xizmati vaqtincha ishlamayapti", code: "GEOCODER_UNAVAILABLE" });
+      return res.status(502).json({ message: "Geokoder xizmati vaqtincha ishlamayapti", code: "GEOCODER_UNAVAILABLE", provider: "yandex" });
     }
 
     const data = await response.json();
@@ -80,17 +126,18 @@ router.get("/maps/geocode", async (req, res, next) => {
         locality: null,
         coordinates: { lat, lng },
         provider: "yandex",
+        configured: true,
         found: false,
       });
     }
 
     const meta = geoObject.metaDataProperty?.GeocoderMetaData;
-    const formattedAddress = meta?.text || geoObject.name || null;
+    const formattedAddress = meta?.Address?.formatted || meta?.text || geoObject.name || null;
     const components: Array<{ kind: string; name: string }> = meta?.Address?.Components || [];
 
     const getKind = (kind: string) => components.find((c) => c.kind === kind)?.name || null;
     const locality = getKind("locality");
-    const district = getKind("district") || getKind("sub_locality");
+    const district = getKind("district") || getKind("sub_locality") || getKind("area");
     const street = getKind("street");
     const house = getKind("house");
 
@@ -104,6 +151,7 @@ router.get("/maps/geocode", async (req, res, next) => {
       precision: meta?.precision || null,
       coordinates: { lat, lng },
       provider: "yandex",
+      configured: true,
       found: true,
     });
   } catch (error: any) {

@@ -609,7 +609,12 @@ export default function CatalogScreen() {
             paddingBottom: 32 + (Platform.OS === 'web' ? 20 : 8),
           },
         ]}
+        horizontal={false}
+        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
         onScroll={({ nativeEvent }) => {
@@ -684,42 +689,48 @@ export default function CatalogScreen() {
           </View>
         ) : null}
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.catsRow, { paddingHorizontal: sidePad }]}
-          style={[styles.catsScroll, { marginHorizontal: -sidePad }]}
-        >
-          {catLoading && !catError && categoryChips.length <= 1 ? (
-            <View style={styles.catLoadingChip}>
-              <ActivityIndicator size="small" color={PURPLE} />
-            </View>
-          ) : null}
-          {categoryChips.map((c) => {
-            const active = cat === c.id;
-            return (
-              <Pressable
-                key={c.id}
-                style={styles.catItem}
-                onPress={() => setCat(c.id)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={c.label}
-              >
-                <View style={[styles.catIcon, active && styles.catIconActive]}>
-                  <MaterialCommunityIcons
-                    name={c.id === 'all' ? 'view-grid' : 'tag-outline'}
-                    size={22}
-                    color={active ? '#fff' : PURPLE}
-                  />
-                </View>
-                <Text style={[styles.catLabel, active && styles.catLabelActive]} numberOfLines={2}>
-                  {c.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <View style={[styles.catsContainer, { marginHorizontal: -sidePad, paddingHorizontal: sidePad }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            nestedScrollEnabled
+            directionalLockEnabled
+            alwaysBounceVertical={false}
+            bounces={false}
+            contentContainerStyle={styles.catsRow}
+            style={styles.catsScroll}
+          >
+            {catLoading && !catError && categoryChips.length <= 1 ? (
+              <View style={styles.catLoadingChip}>
+                <ActivityIndicator size="small" color={PURPLE} />
+              </View>
+            ) : null}
+            {categoryChips.map((c) => {
+              const active = cat === c.id;
+              return (
+                <Pressable
+                  key={c.id}
+                  style={styles.catItem}
+                  onPress={() => setCat(c.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={c.label}
+                >
+                  <View style={[styles.catIcon, active && styles.catIconActive]}>
+                    <MaterialCommunityIcons
+                      name={c.id === 'all' ? 'view-grid' : 'tag-outline'}
+                      size={22}
+                      color={active ? '#fff' : PURPLE}
+                    />
+                  </View>
+                  <Text style={[styles.catLabel, active && styles.catLabelActive]} numberOfLines={2}>
+                    {c.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
 
         <View style={styles.toolsRow}>
           <Pressable
@@ -857,8 +868,15 @@ export default function CatalogScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG, alignItems: 'center' },
-  scroll: { flex: 1, width: '100%' },
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+    width: '100%',
+    maxWidth: '100%',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  scroll: { flex: 1, width: '100%', maxWidth: '100%' },
   content: {
     alignSelf: 'center',
   },
@@ -987,7 +1005,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
 
-  catsScroll: { marginBottom: 12, flexGrow: 0 },
+  catsContainer: {
+    marginBottom: 12,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  catsScroll: { flexGrow: 0, width: '100%' },
   catsRow: { gap: 10, paddingBottom: 4, alignItems: 'flex-start' },
   catItem: { width: 78, alignItems: 'center', minHeight: 88 },
   catIcon: {

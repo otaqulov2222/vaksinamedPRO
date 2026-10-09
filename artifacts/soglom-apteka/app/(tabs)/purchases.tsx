@@ -152,8 +152,11 @@ function OrderCard({ order }: { order: any }) {
   const placeLine = [branchName, methodLabel].filter(Boolean).join(' · ');
 
   // Show secondary payment chip ONLY when customer action/attention is required
-  const needsPaymentAttention = pay === 'PENDING' || pay === 'FAILED';
-  const payUrgentLabel = needsPaymentAttention ? paymentLabelShort(t, order.paymentStatus) : null;
+  const cancelled = isCancelled(order);
+  const completed = isCompleted(order);
+  const needsPaymentAttention = !cancelled && !completed && (pay === 'PENDING' || pay === 'FAILED');
+  const payRefundLabel = cancelled && (pay === 'REFUNDED' || pay === 'PARTIALLY_REFUNDED') ? paymentLabelShort(t, order.paymentStatus) : null;
+  const payUrgentLabel = needsPaymentAttention ? paymentLabelShort(t, order.paymentStatus) : payRefundLabel;
 
   const a11y = [
     orderTitle,
@@ -218,9 +221,11 @@ function OrderCard({ order }: { order: any }) {
             </Text>
           ) : null}
         </View>
-        <Text style={styles.totalValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-          {totalLabel}
-        </Text>
+        <View style={styles.totalCol}>
+          <Text style={styles.totalValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+            {totalLabel}
+          </Text>
+        </View>
       </View>
 
       {payUrgentLabel ? (
@@ -315,7 +320,7 @@ export default function PurchasesScreen() {
     return counts.cancelled;
   };
 
-  const topPad = Platform.OS === 'web' ? Math.max(insets.top, 12) : Math.max(insets.top, 8);
+  const topPad = Platform.OS === 'web' ? 16 : Math.max(insets.top, 16) + 4;
   const tabClearance = Platform.OS === 'web' ? 96 : 80;
   const bottomPad = 28 + Math.max(insets.bottom, 8) + tabClearance;
 
@@ -327,7 +332,9 @@ export default function PurchasesScreen() {
   const header = (
     <View style={styles.header}>
       <View style={styles.headerText}>
-        <Text style={styles.pageTitle}>{t('common.navOrders')}</Text>
+        <Text style={styles.pageTitle} accessibilityRole="header">
+          {t('common.navOrders')}
+        </Text>
         <Text style={styles.pageSubtitle}>
           {t('orders.listSubtitle')}
         </Text>
@@ -344,7 +351,12 @@ export default function PurchasesScreen() {
           { paddingHorizontal: sidePad, paddingBottom: bottomPad },
           showEmpty || showError ? styles.contentCompact : null,
         ]}
+        horizontal={false}
+        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
         keyboardShouldPersistTaps="handled"
         refreshControl={
           showList || showEmpty || showError ? (
@@ -420,12 +432,17 @@ export default function PurchasesScreen() {
           <>
             {header}
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.filters, { paddingRight: 4 }]}
-              style={[styles.filtersScroll, { marginHorizontal: -sidePad, paddingHorizontal: sidePad }]}
-            >
+            <View style={[styles.filtersContainer, { marginHorizontal: -sidePad, paddingHorizontal: sidePad }]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                directionalLockEnabled
+                alwaysBounceVertical={false}
+                bounces={false}
+                contentContainerStyle={[styles.filters, { paddingRight: 4 }]}
+                style={styles.filtersScroll}
+              >
               {FILTERS.map((f) => {
                 const active = filter === f.key;
                 const n = countFor(f.key);
@@ -448,7 +465,8 @@ export default function PurchasesScreen() {
                   </Pressable>
                 );
               })}
-            </ScrollView>
+              </ScrollView>
+            </View>
 
             {visible.length === 0 ? (
               <View style={styles.stateCard}>
@@ -476,8 +494,18 @@ export default function PurchasesScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
-  scroll: { flex: 1 },
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  scroll: {
+    flex: 1,
+    width: '100%',
+    maxWidth: '100%',
+  },
   content: {
     maxWidth: 440,
     width: '100%',
@@ -507,9 +535,14 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  filtersScroll: {
+  filtersContainer: {
     marginBottom: 14,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  filtersScroll: {
     flexGrow: 0,
+    width: '100%',
   },
   filters: {
     gap: 8,
@@ -562,7 +595,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 14,
+    paddingTop: 15,
+    paddingBottom: 15,
+    paddingLeft: 16,
+    paddingRight: 18,
     shadowColor: '#1A1040',
     shadowOpacity: 0.04,
     shadowRadius: 10,
@@ -620,7 +656,8 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 10,
+    justifyContent: 'space-between',
+    gap: 12,
     marginBottom: 10,
   },
   metaLeft: { flex: 1, minWidth: 0, gap: 2 },
@@ -630,13 +667,18 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: MUTED,
   },
+  totalCol: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    paddingLeft: 4,
+    maxWidth: '48%',
+  },
   totalValue: {
     fontFamily: 'Inter_700Bold',
     fontSize: 16,
     lineHeight: 21,
     color: PURPLE_DEEP,
-    flexShrink: 0,
-    maxWidth: '46%',
     textAlign: 'right',
   },
   axisRow: {

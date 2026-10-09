@@ -26,18 +26,25 @@ export function Screen({ children, scroll = true }: PropsWithChildren<{ scroll?:
   };
 
   if (!scroll) {
-    return <View style={[styles.fill, padStyle]}>{children}</View>;
+    return <View style={[styles.screenRoot, padStyle]}>{children}</View>;
   }
 
   return (
-    <ScrollView
-      style={[styles.fill, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.scrollContent, padStyle]}
-      showsVerticalScrollIndicator={false}
-      showsHorizontalScrollIndicator={false}
-    >
-      {children}
-    </ScrollView>
+    <View style={styles.screenRoot}>
+      <ScrollView
+        style={[styles.fill, { backgroundColor: colors.background }]}
+        contentContainerStyle={[styles.scrollContent, padStyle]}
+        horizontal={false}
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
+        keyboardShouldPersistTaps="handled"
+      >
+        {children}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -130,7 +137,13 @@ export function Pill({ children, active = false }: PropsWithChildren<{ active?: 
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1 },
+  screenRoot: {
+    flex: 1,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  fill: { flex: 1, width: '100%', maxWidth: '100%' },
   scrollContent: { flexGrow: 1 },
   iconButton: {
     width: 42,

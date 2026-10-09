@@ -250,7 +250,23 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
     const fulfillment = (req.body.fulfillment === "delivery" ? "delivery" : "pickup") as OrderChannel;
     const paymentMethod = ["payme", "click", "pay_at_branch", "cod"].includes(req.body.paymentMethod)
       ? req.body.paymentMethod
-      : "pay_at_branch";
+      : fulfillment === "delivery"
+        ? "payme"
+        : "pay_at_branch";
+
+    if (fulfillment === "delivery" && (paymentMethod === "pay_at_branch" || paymentMethod === "cod")) {
+      return res.status(400).json({
+        message: "Yetkazib berish uchun faqat onlayn to‘lov (Payme / Click) mavjud",
+        code: "INVALID_PAYMENT_METHOD",
+      });
+    }
+
+    if (fulfillment === "pickup" && paymentMethod === "cod") {
+      return res.status(400).json({
+        message: "Filialdan olib ketishda COD mavjud emas",
+        code: "INVALID_PAYMENT_METHOD",
+      });
+    }
     const address = typeof req.body.address === "string" ? req.body.address.trim() : "";
     const comment = typeof req.body.comment === "string" ? req.body.comment.trim() : "";
     const useCashback = Boolean(req.body.useCashback);
@@ -261,6 +277,9 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
     void req.body.unitPrice;
     void req.body.cashbackAmount;
     void req.body.discount;
+    void req.body.paymentStatus;
+    void req.body.paymentAmount;
+    void req.body.deliveryFee;
 
     const payload = await cartPayload(customer.id);
     if (!payload.items.length) {

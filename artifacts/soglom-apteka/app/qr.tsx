@@ -304,7 +304,13 @@ export default function QrScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingHorizontal: sidePad, paddingBottom: bottomPad }]}
+        horizontal={false}
+        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.nav}>
           <Pressable
@@ -413,8 +419,14 @@ export default function QrScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
-  scroll: { flex: 1 },
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  scroll: { flex: 1, width: '100%', maxWidth: '100%' },
   content: {
     maxWidth: 440,
     width: '100%',

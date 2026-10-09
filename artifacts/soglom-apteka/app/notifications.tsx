@@ -21,11 +21,18 @@ export default function NotificationsScreen() {
   const { t } = useApp();
 
   return (
-    <ScrollView
-      style={[styles.root, { paddingBottom: Math.max(insets.bottom, 16) }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.screenRoot}>
+      <ScrollView
+        style={[styles.root, { paddingBottom: Math.max(insets.bottom, 16) }]}
+        contentContainerStyle={styles.content}
+        horizontal={false}
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
+        keyboardShouldPersistTaps="handled"
+      >
       <View style={styles.hero}>
         <View style={styles.iconWrap}>
           <Feather name="bell-off" size={28} color={PURPLE} />
@@ -59,12 +66,20 @@ export default function NotificationsScreen() {
           <Feather name="chevron-right" size={18} color="#C5CAD6" />
         </Pressable>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
+  screenRoot: {
+    flex: 1,
+    backgroundColor: BG,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  root: { flex: 1, width: '100%', maxWidth: '100%', backgroundColor: BG },
   content: {
     paddingHorizontal: 16,
     paddingTop: 12,

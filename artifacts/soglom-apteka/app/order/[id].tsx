@@ -331,7 +331,13 @@ export default function OrderScreen() {
             paddingBottom: 28 + bottomPad,
           },
         ]}
+        horizontal={false}
+        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
+        keyboardShouldPersistTaps="handled"
       >
         {/* Current status — honest single card, no fake timeline */}
         <View style={styles.card}>
@@ -341,24 +347,26 @@ export default function OrderScreen() {
             value={fulfillmentLabel(t, order.fulfillmentStatus)}
             tone={fulfillTone}
           />
-          <StatusRow
-            label={t('orders.statusRowPayment')}
-            value={paymentLabel(t, order.paymentStatus)}
-            tone={payTone}
-          />
-          {showReservation ? (
+          {fulfill !== 'CANCELLED' || pay === 'PAID' || pay === 'REFUNDED' || pay === 'PARTIALLY_REFUNDED' ? (
+            <StatusRow
+              label={t('orders.statusRowPayment')}
+              value={paymentLabel(t, order.paymentStatus)}
+              tone={payTone}
+            />
+          ) : null}
+          {showReservation && fulfill !== 'CANCELLED' ? (
             <StatusRow
               label={t('orders.statusRowReservation')}
               value={reservationLabel(t, order.reservationStatus, resExpired)}
               tone={resTone}
             />
           ) : null}
-          {pay === 'PENDING' ? (
+          {pay === 'PENDING' && fulfill !== 'CANCELLED' ? (
             <Text style={styles.noteWarn}>
               {t('orders.notePaymentPending')}
             </Text>
           ) : null}
-          {pay === 'FAILED' ? (
+          {pay === 'FAILED' && fulfill !== 'CANCELLED' ? (
             <Text style={styles.noteBad}>
               {t('orders.notePaymentFailed')}
             </Text>
@@ -369,7 +377,6 @@ export default function OrderScreen() {
           <View style={styles.card}>
             <Text style={styles.cardLabel}>{t('orders.countdownLabel')}</Text>
             <Text style={styles.countdown}>{formatCountdown(msLeft)}</Text>
-            <Text style={styles.meta}>{t('orders.countdownNote')}</Text>
           </View>
         ) : null}
 
@@ -553,8 +560,15 @@ export default function OrderScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG, alignItems: 'center' },
-  scroll: { flex: 1, width: '100%' },
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+    width: '100%',
+    maxWidth: '100%',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  scroll: { flex: 1, width: '100%', maxWidth: '100%' },
   content: { alignSelf: 'center', paddingTop: 10 },
 
   header: {
