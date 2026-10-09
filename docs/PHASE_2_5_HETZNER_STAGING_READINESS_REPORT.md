@@ -21,7 +21,7 @@ Phase 2.5 doirasida VaksinaMed loyihasi uchun yangi Hetzner Staging serverini xa
 ## 2. TEKSHIRILGAN VA O‘ZGARTIRILGAN FAYLLAR (CHANGESET AUDIT)
 
 ### Tekshirilgan va ishlab chiqilgan infratuzilma fayllari:
-1. `docker-compose.staging.yml` *(Yangi yaratildi)*:
+1. `infra/docker-compose.staging.yml` *(Yangi yaratildi)*:
    - Staging muhiti uchun PostgreSQL 16, Redis 7.2, alohida API server, alohida Worker va Nginx xizmatlarini izolyatsiyalangan Docker tarmog‘ida birlashtiruvchi rasmiy konfiguratsiya.
 2. `infra/nginx/staging.conf` *(Yangi yaratildi)*:
    - HTTP (ACME webroot challenge, HTTPS redirect) va HTTPS (Let's Encrypt TLS 1.2/1.3, xavfsizlik headerlari, proxy buferlari) sozlamalari.
@@ -43,7 +43,7 @@ Phase 2.5 doirasida VaksinaMed loyihasi uchun yangi Hetzner Staging serverini xa
 
 ## 3. HETZNER STAGING DOCKER & XAVFSIZLIK AUDITI
 
-Staging infratuzilmasi uchun quyidagi xavfsizlik talablari `docker-compose.staging.yml` da qat'iy kafolatlandi:
+Staging infratuzilmasi uchun quyidagi xavfsizlik talablari `infra/docker-compose.staging.yml` da qat'iy kafolatlandi:
 
 1. **PostgreSQL va Redis portlarining to‘liq izolyatsiyasi:**
    - `postgres` (5432) va `redis` (6379) xizmatlarida `ports:` bo‘limi mavjud emas (hostga bog‘lanmagan).
@@ -154,7 +154,7 @@ Hetzner Staging serverini yaratishdan oldin quyidagi 5 ta qaror tasdiqlanishi lo
 
 | Komponent / Tekshiruv | Holat | Izoh / Dalil |
 | :--- | :---: | :--- |
-| **Docker Staging Konfiguratsiyasi** | `PASS` | `docker-compose.staging.yml` yaratildi, PostgreSQL/Redis tarmoqdan to‘liq izolyatsiya qilindi |
+| **Docker Staging Konfiguratsiyasi** | `PASS` | `infra/docker-compose.staging.yml` yaratildi, PostgreSQL/Redis tarmoqdan to‘liq izolyatsiya qilindi |
 | **Nginx TLS & Reverse Proxy** | `PASS` | `infra/nginx/staging.conf` yaratildi, HTTP/HTTPS va xavfsizlik headerlari kiritildi |
 | **Environment & Secrets Andozasi** | `PASS` | `infra/.env.staging.example` tayyorlandi, maxfiy kalitlar xavfsiz ajratildi |
 | **Zaxiralash va Migratsiya Skriptlari** | `PASS` | `backup-staging.sh` (GPG shifrlangan) va `migrate-staging.sh` (advisory lock) yaratildi |
@@ -174,5 +174,5 @@ Hetzner Staging serverini yaratishdan oldin quyidagi 5 ta qaror tasdiqlanishi lo
 ## 9. KEYINGI XAVFSIZ QADAM (NEXT SAFE STEP)
 
 1. Foydalanuvchi tomonidan Hetzner server konfiguratsiyasi (CPX21/CPX31) va eski cashback siyosati (Variant A) tasdiqlanishi.
-2. Tasdiq olingach, Hetzner Cloud konsolida yangi serverni ochish, SSH kalitini o‘rnatish va `docker-compose.staging.yml` orqali bo‘sh PostgreSQL 16 instansiyasini ko‘tarish.
+2. Tasdiq olingach, Hetzner Cloud konsolida yangi serverni ochish, SSH kalitini o‘rnatish va `infra/docker-compose.staging.yml` orqali bo‘sh PostgreSQL 16 instansiyasini ko‘tarish.
 3. Yangi ko‘tarilgan real PostgreSQL bazasida ishlab chiqilgan 5 ta Concurrency testini ishga tushirish.

@@ -20,7 +20,7 @@ chmod 700 "${BACKUP_DIR}"
 echo "[$(date -u)] Starting automated PostgreSQL staging backup..."
 
 # 1. Execute pg_dump via Docker exec
-docker compose -f /opt/vaksinamed/docker-compose.staging.yml exec -T postgres \
+docker compose -f /opt/vaksinamed/infra/docker-compose.staging.yml exec -T postgres \
   pg_dump -U "${POSTGRES_USER:-vaksinamed_staging_user}" -d vaksinamed_staging --format=custom --compress=9 \
   > "${DUMP_FILE}"
 

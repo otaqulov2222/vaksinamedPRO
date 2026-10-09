@@ -12,14 +12,14 @@ set -euo pipefail
 cd /opt/vaksinamed
 
 echo "[$(date -u)] Checking migration status on staging PostgreSQL..."
-docker compose -f docker-compose.staging.yml run --rm --no-deps api \
+docker compose -f infra/docker-compose.staging.yml run --rm --no-deps api \
   node --enable-source-maps dist/migrate.mjs --status
 
 read -p "Apply pending migrations to vaksinamed_staging? (y/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
   echo "[$(date -u)] Applying migrations..."
-  docker compose -f docker-compose.staging.yml run --rm --no-deps api \
+  docker compose -f infra/docker-compose.staging.yml run --rm --no-deps api \
     node --enable-source-maps dist/migrate.mjs
   echo "[$(date -u)] Migrations applied successfully."
 else
