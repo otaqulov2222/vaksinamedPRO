@@ -200,12 +200,264 @@ router.get("/payments/:provider/checkout/:id", async (req, res, next) => {
     if (!rows[0]) return res.status(404).send("To‘lov topilmadi");
     const order = (await db.select().from(orders).where(eq(orders.id, rows[0].orderId)))[0];
     res.setHeader("content-type", "text/html; charset=utf-8");
-    return res.send(`<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vaksina Med to‘lov</title>
-    <style>body{font-family:Inter,Arial,sans-serif;background:#fcfaff;color:#29153f;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}card{display:block;background:#fff;border:1px solid #e5d9ed;border-radius:24px;padding:28px;max-width:420px}h1{margin:0 0 8px}p{color:#7d7085}button{background:#603085;color:#fff;border:0;border-radius:14px;padding:14px 18px;font-weight:700;width:100%;margin-top:18px;cursor:pointer}</style></head>
-    <body><form method="post" action="/api/payments/${id}/simulate-success"><div style="background:#fff;border:1px solid #e5d9ed;border-radius:24px;padding:28px;max-width:420px">
-    <h1>Vaksina Med</h1><p>${rows[0].provider.toUpperCase()} · ${order?.code ?? ""}</p><h2>${new Intl.NumberFormat("uz-UZ").format(rows[0].amount)} so‘m</h2>
-    <p>DEVELOPMENT ONLY — mock to‘lov. Productionda o‘chirilgan.</p>
-    <button type="submit">To‘lovni tasdiqlash</button></div></form></body></html>`);
+    return res.send(`<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+  <title>Vaksina Med · To‘lov</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      background: #F7F5F2;
+      color: #1A1040;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      margin: 0;
+      padding: 0;
+    }
+    .app-shell {
+      width: 100%;
+      max-width: 440px;
+      min-height: 100vh;
+      background: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    .header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #F1EBFF;
+      background: #FFFFFF;
+    }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #F1EBFF;
+      color: #6A22D6;
+      text-decoration: none;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .header-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1A1040;
+    }
+    .secure-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #15803D;
+      background: #DCFCE7;
+      padding: 4px 8px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .content {
+      padding: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .dev-banner {
+      background: #FEF3C7;
+      border: 1px solid #FDE68A;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #92400E;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dev-badge {
+      background: #F59E0B;
+      color: #FFFFFF;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .summary-card {
+      background: linear-gradient(135deg, #FAF7FF 0%, #F3EDFF 100%);
+      border: 1px solid #E9DEFF;
+      border-radius: 20px;
+      padding: 22px 20px;
+      text-align: center;
+    }
+    .provider-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #FFFFFF;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #6A22D6;
+      box-shadow: 0 2px 6px rgba(106, 34, 214, 0.08);
+      margin-bottom: 12px;
+    }
+    .order-code {
+      font-size: 13px;
+      color: #6B7280;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .amount {
+      font-size: 28px;
+      font-weight: 800;
+      color: #1A1040;
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+    .info-list {
+      background: #F9FAFB;
+      border: 1px solid #F3F4F6;
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+    .info-label {
+      color: #6B7280;
+    }
+    .info-val {
+      font-weight: 600;
+      color: #1F2937;
+    }
+    .trust-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: #F0FDF4;
+      border-radius: 12px;
+      font-size: 12px;
+      color: #166534;
+      line-height: 16px;
+    }
+    .footer {
+      padding: 20px;
+      border-top: 1px solid #F3F4F6;
+      background: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn-pay {
+      background: #6A22D6;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 14px;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 700;
+      width: 100%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    .btn-pay:hover {
+      background: #5619B5;
+    }
+    .btn-cancel {
+      background: transparent;
+      color: #6B7280;
+      border: none;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      border-radius: 10px;
+    }
+    .btn-cancel:hover {
+      color: #1F2937;
+      background: #F3F4F6;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="header">
+      <a href="http://localhost:8081/order/${order?.id ?? ''}" class="back-btn" title="Orqaga">‹</a>
+      <div class="header-title">Vaksina Med to‘lov</div>
+      <div class="secure-badge">🔒 Xavfsiz</div>
+    </div>
+    <div class="content">
+      <div class="dev-banner">
+        <span class="dev-badge">Test rejimi</span>
+        <span>Mock to‘lov muhiti · Real mablag‘ yechilmaydi</span>
+      </div>
+
+      <div class="summary-card">
+        <div class="provider-pill">
+          💳 ${rows[0].provider.toUpperCase()}
+        </div>
+        <div class="order-code">Buyurtma: #${order?.code ?? ""}</div>
+        <div class="amount">${new Intl.NumberFormat("uz-UZ").format(rows[0].amount)} so‘m</div>
+      </div>
+
+      <div class="info-list">
+        <div class="info-row">
+          <span class="info-label">Qabul qiluvchi</span>
+          <span class="info-val">Vaksina Med MCHJ</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">To‘lov provayderi</span>
+          <span class="info-val">${rows[0].provider.toUpperCase()}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Holati</span>
+          <span class="info-val" style="color: #D97706;">To‘lov kutilmoqda</span>
+        </div>
+      </div>
+
+      <div class="trust-box">
+        <span>🛡️</span>
+        <div>Barcha ma’lumotlar 256-bitli xavfsiz shifrlash orqali himoyalangan va rasmiy to‘lov shlyuzi orqali qayta ishlanadi.</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <form method="post" action="/api/payments/${id}/simulate-success">
+        <button type="submit" class="btn-pay">
+          ✓ To‘lovni tasdiqlash
+        </button>
+      </form>
+      <a href="http://localhost:8081/order/${order?.id ?? ''}" class="btn-cancel">
+        Bekor qilish va buyurtmaga qaytish
+      </a>
+    </div>
+  </div>
+</body>
+</html>`);
   } catch (error) {
     return next(error);
   }

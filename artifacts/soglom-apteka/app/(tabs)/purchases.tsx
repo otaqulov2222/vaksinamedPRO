@@ -537,7 +537,8 @@ const styles = StyleSheet.create({
 
   filtersContainer: {
     marginBottom: 14,
-    width: '100%',
+    alignSelf: 'stretch',
+    width: Platform.OS === 'web' ? ('auto' as any) : undefined,
     overflow: 'hidden',
   },
   filtersScroll: {
@@ -751,7 +752,8 @@ const styles = StyleSheet.create({
     maxWidth: 260,
   },
   primaryCta: {
-    marginTop: 14,
+    marginTop: 16,
+    width: '100%',
     minHeight: 46,
     borderRadius: 12,
     backgroundColor: PURPLE,
@@ -760,8 +762,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    alignSelf: 'stretch',
-    maxWidth: 300,
   },
   primaryCtaText: {
     fontFamily: 'Inter_600SemiBold',

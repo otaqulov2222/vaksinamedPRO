@@ -119,10 +119,41 @@ async function buildAll() {
       js: `import { createRequire as __bannerCrReq } from 'node:module';
 import __bannerPath from 'node:path';
 import __bannerUrl from 'node:url';
+import __bannerFs from 'node:fs';
 
 globalThis.require = __bannerCrReq(import.meta.url);
 globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
 globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
+
+(() => {
+  const candidates = [
+    __bannerPath.resolve(__bannerPath.dirname(globalThis.__filename), '../../.env'),
+    __bannerPath.resolve(process.cwd(), '.env'),
+    __bannerPath.resolve(process.cwd(), '../../.env'),
+  ];
+  for (const rootEnv of candidates) {
+    if (__bannerFs.existsSync(rootEnv)) {
+      const text = __bannerFs.readFileSync(rootEnv, 'utf8');
+      for (const raw of text.split(/\\r?\\n/)) {
+        const line = raw.trim();
+        if (!line || line.startsWith('#')) continue;
+        const i = line.indexOf('=');
+        if (i <= 0) continue;
+        const key = line.slice(0, i).trim();
+        let val = line.slice(i + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1);
+        if (!(key in process.env)) {
+          if (key === 'PGLITE_DIR' && !__bannerPath.isAbsolute(val)) {
+            process.env[key] = __bannerPath.resolve(__bannerPath.dirname(rootEnv), val);
+          } else {
+            process.env[key] = val;
+          }
+        }
+      }
+      break;
+    }
+  }
+})();
     `,
     },
   });

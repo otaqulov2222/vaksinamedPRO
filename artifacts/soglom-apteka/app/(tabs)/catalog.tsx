@@ -350,7 +350,7 @@ export default function CatalogScreen() {
   const contentWidth = Math.min(width, 480);
   const gridGap = narrow ? 10 : 12;
   const sidePad = narrow ? 12 : 16;
-  const cardWidth = (contentWidth - sidePad * 2 - gridGap) / 2;
+  const cardWidth = Math.floor((contentWidth - sidePad * 2 - gridGap) / 2);
 
   const syncQueryToRoute = useCallback((raw: string) => {
     const next = raw.trim();
@@ -604,7 +604,8 @@ export default function CatalogScreen() {
         contentContainerStyle={[
           styles.content,
           {
-            width: contentWidth,
+            width: '100%',
+            maxWidth: 480,
             paddingHorizontal: sidePad,
             paddingBottom: 32 + (Platform.OS === 'web' ? 20 : 8),
           },
@@ -1007,7 +1008,8 @@ const styles = StyleSheet.create({
 
   catsContainer: {
     marginBottom: 12,
-    width: '100%',
+    alignSelf: 'stretch',
+    width: Platform.OS === 'web' ? ('auto' as any) : undefined,
     overflow: 'hidden',
   },
   catsScroll: { flexGrow: 0, width: '100%' },
