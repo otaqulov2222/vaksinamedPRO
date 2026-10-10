@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 0. Environment Sanitization & Robust System PATH
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+unset IFS
+unset BASH_ENV
+unset CDPATH
+unset GLOBIGNORE
+
 # ==============================================================================
 # VaksinaMed Hetzner Staging Server Bootstrap Script
 # Target: Hetzner Cloud Staging Server (178.104.183.137 / Tailscale: 100.85.166.99)
@@ -710,6 +717,20 @@ if command -v nginx >/dev/null 2>&1; then
         TARGET_NGINX_CONF="${NGINX_AVAILABLE_DIR}/app-staging.vaksinamedgps.uz"
     elif [[ -f "${NGINX_AVAILABLE_DIR}/app-staging.vaksinamedgps.uz.conf" ]]; then
         TARGET_NGINX_CONF="${NGINX_AVAILABLE_DIR}/app-staging.vaksinamedgps.uz.conf"
+    else
+        # Auto-detect any existing file dedicated to app-staging.vaksinamedgps.uz
+        for search_file in "${NGINX_AVAILABLE_DIR}"/* "${NGINX_ENABLED_DIR}"/* "/etc/nginx/conf.d"/*; do
+            if [[ -f "${search_file}" && ! -L "${search_file}" ]]; then
+                if grep -q "server_name.*app-staging\.vaksinamedgps\.uz" "${search_file}" 2>/dev/null; then
+                    # Ensure it does not configure api-staging (prevent accidental overwrite of api config)
+                    if ! grep -q "api-staging" "${search_file}" 2>/dev/null; then
+                        TARGET_NGINX_CONF="${search_file}"
+                        echo "    Found active dedicated Nginx site config: ${TARGET_NGINX_CONF}"
+                        break
+                    fi
+                fi
+            fi
+        done
     fi
 
     # Backup existing configuration safely
@@ -863,16 +884,48 @@ server {
 NGINX_EOF
     fi
 
-    # Check TLS certificates: preserve alternative cert paths if existing backup had them
-    DEFAULT_CERT="/etc/letsencrypt/live/app-staging.vaksinamedgps.uz/fullchain.pem"
-    if [[ ! -f "${DEFAULT_CERT}" && -n "${BACKUP_NGINX_CONF}" && -f "${BACKUP_NGINX_CONF}" ]]; then
-        EXISTING_CERT=$(grep -E '^\s*ssl_certificate\s+' "${BACKUP_NGINX_CONF}" | head -n 1 | awk '{print $2}' | tr -d ';' || true)
-        EXISTING_KEY=$(grep -E '^\s*ssl_certificate_key\s+' "${BACKUP_NGINX_CONF}" | head -n 1 | awk '{print $2}' | tr -d ';' || true)
-        if [[ -n "${EXISTING_CERT}" && -f "${EXISTING_CERT}" && -n "${EXISTING_KEY}" && -f "${EXISTING_KEY}" ]]; then
-            echo "    Preserving active SSL certificate paths: ${EXISTING_CERT}"
-            sed -i "s|/etc/letsencrypt/live/app-staging.vaksinamedgps.uz/fullchain.pem|${EXISTING_CERT}|g" "${TARGET_NGINX_CONF}"
-            sed -i "s|/etc/letsencrypt/live/app-staging.vaksinamedgps.uz/privkey.pem|${EXISTING_KEY}|g" "${TARGET_NGINX_CONF}"
+    # Determine active SSL certificate and key paths (preserving existing TLS setup)
+    ACTIVE_CERT=""
+    ACTIVE_KEY=""
+
+    # 1. Search existing nginx configurations for currently configured certificates
+    for cfg in "${TARGET_NGINX_CONF}" "${BACKUP_NGINX_CONF}" "${NGINX_AVAILABLE_DIR}"/* "${NGINX_ENABLED_DIR}"/* "/etc/nginx/conf.d"/*; do
+        if [[ -n "${cfg}" && -f "${cfg}" ]]; then
+            if grep -q "app-staging" "${cfg}" 2>/dev/null || [[ -n "${BACKUP_NGINX_CONF}" && "${cfg}" == "${BACKUP_NGINX_CONF}" ]]; then
+                c_cand=$(grep -E '^\s*ssl_certificate\s+' "${cfg}" 2>/dev/null | head -n 1 | awk '{print $2}' | tr -d ';' || true)
+                k_cand=$(grep -E '^\s*ssl_certificate_key\s+' "${cfg}" 2>/dev/null | head -n 1 | awk '{print $2}' | tr -d ';' || true)
+                if [[ -n "${c_cand}" && -f "${c_cand}" && -n "${k_cand}" && -f "${k_cand}" ]]; then
+                    ACTIVE_CERT="${c_cand}"
+                    ACTIVE_KEY="${k_cand}"
+                    echo "    Detected active SSL certificates from existing configuration: ${ACTIVE_CERT}"
+                    break
+                fi
+            fi
         fi
+    done
+
+    # 2. If not found in configs, check standard Let's Encrypt live paths
+    if [[ -z "${ACTIVE_CERT}" ]]; then
+        for le_dir in \
+            "/etc/letsencrypt/live/app-staging.vaksinamedgps.uz" \
+            "/etc/letsencrypt/live/app-staging.vaksinamedgps.uz-0001" \
+            "/etc/letsencrypt/live/vaksinamedgps.uz" \
+            "/etc/letsencrypt/live/staging.vaksinamedgps.uz" \
+            "/etc/letsencrypt/live/staging.vaksinamed.uz"; do
+            if [[ -f "${le_dir}/fullchain.pem" && -f "${le_dir}/privkey.pem" ]]; then
+                ACTIVE_CERT="${le_dir}/fullchain.pem"
+                ACTIVE_KEY="${le_dir}/privkey.pem"
+                echo "    Detected active Let's Encrypt certificate at ${le_dir}"
+                break
+            fi
+        done
+    fi
+
+    # 3. Apply discovered certificates if valid
+    if [[ -n "${ACTIVE_CERT}" && -f "${ACTIVE_CERT}" && -n "${ACTIVE_KEY}" && -f "${ACTIVE_KEY}" ]]; then
+        echo "    Preserving active SSL certificate paths: ${ACTIVE_CERT}"
+        sed -i "s|/etc/letsencrypt/live/app-staging.vaksinamedgps.uz/fullchain.pem|${ACTIVE_CERT}|g" "${TARGET_NGINX_CONF}"
+        sed -i "s|/etc/letsencrypt/live/app-staging.vaksinamedgps.uz/privkey.pem|${ACTIVE_KEY}|g" "${TARGET_NGINX_CONF}"
     fi
 
     # Symlink to sites-enabled
@@ -892,9 +945,10 @@ NGINX_EOF
         if [[ -n "${BACKUP_NGINX_CONF}" && -f "${BACKUP_NGINX_CONF}" ]]; then
             cp "${BACKUP_NGINX_CONF}" "${TARGET_NGINX_CONF}"
             echo "    Restored previous Nginx configuration from backup." >&2
+            nginx -t && (systemctl reload nginx 2>/dev/null || true)
         else
-            rm -f "${ENABLED_LINK}"
-            echo "    Removed unverified site link." >&2
+            rm -f "${ENABLED_LINK}" "${TARGET_NGINX_CONF}"
+            echo "    Removed unverified site configuration." >&2
         fi
         exit 1
     fi
