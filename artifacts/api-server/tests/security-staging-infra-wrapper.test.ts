@@ -104,4 +104,17 @@ describe('Staging Deployment Infrastructure Security Contracts', () => {
     assert.ok(content.includes('downloaded-feather.ttf'), 'must verify downloaded font binary header in healthcheck');
     assert.ok(content.includes('github.ref == \'refs/heads/main\''), 'must restrict live deploy to main branch only');
   });
+
+  it('10. Nginx staging configuration protects font and asset paths from HTML fallback', () => {
+    const nginxFile = path.join(repoRoot, 'infra/nginx/app-staging.conf');
+    assert.ok(fs.existsSync(nginxFile), 'infra/nginx/app-staging.conf must exist');
+    const content = fs.readFileSync(nginxFile, 'utf8');
+
+    assert.ok(content.includes('location /fonts/'), 'must have dedicated /fonts/ location block');
+    assert.ok(content.includes('location /assets/'), 'must have dedicated /assets/ location block');
+    assert.ok(content.includes('location /_expo/'), 'must have dedicated /_expo/ location block');
+    assert.ok(content.includes('try_files $uri =404;'), 'must return 404 for missing assets, never HTML fallback');
+    assert.ok(content.includes('no-cache, no-store, must-revalidate'), 'must enforce no-cache on HTML routes');
+    assert.ok(content.includes('font/ttf ttf'), 'must define explicit font MIME types');
+  });
 });

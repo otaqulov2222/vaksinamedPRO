@@ -221,6 +221,19 @@ if (fs.existsSync(jsWebDir)) {
   }
 }
 
+// 5b. Tag index.html with export metadata for staging release verification
+const indexHtmlPath = path.join(distDir, 'index.html');
+if (fs.existsSync(indexHtmlPath)) {
+  let html = fs.readFileSync(indexHtmlPath, 'utf8');
+  const releaseId = process.env.RELEASE_ID || process.env.GITHUB_SHA || `build-${Date.now()}`;
+  const buildStamp = `<meta name="vaksinamed-build" content="release=${releaseId};date=${new Date().toISOString()};fonts=stabilized" />`;
+  if (!html.includes('vaksinamed-build')) {
+    html = html.replace('</head>', `${buildStamp}</head>`);
+    fs.writeFileSync(indexHtmlPath, html, 'utf8');
+    console.log(`[build-web] Injected build stamp into index.html: ${buildStamp}`);
+  }
+}
+
 // 6. Final verification and integrity check
 console.log('[build-web] Verifying font assets integrity in dist...');
 const requiredDistFonts = [

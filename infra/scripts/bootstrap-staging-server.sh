@@ -36,7 +36,7 @@ if [[ "${CURRENT_HOST}" =~ (prod|production|vaksina-gps) ]]; then
     exit 1
 fi
 
-echo "--> Step 1/6: Provisioning unprivileged 'deployer' user..."
+echo "--> Step 1/7: Provisioning unprivileged 'deployer' user..."
 if ! id -u deployer >/dev/null 2>&1; then
     useradd -m -s /bin/bash -c "VaksinaMed CI/CD Deployer" deployer
     echo "    Created user 'deployer'."
@@ -56,7 +56,7 @@ touch /home/deployer/.ssh/authorized_keys
 chmod 600 /home/deployer/.ssh/authorized_keys
 chown -R deployer:deployer /home/deployer/.ssh
 
-echo "--> Step 2/6: Configuring staging directory structures and permissions..."
+echo "--> Step 2/7: Configuring staging directory structures and permissions..."
 BACKEND_DIR="/opt/vaksinamed"
 mkdir -p "${BACKEND_DIR}"
 chown root:root "${BACKEND_DIR}"
@@ -92,7 +92,7 @@ chmod -R 775 "${FRONTEND_RELEASES}"
 chown -R deployer:deployer "${BACKEND_RELEASES}"
 chmod -R 750 "${BACKEND_RELEASES}"
 
-echo "--> Step 3/6: Preserving existing frontend deployment..."
+echo "--> Step 3/7: Preserving existing frontend deployment..."
 CURRENT_WEB="/var/www/vaksinamed-app-staging"
 if [[ -d "${CURRENT_WEB}" && ! -L "${CURRENT_WEB}" ]]; then
     TIMESTAMP=$(date +%Y%m%d%H%M%S)
@@ -120,14 +120,14 @@ else
     echo "    Created initial placeholder symlink at ${CURRENT_WEB}."
 fi
 
-echo "--> Step 4/6: Preserving database volumes and ensuring isolation..."
+echo "--> Step 4/7: Preserving database volumes and ensuring isolation..."
 if command -v docker >/dev/null 2>&1; then
     echo "    Checking Docker named volumes for staging databases..."
     docker volume inspect staging_pgdata >/dev/null 2>&1 && echo "    PASS: Volume 'staging_pgdata' exists and preserved." || echo "    INFO: Volume 'staging_pgdata' will be initialized by compose."
     docker volume inspect staging_redisdata >/dev/null 2>&1 && echo "    PASS: Volume 'staging_redisdata' exists and preserved." || echo "    INFO: Volume 'staging_redisdata' will be initialized by compose."
 fi
 
-echo "--> Step 5/6: Installing root staging control wrapper (/usr/local/bin/vaksinamed-staging-ctl)..."
+echo "--> Step 5/7: Installing root staging control wrapper (/usr/local/bin/vaksinamed-staging-ctl)..."
 SCRIPT_SOURCE=""
 if [[ -f "${BACKEND_DIR}/infra/scripts/vaksinamed-staging-ctl.sh" ]]; then
     SCRIPT_SOURCE="${BACKEND_DIR}/infra/scripts/vaksinamed-staging-ctl.sh"
@@ -503,7 +503,7 @@ case "${ACTION}" in
             echo "ERROR: Missing index.html in ${TARGET_FRONTEND}!" >&2
             exit 1
         fi
-        for font in "Feather.ttf" "MaterialCommunityIcons.ttf" "Inter-Regular.ttf"; do
+        for font in "Feather.ttf" "MaterialCommunityIcons.ttf" "Inter-Regular.ttf" "Inter-SemiBold.ttf"; do
             verify_font_file "${TARGET_FRONTEND}/fonts/${font}" || exit 1
         done
         echo "    PASS: Frontend assets and fonts verified."
@@ -663,7 +663,7 @@ chmod 755 "${TARGET_BIN}"
 chown root:root "${TARGET_BIN}"
 echo "    PASS: ${TARGET_BIN} installed (0755 root:root)."
 
-echo "--> Step 6/6: Installing strict sudoers configuration..."
+echo "--> Step 6/7: Installing strict sudoers configuration..."
 SUDOERS_FILE="/etc/sudoers.d/vaksinamed-deployer"
 SUDOERS_TMP="/tmp/vaksinamed-deployer.tmp"
 
@@ -697,6 +697,209 @@ else
     echo "CRITICAL ERROR: Sudoers syntax validation failed!" >&2
     rm -f "${SUDOERS_TMP}"
     exit 1
+fi
+
+echo "--> Step 7/7: Configuring and validating Nginx for Staging Web App (app-staging.vaksinamedgps.uz)..."
+if command -v nginx >/dev/null 2>&1; then
+    NGINX_AVAILABLE_DIR="/etc/nginx/sites-available"
+    NGINX_ENABLED_DIR="/etc/nginx/sites-enabled"
+    mkdir -p "${NGINX_AVAILABLE_DIR}" "${NGINX_ENABLED_DIR}" /var/www/certbot
+
+    TARGET_NGINX_CONF="${NGINX_AVAILABLE_DIR}/app-staging.conf"
+    if [[ -f "${NGINX_AVAILABLE_DIR}/app-staging.vaksinamedgps.uz" ]]; then
+        TARGET_NGINX_CONF="${NGINX_AVAILABLE_DIR}/app-staging.vaksinamedgps.uz"
+    elif [[ -f "${NGINX_AVAILABLE_DIR}/app-staging.vaksinamedgps.uz.conf" ]]; then
+        TARGET_NGINX_CONF="${NGINX_AVAILABLE_DIR}/app-staging.vaksinamedgps.uz.conf"
+    fi
+
+    # Backup existing configuration safely
+    BACKUP_NGINX_CONF=""
+    if [[ -f "${TARGET_NGINX_CONF}" ]]; then
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        BACKUP_NGINX_CONF="${TARGET_NGINX_CONF}.backup-${TIMESTAMP}"
+        cp "${TARGET_NGINX_CONF}" "${BACKUP_NGINX_CONF}"
+        echo "    Backed up existing Nginx config to ${BACKUP_NGINX_CONF}"
+    fi
+
+    # Locate source config or write self-contained template
+    NGINX_SRC=""
+    if [[ -f "${BACKEND_DIR}/infra/nginx/app-staging.conf" ]]; then
+        NGINX_SRC="${BACKEND_DIR}/infra/nginx/app-staging.conf"
+    elif [[ -f "$(dirname "$0")/../nginx/app-staging.conf" ]]; then
+        NGINX_SRC="$(dirname "$0")/../nginx/app-staging.conf"
+    fi
+
+    if [[ -n "${NGINX_SRC}" && -f "${NGINX_SRC}" ]]; then
+        echo "    Copying Nginx config from ${NGINX_SRC}..."
+        cp "${NGINX_SRC}" "${TARGET_NGINX_CONF}"
+    else
+        echo "    Writing self-contained Nginx config to ${TARGET_NGINX_CONF}..."
+        cat << 'NGINX_EOF' > "${TARGET_NGINX_CONF}"
+# Nginx Virtual Host Configuration for VaksinaMed Mobile Web (Staging)
+# Domain: app-staging.vaksinamedgps.uz
+# Root: /var/www/vaksinamed-app-staging (Symlink to active release in /var/www/vaksinamed-app-releases/)
+
+# HTTP to HTTPS redirect
+server {
+    listen 80;
+    listen [::]:80;
+    server_name app-staging.vaksinamedgps.uz;
+
+    # ACME Challenge for Let's Encrypt Certbot
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS Server Block
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name app-staging.vaksinamedgps.uz;
+
+    # SSL Certificates
+    ssl_certificate /etc/letsencrypt/live/app-staging.vaksinamedgps.uz/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app-staging.vaksinamedgps.uz/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+
+    # Security Headers
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Web Root
+    root /var/www/vaksinamed-app-staging;
+    index index.html;
+
+    # Gzip Compression
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/x-javascript
+        font/ttf
+        font/otf
+        image/svg+xml;
+
+    # Font MIME Types & Headers
+    location /fonts/ {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+        types {
+            font/ttf ttf;
+            font/otf otf;
+            font/woff woff;
+            font/woff2 woff2;
+            application/font-woff2 woff2;
+            application/font-woff woff;
+        }
+    }
+
+    # Static Assets (Images, Bundles, Chunks)
+    location /assets/ {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Access-Control-Allow-Origin "*" always;
+        types {
+            font/ttf ttf;
+            font/otf otf;
+            font/woff woff;
+            font/woff2 woff2;
+            image/png png;
+            image/jpeg jpg jpeg;
+            image/svg+xml svg;
+            image/x-icon ico;
+        }
+    }
+
+    # Expo Static JS Bundles
+    location /_expo/ {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        types {
+            application/javascript js mjs;
+            application/json json;
+        }
+    }
+
+    # HTML Pages & SPA Fallback (Never cache HTML)
+    location / {
+        try_files $uri $uri/ /index.html;
+        expires -1;
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+    }
+
+    # Protect hidden files except Let's Encrypt challenge
+    location ~ /\.(?!well-known) {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+}
+NGINX_EOF
+    fi
+
+    # Check TLS certificates: preserve alternative cert paths if existing backup had them
+    DEFAULT_CERT="/etc/letsencrypt/live/app-staging.vaksinamedgps.uz/fullchain.pem"
+    if [[ ! -f "${DEFAULT_CERT}" && -n "${BACKUP_NGINX_CONF}" && -f "${BACKUP_NGINX_CONF}" ]]; then
+        EXISTING_CERT=$(grep -E '^\s*ssl_certificate\s+' "${BACKUP_NGINX_CONF}" | head -n 1 | awk '{print $2}' | tr -d ';' || true)
+        EXISTING_KEY=$(grep -E '^\s*ssl_certificate_key\s+' "${BACKUP_NGINX_CONF}" | head -n 1 | awk '{print $2}' | tr -d ';' || true)
+        if [[ -n "${EXISTING_CERT}" && -f "${EXISTING_CERT}" && -n "${EXISTING_KEY}" && -f "${EXISTING_KEY}" ]]; then
+            echo "    Preserving active SSL certificate paths: ${EXISTING_CERT}"
+            sed -i "s|/etc/letsencrypt/live/app-staging.vaksinamedgps.uz/fullchain.pem|${EXISTING_CERT}|g" "${TARGET_NGINX_CONF}"
+            sed -i "s|/etc/letsencrypt/live/app-staging.vaksinamedgps.uz/privkey.pem|${EXISTING_KEY}|g" "${TARGET_NGINX_CONF}"
+        fi
+    fi
+
+    # Symlink to sites-enabled
+    ENABLED_LINK="${NGINX_ENABLED_DIR}/$(basename "${TARGET_NGINX_CONF}")"
+    ln -sfn "${TARGET_NGINX_CONF}" "${ENABLED_LINK}"
+
+    # Validate with nginx -t
+    echo "    Validating Nginx configuration with 'nginx -t'..."
+    if nginx -t; then
+        echo "    PASS: Nginx configuration test succeeded."
+        if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
+            systemctl reload nginx
+            echo "    PASS: Nginx reloaded with secure font and asset routing."
+        fi
+    else
+        echo "    CRITICAL ERROR: Nginx configuration test failed! Restoring backup..." >&2
+        if [[ -n "${BACKUP_NGINX_CONF}" && -f "${BACKUP_NGINX_CONF}" ]]; then
+            cp "${BACKUP_NGINX_CONF}" "${TARGET_NGINX_CONF}"
+            echo "    Restored previous Nginx configuration from backup." >&2
+        else
+            rm -f "${ENABLED_LINK}"
+            echo "    Removed unverified site link." >&2
+        fi
+        exit 1
+    fi
+else
+    echo "    INFO: Nginx is not installed or not in PATH. Skipping Nginx configuration."
 fi
 
 echo "--> Self-test and verification..."

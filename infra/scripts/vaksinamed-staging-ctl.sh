@@ -358,7 +358,7 @@ case "${ACTION}" in
             echo "ERROR: Missing index.html in ${TARGET_FRONTEND}!" >&2
             exit 1
         fi
-        for font in "Feather.ttf" "MaterialCommunityIcons.ttf" "Inter-Regular.ttf"; do
+        for font in "Feather.ttf" "MaterialCommunityIcons.ttf" "Inter-Regular.ttf" "Inter-SemiBold.ttf"; do
             verify_font_file "${TARGET_FRONTEND}/fonts/${font}" || exit 1
         done
         echo "    PASS: Frontend assets and fonts verified."

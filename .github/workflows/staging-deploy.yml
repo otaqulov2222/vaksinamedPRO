@@ -288,8 +288,13 @@ jobs:
           echo "1. Checking API health endpoint..."
           curl -fsS --retry 5 --retry-delay 3 https://api-staging.vaksinamedgps.uz/api/health/live
 
-          echo "2. Checking Web app index..."
-          curl -fsS --retry 5 --retry-delay 3 https://app-staging.vaksinamedgps.uz/ > /dev/null
+          echo "2. Checking Web app index and build stamp..."
+          INDEX_HTML=$(curl -fsS --retry 5 --retry-delay 3 https://app-staging.vaksinamedgps.uz/)
+          if echo "${INDEX_HTML}" | grep -q 'vaksinamed-build'; then
+            echo "PASS: New Expo web build verified on public domain with build stamp."
+          else
+            echo "WARNING: Web app responded, but build stamp was not detected."
+          fi
 
           echo "3. Checking Web font asset (Feather.ttf valid binary header)..."
           curl -fsS --retry 5 --retry-delay 3 https://app-staging.vaksinamedgps.uz/fonts/Feather.ttf -o /tmp/downloaded-feather.ttf
@@ -301,5 +306,13 @@ jobs:
             if (magic !== 0x00010000 && magic !== 0x4F54544F) throw new Error('Corrupted font magic 0x' + magic.toString(16));
             console.log('PASS: Downloaded font is a genuine TTF binary (' + buf.length + ' bytes)');
           "
+
+          echo "4. Checking Nginx Cache-Control headers (HTML must be no-cache)..."
+          HTML_HEADERS=$(curl -sI https://app-staging.vaksinamedgps.uz/)
+          if echo "${HTML_HEADERS}" | grep -qi 'no-cache'; then
+            echo "PASS: HTML Cache-Control: no-cache verified."
+          else
+            echo "WARNING: Cache-Control no-cache not found in response headers."
+          fi
 
           echo "SUCCESS: Staging deployment fully verified and healthy!"
