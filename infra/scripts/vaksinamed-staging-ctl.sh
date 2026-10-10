@@ -76,7 +76,8 @@ case "${ACTION}" in
         fi
         RELEASE_ID="${2}"
         # Validate release ID format strictly: only alphanumeric, dot, underscore, dash; 7 to 64 chars
-        if [[ ! "${RELEASE_ID}" =~ ^[a-zA-Z0-9._-]{7,64}$ ]]; then
+        # Must start with alphanumeric character (strictly blocks leading '-', '.', or '/')
+        if [[ ! "${RELEASE_ID}" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{6,63}$ ]]; then
             echo "ERROR: Invalid release ID format: '${RELEASE_ID}'" >&2
             exit 1
         fi

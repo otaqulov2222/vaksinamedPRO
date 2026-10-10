@@ -146,6 +146,28 @@ else
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ==============================================================================
+# VaksinaMed Staging Deployment Control Wrapper
+# Target Server Location: /usr/local/bin/vaksinamed-staging-ctl
+# Owner: root:root | Permissions: 0755
+#
+# Security & Privilege Boundaries:
+# 1. Environment Sanitization: Clears IFS, BASH_ENV, CDPATH, GLOBIGNORE and
+#    forces a minimal, trusted system PATH.
+# 2. Strict Parameter Validation: Rejects excess arguments, validates action
+#    and release ID regex. No eval or dynamic shell execution.
+# 3. Isolation & TOCTOU Protection: Takes root ownership of release files
+#    BEFORE auditing to prevent race-condition modification by unprivileged users.
+# 4. Prohibited File & Traversal Auditing: Rejects symlinks, special files,
+#    path traversal (..), and prohibited configurations (.env, compose, shell scripts).
+# 5. Asset & Health Verification: Verifies binary font magic (not HTML 200),
+#    HTML index integrity, and API readiness.
+# 6. Automatic Rollback: Restores previous frontend symlink and backend release
+#    if post-deploy health check fails, returning non-zero exit code.
+# 7. Preserves Databases: PostgreSQL (staging_pgdata) and Redis (staging_redisdata)
+#    named Docker volumes are strictly preserved and never recreated or pruned.
+# ==============================================================================
+
 # 1. Environment Sanitization
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 unset IFS
@@ -173,6 +195,7 @@ ENV_FILE="${BACKEND_DIR}/.env.staging"
 DOCKERFILE="${BACKEND_DIR}/Dockerfile"
 LOCK_FILE="/tmp/vaksinamed-staging-deploy.lock"
 
+# Helper: Docker Compose command runner (v2 plugin or v1 standalone)
 dc_cmd() {
     if docker compose version >/dev/null 2>&1; then
         docker compose "$@"
@@ -181,6 +204,7 @@ dc_cmd() {
     fi
 }
 
+# 3. Strict Action & Argument Count Validation
 if [[ $# -lt 1 ]]; then
     echo "ERROR: Missing action argument." >&2
     echo "Usage: vaksinamed-staging-ctl {deploy <release-id>|rollback|healthcheck|reload-nginx}" >&2
@@ -196,18 +220,33 @@ case "${ACTION}" in
             exit 1
         fi
         RELEASE_ID="${2}"
-        if [[ ! "${RELEASE_ID}" =~ ^[a-zA-Z0-9._-]{7,64}$ ]]; then
+        # Validate release ID format strictly: only alphanumeric, dot, underscore, dash; 7 to 64 chars
+        # Must start with alphanumeric character (strictly blocks leading '-', '.', or '/')
+        if [[ ! "${RELEASE_ID}" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{6,63}$ ]]; then
             echo "ERROR: Invalid release ID format: '${RELEASE_ID}'" >&2
             exit 1
         fi
+        # Reject path traversal patterns explicitly
         if [[ "${RELEASE_ID}" == *".."* || "${RELEASE_ID}" == *"/"* || "${RELEASE_ID}" == *"\\"* ]]; then
             echo "ERROR: Path traversal detected in release ID: '${RELEASE_ID}'" >&2
             exit 1
         fi
         ;;
-    rollback|healthcheck|reload-nginx)
+    rollback)
         if [[ $# -ne 1 ]]; then
-            echo "ERROR: '${ACTION}' accepts no additional arguments. Given: $# arguments." >&2
+            echo "ERROR: 'rollback' accepts no additional arguments. Given: $# arguments." >&2
+            exit 1
+        fi
+        ;;
+    healthcheck)
+        if [[ $# -ne 1 ]]; then
+            echo "ERROR: 'healthcheck' accepts no additional arguments. Given: $# arguments." >&2
+            exit 1
+        fi
+        ;;
+    reload-nginx)
+        if [[ $# -ne 1 ]]; then
+            echo "ERROR: 'reload-nginx' accepts no additional arguments. Given: $# arguments." >&2
             exit 1
         fi
         ;;
@@ -218,12 +257,14 @@ case "${ACTION}" in
         ;;
 esac
 
+# 4. Exclusive Deployment Lock
 exec 200>"${LOCK_FILE}"
 if ! flock -n 200; then
     echo "ERROR: Another deployment or rollback operation is currently in progress!" >&2
     exit 1
 fi
 
+# Helper: Reload Nginx safely with configuration testing
 reload_nginx() {
     if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
         echo "--> Testing and reloading Nginx configuration..."
@@ -237,32 +278,41 @@ reload_nginx() {
     fi
 }
 
+# Helper: Validate font binary magic bytes (reject HTML error pages served with HTTP 200)
 verify_font_file() {
     local font_path="${1}"
     local font_name
     font_name=$(basename "${font_path}")
+
     if [[ ! -f "${font_path}" ]]; then
-        echo "    FAIL: Font file ${font_name} does not exist!" >&2
+        echo "    FAIL: Font file ${font_name} does not exist at ${font_path}!" >&2
         return 1
     fi
+
     local size
     size=$(stat -c%s "${font_path}" 2>/dev/null || stat -f%z "${font_path}" 2>/dev/null || echo "0")
     if [[ "${size}" -lt 10000 ]]; then
         echo "    FAIL: Font file ${font_name} is too small (${size} bytes)!" >&2
         return 1
     fi
+
+    # Read first 4 bytes using od/xxd/head to verify TTF (00 01 00 00) or OTF (4F 54 54 4F)
     local magic_hex
     magic_hex=$(od -N 4 -t x1 "${font_path}" 2>/dev/null | head -n 1 | awk '{print $2$3$4$5}' | tr '[:upper:]' '[:lower:]')
     if [[ "${magic_hex}" != "00010000" && "${magic_hex}" != "4f54544f" && "${magic_hex}" != "74746366" ]]; then
         echo "    FAIL: Font file ${font_name} has invalid magic header 0x${magic_hex} (corrupted or HTML)!" >&2
         return 1
     fi
+
     return 0
 }
 
+# Helper: Run Comprehensive Healthchecks
 run_healthchecks() {
     echo "--> Running post-deployment health checks..."
     local pass=1
+
+    # 1. API Live Healthcheck
     local api_ok=0
     for attempt in 1 2 3 4 5; do
         if curl -fsS --max-time 5 http://127.0.0.1:5000/api/health/live > /dev/null 2>&1 || \
@@ -273,6 +323,7 @@ run_healthchecks() {
         fi
         sleep 2
     done
+
     if [[ "${api_ok}" -eq 1 ]]; then
         echo "    PASS: API live endpoint responding."
     else
@@ -280,6 +331,7 @@ run_healthchecks() {
         pass=0
     fi
 
+    # 2. Frontend Index HTML Check
     local web_ok=0
     local web_content=""
     if web_content=$(curl -fsS --max-time 5 https://app-staging.vaksinamedgps.uz/ 2>/dev/null || curl -fsS --max-time 5 http://127.0.0.1/ 2>/dev/null); then
@@ -294,6 +346,7 @@ run_healthchecks() {
             web_ok=1
         fi
     fi
+
     if [[ "${web_ok}" -eq 1 ]]; then
         echo "    PASS: Frontend index HTML responding valid markup."
     else
@@ -301,134 +354,304 @@ run_healthchecks() {
         pass=0
     fi
 
+    # 3. Font Asset Integrity Check
     local font_ok=0
     if [[ -f "${CURRENT_FRONTEND_SYMLINK}/fonts/Feather.ttf" ]]; then
         if verify_font_file "${CURRENT_FRONTEND_SYMLINK}/fonts/Feather.ttf"; then
             font_ok=1
         fi
     fi
+
     if [[ "${font_ok}" -eq 1 ]]; then
-        echo "    PASS: Frontend font Feather.ttf verified."
+        echo "    PASS: Frontend font Feather.ttf verified (valid TTF binary)."
     else
         echo "    FAIL: Feather.ttf font check failed!" >&2
         pass=0
     fi
 
-    return "$((1 - pass))"
+    if [[ "${pass}" -eq 1 ]]; then
+        return 0
+    else
+        return 1
+    fi
 }
 
+# Helper: Enforce root security invariants on /opt/vaksinamed
 enforce_root_invariants() {
-    [[ ! -d "${BACKEND_DIR}" ]] && { echo "ERROR: ${BACKEND_DIR} does not exist!" >&2; exit 1; }
-    [[ ! -f "${ENV_FILE}" ]] && { echo "ERROR: ${ENV_FILE} does not exist!" >&2; exit 1; }
-    [[ ! -f "${COMPOSE_FILE}" ]] && { echo "ERROR: ${COMPOSE_FILE} does not exist!" >&2; exit 1; }
-    [[ ! -f "${DOCKERFILE}" ]] && { echo "ERROR: ${DOCKERFILE} does not exist!" >&2; exit 1; }
+    echo "--> Verifying and enforcing root security invariants on ${BACKEND_DIR}..."
+    if [[ ! -d "${BACKEND_DIR}" ]]; then
+        echo "ERROR: Backend directory ${BACKEND_DIR} does not exist!" >&2
+        exit 1
+    fi
+    if [[ ! -f "${ENV_FILE}" ]]; then
+        echo "ERROR: Security invariant violated: ${ENV_FILE} does not exist!" >&2
+        exit 1
+    fi
+    if [[ ! -f "${COMPOSE_FILE}" ]]; then
+        echo "ERROR: Security invariant violated: ${COMPOSE_FILE} does not exist!" >&2
+        exit 1
+    fi
+    if [[ ! -f "${DOCKERFILE}" ]]; then
+        echo "ERROR: Security invariant violated: ${DOCKERFILE} does not exist!" >&2
+        exit 1
+    fi
 
+    # Enforce root ownership and strict permissions
     chown root:root "${ENV_FILE}" "${COMPOSE_FILE}" "${DOCKERFILE}"
     chmod 600 "${ENV_FILE}"
     chmod 644 "${COMPOSE_FILE}" "${DOCKERFILE}"
     chown root:root "${BACKEND_DIR}"
     chmod 755 "${BACKEND_DIR}"
+    echo "    PASS: Root security invariants verified (.env.staging is 0600 root:root)."
 }
 
+# Helper: Sync application source safely without overwriting root invariants
 sync_backend_release() {
     local source_dir="${1}"
+    echo "--> Safely syncing application files from ${source_dir} to ${BACKEND_DIR}..."
+
+    # Use rsync or tar with strict exclusion of sensitive/immutable files
     if command -v rsync >/dev/null 2>&1; then
-        rsync -a --exclude='.env*' --exclude='docker-compose*' --exclude='Dockerfile' --exclude='infra/' --exclude='*.sh' "${source_dir}/" "${BACKEND_DIR}/"
+        rsync -a \
+            --exclude='.env*' \
+            --exclude='docker-compose*' \
+            --exclude='Dockerfile' \
+            --exclude='infra/' \
+            --exclude='*.sh' \
+            --exclude='*.bash' \
+            "${source_dir}/" "${BACKEND_DIR}/"
     else
-        tar -C "${source_dir}" --exclude='.env*' --exclude='docker-compose*' --exclude='Dockerfile' --exclude='infra' --exclude='*.sh' -cf - . | tar -C "${BACKEND_DIR}" -xf -
+        tar -C "${source_dir}" \
+            --exclude='.env*' \
+            --exclude='docker-compose*' \
+            --exclude='Dockerfile' \
+            --exclude='infra' \
+            --exclude='*.sh' \
+            --exclude='*.bash' \
+            -cf - . | tar -C "${BACKEND_DIR}" -xf -
     fi
+
+    # Enforce root ownership on synced files
     chown -R root:root "${BACKEND_DIR}"
     chmod 755 "${BACKEND_DIR}"
     chmod 600 "${ENV_FILE}"
     chmod 644 "${COMPOSE_FILE}" "${DOCKERFILE}"
+    echo "    PASS: Application source synced under root:root ownership."
 }
 
+# ------------------------------------------------------------------------------
+# Action Execution
+# ------------------------------------------------------------------------------
 case "${ACTION}" in
     deploy)
         TARGET_FRONTEND="${FRONTEND_RELEASES_DIR}/${RELEASE_ID}"
         TARGET_BACKEND="${BACKEND_RELEASES_DIR}/${RELEASE_ID}"
 
         echo "=== [VAKSINAMED] Executing Deployment for Release: ${RELEASE_ID} ==="
+
+        # 1. Enforce root invariants before doing anything
         enforce_root_invariants
 
-        [[ ! -d "${TARGET_FRONTEND}" ]] && { echo "ERROR: Frontend release dir missing!" >&2; exit 1; }
-        [[ ! -d "${TARGET_BACKEND}" ]] && { echo "ERROR: Backend release dir missing!" >&2; exit 1; }
+        # 2. Verify existence of release directories
+        if [[ ! -d "${TARGET_FRONTEND}" ]]; then
+            echo "ERROR: Frontend release directory ${TARGET_FRONTEND} does not exist!" >&2
+            exit 1
+        fi
+        if [[ ! -d "${TARGET_BACKEND}" ]]; then
+            echo "ERROR: Backend release directory ${TARGET_BACKEND} does not exist!" >&2
+            exit 1
+        fi
 
+        # 3. Isolation & TOCTOU Protection: Take root ownership immediately
+        echo "--> Securing release ownership under root:root (preventing TOCTOU tampering)..."
         chown -R root:root "${TARGET_FRONTEND}" "${TARGET_BACKEND}"
         chmod -R u=rwX,go=rX "${TARGET_FRONTEND}" "${TARGET_BACKEND}"
 
+        # 4. Security Check: Reject symlinks and special files in uploaded releases
+        echo "--> Auditing release directories for prohibited symlinks and special files..."
         if find "${TARGET_FRONTEND}" "${TARGET_BACKEND}" -type l 2>/dev/null | grep -q .; then
-            echo "ERROR: Symbolic links found in release!" >&2; exit 1
+            echo "ERROR: Security violation: Symbolic links found in uploaded release!" >&2
+            exit 1
         fi
         if find "${TARGET_FRONTEND}" "${TARGET_BACKEND}" ! -type f ! -type d 2>/dev/null | grep -q .; then
-            echo "ERROR: Special files found in release!" >&2; exit 1
+            echo "ERROR: Security violation: Special files (fifos/devices/sockets) found in uploaded release!" >&2
+            exit 1
         fi
+        echo "    PASS: No prohibited symlinks or special files detected."
+
+        # 5. Security Check: Ensure release does not attempt to smuggle root config files
+        echo "--> Auditing backend release for prohibited configuration files..."
         if find "${TARGET_BACKEND}" \( -name ".env*" -o -name "docker-compose*" -o -name "Dockerfile" -o -name "*.sh" -o -path "*/infra/*" \) 2>/dev/null | grep -q .; then
-            echo "ERROR: Prohibited configuration files in release payload!" >&2; exit 1
+            echo "ERROR: Security violation: Prohibited configuration or script files found in release payload!" >&2
+            exit 1
         fi
+        echo "    PASS: No prohibited configuration files in release payload."
 
+        # 6. Verify Checksums if provided
         if [[ -f "${TARGET_BACKEND}/release.sha256" ]]; then
-            (cd "${TARGET_BACKEND}" && sha256sum -c release.sha256) || { echo "ERROR: SHA256 checksum mismatch!" >&2; exit 1; }
+            echo "--> Verifying SHA256 checksums..."
+            (cd "${TARGET_BACKEND}" && sha256sum -c release.sha256) || {
+                echo "ERROR: Release checksum verification failed!" >&2
+                exit 1
+            }
+            echo "    PASS: Release checksums verified."
         fi
 
-        [[ ! -f "${TARGET_FRONTEND}/index.html" ]] && { echo "ERROR: Missing index.html!" >&2; exit 1; }
+        # 7. Verify Frontend Assets
+        echo "--> Verifying frontend assets in release..."
+        if [[ ! -f "${TARGET_FRONTEND}/index.html" ]]; then
+            echo "ERROR: Missing index.html in ${TARGET_FRONTEND}!" >&2
+            exit 1
+        fi
         for font in "Feather.ttf" "MaterialCommunityIcons.ttf" "Inter-Regular.ttf"; do
             verify_font_file "${TARGET_FRONTEND}/fonts/${font}" || exit 1
         done
+        echo "    PASS: Frontend assets and fonts verified."
 
-        [[ ! -f "${TARGET_BACKEND}/artifacts/api-server/dist/index.mjs" ]] && { echo "ERROR: Missing backend bundle!" >&2; exit 1; }
+        # 8. Verify Backend Code Structure
+        echo "--> Verifying backend build structure in release..."
+        if [[ ! -f "${TARGET_BACKEND}/artifacts/api-server/dist/index.mjs" ]]; then
+            echo "ERROR: Missing artifacts/api-server/dist/index.mjs in ${TARGET_BACKEND}!" >&2
+            exit 1
+        fi
+        if [[ ! -f "${TARGET_BACKEND}/package.json" || ! -f "${TARGET_BACKEND}/pnpm-lock.yaml" ]]; then
+            echo "ERROR: Missing package.json or pnpm-lock.yaml in ${TARGET_BACKEND}!" >&2
+            exit 1
+        fi
+        echo "    PASS: Backend code structure verified."
 
+        # 9. Record Previous Releases for Rollback
         if [[ -L "${CURRENT_FRONTEND_SYMLINK}" ]]; then
             PREV_TARGET=$(readlink -f "${CURRENT_FRONTEND_SYMLINK}")
             echo "${PREV_TARGET}" > "${PREV_FRONTEND_SYMLINK_FILE}"
+            echo "--> Recorded previous frontend release: ${PREV_TARGET}"
+        elif [[ -d "${CURRENT_FRONTEND_SYMLINK}" ]]; then
+            INITIAL_BACKUP="${FRONTEND_RELEASES_DIR}/legacy-initial-$(date +%Y%m%d%H%M%S)"
+            mv "${CURRENT_FRONTEND_SYMLINK}" "${INITIAL_BACKUP}"
+            echo "${INITIAL_BACKUP}" > "${PREV_FRONTEND_SYMLINK_FILE}"
+            echo "--> Backed up legacy frontend directory to: ${INITIAL_BACKUP}"
         fi
+
         if [[ -f "${BACKEND_DIR}/.current_release_id" ]]; then
             cat "${BACKEND_DIR}/.current_release_id" > "${PREV_BACKEND_RELEASE_FILE}"
         fi
 
+        # 10. Atomically Swap Frontend Symlink (mv -Tf)
+        echo "--> Atomically updating frontend symlink..."
         ln -sfn "${TARGET_FRONTEND}" "${CURRENT_FRONTEND_SYMLINK}.tmp"
         mv -Tf "${CURRENT_FRONTEND_SYMLINK}.tmp" "${CURRENT_FRONTEND_SYMLINK}"
         reload_nginx
 
+        # 11. Sync Backend Source into /opt/vaksinamed under root control
         sync_backend_release "${TARGET_BACKEND}"
         echo "${RELEASE_ID}" > "${BACKEND_DIR}/.current_release_id"
 
+        # 12. Rebuild and Restart API & Worker Containers (Stateless)
+        echo "--> Building and restarting API and Worker containers..."
         cd "${BACKEND_DIR}"
         dc_cmd -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" up -d --build api worker
+
         sleep 5
 
+        # 13. Verify Post-Deploy Health Checks
         if ! run_healthchecks; then
-            echo "CRITICAL: Healthcheck failed! Rolling back..." >&2
+            echo "CRITICAL: Post-deploy health checks failed! Triggering automatic rollback..." >&2
+
+            # Rollback frontend symlink
             if [[ -f "${PREV_FRONTEND_SYMLINK_FILE}" ]]; then
                 PREV_F=$(cat "${PREV_FRONTEND_SYMLINK_FILE}")
-                [[ -d "${PREV_F}" ]] && { ln -sfn "${PREV_F}" "${CURRENT_FRONTEND_SYMLINK}.tmp"; mv -Tf "${CURRENT_FRONTEND_SYMLINK}.tmp" "${CURRENT_FRONTEND_SYMLINK}"; reload_nginx || true; }
+                if [[ -d "${PREV_F}" ]]; then
+                    ln -sfn "${PREV_F}" "${CURRENT_FRONTEND_SYMLINK}.tmp"
+                    mv -Tf "${CURRENT_FRONTEND_SYMLINK}.tmp" "${CURRENT_FRONTEND_SYMLINK}"
+                    reload_nginx || true
+                    echo "--> Restored frontend symlink to: ${PREV_F}"
+                fi
             fi
+
+            # Rollback backend code if previous release exists
             if [[ -f "${PREV_BACKEND_RELEASE_FILE}" ]]; then
                 PREV_B_ID=$(cat "${PREV_BACKEND_RELEASE_FILE}")
-                [[ -d "${BACKEND_RELEASES_DIR}/${PREV_B_ID}" ]] && { sync_backend_release "${BACKEND_RELEASES_DIR}/${PREV_B_ID}"; dc_cmd -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" up -d --build api worker || true; }
+                if [[ -d "${BACKEND_RELEASES_DIR}/${PREV_B_ID}" ]]; then
+                    sync_backend_release "${BACKEND_RELEASES_DIR}/${PREV_B_ID}"
+                    dc_cmd -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" up -d --build api worker || true
+                    echo "--> Restored backend release to: ${PREV_B_ID}"
+                fi
+            else
+                dc_cmd -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" restart api worker || true
             fi
+
+            echo "ERROR: Deployment failed and rollback was executed." >&2
             exit 1
         fi
 
-        cd "${FRONTEND_RELEASES_DIR}" && ls -1dt */ 2>/dev/null | tail -n +6 | xargs -r rm -rf || true
-        cd "${BACKEND_RELEASES_DIR}" && ls -1dt */ 2>/dev/null | tail -n +6 | xargs -r rm -rf || true
+        # 14. Prune Old Releases (Keep Last 5)
+        echo "--> Pruning old releases (retaining last 5)..."
+        cd "${FRONTEND_RELEASES_DIR}"
+        ls -1dt */ 2>/dev/null | tail -n +6 | xargs -r rm -rf || true
+        cd "${BACKEND_RELEASES_DIR}"
+        ls -1dt */ 2>/dev/null | tail -n +6 | xargs -r rm -rf || true
+
         echo "=== [VAKSINAMED] Deployment Succeeded for Release: ${RELEASE_ID} ==="
         ;;
+
     rollback)
+        echo "=== [VAKSINAMED] Executing Staging Rollback ==="
         enforce_root_invariants
+
+        # Rollback Frontend
+        TARGET_FRONTEND_ROLLBACK=""
         if [[ -f "${PREV_FRONTEND_SYMLINK_FILE}" ]]; then
             PREV_F=$(cat "${PREV_FRONTEND_SYMLINK_FILE}")
-            [[ -d "${PREV_F}" ]] && { ln -sfn "${PREV_F}" "${CURRENT_FRONTEND_SYMLINK}.tmp"; mv -Tf "${CURRENT_FRONTEND_SYMLINK}.tmp" "${CURRENT_FRONTEND_SYMLINK}"; reload_nginx || true; }
+            if [[ -d "${PREV_F}" ]]; then
+                TARGET_FRONTEND_ROLLBACK="${PREV_F}"
+            fi
         fi
+        if [[ -z "${TARGET_FRONTEND_ROLLBACK}" ]]; then
+            LATEST_F=$(ls -1dt "${FRONTEND_RELEASES_DIR}"/*/ 2>/dev/null || true)
+            TARGET_FRONTEND_ROLLBACK=$(echo "${LATEST_F}" | sed -n '2p' || true)
+        fi
+
+        if [[ -n "${TARGET_FRONTEND_ROLLBACK}" && -d "${TARGET_FRONTEND_ROLLBACK}" ]]; then
+            echo "--> Rolling back frontend to: ${TARGET_FRONTEND_ROLLBACK}"
+            ln -sfn "${TARGET_FRONTEND_ROLLBACK}" "${CURRENT_FRONTEND_SYMLINK}.tmp"
+            mv -Tf "${CURRENT_FRONTEND_SYMLINK}.tmp" "${CURRENT_FRONTEND_SYMLINK}"
+            reload_nginx
+        else
+            echo "WARNING: No previous frontend release directory found!" >&2
+        fi
+
+        # Rollback Backend
+        TARGET_BACKEND_ROLLBACK=""
         if [[ -f "${PREV_BACKEND_RELEASE_FILE}" ]]; then
             PREV_B_ID=$(cat "${PREV_BACKEND_RELEASE_FILE}")
-            [[ -d "${BACKEND_RELEASES_DIR}/${PREV_B_ID}" ]] && { sync_backend_release "${BACKEND_RELEASES_DIR}/${PREV_B_ID}"; cd "${BACKEND_DIR}"; dc_cmd -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" up -d --build api worker; }
+            if [[ -d "${BACKEND_RELEASES_DIR}/${PREV_B_ID}" ]]; then
+                TARGET_BACKEND_ROLLBACK="${BACKEND_RELEASES_DIR}/${PREV_B_ID}"
+            fi
         fi
+        if [[ -z "${TARGET_BACKEND_ROLLBACK}" ]]; then
+            LATEST_B=$(ls -1dt "${BACKEND_RELEASES_DIR}"/*/ 2>/dev/null || true)
+            TARGET_BACKEND_ROLLBACK=$(echo "${LATEST_B}" | sed -n '2p' || true)
+        fi
+
+        if [[ -n "${TARGET_BACKEND_ROLLBACK}" && -d "${TARGET_BACKEND_ROLLBACK}" ]]; then
+            echo "--> Rolling back backend code to: ${TARGET_BACKEND_ROLLBACK}"
+            sync_backend_release "${TARGET_BACKEND_ROLLBACK}"
+            cd "${BACKEND_DIR}"
+            dc_cmd -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" up -d --build api worker
+        else
+            echo "--> Restarting current containers as fallback..."
+            cd "${BACKEND_DIR}"
+            dc_cmd -f "${COMPOSE_FILE}" --env-file "${ENV_FILE}" restart api worker
+        fi
+
         run_healthchecks
+        echo "=== [VAKSINAMED] Rollback Completed Successfully ==="
         ;;
+
     healthcheck)
         run_healthchecks
         ;;
+
     reload-nginx)
         reload_nginx
         ;;
@@ -451,11 +674,16 @@ cat << 'SUDOERS_EOF' > "${SUDOERS_TMP}"
 # Security Invariants & Privilege Boundaries:
 # 1. deployer is NOT in docker or sudo groups.
 # 2. deployer can ONLY invoke the root-owned wrapper /usr/local/bin/vaksinamed-staging-ctl.
-# 3. All argument validation, environment sanitization, and access checks are enforced
-#    strictly inside /usr/local/bin/vaksinamed-staging-ctl.
-# 4. Arbitrary binaries, shells, and edits are strictly forbidden.
+# 3. Sudoers strictly scopes the deploy argument:
+#    'deploy [a-zA-Z0-9]*' requires the release ID to begin with an alphanumeric character.
+#    This eliminates arbitrary wildcard flags ('-', '--'), path traversals ('.', '..'),
+#    and absolute paths ('/') before the root wrapper is even executed.
+# 4. 'rollback', 'healthcheck', and 'reload-nginx' accept NO arguments.
+# 5. All secondary validation (argument count $# -eq 2, exact length 7-64, TOCTOU chown,
+#    special file audits, symlink checks) is enforced inside the root wrapper.
+# 6. Arbitrary binaries, shells, and edits are strictly forbidden.
 
-deployer ALL=(root) NOPASSWD: /usr/local/bin/vaksinamed-staging-ctl deploy *, /usr/local/bin/vaksinamed-staging-ctl rollback, /usr/local/bin/vaksinamed-staging-ctl healthcheck, /usr/local/bin/vaksinamed-staging-ctl reload-nginx
+deployer ALL=(root) NOPASSWD: /usr/local/bin/vaksinamed-staging-ctl deploy [a-zA-Z0-9]*, /usr/local/bin/vaksinamed-staging-ctl rollback, /usr/local/bin/vaksinamed-staging-ctl healthcheck, /usr/local/bin/vaksinamed-staging-ctl reload-nginx
 SUDOERS_EOF
 
 # Strictly validate sudoers syntax before installing

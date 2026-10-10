@@ -41,7 +41,7 @@ describe('Staging Deployment Infrastructure Security Contracts', () => {
   it('3. Root wrapper enforces strict release ID regex and rejects path traversal', () => {
     const content = fs.readFileSync(wrapperScript, 'utf8');
 
-    assert.ok(content.includes('^[a-zA-Z0-9._-]{7,64}$'), 'must enforce regex on release ID');
+    assert.ok(content.includes('^[a-zA-Z0-9][a-zA-Z0-9._-]{6,63}$'), 'must enforce alphanumeric-starting regex on release ID');
     assert.ok(content.includes('*".."*'), 'must explicitly check and reject .. traversal');
   });
 
@@ -75,7 +75,7 @@ describe('Staging Deployment Infrastructure Security Contracts', () => {
     const content = fs.readFileSync(sudoersFile, 'utf8');
 
     assert.ok(content.includes('deployer ALL=(root) NOPASSWD:'), 'must grant restricted nopasswd to deployer');
-    assert.ok(content.includes('/usr/local/bin/vaksinamed-staging-ctl deploy *'), 'must restrict deploy action');
+    assert.ok(content.includes('/usr/local/bin/vaksinamed-staging-ctl deploy [a-zA-Z0-9]*'), 'must restrict deploy action');
     assert.ok(content.includes('/usr/local/bin/vaksinamed-staging-ctl rollback'), 'must restrict rollback');
     assert.ok(content.includes('/usr/local/bin/vaksinamed-staging-ctl healthcheck'), 'must restrict healthcheck');
     assert.ok(content.includes('/usr/local/bin/vaksinamed-staging-ctl reload-nginx'), 'must restrict reload-nginx');

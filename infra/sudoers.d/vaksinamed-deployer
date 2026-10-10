@@ -4,8 +4,13 @@
 # Security Invariants & Privilege Boundaries:
 # 1. deployer is NOT in docker or sudo groups.
 # 2. deployer can ONLY invoke the root-owned wrapper /usr/local/bin/vaksinamed-staging-ctl.
-# 3. All argument validation, environment sanitization, and access checks are enforced
-#    strictly inside /usr/local/bin/vaksinamed-staging-ctl.
-# 4. Arbitrary binaries, shells, and edits are strictly forbidden.
+# 3. Sudoers strictly scopes the deploy argument:
+#    'deploy [a-zA-Z0-9]*' requires the release ID to begin with an alphanumeric character.
+#    This eliminates arbitrary wildcard flags ('-', '--'), path traversals ('.', '..'),
+#    and absolute paths ('/') before the root wrapper is even executed.
+# 4. 'rollback', 'healthcheck', and 'reload-nginx' accept NO arguments.
+# 5. All secondary validation (argument count $# -eq 2, exact length 7-64, TOCTOU chown,
+#    special file audits, symlink checks) is enforced inside the root wrapper.
+# 6. Arbitrary binaries, shells, and edits are strictly forbidden.
 
-deployer ALL=(root) NOPASSWD: /usr/local/bin/vaksinamed-staging-ctl deploy *, /usr/local/bin/vaksinamed-staging-ctl rollback, /usr/local/bin/vaksinamed-staging-ctl healthcheck, /usr/local/bin/vaksinamed-staging-ctl reload-nginx
+deployer ALL=(root) NOPASSWD: /usr/local/bin/vaksinamed-staging-ctl deploy [a-zA-Z0-9]*, /usr/local/bin/vaksinamed-staging-ctl rollback, /usr/local/bin/vaksinamed-staging-ctl healthcheck, /usr/local/bin/vaksinamed-staging-ctl reload-nginx

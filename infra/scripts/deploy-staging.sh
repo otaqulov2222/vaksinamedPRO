@@ -21,8 +21,8 @@ FRONTEND_RELEASES_DIR="/var/www/vaksinamed-app-releases"
 BACKEND_RELEASES_DIR="/var/vaksinamed-releases"
 WRAPPER_BIN="/usr/local/bin/vaksinamed-staging-ctl"
 
-# 1. Validate Release ID format strictly
-if [[ ! "${RELEASE_ID}" =~ ^[a-zA-Z0-9._-]{7,64}$ ]]; then
+# 1. Validate Release ID format strictly (must start with alphanumeric)
+if [[ ! "${RELEASE_ID}" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{6,63}$ ]]; then
     echo "ERROR: Invalid release ID format: ${RELEASE_ID}" >&2
     exit 1
 fi
