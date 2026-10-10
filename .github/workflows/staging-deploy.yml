@@ -34,7 +34,7 @@ jobs:
     name: Test & Audit Gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ github.event.inputs.skip_tests != 'true' }}
+    if: github.event.inputs.skip_tests != 'true'
     env:
       APP_ENV: test
       NODE_ENV: test
@@ -180,9 +180,8 @@ jobs:
           name: backend-dist
           path: /tmp/artifacts
 
-      # Connect to Tailscale Mesh Network (if TAILSCALE_AUTHKEY is configured)
+      # Connect to Tailscale Private Mesh Network
       - name: Connect to Tailscale Private Mesh Network
-        if: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
         uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
