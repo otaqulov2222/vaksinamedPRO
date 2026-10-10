@@ -117,4 +117,26 @@ describe('Staging Deployment Infrastructure Security Contracts', () => {
     assert.ok(content.includes('no-cache, no-store, must-revalidate'), 'must enforce no-cache on HTML routes');
     assert.ok(content.includes('font/ttf ttf'), 'must define explicit font MIME types');
   });
+
+  it('11. deploy-staging.sh verifies archive checksums BEFORE unpacking and cleans up temporary manifests', () => {
+    assert.ok(fs.existsSync(deployScript), 'deploy-staging.sh must exist');
+    const content = fs.readFileSync(deployScript, 'utf8');
+
+    assert.ok(content.includes('sha256sum -c release.sha256'), 'must verify archive checksums');
+    // Ensure checksum check is executed BEFORE tar -xzf
+    const checksumPos = content.indexOf('sha256sum -c release.sha256');
+    const unpackPos = content.indexOf('tar -xzf');
+    assert.ok(checksumPos < unpackPos, 'archive checksum verification must happen BEFORE unpacking tarballs');
+    // Ensure raw archive manifest is not copied into backend release
+    assert.ok(!content.includes('cp /tmp/release.sha256 "${BACKEND_RELEASES_DIR}'), 'must not copy archive checksums to unpacked backend');
+  });
+
+  it('12. Root wrapper validates unpacked release manifests and JS bundles, and ignores archive checksums', () => {
+    assert.ok(fs.existsSync(wrapperScript), 'vaksinamed-staging-ctl.sh must exist');
+    const content = fs.readFileSync(wrapperScript, 'utf8');
+
+    assert.ok(content.includes('release-manifest.sha256'), 'must check unpacked release-manifest.sha256');
+    assert.ok(content.includes('entry-*.js'), 'must verify presence of entry JS bundle');
+    assert.ok(content.includes('\\.tar\\.gz'), 'must detect and safely ignore archive names in release.sha256');
+  });
 });

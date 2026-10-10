@@ -127,7 +127,14 @@ jobs:
       - name: Create Release Tarballs & Checksums
         run: |
           mkdir -p /tmp/dist-packages
+
+          # Generate unpacked release manifest for frontend
+          (cd artifacts/soglom-apteka/dist && sha256sum index.html fonts/Feather.ttf fonts/MaterialCommunityIcons.ttf fonts/Inter-Regular.ttf fonts/Inter-SemiBold.ttf > release-manifest.sha256)
           tar -czf /tmp/dist-packages/frontend-dist.tar.gz -C artifacts/soglom-apteka/dist .
+          rm -f artifacts/soglom-apteka/dist/release-manifest.sha256
+
+          # Generate unpacked release manifest for backend
+          sha256sum artifacts/api-server/dist/index.mjs package.json pnpm-lock.yaml > release-manifest.sha256
           tar -czf /tmp/dist-packages/backend-dist.tar.gz \
             --exclude='node_modules' \
             --exclude='.git' \
@@ -138,6 +145,9 @@ jobs:
             --exclude='infra' \
             --exclude='*.sh' \
             .
+          rm -f release-manifest.sha256
+
+          # Generate archive-level checksums for upload/transfer verification
           cd /tmp/dist-packages
           sha256sum frontend-dist.tar.gz backend-dist.tar.gz > release.sha256
           ls -lh /tmp/dist-packages/

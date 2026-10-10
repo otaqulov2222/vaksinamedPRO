@@ -494,17 +494,41 @@ case "${ACTION}" in
         fi
         echo "    PASS: No prohibited configuration files in release payload."
 
-        # 6. Verify Checksums if provided
-        if [[ -f "${TARGET_BACKEND}/release.sha256" ]]; then
-            echo "--> Verifying SHA256 checksums..."
-            (cd "${TARGET_BACKEND}" && sha256sum -c release.sha256) || {
-                echo "ERROR: Release checksum verification failed!" >&2
+        # 6. Verify Unpacked Release Integrity & Checksums
+        echo "--> Verifying unpacked release payload integrity..."
+        if [[ -f "${TARGET_BACKEND}/release-manifest.sha256" ]]; then
+            echo "    Verifying backend files checksum manifest..."
+            (cd "${TARGET_BACKEND}" && sha256sum -c release-manifest.sha256) || {
+                echo "ERROR: Backend release-manifest.sha256 checksum verification failed!" >&2
                 exit 1
             }
-            echo "    PASS: Release checksums verified."
+            echo "    PASS: Backend release-manifest checksums verified."
         fi
 
-        # 7. Verify Frontend Assets
+        if [[ -f "${TARGET_FRONTEND}/release-manifest.sha256" ]]; then
+            echo "    Verifying frontend files checksum manifest..."
+            (cd "${TARGET_FRONTEND}" && sha256sum -c release-manifest.sha256) || {
+                echo "ERROR: Frontend release-manifest.sha256 checksum verification failed!" >&2
+                exit 1
+            }
+            echo "    PASS: Frontend release-manifest checksums verified."
+        fi
+
+        # If release.sha256 exists, check only if it contains unpacked files (never fail on archive names)
+        if [[ -f "${TARGET_BACKEND}/release.sha256" ]]; then
+            if grep -q '\.tar\.gz' "${TARGET_BACKEND}/release.sha256" 2>/dev/null; then
+                echo "    INFO: release.sha256 references archives (verified prior to unpack). Skipping inside unpacked directory."
+            else
+                echo "    Verifying legacy backend release.sha256..."
+                (cd "${TARGET_BACKEND}" && sha256sum -c release.sha256) || {
+                    echo "ERROR: Release checksum verification failed!" >&2
+                    exit 1
+                }
+                echo "    PASS: Legacy release checksums verified."
+            fi
+        fi
+
+        # 7. Verify Frontend Assets (HTML, 4 core fonts with TTF magic, JS bundles)
         echo "--> Verifying frontend assets in release..."
         if [[ ! -f "${TARGET_FRONTEND}/index.html" ]]; then
             echo "ERROR: Missing index.html in ${TARGET_FRONTEND}!" >&2
@@ -513,7 +537,12 @@ case "${ACTION}" in
         for font in "Feather.ttf" "MaterialCommunityIcons.ttf" "Inter-Regular.ttf" "Inter-SemiBold.ttf"; do
             verify_font_file "${TARGET_FRONTEND}/fonts/${font}" || exit 1
         done
-        echo "    PASS: Frontend assets and fonts verified."
+        # Verify JS asset bundles exist in _expo/static/js/web
+        if ! find "${TARGET_FRONTEND}/_expo/static/js/web" -maxdepth 1 -name "entry-*.js" -type f -size +10k 2>/dev/null | grep -q .; then
+            echo "ERROR: Missing or corrupted entry JS bundle in ${TARGET_FRONTEND}/_expo/static/js/web!" >&2
+            exit 1
+        fi
+        echo "    PASS: Frontend assets, fonts, and JS bundles verified."
 
         # 8. Verify Backend Code Structure
         echo "--> Verifying backend build structure in release..."

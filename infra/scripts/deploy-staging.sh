@@ -37,7 +37,24 @@ fi
 
 echo "=== [VAKSINAMED] Preparing Unprivileged Deployment (Release: ${RELEASE_ID}) ==="
 
-# 3. Unpack Frontend Distribution into dedicated releases area
+# 3. Verify Archive Integrity using SHA256 checksums BEFORE unpacking
+if [ -f "/tmp/release.sha256" ]; then
+    echo "--> Verifying archive integrity before unpacking..."
+    (cd /tmp && sha256sum -c release.sha256) || {
+        echo "CRITICAL ERROR: Archive SHA256 checksum verification failed!" >&2
+        exit 1
+    }
+    echo "    PASS: Release archive checksums verified."
+elif [ -f "/home/deployer/uploads/release.sha256" ]; then
+    echo "--> Verifying archive integrity from uploads before unpacking..."
+    (cd /home/deployer/uploads && sha256sum -c release.sha256) || {
+        echo "CRITICAL ERROR: Upload archive SHA256 checksum verification failed!" >&2
+        exit 1
+    }
+    echo "    PASS: Upload archive checksums verified."
+fi
+
+# 4. Unpack Frontend Distribution into dedicated releases area
 mkdir -p "${FRONTEND_RELEASES_DIR}/${RELEASE_ID}"
 if [ -f "/tmp/frontend-dist.tar.gz" ]; then
     echo "--> Unpacking frontend distribution to ${FRONTEND_RELEASES_DIR}/${RELEASE_ID}..."
@@ -49,7 +66,7 @@ elif [ -f "/home/deployer/uploads/frontend-dist.tar.gz" ]; then
     rm -f /home/deployer/uploads/frontend-dist.tar.gz
 fi
 
-# 4. Unpack Backend Distribution into dedicated releases area (NEVER /opt/vaksinamed)
+# 5. Unpack Backend Distribution into dedicated releases area (NEVER /opt/vaksinamed)
 mkdir -p "${BACKEND_RELEASES_DIR}/${RELEASE_ID}"
 if [ -f "/tmp/backend-dist.tar.gz" ]; then
     echo "--> Unpacking backend distribution to ${BACKEND_RELEASES_DIR}/${RELEASE_ID}..."
@@ -61,13 +78,10 @@ elif [ -f "/home/deployer/uploads/backend-dist.tar.gz" ]; then
     rm -f /home/deployer/uploads/backend-dist.tar.gz
 fi
 
-# Copy release.sha256 if provided
-if [ -f "/tmp/release.sha256" ]; then
-    cp /tmp/release.sha256 "${BACKEND_RELEASES_DIR}/${RELEASE_ID}/release.sha256"
-    rm -f /tmp/release.sha256
-fi
+# Clean up temporary archive checksum manifest
+rm -f /tmp/release.sha256 /home/deployer/uploads/release.sha256 2>/dev/null || true
 
-# 5. Delegate to Privileged Staging Control Wrapper (allowed by sudoers)
+# 6. Delegate to Privileged Staging Control Wrapper (allowed by sudoers)
 echo "--> Executing privileged staging control wrapper..."
 sudo "${WRAPPER_BIN}" deploy "${RELEASE_ID}"
 
