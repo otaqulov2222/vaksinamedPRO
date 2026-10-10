@@ -34,7 +34,7 @@ jobs:
     name: Test & Audit Gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ !inputs.skip_tests }}
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
     env:
       APP_ENV: test
       NODE_ENV: test
@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [test-and-audit]
-    if: always() && (needs.test-and-audit.result == 'success' || inputs.skip_tests == true)
+    if: always() && (needs.test-and-audit.result == 'success' || github.event.inputs.skip_tests == 'true')
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
