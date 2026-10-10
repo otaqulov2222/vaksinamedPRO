@@ -10,8 +10,10 @@ import {
   allowTelegramAutoProvision,
   allowTelegramHeaderAuth,
   allowDemoCashbackSeed,
+  getStagingTestOtpCode,
   isHqAdminRole,
   isProductionLike,
+  isStagingTestOtpAllowed,
   requireConfiguredSecret,
 } from "./securityEnv";
 import { createSession, isSessionToken, validateSessionToken, type SessionMeta } from "./sessions";
@@ -283,7 +285,10 @@ export async function createOtp(phoneRaw: string, purpose: "login" | "register" 
     throw Object.assign(new Error("Kod allaqachon yuborilgan. 60 soniyadan keyin qayta urinib ko‘ring."), { status: 429 });
   }
 
-  const code = String(randomInt(100000, 999999));
+  const stagingBypass = isStagingTestOtpAllowed(phone);
+  const code = stagingBypass
+    ? (getStagingTestOtpCode() as string)
+    : String(randomInt(100000, 999999));
   const codeHash = hashOtp(phone, code);
   const expires = new Date(Date.now() + 5 * 60 * 1000).toISOString();
   const safePurpose = purpose === "register" ? "register" : "login";

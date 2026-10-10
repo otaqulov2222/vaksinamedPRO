@@ -4,9 +4,10 @@
  * P2: OTP plaintext never logged in production-like environments.
  */
 
-import { allowOtpConsoleLog, isProductionLike } from "./securityEnv";
+import { allowOtpConsoleLog, isProductionLike, isStagingTestOtpAllowed } from "./securityEnv";
 
-type SendResult = { ok: boolean; provider: "eskiz" | "dev"; messageId?: string };
+export type SmsProvider = "eskiz" | "dev" | "staging_test";
+type SendResult = { ok: boolean; provider: SmsProvider; messageId?: string };
 
 let eskizToken: { value: string; expiresAt: number } | null = null;
 
@@ -30,6 +31,10 @@ async function getEskizToken() {
 }
 
 export async function sendSms(phone998: string, text: string): Promise<SendResult> {
+  if (isStagingTestOtpAllowed(phone998)) {
+    return { ok: true, provider: "staging_test" };
+  }
+
   const token = await getEskizToken().catch(() => null);
   if (!token) {
     if (isProductionLike()) {

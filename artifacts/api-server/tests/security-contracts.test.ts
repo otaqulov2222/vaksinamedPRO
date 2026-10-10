@@ -74,5 +74,8 @@ describe("P2 env matrix documentation", () => {
     assert.match(example, /ALLOW_PAYMENT_SIMULATE/);
     assert.match(example, /FOM_WEBHOOK_SECRET/);
     assert.match(example, /ALLOW_TELEGRAM/);
+    assert.match(example, /STAGING_TEST_OTP_ENABLED/);
+    assert.match(example, /STAGING_TEST_OTP_PHONE/);
+    assert.match(example, /STAGING_TEST_OTP_CODE/);
   });
 });

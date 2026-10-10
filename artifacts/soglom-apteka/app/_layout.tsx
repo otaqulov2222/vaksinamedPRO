@@ -70,6 +70,7 @@ function applyWebViewportLock() {
         height: 100% !important;
         overflow-x: hidden !important;
         background-color: #F7F5F2 !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
       }
       #root {
         margin: 0 !important;
@@ -80,6 +81,7 @@ function applyWebViewportLock() {
         overflow-x: hidden !important;
         display: flex !important;
         flex-direction: column !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
       }
       #root > div {
         width: 100% !important;
@@ -88,6 +90,9 @@ function applyWebViewportLock() {
       }
       *, *::before, *::after {
         box-sizing: border-box !important;
+      }
+      input, textarea, button, select {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
       }
     `;
     document.head.appendChild(style);

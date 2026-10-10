@@ -13,6 +13,9 @@ const ENV_KEYS = [
   "ADMIN_SECRET",
   "CUSTOMER_SECRET",
   "POS_SECRET",
+  "STAGING_TEST_OTP_ENABLED",
+  "STAGING_TEST_OTP_PHONE",
+  "STAGING_TEST_OTP_CODE",
 ] as const;
 
 const saved: Record<string, string | undefined> = {};
@@ -145,5 +148,53 @@ describe("P2 security env gates", () => {
     const s = await loadSecurity();
     assert.equal(s.isHqAdminRole("cashier"), false);
     assert.equal(s.isHqAdminRole("super_admin"), true);
+  });
+
+  it("staging test OTP is active only when APP_ENV=staging and flag is true", async () => {
+    process.env.APP_ENV = "staging";
+    process.env.STAGING_TEST_OTP_ENABLED = "true";
+    process.env.STAGING_TEST_OTP_PHONE = "+998 90 123 45 67";
+    process.env.STAGING_TEST_OTP_CODE = "123456";
+    const s = await loadSecurity();
+    assert.equal(s.isStagingTestOtpActive(), true);
+    assert.equal(s.getStagingTestOtpPhone(), "998901234567");
+    assert.equal(s.getStagingTestOtpCode(), "123456");
+    assert.equal(s.isStagingTestOtpAllowed("998901234567"), true);
+    assert.equal(s.isStagingTestOtpAllowed("+998 90 123 45 67"), true);
+    assert.equal(s.isStagingTestOtpAllowed("998909999999"), false);
+  });
+
+  it("staging test OTP is strictly disabled in production even if flag is true", async () => {
+    process.env.APP_ENV = "production";
+    process.env.NODE_ENV = "production";
+    process.env.STAGING_TEST_OTP_ENABLED = "true";
+    process.env.STAGING_TEST_OTP_PHONE = "998901234567";
+    process.env.STAGING_TEST_OTP_CODE = "123456";
+    const s = await loadSecurity();
+    assert.equal(s.isStagingTestOtpActive(), false);
+    assert.equal(s.getStagingTestOtpPhone(), null);
+    assert.equal(s.getStagingTestOtpCode(), null);
+    assert.equal(s.isStagingTestOtpAllowed("998901234567"), false);
+  });
+
+  it("staging test OTP is disabled when flag is false or unset", async () => {
+    process.env.APP_ENV = "staging";
+    process.env.STAGING_TEST_OTP_ENABLED = "false";
+    process.env.STAGING_TEST_OTP_PHONE = "998901234567";
+    process.env.STAGING_TEST_OTP_CODE = "123456";
+    const s = await loadSecurity();
+    assert.equal(s.isStagingTestOtpActive(), false);
+    assert.equal(s.isStagingTestOtpAllowed("998901234567"), false);
+  });
+
+  it("staging test OTP rejects invalid phone or code format", async () => {
+    process.env.APP_ENV = "staging";
+    process.env.STAGING_TEST_OTP_ENABLED = "true";
+    process.env.STAGING_TEST_OTP_PHONE = "123"; // invalid phone
+    process.env.STAGING_TEST_OTP_CODE = "12ab"; // invalid code
+    const s = await loadSecurity();
+    assert.equal(s.getStagingTestOtpPhone(), null);
+    assert.equal(s.getStagingTestOtpCode(), null);
+    assert.equal(s.isStagingTestOtpAllowed("123"), false);
   });
 });

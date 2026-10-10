@@ -81,6 +81,9 @@ services:
       ESKIZ_PASSWORD: ${ESKIZ_PASSWORD:-}
       ESKIZ_FROM: ${ESKIZ_FROM:-4546}
       PG_POOL_MAX: 20
+      STAGING_TEST_OTP_ENABLED: ${STAGING_TEST_OTP_ENABLED:-}
+      STAGING_TEST_OTP_PHONE: ${STAGING_TEST_OTP_PHONE:-}
+      STAGING_TEST_OTP_CODE: ${STAGING_TEST_OTP_CODE:-}
     networks:
       - vaksinamed_staging_net
     expose:

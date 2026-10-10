@@ -56,6 +56,50 @@ export function allowOtpConsoleLog(): boolean {
   return flagEnabled("ALLOW_OTP_DEV_BYPASS") || !process.env.ESKIZ_EMAIL;
 }
 
+/**
+ * Staging Test OTP Gate:
+ * Strictly allowed ONLY when APP_ENV === 'staging' AND STAGING_TEST_OTP_ENABLED is true.
+ * Never active when APP_ENV === 'production' or any other environment.
+ */
+export function isStagingTestOtpActive(): boolean {
+  const app = (process.env.APP_ENV || "").toLowerCase();
+  if (app !== "staging") return false;
+  return flagEnabled("STAGING_TEST_OTP_ENABLED");
+}
+
+function normalizePhoneDigits(input: string): string {
+  const digits = String(input || "").replace(/\D/g, "");
+  if (digits.length === 9) return `998${digits}`;
+  if (digits.length === 12 && digits.startsWith("998")) return digits;
+  if (digits.length === 11 && digits.startsWith("8")) return `998${digits.slice(1)}`;
+  return digits;
+}
+
+export function getStagingTestOtpPhone(): string | null {
+  if (!isStagingTestOtpActive()) return null;
+  const raw = process.env.STAGING_TEST_OTP_PHONE?.trim();
+  if (!raw) return null;
+  const normalized = normalizePhoneDigits(raw);
+  if (normalized.length !== 12 || !normalized.startsWith("998")) return null;
+  return normalized;
+}
+
+export function getStagingTestOtpCode(): string | null {
+  if (!isStagingTestOtpActive()) return null;
+  const code = process.env.STAGING_TEST_OTP_CODE?.trim();
+  if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) return null;
+  return code;
+}
+
+export function isStagingTestOtpAllowed(phoneRaw: string): boolean {
+  if (!isStagingTestOtpActive()) return false;
+  const allowedPhone = getStagingTestOtpPhone();
+  const allowedCode = getStagingTestOtpCode();
+  if (!allowedPhone || !allowedCode) return false;
+  const normalized = normalizePhoneDigits(phoneRaw);
+  return normalized === allowedPhone;
+}
+
 /** Unauthenticated simulate-success — never production-like. */
 export function allowPaymentSimulate(): boolean {
   if (isProductionLike()) return false;

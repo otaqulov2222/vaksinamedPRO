@@ -8,6 +8,7 @@
     "dev:web": "expo start --web --port 8081 --localhost",
     "start:telegram": "expo start --web --port 8081 --localhost",
     "build": "node scripts/build.js",
+    "build:web": "node scripts/export-web.mjs",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tests/tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts"

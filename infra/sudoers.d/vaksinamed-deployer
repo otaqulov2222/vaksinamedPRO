@@ -1,0 +1,9 @@
+# Restricted sudoers specification for VaksinaMed CI/CD deployer
+# Location on server: /etc/sudoers.d/vaksinamed-deployer (chmod 0440)
+#
+# Security Invariants:
+# 1. deployer is NOT in the docker group (no direct access to /var/run/docker.sock).
+# 2. deployer can ONLY invoke the root-owned wrapper with strictly validated commands.
+# 3. Arbitrary commands, shells, and file edits are strictly denied.
+
+deployer ALL=(root) NOPASSWD: /usr/local/bin/vaksinamed-staging-ctl deploy [a-zA-Z0-9._-]*, /usr/local/bin/vaksinamed-staging-ctl rollback, /usr/local/bin/vaksinamed-staging-ctl healthcheck, /usr/local/bin/vaksinamed-staging-ctl reload-nginx

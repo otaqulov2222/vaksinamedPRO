@@ -129,10 +129,17 @@ export default function App() {
   async function login(event: FormEvent) {
     event.preventDefault();
     setError("");
+    const trimmed = email.trim();
+    const resolvedEmail =
+      trimmed.toLowerCase() === "admin"
+        ? "admin@vaksinamed.uz"
+        : trimmed.toLowerCase() === "kassa"
+        ? "kassa@vaksinamed.uz"
+        : trimmed;
     try {
       const data = await request("/api/admin/login", null, {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: resolvedEmail, password }),
       });
       localStorage.setItem("vm-admin-token", data.token);
       setReady(false);
@@ -172,11 +179,13 @@ export default function App() {
           <p className="muted">Boshqaruv konsoliga kirish</p>
           <div className="login-form">
             <label className="login-field">
-              <span>Email</span>
+              <span>Email yoki login</span>
               <input
-                type="email"
+                type="text"
+                inputMode="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@vaksinamed.uz"
                 autoComplete="username"
                 required
               />
@@ -187,10 +196,14 @@ export default function App() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="vaksinamed"
                 autoComplete="current-password"
                 required
               />
             </label>
+            <div style={{ fontSize: "12px", color: "var(--muted, #64748b)", marginTop: "2px", lineHeight: "1.4" }}>
+              💡 Demo kirish: <strong>admin@vaksinamed.uz</strong> (yoki <strong>admin</strong>) · Parol: <strong>vaksinamed</strong>
+            </div>
             {error ? <div className="login-error" role="alert">{error}</div> : null}
             <button className="btn-primary" type="submit">Kirish</button>
           </div>

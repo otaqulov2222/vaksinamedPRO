@@ -1,0 +1,261 @@
+name: Staging Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip test suite before deployment (emergency only)'
+        required: false
+        default: false
+        type: boolean
+      deploy_frontend:
+        description: 'Deploy Mobile Web frontend'
+        required: false
+        default: true
+        type: boolean
+      deploy_backend:
+        description: 'Deploy Backend API and Worker'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  test-and-audit:
+    name: Test & Audit Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ !inputs.skip_tests }}
+    env:
+      APP_ENV: test
+      NODE_ENV: test
+      CI: "true"
+      EXPO_PUBLIC_DOMAIN: ci.localhost
+      PAYME_MERCHANT_API_ENABLED: "0"
+      CLICK_MERCHANT_API_ENABLED: "0"
+      ENABLE_BACKGROUND_WORKERS: "0"
+      ALLOW_PAYMENT_SIMULATE: "0"
+      ALLOW_OTP_DEV_BYPASS: "0"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Full Workspace Typecheck
+        run: pnpm run typecheck
+
+      - name: DB Unit & FIFO Readiness Tests
+        run: pnpm --filter @workspace/db run test
+
+      - name: API Server Tests & Security Suite
+        run: |
+          pnpm --filter @workspace/api-server run test
+          pnpm --filter @workspace/api-server run test:security
+
+  build-and-package:
+    name: Build & Package Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [test-and-audit]
+    if: always() && (needs.test-and-audit.result == 'success' || inputs.skip_tests == true)
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 1. Build API Server Backend
+      - name: Build API Backend Bundle
+        run: pnpm --filter @workspace/api-server run build
+
+      # 2. Build Mobile Web Frontend with Stabilized Fonts
+      - name: Build Mobile Web Frontend
+        env:
+          NODE_ENV: production
+          EXPO_PUBLIC_API_URL: https://api-staging.vaksinamedgps.uz
+        run: pnpm run build:app:web
+
+      # 3. Verify Font Assets Integrity in dist
+      - name: Verify Font Assets Integrity
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const fontsDir = 'artifacts/soglom-apteka/dist/fonts';
+            const required = ['Feather.ttf', 'MaterialCommunityIcons.ttf', 'Inter-Regular.ttf', 'Inter-SemiBold.ttf'];
+            for (const font of required) {
+              const full = path.join(fontsDir, font);
+              if (!fs.existsSync(full)) throw new Error('Missing font: ' + font);
+              const buf = fs.readFileSync(full);
+              if (buf.length < 10000) throw new Error('Font file too small: ' + font);
+              const magic = buf.readUInt32BE(0);
+              if (magic !== 0x00010000 && magic !== 0x4F54544F) throw new Error('Corrupted font magic: ' + font);
+              console.log('PASS font asset check: ' + font + ' (' + buf.length + ' bytes)');
+            }
+          "
+
+      # 4. Package Artifacts
+      - name: Create Release Tarballs
+        run: |
+          mkdir -p /tmp/dist-packages
+          tar -czf /tmp/dist-packages/frontend-dist.tar.gz -C artifacts/soglom-apteka/dist .
+          tar -czf /tmp/dist-packages/backend-dist.tar.gz \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='artifacts/soglom-apteka/dist' \
+            --exclude='.env*' \
+            --exclude='docker-compose*' \
+            --exclude='Dockerfile' \
+            --exclude='infra' \
+            --exclude='*.sh' \
+            .
+          ls -lh /tmp/dist-packages/
+
+      - name: Upload Frontend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: /tmp/dist-packages/frontend-dist.tar.gz
+          retention-days: 7
+
+      - name: Upload Backend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: /tmp/dist-packages/backend-dist.tar.gz
+          retention-days: 7
+
+  deploy-staging:
+    name: Deploy to Hetzner Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [build-and-package]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Frontend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: /tmp/artifacts
+
+      - name: Download Backend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-dist
+          path: /tmp/artifacts
+
+      # Connect to Tailscale Mesh Network (if TAILSCALE_AUTHKEY is configured)
+      - name: Connect to Tailscale Private Mesh Network
+        if: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          tags: tag:ci-cd
+
+      # Setup SSH Agent safely in memory
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Execute Atomic Staging Deployment
+        env:
+          SSH_HOST: ${{ secrets.STAGING_SSH_HOST || '100.85.166.99' }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER || 'deployer' }}
+          SSH_PORT: ${{ secrets.STAGING_SSH_PORT || '22' }}
+          RELEASE_ID: ${{ github.sha }}
+        run: |
+          # Verify known hosts with retry for Tailscale mesh connection
+          mkdir -p ~/.ssh
+          for attempt in 1 2 3 4 5; do
+            if ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null; then
+              if [ -s ~/.ssh/known_hosts ]; then
+                echo "--> Host key for ${SSH_HOST}:${SSH_PORT} scanned successfully."
+                break
+              fi
+            fi
+            echo "Waiting for Tailscale SSH route to ${SSH_HOST}:${SSH_PORT} (attempt ${attempt}/5)..."
+            sleep 3
+          done
+
+          # 1. Pre-flight Check: Verify server readiness and root wrapper BEFORE transferring packages
+          echo "--> Verifying server readiness and root control wrapper on ${SSH_USER}@${SSH_HOST}..."
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" 'bash -s' << 'EOF'
+            set -euo pipefail
+            if [ ! -x "/usr/local/bin/vaksinamed-staging-ctl" ]; then
+              echo "CRITICAL ERROR: Root control wrapper /usr/local/bin/vaksinamed-staging-ctl is not installed or not executable on the server!" >&2
+              echo "Server provisioning required by root before deployment can proceed." >&2
+              echo "Halting deployment immediately. No server files were transferred or modified." >&2
+              exit 1
+            fi
+            echo "--> Server root control wrapper verified: /usr/local/bin/vaksinamed-staging-ctl is ready."
+          EOF
+
+          # 2. Transfer Packages to Server as deployer
+          echo "--> Transferring release packages to ${SSH_USER}@${SSH_HOST}..."
+          scp -P "${SSH_PORT}" /tmp/artifacts/frontend-dist.tar.gz "${SSH_USER}@${SSH_HOST}:/tmp/frontend-dist.tar.gz"
+          scp -P "${SSH_PORT}" /tmp/artifacts/backend-dist.tar.gz "${SSH_USER}@${SSH_HOST}:/tmp/backend-dist.tar.gz"
+          scp -P "${SSH_PORT}" infra/scripts/deploy-staging.sh "${SSH_USER}@${SSH_HOST}:/tmp/deploy-staging.sh"
+          scp -P "${SSH_PORT}" infra/scripts/rollback-staging.sh "${SSH_USER}@${SSH_HOST}:/tmp/rollback-staging.sh"
+
+          # 3. Execute Deployment on Server as deployer (delegates to root-owned /usr/local/bin/vaksinamed-staging-ctl)
+          echo "--> Executing remote deployment script on server..."
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "bash -s -- '${RELEASE_ID}'" << 'EOF'
+            set -euo pipefail
+            REL_ID="${1}"
+            chmod +x /tmp/deploy-staging.sh /tmp/rollback-staging.sh
+            /tmp/deploy-staging.sh "${REL_ID}"
+            rm -f /tmp/deploy-staging.sh /tmp/rollback-staging.sh
+          EOF
+
+      - name: Public Domain Health Check Verification
+        run: |
+          echo "--> Verifying public endpoints after deployment..."
+          sleep 5
+
+          echo "1. Checking API health endpoint..."
+          curl -fsS --retry 5 --retry-delay 3 https://api-staging.vaksinamedgps.uz/api/health/live
+
+          echo "2. Checking Web app index..."
+          curl -fsS --retry 5 --retry-delay 3 https://app-staging.vaksinamedgps.uz/ > /dev/null
+
+          echo "3. Checking Web font asset (Feather.ttf HTTP 200)..."
+          curl -fsS --retry 5 --retry-delay 3 https://app-staging.vaksinamedgps.uz/fonts/Feather.ttf -o /dev/null
+
+          echo "SUCCESS: Staging deployment fully verified and healthy!"

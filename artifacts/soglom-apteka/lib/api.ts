@@ -3,7 +3,18 @@ import { tr } from '@/lib/i18n';
 import { NETWORK_ERROR_CODE } from '@/lib/i18n/errors';
 import { SESSION_ENDED_KEY } from '@/lib/session';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+function resolveApiUrl(): string {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname;
+    if ((host === 'localhost' || host === '127.0.0.1') && (!envUrl || envUrl.includes('vaksinamedgps.uz'))) {
+      return `http://${host}:5000`;
+    }
+  }
+  return envUrl || 'https://api-staging.vaksinamedgps.uz';
+}
+
+const API_URL = resolveApiUrl();
 const TOKEN_KEY = 'vaksinamed-customer-token';
 
 let memoryToken: string | null = null;

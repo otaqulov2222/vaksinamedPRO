@@ -51,7 +51,18 @@ Thumbs.db
 
 # secrets
 .env
+.env.*
 **/.env
+**/.env.*
+!.env.example
+!.env.staging.example
+!infra/.env.staging.example
+
+# deployment bundles & temporary archives
+artifacts/*.tar.gz
+artifacts/*.zip
+artifacts/staging-deploy-bundle/
+artifacts/dist-packages/
 
 # local visual fixtures (generated screenshots / DOM dumps)
 artifacts/admin-web/.tmp-visual/
