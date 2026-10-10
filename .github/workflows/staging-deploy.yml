@@ -10,15 +10,10 @@ on:
         required: false
         default: false
         type: boolean
-      deploy_frontend:
-        description: 'Deploy Mobile Web frontend'
+      force_deploy:
+        description: 'Force deployment even if STAGING_DEPLOY_READY variable is not set'
         required: false
-        default: true
-        type: boolean
-      deploy_backend:
-        description: 'Deploy Backend API and Worker'
-        required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -128,8 +123,8 @@ jobs:
             }
           "
 
-      # 4. Package Artifacts
-      - name: Create Release Tarballs
+      # 4. Package Artifacts & Calculate SHA256 Checksums
+      - name: Create Release Tarballs & Checksums
         run: |
           mkdir -p /tmp/dist-packages
           tar -czf /tmp/dist-packages/frontend-dist.tar.gz -C artifacts/soglom-apteka/dist .
@@ -143,7 +138,10 @@ jobs:
             --exclude='infra' \
             --exclude='*.sh' \
             .
+          cd /tmp/dist-packages
+          sha256sum frontend-dist.tar.gz backend-dist.tar.gz > release.sha256
           ls -lh /tmp/dist-packages/
+          cat release.sha256
 
       - name: Upload Frontend Artifact
         uses: actions/upload-artifact@v4
@@ -159,11 +157,39 @@ jobs:
           path: /tmp/dist-packages/backend-dist.tar.gz
           retention-days: 7
 
+      - name: Upload Checksums Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-checksums
+          path: /tmp/dist-packages/release.sha256
+          retention-days: 7
+
+  deployment-gate-notice:
+    name: Staging Readiness Gate Notice
+    runs-on: ubuntu-latest
+    needs: [build-and-package]
+    if: always() && needs.build-and-package.result == 'success' && vars.STAGING_DEPLOY_READY != 'true' && github.event.inputs.force_deploy != 'true'
+    steps:
+      - name: Report Deployment Gated Status
+        run: |
+          echo "### ⏸️ Staging Server Deployment Gated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Repository variable \`STAGING_DEPLOY_READY\` is not set to \`true\`." >> $GITHUB_STEP_SUMMARY
+          echo "- All tests, typechecks, security gates, and release packaging completed **successfully**." >> $GITHUB_STEP_SUMMARY
+          echo "- Live deployment to Hetzner staging server was **safely skipped** because the server has not yet completed root bootstrap." >> $GITHUB_STEP_SUMMARY
+          echo "- Once root bootstrap is executed on the Hetzner staging server, set \`STAGING_DEPLOY_READY=true\` in repository variables to enable live server deployment on every push." >> $GITHUB_STEP_SUMMARY
+          echo "::notice title=Deployment Gated::Server deployment safely skipped: STAGING_DEPLOY_READY is not set to true. One-time server root bootstrap required before live deploy."
+
   deploy-staging:
     name: Deploy to Hetzner Staging
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [build-and-package]
+    if: |
+      always() &&
+      needs.build-and-package.result == 'success' &&
+      (vars.STAGING_DEPLOY_READY == 'true' || github.event.inputs.force_deploy == 'true') &&
+      github.ref == 'refs/heads/main'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -178,6 +204,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: backend-dist
+          path: /tmp/artifacts
+
+      - name: Download Checksums Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-checksums
           path: /tmp/artifacts
 
       # Connect to Tailscale Private Mesh Network
@@ -200,18 +232,22 @@ jobs:
           SSH_PORT: ${{ secrets.STAGING_SSH_PORT || '22' }}
           RELEASE_ID: ${{ github.sha }}
         run: |
-          # Verify known hosts with retry for Tailscale mesh connection
           mkdir -p ~/.ssh
-          for attempt in 1 2 3 4 5; do
-            if ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null; then
-              if [ -s ~/.ssh/known_hosts ]; then
-                echo "--> Host key for ${SSH_HOST}:${SSH_PORT} scanned successfully."
-                break
+          if [ -n "${{ secrets.STAGING_SSH_KNOWN_HOSTS }}" ]; then
+            echo "${{ secrets.STAGING_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+            chmod 600 ~/.ssh/known_hosts
+          else
+            for attempt in 1 2 3 4 5; do
+              if ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null; then
+                if [ -s ~/.ssh/known_hosts ]; then
+                  echo "--> Host key for ${SSH_HOST}:${SSH_PORT} scanned successfully."
+                  break
+                fi
               fi
-            fi
-            echo "Waiting for Tailscale SSH route to ${SSH_HOST}:${SSH_PORT} (attempt ${attempt}/5)..."
-            sleep 3
-          done
+              echo "Waiting for Tailscale SSH route to ${SSH_HOST}:${SSH_PORT} (attempt ${attempt}/5)..."
+              sleep 3
+            done
+          fi
 
           # 1. Pre-flight Check: Verify server readiness and root wrapper BEFORE transferring packages
           echo "--> Verifying server readiness and root control wrapper on ${SSH_USER}@${SSH_HOST}..."
@@ -230,10 +266,11 @@ jobs:
           echo "--> Transferring release packages to ${SSH_USER}@${SSH_HOST}..."
           scp -P "${SSH_PORT}" /tmp/artifacts/frontend-dist.tar.gz "${SSH_USER}@${SSH_HOST}:/tmp/frontend-dist.tar.gz"
           scp -P "${SSH_PORT}" /tmp/artifacts/backend-dist.tar.gz "${SSH_USER}@${SSH_HOST}:/tmp/backend-dist.tar.gz"
+          scp -P "${SSH_PORT}" /tmp/artifacts/release.sha256 "${SSH_USER}@${SSH_HOST}:/tmp/release.sha256"
           scp -P "${SSH_PORT}" infra/scripts/deploy-staging.sh "${SSH_USER}@${SSH_HOST}:/tmp/deploy-staging.sh"
           scp -P "${SSH_PORT}" infra/scripts/rollback-staging.sh "${SSH_USER}@${SSH_HOST}:/tmp/rollback-staging.sh"
 
-          # 3. Execute Deployment on Server as deployer (delegates to root-owned /usr/local/bin/vaksinamed-staging-ctl)
+          # 3. Execute Deployment on Server as deployer
           echo "--> Executing remote deployment script on server..."
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "bash -s -- '${RELEASE_ID}'" << 'EOF'
             set -euo pipefail
@@ -254,7 +291,15 @@ jobs:
           echo "2. Checking Web app index..."
           curl -fsS --retry 5 --retry-delay 3 https://app-staging.vaksinamedgps.uz/ > /dev/null
 
-          echo "3. Checking Web font asset (Feather.ttf HTTP 200)..."
-          curl -fsS --retry 5 --retry-delay 3 https://app-staging.vaksinamedgps.uz/fonts/Feather.ttf -o /dev/null
+          echo "3. Checking Web font asset (Feather.ttf valid binary header)..."
+          curl -fsS --retry 5 --retry-delay 3 https://app-staging.vaksinamedgps.uz/fonts/Feather.ttf -o /tmp/downloaded-feather.ttf
+          node -e "
+            const fs = require('fs');
+            const buf = fs.readFileSync('/tmp/downloaded-feather.ttf');
+            if (buf.length < 10000) throw new Error('Font file too small: ' + buf.length);
+            const magic = buf.readUInt32BE(0);
+            if (magic !== 0x00010000 && magic !== 0x4F54544F) throw new Error('Corrupted font magic 0x' + magic.toString(16));
+            console.log('PASS: Downloaded font is a genuine TTF binary (' + buf.length + ' bytes)');
+          "
 
           echo "SUCCESS: Staging deployment fully verified and healthy!"

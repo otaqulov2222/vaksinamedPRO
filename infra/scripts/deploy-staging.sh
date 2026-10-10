@@ -61,6 +61,12 @@ elif [ -f "/home/deployer/uploads/backend-dist.tar.gz" ]; then
     rm -f /home/deployer/uploads/backend-dist.tar.gz
 fi
 
+# Copy release.sha256 if provided
+if [ -f "/tmp/release.sha256" ]; then
+    cp /tmp/release.sha256 "${BACKEND_RELEASES_DIR}/${RELEASE_ID}/release.sha256"
+    rm -f /tmp/release.sha256
+fi
+
 # 5. Delegate to Privileged Staging Control Wrapper (allowed by sudoers)
 echo "--> Executing privileged staging control wrapper..."
 sudo "${WRAPPER_BIN}" deploy "${RELEASE_ID}"
