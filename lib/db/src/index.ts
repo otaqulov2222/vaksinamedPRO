@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, existsSync, unlinkSync, rmSync } from "node:fs";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { PGlite } from "@electric-sql/pglite";
@@ -57,8 +57,25 @@ async function createDatabase(): Promise<DatabaseInstance> {
   // Local demo only — not production architecture
   const dataDir = process.env.PGLITE_DIR || path.resolve(process.cwd(), ".data", "pglite");
   mkdirSync(dataDir, { recursive: true });
-  const client = new PGlite(dataDir);
-  await client.waitReady;
+  const pidFile = path.join(dataDir, "postmaster.pid");
+  if (existsSync(pidFile)) {
+    try {
+      unlinkSync(pidFile);
+    } catch {}
+  }
+  let client: PGlite;
+  try {
+    client = new PGlite(dataDir);
+    await client.waitReady;
+  } catch (err) {
+    console.warn("[db] PGlite local dev directory was corrupted, auto-recovering:", err);
+    try {
+      rmSync(dataDir, { recursive: true, force: true });
+      mkdirSync(dataDir, { recursive: true });
+    } catch {}
+    client = new PGlite(dataDir);
+    await client.waitReady;
+  }
   const database = drizzlePglite(client, { schema });
   await applyMigrations(database, "pglite");
   if (shouldAutoSeed(environment, "pglite")) {
@@ -82,6 +99,7 @@ export * from "./health";
 export * from "./migrate";
 export * from "./migrationLock";
 export * from "./poolConfig";
+export * from "./stagingCatalogSeed";
 export { getMigrationsFolder } from "./migrationsPath";
 /** @deprecated Prefer versioned migrations. Kept for reference / emergency local repair. */
 export { bootstrapSchema } from "./bootstrap";

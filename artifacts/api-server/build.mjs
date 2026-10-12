@@ -17,9 +17,11 @@ async function buildAll() {
   await esbuild({
     // dist/index.mjs = API server; dist/worker.mjs = standalone worker_jobs process (no HTTP);
     // dist/migrate.mjs = one-off migration release step (no HTTP, no seed).
+    // dist/seed-staging-catalog.mjs = one-off controlled staging catalog seed.
     entryPoints: [
       path.resolve(artifactDir, "src/index.ts"), path.resolve(artifactDir, "src/worker.ts"),
       path.resolve(artifactDir, "src/migrate.ts"),
+      path.resolve(artifactDir, "src/seed-staging-catalog.ts"),
     ],
     platform: "node",
     bundle: true,

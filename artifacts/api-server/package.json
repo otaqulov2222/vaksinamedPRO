@@ -10,6 +10,7 @@
     "start:worker": "node --enable-source-maps ./dist/worker.mjs",
     "migrate:release": "node --enable-source-maps ./dist/migrate.mjs",
     "migrate:release:status": "node --enable-source-maps ./dist/migrate.mjs --status",
+    "seed:staging-catalog": "node --enable-source-maps ./dist/seed-staging-catalog.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/**/*.test.ts",
     "test:security": "tsx --test tests/security-*.test.ts",

@@ -6,11 +6,13 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./release": "./src/release.ts"
+    "./release": "./src/release.ts",
+    "./staging-catalog": "./src/stagingCatalogSeed.ts"
   },
   "scripts": {
     "migrate": "tsx src/scripts/migrate.ts",
     "migrate:status": "tsx src/scripts/migrate-status.ts",
+    "seed:staging-catalog": "tsx src/scripts/seed-staging-catalog.ts",
     "push": "node ./scripts/push-guard.mjs",
     "push:force": "node ./scripts/push-guard.mjs --force",
     "test": "tsx --test --test-concurrency=1 tests/**/*.test.ts",
