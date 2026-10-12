@@ -26,6 +26,7 @@ import { bindReservationOrder, reserveStock } from "../lib/inventory";
 import {
   applyOrderTransition,
   initialAxesForCheckout,
+  voidPendingOrderPayments,
   type OrderChannel,
 } from "../lib/orderTransitions";
 import { publicBranch } from "../lib/securityEnv";
@@ -630,6 +631,10 @@ router.post("/orders/:id/cancel", async (req, res, next) => {
 
     if (rows[0].fulfillmentStatus === "COMPLETED" || rows[0].fulfillmentStatus === "CANCELLED") {
       if (rows[0].fulfillmentStatus === "CANCELLED") {
+        await voidPendingOrderPayments(rows[0].id, {
+          actor: `customer:${customer.id}`,
+          reason: "idempotent_customer_order_cancel",
+        });
         return res.json({ ok: true, idempotent: true });
       }
       return res.status(400).json({
@@ -692,6 +697,10 @@ router.post("/orders/:id/admin-cancel", async (req, res, next) => {
 
     if (rows[0].fulfillmentStatus === "COMPLETED" || rows[0].fulfillmentStatus === "CANCELLED") {
       if (rows[0].fulfillmentStatus === "CANCELLED") {
+        await voidPendingOrderPayments(rows[0].id, {
+          actor: `staff:${admin.email}`,
+          reason: "idempotent_admin_order_cancel",
+        });
         return res.json({ ok: true, idempotent: true, paymentRefundRequired: false });
       }
       return res.status(400).json({
@@ -732,6 +741,8 @@ router.post("/orders/:id/admin-cancel", async (req, res, next) => {
       });
     }
 
+    const finalPaymentStatus = wasPaid ? rows[0].paymentStatus : "FAILED";
+
     try {
       await db.insert(auditLog).values({
         actor: admin.email,
@@ -742,7 +753,7 @@ router.post("/orders/:id/admin-cancel", async (req, res, next) => {
           branchId: rows[0].branchId,
           wasPaid,
           paymentRefundRequired: wasPaid,
-          paymentStatus: rows[0].paymentStatus,
+          paymentStatus: finalPaymentStatus,
         }),
       });
     } catch {
@@ -752,7 +763,7 @@ router.post("/orders/:id/admin-cancel", async (req, res, next) => {
     return res.json({
       ok: true,
       paymentRefundRequired: wasPaid,
-      paymentStatus: rows[0].paymentStatus,
+      paymentStatus: finalPaymentStatus,
       note: wasPaid
         ? "Buyurtma bekor qilindi. PSP refund CONTRACT_PENDING — pul avtomatik qaytarilmaydi."
         : "Buyurtma bekor qilindi.",

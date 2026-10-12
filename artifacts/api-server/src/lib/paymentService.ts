@@ -28,7 +28,8 @@ import {
   type IntentStatus,
 } from "./paymentLifecycle";
 import { getPaymentAdapter, type PaymentProviderName } from "./paymentAdapters";
-import { applyOrderTransition } from "./orderTransitions";
+import { applyOrderTransition, voidPendingOrderPayments } from "./orderTransitions";
+export { voidPendingOrderPayments } from "./orderTransitions";
 import { allowPaymentSimulate } from "./securityEnv";
 import {
   isOnlinePaymentProvider,
@@ -575,6 +576,59 @@ export async function failPaymentIntent(
         actor: opts.actor || "payment:fail",
         actorType: "system",
         reason: opts.reason || "payment_failed",
+        inventory: "none",
+        alreadyInTx: true,
+      },
+      tx,
+    );
+    return updated[0];
+  });
+}
+
+/** Mark intent CANCELLED with valid transition (P7.2). */
+export async function cancelPaymentIntent(
+  intentId: number,
+  opts: { actor?: string; reason?: string; alreadyInTx?: boolean } = {},
+  executor: DbLike = db,
+): Promise<PaymentIntent> {
+  return withTx(executor, Boolean(opts.alreadyInTx), async (tx) => {
+    const intent = (await tx.select().from(paymentIntents).where(eq(paymentIntents.id, intentId)).limit(1))[0];
+    if (!intent) throw badRequest("Payment intent topilmadi", 404);
+    if (intent.status === "CANCELLED") return intent;
+    assertIntentTransition(intent.status as IntentStatus, "CANCELLED");
+    let metaObj: Record<string, unknown> = {};
+    try {
+      metaObj = JSON.parse(intent.meta || "{}");
+    } catch {}
+    const updated = await tx
+      .update(paymentIntents)
+      .set({
+        status: "CANCELLED",
+        updatedAt: new Date(),
+        meta: JSON.stringify({
+          ...metaObj,
+          cancelReason: opts.reason || "cancelled",
+          actor: opts.actor,
+          cancelledAt: new Date().toISOString(),
+        }),
+      })
+      .where(eq(paymentIntents.id, intentId))
+      .returning();
+
+    if (intent.legacyPaymentId) {
+      await tx
+        .update(payments)
+        .set({ status: "cancelled" })
+        .where(eq(payments.id, intent.legacyPaymentId));
+    }
+
+    await applyOrderTransition(
+      {
+        orderId: intent.orderId,
+        toPayment: "FAILED",
+        actor: opts.actor || "payment:cancel",
+        actorType: "system",
+        reason: opts.reason || "payment_cancelled",
         inventory: "none",
         alreadyInTx: true,
       },

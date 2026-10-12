@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
-import { db, orders, type Order } from "@workspace/db";
+import { db, orders, payments, paymentIntents, type Order } from "@workspace/db";
 import { consumeReservation, releaseReservation } from "./inventory";
+import { assertIntentTransition, type IntentStatus } from "./paymentLifecycle";
 
 type DbLike = typeof db;
 
@@ -150,6 +151,97 @@ export type TransitionResult = {
 };
 
 /**
+ * Void/cancel any pending (unpaid) payments and payment intents for an order.
+ * - Transitions pending paymentIntents (CREATED, REQUIRES_PAYMENT, PROCESSING, FAILED) -> CANCELLED
+ * - Transitions pending legacy payments (awaiting_pos, pending, pending_keys) -> cancelled
+ * - Preserves PAID, REFUNDED, PARTIALLY_REFUNDED payments (Requirement 5)
+ * - Safe and idempotent on repeat calls (Requirement 4)
+ */
+export async function voidPendingOrderPayments(
+  orderId: number,
+  opts: { actor?: string; reason?: string; alreadyInTx?: boolean } = {},
+  executor: DbLike = db,
+): Promise<{ cancelledIntents: number; cancelledLegacyPayments: number }> {
+  return withTx(executor, Boolean(opts.alreadyInTx), async (tx) => {
+    // 1. Cancel uncaptured payment intents
+    const intents = await tx
+      .select()
+      .from(paymentIntents)
+      .where(eq(paymentIntents.orderId, orderId));
+
+    let cancelledIntents = 0;
+    for (const intent of intents) {
+      if (
+        intent.status === "PAID"
+        || intent.status === "REFUNDED"
+        || intent.status === "PARTIALLY_REFUNDED"
+        || intent.status === "CANCELLED"
+      ) {
+        continue;
+      }
+      assertIntentTransition(intent.status as IntentStatus, "CANCELLED");
+      let metaObj: Record<string, unknown> = {};
+      try {
+        metaObj = JSON.parse(intent.meta || "{}");
+      } catch {}
+      await tx
+        .update(paymentIntents)
+        .set({
+          status: "CANCELLED",
+          updatedAt: new Date(),
+          meta: JSON.stringify({
+            ...metaObj,
+            cancelReason: opts.reason || "order_cancelled",
+            cancelledBy: opts.actor,
+            cancelledAt: new Date().toISOString(),
+          }),
+        })
+        .where(eq(paymentIntents.id, intent.id));
+      cancelledIntents++;
+    }
+
+    // 2. Cancel unpaid legacy payments (e.g. awaiting_pos, pending, pending_keys)
+    const legacyRows = await tx
+      .select()
+      .from(payments)
+      .where(eq(payments.orderId, orderId));
+
+    let cancelledLegacyPayments = 0;
+    for (const row of legacyRows) {
+      const s = String(row.status || "").toLowerCase();
+      if (
+        s === "paid"
+        || s === "refunded"
+        || s === "partially_refunded"
+        || s === "cancelled"
+      ) {
+        continue;
+      }
+      await tx
+        .update(payments)
+        .set({ status: "cancelled" })
+        .where(eq(payments.id, row.id));
+      cancelledLegacyPayments++;
+    }
+
+    // 3. Heal order payment_status if order is already CANCELLED but paymentStatus remained PENDING
+    const orderRows = await tx
+      .select({ id: orders.id, paymentStatus: orders.paymentStatus, fulfillmentStatus: orders.fulfillmentStatus })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (orderRows[0] && orderRows[0].fulfillmentStatus === "CANCELLED" && orderRows[0].paymentStatus === "PENDING") {
+      await tx
+        .update(orders)
+        .set({ paymentStatus: "FAILED" })
+        .where(eq(orders.id, orderId));
+    }
+
+    return { cancelledIntents, cancelledLegacyPayments };
+  });
+}
+
+/**
  * P5.2 — single server-side order transition service.
  * Inventory: CANCEL→release, COMPLETE→consume via P4 services only.
  */
@@ -207,6 +299,28 @@ export async function applyOrderTransition(
         assertPaymentTransition(nextPayment, input.toPayment);
         nextPayment = input.toPayment;
         axesChanged = true;
+      }
+    }
+
+    if (nextFulfillment === "CANCELLED") {
+      // If payment was not completed/refunded, void pending payments & transition payment axis to FAILED
+      if (nextPayment !== "PAID" && nextPayment !== "PARTIALLY_REFUNDED" && nextPayment !== "REFUNDED") {
+        if (nextPayment === "PENDING") {
+          nextPayment = "FAILED";
+          axesChanged = true;
+        }
+        const voidRes = await voidPendingOrderPayments(
+          order.id,
+          {
+            actor: input.actor,
+            reason: input.reason || "order_cancel",
+            alreadyInTx: true,
+          },
+          tx,
+        );
+        if (voidRes.cancelledIntents > 0 || voidRes.cancelledLegacyPayments > 0) {
+          axesChanged = true;
+        }
       }
     }
 
