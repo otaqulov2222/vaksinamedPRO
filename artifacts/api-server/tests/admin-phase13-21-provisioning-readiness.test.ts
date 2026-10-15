@@ -61,12 +61,12 @@ describe("13.21 migration release entrypoint", () => {
     assert.match(docker, /^CMD \["node", "--enable-source-maps", "dist\/index\.mjs"\]$/m);
   });
 
-  it("no new migration: journal still ends at 0013", () => {
+  it("migration journal has valid entries up to 0014", () => {
     const journal = JSON.parse(read(path.join(repoRoot, "lib/db/migrations/meta/_journal.json"))) as {
       entries: Array<{ tag: string }>;
     };
-    assert.equal(journal.entries.length, 14);
-    assert.equal(journal.entries.at(-1)?.tag, "0013_auth_event_telemetry");
+    assert.equal(journal.entries.length, 15);
+    assert.equal(journal.entries.at(-1)?.tag, "0014_fiscal_cheques_and_mxik");
   });
 });
 

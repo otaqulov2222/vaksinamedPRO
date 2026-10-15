@@ -13,6 +13,9 @@ export const products = pgTable("products", {
   icon: text("icon").notNull().default("pill"),
   analogGroup: text("analog_group").notNull().default(""),
   requiresPrescription: boolean("requires_prescription").notNull().default(false),
+  mxikCode: text("mxik_code").notNull().default("02106001001000000"),
+  packageCode: text("package_code").notNull().default("796"),
+  vatPercent: integer("vat_percent").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

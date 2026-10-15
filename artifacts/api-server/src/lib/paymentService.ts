@@ -36,6 +36,8 @@ import {
   resolvePaymentMerchantConfig,
   toPublicMerchantSummary,
 } from "./branchPaymentMerchant";
+import { createFiscalCheque, refundFiscalCheque } from "./fiscalService";
+import { logger } from "./logger";
 
 type DbLike = typeof db;
 
@@ -534,6 +536,25 @@ export async function capturePayment(
       tx,
     );
 
+    // Generate electronic fiscal cheque (OFD Soliq)
+    try {
+      await createFiscalCheque(
+        {
+          orderId: intent.orderId,
+          paymentId: intent.legacyPaymentId,
+          provider: intent.provider,
+          actor: input.actor || "payment:capture",
+        },
+        tx as any,
+      );
+    } catch (fiscalErr) {
+      logger.warn({
+        event: "FISCAL_CHEQUE_CREATION_FAILED",
+        error: (fiscalErr as Error)?.message,
+        orderId: intent.orderId,
+      });
+    }
+
     return { intent: updated[0], capture, idempotent: false };
   });
 }
@@ -883,6 +904,18 @@ export async function requestRefund(
       },
       tx,
     );
+
+    if (nextStatus === "REFUNDED") {
+      try {
+        await refundFiscalCheque(intent.orderId, input.reason || "refund", tx as any);
+      } catch (refundErr) {
+        logger.warn({
+          event: "FISCAL_CHEQUE_REFUND_FAILED",
+          error: (refundErr as Error)?.message,
+          orderId: intent.orderId,
+        });
+      }
+    }
 
     return {
       refund: refundRow,

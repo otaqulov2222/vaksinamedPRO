@@ -139,6 +139,7 @@ router.post("/deliveries/:orderId/assign", async (req, res, next) => {
 
     const courierId = Number(req.body.courierId || admin.id);
     const courierName = String(req.body.courierName || admin.name || admin.email || "").trim();
+    const courierPhone = req.body.courierPhone ? String(req.body.courierPhone).trim() : undefined;
     const courierBranchId = Number(req.body.courierBranchId ?? order.branchId);
     if (!courierName) return res.status(400).json({ message: "courierName majburiy" });
 
@@ -146,6 +147,7 @@ router.post("/deliveries/:orderId/assign", async (req, res, next) => {
       orderId,
       courierId,
       courierName,
+      courierPhone,
       courierBranchId,
       actor: admin.email,
       expectedOrderBranchId: order.branchId,

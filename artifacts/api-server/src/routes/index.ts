@@ -15,6 +15,7 @@ import mapsRouter from "./maps";
 import authRouter from "./auth";
 import posRouter from "./pos";
 import workersRouter from "./workers";
+import fomInventoryRouter from "./fomInventory";
 
 const router: IRouter = Router();
 
@@ -33,6 +34,7 @@ router.use(adminRouter);
 router.use(adminUsersRouter);
 router.use(adminSecurityRouter);
 router.use(integrationsRouter);
+router.use(fomInventoryRouter);
 router.use(mapsRouter);
 
 export default router;

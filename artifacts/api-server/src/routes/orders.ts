@@ -15,6 +15,7 @@ import {
   reservations,
   staffRatings,
   auditLog,
+  fiscalCheques,
 } from "@workspace/db";
 import { requireAdmin, requireCustomer } from "../lib/auth";
 import { DELIVERY_FEE, RESERVE_HOURS, formatDate, orderCode, computeCashback } from "../lib/money";
@@ -23,6 +24,7 @@ import { confirmFomSale } from "../lib/fom";
 import { cartPayload } from "./cart";
 import { requirePermission, assertBranchScope } from "../lib/rbac";
 import { bindReservationOrder, reserveStock } from "../lib/inventory";
+import { createFiscalCheque, getFiscalChequeByOrderId } from "../lib/fiscalService";
 import {
   applyOrderTransition,
   initialAxesForCheckout,
@@ -103,6 +105,9 @@ export async function serializeOrder(order: typeof orders.$inferSelect) {
   const existingRating = (
     await db.select().from(staffRatings).where(eq(staffRatings.orderId, order.id)).limit(1)
   )[0];
+  const chequeRow = (
+    await db.select().from(fiscalCheques).where(eq(fiscalCheques.orderId, order.id)).limit(1)
+  )[0];
   const completed =
     order.fulfillmentStatus === "COMPLETED" || String(order.status).toLowerCase() === "completed";
 
@@ -170,6 +175,20 @@ export async function serializeOrder(order: typeof orders.$inferSelect) {
     qrPayload: `VAKSINA-${order.code}`,
     alreadyRated: Boolean(existingRating),
     canRate: completed && !existingRating,
+    fiscalCheque: chequeRow
+      ? {
+          id: chequeRow.id,
+          receiptNumber: chequeRow.receiptNumber,
+          fiscalSign: chequeRow.fiscalSign,
+          terminalId: chequeRow.terminalId,
+          qrUrl: chequeRow.qrUrl,
+          status: chequeRow.status,
+          totalAmount: chequeRow.totalAmount,
+          vatAmount: chequeRow.vatAmount,
+          discountAmount: chequeRow.discountAmount,
+          createdAt: chequeRow.createdAt,
+        }
+      : null,
   };
 }
 
@@ -240,6 +259,63 @@ router.get("/orders/:id", async (req, res, next) => {
       return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
     }
     return res.json({ order: await serializeOrder(rows[0]) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * OFD / Soliq elektron fiskal chekni olish
+ * Mijoz: o'zining buyurtmasi uchun
+ * Admin: xodimlar va kassa audit uchun
+ */
+router.get("/orders/:id/fiscal-cheque", async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
+    }
+    const order = (await db.select().from(orders).where(eq(orders.id, id)).limit(1))[0];
+    if (!order) {
+      return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
+    }
+
+    // Auth check
+    const authHeader = req.header("authorization");
+    let isOwner = false;
+    let isAdmin = false;
+    if (authHeader) {
+      try {
+        const cust = await requireCustomer(req);
+        if (cust && cust.id === order.customerId) isOwner = true;
+      } catch {
+        try {
+          const adm = await requireAdmin(req);
+          if (adm) isAdmin = true;
+        } catch {}
+      }
+    }
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "Ruxsat berilmagan", code: "FORBIDDEN" });
+    }
+
+    let cheque = await getFiscalChequeByOrderId(id);
+    if (!cheque && (order.paymentStatus === "PAID" || order.status === "paid")) {
+      await createFiscalCheque({ orderId: id, actor: "orders:get-fiscal-cheque" });
+      cheque = await getFiscalChequeByOrderId(id);
+    }
+
+    if (!cheque) {
+      return res.status(404).json({
+        message: "Fiskal chek hali shakllanmagan (to‘lov amalga oshirilgandan keyin beriladi)",
+        code: "FISCAL_CHEQUE_NOT_FOUND",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      fiscalCheque: cheque,
+    });
   } catch (error) {
     return next(error);
   }
@@ -416,18 +492,47 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
       let cashbackEarned = calc.cashbackEarned;
       let total = calc.payableTotal;
 
-      const reserved = await reserveStock(
-        {
-          branchId: branch.id,
-          customerId: customer.id,
-          items: pricedItems.map((item) => ({ productId: item.productId, quantity: item.quantity })),
-          idempotencyKey,
-          expiresAt,
-          actor: `customer:${customer.id}`,
-        },
-        tx as unknown as typeof db,
-        { alreadyInTx: true },
-      );
+      let reserved;
+      try {
+        reserved = await reserveStock(
+          {
+            branchId: branch.id,
+            customerId: customer.id,
+            items: pricedItems.map((item) => ({ productId: item.productId, quantity: item.quantity })),
+            idempotencyKey,
+            expiresAt,
+            actor: `customer:${customer.id}`,
+          },
+          tx as unknown as typeof db,
+          { alreadyInTx: true },
+        );
+      } catch (err: any) {
+        if (err?.code === "STOCK_UNAVAILABLE" || err?.status === 400) {
+          let alternativeBranches: any[] = [];
+          try {
+            const firstUnavailable = pricedItems[0];
+            if (firstUnavailable) {
+              const { findAlternativeBranchesWithStock } = await import("../lib/fomInventoryService");
+              alternativeBranches = await findAlternativeBranchesWithStock(
+                firstUnavailable.productId,
+                firstUnavailable.quantity,
+                branch.id,
+                tx as unknown as typeof db,
+              );
+            }
+          } catch {}
+          throw Object.assign(
+            new Error("Mahsulot tanlangan filialda yetarli emas. Boshqa filialni tanlang yoki kuryerlik orqali buyurtma bering."),
+            {
+              status: 409,
+              code: "STOCK_UNAVAILABLE",
+              branchId: branch.id,
+              alternativeBranches,
+            },
+          );
+        }
+        throw err;
+      }
 
       if (reserved.idempotent && reserved.reservation.orderId) {
         const existingOrder = (

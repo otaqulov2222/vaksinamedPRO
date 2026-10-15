@@ -181,7 +181,28 @@ export const staffRatings = pgTable("staff_ratings", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/** OFD / Soliq (GNK) elektron fiskal cheklar */
+export const fiscalCheques = pgTable("fiscal_cheques", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull(),
+  paymentId: integer("payment_id"),
+  receiptNumber: text("receipt_number").notNull().unique(),
+  fiscalSign: text("fiscal_sign").notNull(),
+  terminalId: text("terminal_id").notNull().default("VK_VAKSINAMED_01"),
+  qrUrl: text("qr_url").notNull(),
+  status: text("status").notNull().default("REGISTERED"),
+  provider: text("provider").notNull().default("soliq_ofd"),
+  totalAmount: integer("total_amount").notNull(),
+  vatAmount: integer("vat_amount").notNull().default(0),
+  discountAmount: integer("discount_amount").notNull().default(0),
+  itemsPayload: text("items_payload").notNull().default("[]"),
+  rawResponse: text("raw_response").notNull().default("{}"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type Cart = typeof carts.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Delivery = typeof deliveries.$inferSelect;
+export type FiscalCheque = typeof fiscalCheques.$inferSelect;
+export type NewFiscalCheque = typeof fiscalCheques.$inferInsert;

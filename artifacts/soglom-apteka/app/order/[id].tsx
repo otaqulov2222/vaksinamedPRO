@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -410,6 +411,22 @@ export default function OrderScreen() {
                   {order.delivery.timeWindow ? ` · ${String(order.delivery.timeWindow)}` : ''}
                 </Text>
               ) : null}
+              {order.delivery?.courierName ? (
+                <Text style={[styles.meta, { color: PURPLE_DEEP, fontWeight: '600', marginTop: 4 }]}>
+                  {t('orders.courierInfoLine', { name: String(order.delivery.courierName) })}
+                </Text>
+              ) : null}
+              {order.delivery?.courierPhone ? (
+                <Pressable
+                  onPress={() => void Linking.openURL(`tel:${order.delivery.courierPhone}`)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t('orders.courierPhoneLine', { phone: String(order.delivery.courierPhone) })}
+                >
+                  <Text style={[styles.meta, { color: PURPLE, fontWeight: '600', marginTop: 2 }]}>
+                    {t('orders.courierPhoneLine', { phone: String(order.delivery.courierPhone) })}
+                  </Text>
+                </Pressable>
+              ) : null}
             </>
           ) : null}
         </View>
@@ -501,6 +518,34 @@ export default function OrderScreen() {
             </Text>
           ) : null}
         </View>
+
+        {/* Soliq OFD elektron fiskal chek */}
+        {order.fiscalCheque ? (
+          <View style={[styles.card, { borderColor: '#E0E7FF', backgroundColor: '#F8FAFC' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <Feather name="file-text" size={16} color={PURPLE_DEEP} />
+              <Text style={[styles.cardTitle, { marginBottom: 0 }]}>
+                {t('orders.fiscalChequeTitle')}
+              </Text>
+            </View>
+            <Text style={styles.meta}>
+              {t('orders.fiscalChequeNumber', { number: String(order.fiscalCheque.receiptNumber) })}
+            </Text>
+            <Text style={styles.meta}>
+              {t('orders.fiscalChequeSign', { sign: String(order.fiscalCheque.fiscalSign) })}
+            </Text>
+            {order.fiscalCheque.qrUrl ? (
+              <Pressable
+                style={[styles.primaryBtn, { marginTop: 10, backgroundColor: '#0284C7' }]}
+                onPress={() => void Linking.openURL(String(order.fiscalCheque.qrUrl))}
+                accessibilityRole="link"
+                accessibilityLabel={t('orders.fiscalChequeVerify')}
+              >
+                <Text style={styles.primaryBtnText}>{t('orders.fiscalChequeVerify')}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Actions */}
         {order.canCancel ? (

@@ -29,6 +29,7 @@ export async function assignCourier(input: {
   orderId: number;
   courierId: number;
   courierName: string;
+  courierPhone?: string;
   courierBranchId: number;
   actor: string;
   expectedOrderBranchId: number;
@@ -44,6 +45,7 @@ export async function assignCourier(input: {
     reason: "courier_assigned",
     courierId: input.courierId,
     courierName: input.courierName,
+    courierPhone: input.courierPhone,
     courierBranchId: input.courierBranchId,
   }, executor);
 }
@@ -57,6 +59,7 @@ export async function transitionDelivery(
     reason?: string;
     courierId?: number | null;
     courierName?: string;
+    courierPhone?: string;
     courierBranchId?: number | null;
   },
   executor: DbLike = db,
@@ -88,6 +91,10 @@ export async function transitionDelivery(
   if (input.courierName != null) patch.courierName = input.courierName;
   if (input.courierId != null) patch.courierId = input.courierId;
   if (input.courierBranchId != null) patch.courierBranchId = input.courierBranchId;
+  if (input.courierPhone != null) {
+    const prevMeta = safeJson(delivery.meta);
+    patch.meta = JSON.stringify({ ...prevMeta, courierPhone: input.courierPhone });
+  }
   if (toStatus === "assigned") patch.assignedAt = now;
   if (toStatus === "picked_up") patch.pickedUpAt = now;
   if (toStatus === "on_the_way") patch.outAt = now;
@@ -174,6 +181,7 @@ function safeJson(raw: string): Record<string, unknown> {
 }
 
 export function serializeDeliveryPublic(d: Delivery) {
+  const meta = safeJson(d.meta);
   return {
     id: d.id,
     orderId: d.orderId,
@@ -181,6 +189,7 @@ export function serializeDeliveryPublic(d: Delivery) {
     timeWindow: d.timeWindow,
     status: d.status,
     courierName: d.courierName || null,
+    courierPhone: typeof meta.courierPhone === "string" ? meta.courierPhone : null,
     courierId: d.courierId ?? null,
     provider: d.provider,
     providerRef: d.providerRef || null,
