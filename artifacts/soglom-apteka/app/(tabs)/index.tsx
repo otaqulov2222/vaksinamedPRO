@@ -72,8 +72,8 @@ const QUICK: {
 
 const HERO_IMAGES: Record<string, any> = {
   uz: require('../../assets/images/home-hero-final-uz.png'),
-  ru: require('../../assets/images/home-hero-final-ru.png'),
-  en: require('../../assets/images/home-hero-final-en.png'),
+  ru: require('../../assets/images/home-hero-clean-base.png'),
+  en: require('../../assets/images/home-hero-clean-base.png'),
 };
 
 export default function HomeScreen() {
@@ -93,6 +93,7 @@ export default function HomeScreen() {
   const [query, setQuery] = useState('');
   const [nextTierTarget, setNextTierTarget] = useState<number | null>(null);
   const [heroBoxW, setHeroBoxW] = useState(0);
+  const isOverlay = t('home.heroBannerType') === 'overlay';
 
   const spentTowardTier = Number(user?.total || 0);
   const left =
@@ -282,13 +283,41 @@ export default function HomeScreen() {
         }}
       >
         {heroBoxW > 0 ? (
-          <Image
-            source={HERO_IMAGES[language] || HERO_IMAGES.uz}
-            style={{ width: heroSize.w, height: heroSize.h }}
-            resizeMode="contain"
-            fadeDuration={0}
-            resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-          />
+          <>
+            <Image
+              source={HERO_IMAGES[language] || HERO_IMAGES.uz}
+              style={{ width: heroSize.w, height: heroSize.h }}
+              resizeMode="contain"
+              fadeDuration={0}
+              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
+            />
+            {isOverlay ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  StyleSheet.absoluteFill,
+                  {
+                    paddingLeft: Math.round(heroSize.w * (117 / 1825)),
+                    paddingTop: Math.round(heroSize.h * (235 / 862)),
+                    width: Math.round(heroSize.w * 0.54),
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    fontFamily: 'Inter_700Bold',
+                    fontWeight: '700',
+                    color: '#1C025D',
+                    fontSize: Math.max(14, Math.round(heroSize.w * 0.043)),
+                    lineHeight: Math.max(18, Math.round(heroSize.w * 0.058)),
+                    letterSpacing: -0.3,
+                  }}
+                >
+                  {t('home.heroSlogan')}
+                </Text>
+              </View>
+            ) : null}
+          </>
         ) : null}
       </Pressable>
 

@@ -1,4 +1,4 @@
-﻿import { defineMessages } from '../core';
+import { defineMessages } from '../core';
 
 export default defineMessages({
   uz: {
@@ -9,6 +9,8 @@ export default defineMessages({
     searchPlaceholder: 'Dori yoki mahsulot qidirish...',
     searchA11y: 'Dori yoki mahsulot qidirish',
     heroA11y: 'Vaksina Med — Sog‘liqni asrab hayot zavqini ulashamiz. Katalogga o‘tish.',
+    heroSlogan: 'Sog‘liqni asrab\nhayot zavqini\nulashamiz',
+    heroBannerType: 'baked',
 
     quickSearch: 'Dori qidirish',
     quickDelivery: 'Yetkazib berish',
@@ -88,6 +90,8 @@ export default defineMessages({
     searchPlaceholder: 'Поиск лекарств и товаров...',
     searchA11y: 'Поиск лекарств и товаров',
     heroA11y: 'Vaksina Med — бережём здоровье, делимся радостью жизни. Перейти в каталог.',
+    heroSlogan: 'Бережём здоровье,\nделимся радостью\nжизни',
+    heroBannerType: 'overlay',
 
     quickSearch: 'Поиск лекарств',
     quickDelivery: 'Доставка',
@@ -167,6 +171,8 @@ export default defineMessages({
     searchPlaceholder: 'Search medicines or products...',
     searchA11y: 'Search medicines or products',
     heroA11y: 'Vaksina Med — caring for health, sharing the joy of life. Go to catalog.',
+    heroSlogan: 'Caring for health,\nsharing the joy\nof life',
+    heroBannerType: 'overlay',
 
     quickSearch: 'Find medicine',
     quickDelivery: 'Delivery',
