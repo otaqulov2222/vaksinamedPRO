@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ChevronRight, ChevronsLeft, ChevronsRight, Eye, EyeOff } from "lucide-react";
 import { request, softRequest, money, type AdminUser } from "./api";
 import {
   NAV,
@@ -63,6 +63,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("vm-admin-sidebar") === "1",
   );
@@ -192,14 +193,28 @@ export default function App() {
             </label>
             <label className="login-field">
               <span>Parol</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="vaksinamed"
-                autoComplete="current-password"
-                required
-              />
+              <div className="login-password-wrap">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="vaksinamed"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowPassword((prev) => !prev);
+                  }}
+                  title={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}
+                  aria-label={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </label>
             <div style={{ fontSize: "12px", color: "var(--muted, #64748b)", marginTop: "2px", lineHeight: "1.4" }}>
               💡 Demo kirish: <strong>admin@vaksinamed.uz</strong> (yoki <strong>admin</strong>) · Parol: <strong>vaksinamed</strong>

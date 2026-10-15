@@ -237,6 +237,42 @@ h2 { margin: 0 0 8px; font-size: 14px; }
   color: var(--vm-text-muted);
 }
 .login-card input { min-height: 40px; }
+.login-password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.login-password-wrap input {
+  padding-right: 42px;
+  width: 100%;
+}
+.login-password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--vm-text-muted);
+  cursor: pointer;
+  border-radius: var(--vm-radius-sm);
+  transition: color var(--vm-dur-fast) ease, background-color var(--vm-dur-fast) ease;
+}
+.login-password-toggle:hover {
+  color: var(--vm-text);
+  background-color: var(--vm-brand-soft);
+}
+.login-password-toggle:focus-visible {
+  outline: 2px solid var(--vm-brand);
+  outline-offset: 1px;
+}
 .login-error {
   padding: 9px 12px;
   border-radius: var(--vm-radius-sm);

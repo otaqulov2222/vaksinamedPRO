@@ -70,6 +70,12 @@ const QUICK: {
   { icon: 'truck-delivery-outline', labelKey: 'home.quickDelivery', to: '/cart', bg: LAVENDER },
 ];
 
+const HERO_IMAGES: Record<string, any> = {
+  uz: require('../../assets/images/home-hero-final-uz.png'),
+  ru: require('../../assets/images/home-hero-final-ru.png'),
+  en: require('../../assets/images/home-hero-final-en.png'),
+};
+
 export default function HomeScreen() {
   const { t, fmt, language, balance, user, cartCount, refresh } = useApp();
   const { width: windowW } = useWindowDimensions();
@@ -277,7 +283,7 @@ export default function HomeScreen() {
       >
         {heroBoxW > 0 ? (
           <Image
-            source={require('../../assets/images/home-hero-final.png')}
+            source={HERO_IMAGES[language] || HERO_IMAGES.uz}
             style={{ width: heroSize.w, height: heroSize.h }}
             resizeMode="contain"
             fadeDuration={0}

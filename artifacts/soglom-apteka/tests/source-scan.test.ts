@@ -121,8 +121,8 @@ function scan(): Record<string, Finding[]> {
     for (const m of code.matchAll(DIALOG_LITERAL)) add('hardcoded', m.index!, m[0]);
     for (const m of code.matchAll(WORDY_LITERAL)) {
       const before = code.slice(Math.max(0, m.index! - 40), m.index!);
-      if (/(fontFamily|accessibilityRole|from|require\(|import\()\s*:?\s*$/.test(before)) continue;
-      if (/^(Inter_\w+|Payme|Click)$/.test(m[2])) continue;
+      if (/(fontFamily|font-family|accessibilityRole|from|require\(|import\()\s*:?\s*$/.test(before)) continue;
+      if (/^(Inter|Inter_\w+|Feather|Ionicons|Material Design Icons|Payme|Click)$/.test(m[2])) continue;
       add('hardcoded', m.index!, m[0]);
     }
     if (file.endsWith('.tsx')) {
