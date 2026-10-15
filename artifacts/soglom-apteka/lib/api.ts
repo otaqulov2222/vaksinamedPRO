@@ -172,6 +172,50 @@ export const api = {
     return request<any>(`/api/catalog/products/${id}${suffix}`);
   },
   promos: () => request<{ promos: any[] }>('/api/catalog/promos'),
+  scanPrescription: (body: { text?: string; image?: string; branchId?: number }) =>
+    request<{
+      success: boolean;
+      totalLinesDetected: number;
+      matchedCount: number;
+      items: Array<{
+        id: string;
+        rawLine: string;
+        cleanedQuery: string;
+        extractedDosage?: string;
+        instructions?: string;
+        confidence: number;
+        confidenceLevel: 'high' | 'medium' | 'low';
+        matchedProduct?: {
+          id: number;
+          sku: string;
+          nameUz: string;
+          nameRu: string;
+          category: string;
+          manufacturer: string;
+          price: number;
+          unit: string;
+          requiresPrescription: boolean;
+          analogGroup?: string;
+          inStock: boolean;
+          availableQuantity?: number;
+        };
+        alternatives?: Array<{
+          id: number;
+          sku: string;
+          nameUz: string;
+          nameRu: string;
+          price: number;
+          manufacturer: string;
+          isCheaper: boolean;
+          priceDiff: number;
+        }>;
+      }>;
+      disclaimer: {
+        uz: string;
+        ru: string;
+        en: string;
+      };
+    }>('/api/catalog/prescription/scan', { method: 'POST', body: JSON.stringify(body) }, false),
   branches: (lat?: number, lng?: number, q = '', region = '') => {
     const params = new URLSearchParams();
     if (lat != null && Number.isFinite(lat)) params.set('lat', String(lat));

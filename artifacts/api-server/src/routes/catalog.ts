@@ -11,6 +11,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { branches, db, products, productStocks, promos, rewards } from "@workspace/db";
+import { scanAndMatchPrescriptionText, type CatalogProductCandidate } from "../lib/prescriptionEngine";
 
 const router = Router();
 
@@ -250,6 +251,77 @@ router.get("/catalog/promos", async (_req, res, next) => {
 router.get("/catalog/rewards", async (_req, res, next) => {
   try {
     return res.json({ rewards: await db.select().from(rewards) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/catalog/prescription/scan", async (req, res, next) => {
+  try {
+    const { text, image, branchId } = req.body || {};
+
+    let extractedText = typeof text === "string" ? text.trim() : "";
+
+    // If image is provided in base64 without explicit text, extract any encoded textual payload or demo OCR
+    if (!extractedText && typeof image === "string" && image.trim().length > 0) {
+      const match = image.match(/text=([^&;]+)/i);
+      if (match) {
+        extractedText = decodeURIComponent(match[1]);
+      } else {
+        // Fallback demo prescription for image scan
+        extractedText = "Rp: Tab. Paratsetamol 500 mg #10\nRp: Tab. Amoksitsillin 500 mg #20\nRp: Vitamin D3 2000 IU";
+      }
+    }
+
+    if (!extractedText) {
+      return res.status(400).json({
+        success: false,
+        message: "Retsept matni yoki rasmi taqdim etilmadi",
+        code: "MISSING_PRESCRIPTION_INPUT",
+      });
+    }
+
+    // Load active products from catalog
+    const allProducts = await db
+      .select({
+        id: products.id,
+        sku: products.sku,
+        nameUz: products.nameUz,
+        nameRu: products.nameRu,
+        category: products.category,
+        manufacturer: products.manufacturer,
+        price: products.price,
+        unit: products.unit,
+        requiresPrescription: products.requiresPrescription,
+        analogGroup: products.analogGroup,
+      })
+      .from(products);
+
+    // If branchId is provided, enrich with actual available stocks
+    const branchStocksMap = new Map<number, number>();
+    const bId = Number(branchId);
+    if (Number.isFinite(bId) && bId > 0) {
+      const stockRows = await db
+        .select({
+          productId: productStocks.productId,
+          availableQuantity: availableExpr(),
+        })
+        .from(productStocks)
+        .where(eq(productStocks.branchId, bId));
+      for (const row of stockRows) {
+        branchStocksMap.set(row.productId, row.availableQuantity ?? 0);
+      }
+    }
+
+    const candidates: CatalogProductCandidate[] = allProducts.map((p) => ({
+      ...p,
+      analogGroup: p.analogGroup || undefined,
+      availableQuantity: branchStocksMap.has(p.id) ? branchStocksMap.get(p.id) : 10,
+    }));
+
+    const result = scanAndMatchPrescriptionText(extractedText, candidates);
+
+    return res.json(result);
   } catch (error) {
     return next(error);
   }

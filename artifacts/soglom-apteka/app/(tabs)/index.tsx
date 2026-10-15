@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { useApp } from '@/context/AppContext';
-import { localizedName } from '@/lib/i18n/data';
+import { localizedName, localizedBranchName, localizedBranchAddress } from '@/lib/i18n/data';
 import { ProgressLine, Screen } from '@/components/AppUI';
 import { api } from '@/lib/api';
 import { notify } from '@/lib/dialogs';
@@ -36,9 +36,6 @@ const SCREEN_PAD = 20;
 /** Vertical rhythm between major Home sections */
 const SPACE = 16;
 
-function shortBranch(t: TFunction, name?: string) {
-  return String(name || '').replace(/^Vaksina Med\s*[·•]\s*/i, '').trim() || t('home.branchLabel');
-}
 
 function productIconName(icon?: string): React.ComponentProps<typeof MaterialCommunityIcons>['name'] {
   const key = String(icon || 'pill');
@@ -58,15 +55,15 @@ function branchHoursLabel(t: TFunction, branch: { hours?: string; is24h?: boolea
 }
 
 const QUICK: {
-  icon: 'pill' | 'map-marker-outline' | 'qrcode-scan' | 'truck-delivery-outline';
+  icon: 'pill' | 'camera-outline' | 'map-marker-outline' | 'truck-delivery-outline';
   labelKey: TranslationKey;
   to: string;
   clearQ?: boolean;
   bg: string;
 }[] = [
   { icon: 'pill', labelKey: 'home.quickSearch', to: '/(tabs)/catalog', clearQ: true, bg: '#FFF4CC' },
+  { icon: 'camera-outline', labelKey: 'catalog.prescriptionScanAction', to: '/prescription', bg: '#EDE9FE' },
   { icon: 'map-marker-outline', labelKey: 'common.navBranches', to: '/branches', bg: LAVENDER },
-  { icon: 'qrcode-scan', labelKey: 'common.navMyQr', to: '/qr', bg: LAVENDER },
   { icon: 'truck-delivery-outline', labelKey: 'home.quickDelivery', to: '/cart', bg: LAVENDER },
 ];
 
@@ -351,6 +348,25 @@ export default function HomeScreen() {
         ))}
       </View>
 
+      {/* PRESCRIPTION SCANNER PROMO */}
+      <Pressable
+        onPress={() => router.push('/prescription')}
+        style={({ pressed }) => [styles.rxPromoCard, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={t('catalog.prescriptionScanAction')}
+      >
+        <View style={styles.rxPromoIconBox}>
+          <MaterialCommunityIcons name="file-document-edit-outline" size={24} color="#FFFFFF" />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.rxPromoTitle}>{t('catalog.prescriptionScanBannerTitle')}</Text>
+          <Text style={styles.rxPromoSub}>{t('catalog.prescriptionScanBannerSub')}</Text>
+        </View>
+        <View style={styles.rxPromoArrowBox}>
+          <Feather name="chevron-right" size={18} color={PURPLE} />
+        </View>
+      </Pressable>
+
       {/* BALANCE + NEAREST */}
       <View style={[styles.twoCol, { gap: colGap }]}>
         <View style={styles.card}>
@@ -415,9 +431,6 @@ export default function HomeScreen() {
               fadeDuration={0}
               resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
             />
-            <View style={styles.nearPhotoCaption} pointerEvents="none">
-              <Text style={styles.nearPhotoCaptionText}>{t('home.nearPhotoCaption')}</Text>
-            </View>
           </View>
           {nearestLoading ? (
             <View style={styles.nearLoadingRow}>
@@ -427,7 +440,7 @@ export default function HomeScreen() {
           ) : (
             <>
               <Text style={styles.nearName} numberOfLines={2}>
-                {nearest ? `VAKSINA MED — ${shortBranch(t, nearest.name)}` : t('home.branchesFallback')}
+                {nearest ? `VAKSINA MED — ${localizedBranchName(language, nearest.name)}` : t('home.branchesFallback')}
               </Text>
               <View style={styles.openRow}>
                 <View style={[styles.hoursDot, !nearest && { backgroundColor: '#CBD5E1' }]} />
@@ -441,18 +454,13 @@ export default function HomeScreen() {
                 </Text>
               ) : nearest?.address ? (
                 <Text style={styles.nearMeta} numberOfLines={2}>
-                  {nearest.address}
+                  {localizedBranchAddress(language, nearest.address)}
                 </Text>
               ) : (
                 <Text style={styles.nearMeta} numberOfLines={2}>
                   {t('home.openBranchList')}
                 </Text>
               )}
-              {!nearestLocated && nearest ? (
-                <Text style={styles.nearDisclaimer} numberOfLines={2}>
-                  {t('home.distanceDisclaimer')}
-                </Text>
-              ) : null}
             </>
           )}
           <View style={styles.cardFooter}>
@@ -815,21 +823,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  nearPhotoCaption: {
-    position: 'absolute',
-    left: 8,
-    bottom: 8,
-    backgroundColor: 'rgba(26, 10, 46, 0.72)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  nearPhotoCaptionText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    lineHeight: 13,
-    color: '#FFFFFF',
-  },
   nearName: {
     fontFamily: 'Inter_700Bold',
     fontSize: 13,
@@ -853,13 +846,6 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     color: MUTED,
     marginTop: 4,
-  },
-  nearDisclaimer: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10,
-    lineHeight: 14,
-    color: MUTED,
-    marginTop: 6,
   },
 
   sectionRow: {
@@ -1007,6 +993,46 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 10,
     backgroundColor: '#EDE7F5',
+  },
+  rxPromoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAF5FF',
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 4,
+    marginBottom: SPACE,
+    borderWidth: 1,
+    borderColor: '#E8DEF8',
+  },
+  rxPromoIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rxPromoTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
+  },
+  rxPromoSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: MUTED,
+    marginTop: 2,
+  },
+  rxPromoArrowBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#F1EBFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottomClearance: {
     height: Platform.OS === 'web' ? 48 : 68,
