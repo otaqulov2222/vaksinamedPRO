@@ -319,11 +319,21 @@ export default function PrescriptionScreen() {
               <Text style={styles.resultsCount}>
                 {t('catalog.prescriptionResultsCount', { count: items.length })}
               </Text>
-              {items.length > 0 ? (
-                <Pressable onPress={selectAll} hitSlop={10}>
-                  <Text style={styles.selectAllText}>{t('catalog.prescriptionSelectAll')}</Text>
+              <View style={styles.headerRightActions}>
+                <Pressable
+                  onPress={() => router.push('/reminders')}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.remindersLink, pressed && styles.pressed]}
+                >
+                  <Feather name="clock" size={13} color={PURPLE} />
+                  <Text style={styles.remindersLinkText}>{t('reminders.quickActionReminders')}</Text>
                 </Pressable>
-              ) : null}
+                {items.length > 0 ? (
+                  <Pressable onPress={selectAll} hitSlop={10}>
+                    <Text style={styles.selectAllText}>{t('catalog.prescriptionSelectAll')}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
 
             {/* DISCLAIMER */}
@@ -656,6 +666,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: PURPLE_DEEP,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  remindersLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  remindersLinkText: {
+    fontSize: 12,
+    color: PURPLE,
+    fontWeight: '600',
   },
   selectAllText: {
     fontSize: 13,

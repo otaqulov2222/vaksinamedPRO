@@ -9,6 +9,7 @@ import components from './messages/components';
 import home from './messages/home';
 import orders from './messages/orders';
 import profile from './messages/profile';
+import reminders from './messages/reminders';
 import status from './messages/status';
 
 export type { Language, TranslationParams };
@@ -25,6 +26,7 @@ const catalogs = {
   cart,
   orders,
   profile,
+  reminders,
   cashback,
   branches,
   components,

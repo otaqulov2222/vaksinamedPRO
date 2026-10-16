@@ -16,6 +16,7 @@ import authRouter from "./auth";
 import posRouter from "./pos";
 import workersRouter from "./workers";
 import fomInventoryRouter from "./fomInventory";
+import remindersRouter from "./reminders";
 
 const router: IRouter = Router();
 
@@ -30,6 +31,7 @@ router.use(ordersRouter);
 router.use(paymentsRouter);
 router.use(deliveriesRouter);
 router.use(workersRouter);
+router.use(remindersRouter);
 router.use(adminRouter);
 router.use(adminUsersRouter);
 router.use(adminSecurityRouter);

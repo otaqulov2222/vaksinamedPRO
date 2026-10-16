@@ -65,8 +65,9 @@ describe("13.21 migration release entrypoint", () => {
     const journal = JSON.parse(read(path.join(repoRoot, "lib/db/migrations/meta/_journal.json"))) as {
       entries: Array<{ tag: string }>;
     };
-    assert.equal(journal.entries.length, 15);
-    assert.equal(journal.entries.at(-1)?.tag, "0014_fiscal_cheques_and_mxik");
+    assert.ok(journal.entries.length >= 15);
+    const m14 = journal.entries.find((e) => e.tag === "0014_fiscal_cheques_and_mxik");
+    assert.ok(m14);
   });
 });
 

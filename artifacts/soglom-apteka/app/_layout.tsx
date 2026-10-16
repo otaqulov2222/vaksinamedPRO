@@ -204,6 +204,7 @@ function RootLayoutNav() {
         <Stack.Screen name="cart" options={{ headerShown: false, title: t('common.navCart') }} />
         <Stack.Screen name="checkout" options={{ headerShown: false, title: t('common.navCheckout') }} />
         <Stack.Screen name="prescription" options={{ headerShown: false, title: t('catalog.prescriptionTitle') }} />
+        <Stack.Screen name="reminders" options={{ headerShown: false, title: t('reminders.title') }} />
         <Stack.Screen name="product/[id]" options={{ headerShown: false, title: t('common.navProduct') }} />
         <Stack.Screen name="order/[id]" options={{ headerShown: false, title: t('common.navOrderStatus') }} />
         <Stack.Screen name="+not-found" options={{ title: t('common.navNotFound') }} />

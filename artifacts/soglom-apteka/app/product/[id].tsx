@@ -457,6 +457,31 @@ export default function ProductScreen() {
           )}
         </View>
 
+        <Pressable
+          style={styles.reminderCard}
+          onPress={() =>
+            router.push({
+              pathname: '/reminders',
+              params: {
+                medicineName: localizedName(language, product),
+                dosage: product.dosage || '',
+                productId: String(product.id),
+              },
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel={t('reminders.addToReminders')}
+        >
+          <View style={styles.reminderIconWrap}>
+            <Feather name="bell" size={18} color={PURPLE} />
+          </View>
+          <View style={styles.reminderTextWrap}>
+            <Text style={styles.reminderTitle}>{t('reminders.addToReminders')}</Text>
+            <Text style={styles.reminderSubtitle}>{t('reminders.subtitle')}</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={MUTED} />
+        </Pressable>
+
         {description ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('catalog.aboutProduct')}</Text>
@@ -776,6 +801,40 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
     color: PURPLE,
+  },
+
+  reminderCard: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: CARD,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+    gap: 12,
+  },
+  reminderIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reminderTextWrap: {
+    flex: 1,
+  },
+  reminderTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+  },
+  reminderSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 2,
   },
 
   section: { marginTop: 22 },

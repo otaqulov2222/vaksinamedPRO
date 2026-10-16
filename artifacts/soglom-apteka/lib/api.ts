@@ -259,6 +259,81 @@ export const api = {
       found?: boolean;
     }>(`/api/maps/geocode?${params}`, {}, false);
   },
+  reminders: (opts?: { date?: string }) => {
+    const q = opts?.date ? `?date=${encodeURIComponent(opts.date)}` : '';
+    return request<{
+      date: string;
+      reminders: any[];
+      schedule: Array<{
+        doseId: string;
+        reminderId: number;
+        medicineName: string;
+        dosage: string;
+        mealRelation: string;
+        time: string;
+        memberTag: string;
+        customMemberName: string | null;
+        currentStock: number;
+        packageSize: number;
+        productId: number | null;
+        instructions: string;
+        status: 'taken' | 'skipped' | 'snoozed' | 'pending';
+        logId?: number;
+        actionTime?: string;
+      }>;
+      todayCompliance: {
+        totalDoses: number;
+        takenDoses: number;
+        skippedDoses: number;
+        pendingDoses: number;
+        percent: number;
+      };
+      lowStockCount: number;
+    }>(`/api/reminders${q}`);
+  },
+  createReminder: (body: {
+    medicineName: string;
+    productId?: number | null;
+    dosage?: string;
+    mealRelation?: string;
+    intakeTimes: string[];
+    startDate: string;
+    endDate?: string | null;
+    durationDays?: number | null;
+    currentStock?: number;
+    packageSize?: number;
+    lowStockThreshold?: number;
+    refillReminderEnabled?: boolean;
+    memberTag?: string;
+    customMemberName?: string | null;
+    instructions?: string;
+  }) => request<{ ok: boolean; reminder: any }>('/api/reminders', { method: 'POST', body: JSON.stringify(body) }),
+  updateReminder: (id: number, body: Record<string, unknown>) =>
+    request<{ ok: boolean; reminder: any }>(`/api/reminders/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteReminder: (id: number) =>
+    request<{ ok: boolean; id: number }>(`/api/reminders/${id}`, { method: 'DELETE' }),
+  takeMedication: (id: number, body: { scheduledDate: string; scheduledTime: string; status: 'taken' | 'skipped' | 'snoozed'; notes?: string }) =>
+    request<{ ok: boolean; reminder: any; log: any }>(`/api/reminders/${id}/take`, { method: 'POST', body: JSON.stringify(body) }),
+  refillAlerts: () =>
+    request<{
+      count: number;
+      alerts: Array<{
+        reminderId: number;
+        medicineName: string;
+        currentStock: number;
+        lowStockThreshold: number;
+        dosesPerDay: number;
+        daysRemaining: number;
+        productId: number | null;
+        product: any;
+        availableInStock: boolean;
+      }>;
+    }>('/api/reminders/refill-alerts'),
+  refillReminderToCart: (id: number) =>
+    request<{ ok: boolean; message: string; productName: string; cartCount: number }>(
+      `/api/reminders/${id}/refill-to-cart`,
+      { method: 'POST', body: JSON.stringify({}) }
+    ),
 };
 
 export { API_URL, newIdempotencyKey };

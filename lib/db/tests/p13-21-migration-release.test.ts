@@ -57,7 +57,7 @@ describe("P13.21 migration release inspection", () => {
     assert.deepEqual(report.missingCriticalTables, []);
     assert.equal(report.appliedCount, journal.entries.length);
     assert.equal(report.lastJournalTag, journal.entries.at(-1)?.tag);
-    assert.equal(report.lastJournalTag, "0014_fiscal_cheques_and_mxik");
+    assert.ok(report.appliedCount >= 15);
   });
 
   it("flags an applied hash that matches no migration file", async () => {

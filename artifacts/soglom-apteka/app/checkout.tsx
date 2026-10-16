@@ -22,8 +22,6 @@ import { confirmAction, notify } from '@/lib/dialogs';
 import type { TranslationKey } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
 import { fulfillmentTypeLabel, paymentMethodLabel } from '@/lib/orderLabels';
-import DeliveryMapPickerModal from '@/components/DeliveryMapPickerModal';
-import type { DeliveryAddressSelection, LatLng } from '@/lib/maps';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -39,13 +37,6 @@ const YELLOW = '#FFCC00';
 
 const PRICE_SNAP_KEY = 'vaksinamed-cart-price-snap';
 const FOCUS_FRESH_MS = 400;
-
-/**
- * Honest delivery timing — not an ETA. Sent as optional `window` so server does not store "Bugun 10:00 — 18:00".
- * API value: keep in Uzbek and untranslated; the UI shows `cart.checkoutDeliveryTiming` instead.
- */
-const DELIVERY_TIMING_HONEST = 'Yetkazib berish vaqti buyurtma tasdiqlangach aniqlanadi'; // i18n-ignore: API payload value
-const MIN_ADDRESS_LENGTH = 8;
 
 /** Localized fallback per checkout error code; Uzbek UI still shows the server message when present. */
 const CHECKOUT_ERROR_FALLBACK: Record<string, TranslationKey> = {
@@ -77,19 +68,8 @@ export default function CheckoutScreen() {
   const contentWidth = Math.min(width, 480);
 
   const [branchId, setBranchId] = useState<number | null>(null);
-  const [fulfillment, setFulfillment] = useState<'pickup' | 'delivery'>('pickup');
+  const fulfillment = 'pickup' as const;
   const [paymentMethod, setPaymentMethod] = useState('pay_at_branch');
-  const [addrDistrict, setAddrDistrict] = useState('');
-  const [addrStreet, setAddrStreet] = useState('');
-  const [addrHouse, setAddrHouse] = useState('');
-  const [addrApartment, setAddrApartment] = useState('');
-  const [addrEntrance, setAddrEntrance] = useState('');
-  const [addrFloor, setAddrFloor] = useState('');
-  const [addrLandmark, setAddrLandmark] = useState('');
-  const [addrComment, setAddrComment] = useState('');
-  const [addrCoords, setAddrCoords] = useState<LatLng | null>(null);
-  const [mapAddressResolved, setMapAddressResolved] = useState<string>('');
-  const [showMapPicker, setShowMapPicker] = useState(false);
   const [useCashback, setUseCashback] = useState(false);
   const [cart, setCart] = useState<any>(null);
   const [rules, setRules] = useState<any>(null);
@@ -171,10 +151,7 @@ export default function CheckoutScreen() {
   const hasItems = items.length > 0;
   const selectedBranch = cart?.branch || null;
 
-  const deliveryFeeKnown =
-    fulfillment !== 'delivery' || (rules != null && typeof rules.deliveryFee === 'number');
-  const deliveryFee =
-    fulfillment === 'delivery' && deliveryFeeKnown ? Number(rules.deliveryFee) : 0;
+  const deliveryFee = 0;
   const goods = Number(cart?.subtotal) || 0;
   const balanceNum = Number(balance) || 0;
   const maxSpendRatio =
@@ -195,83 +172,32 @@ export default function CheckoutScreen() {
       ? Math.min(balanceNum, Math.floor(goods * spendCap))
       : null;
   const cashbackUsed = cashbackPreview != null && cashbackPreview > 0 ? cashbackPreview : 0;
-  const totalPreview = Math.max(0, goods + deliveryFee - cashbackUsed);
+  const totalPreview = Math.max(0, goods - cashbackUsed);
 
   const stockIssues = items.filter((item: any) => Boolean(item.stockInsufficient));
 
-  const paymentOptions: Array<{ value: string; label: string; enabled: boolean; hint?: string }> = (
-    fulfillment === 'delivery'
-      ? [
-          {
-            value: 'payme',
-            label: t('cart.checkoutOnlinePayment'),
-            hint: t('cart.checkoutOnlinePaymentHint'),
-            enabled: true,
-          },
-        ]
-      : [
-          {
-            value: 'pay_at_branch',
-            label: paymentMethodLabel(t, 'pay_at_branch'),
-            hint: t('cart.checkoutPayAtBranchHint'),
-            enabled: true,
-          },
-        ]
-  ).filter((opt) => opt.enabled);
+  const paymentOptions: Array<{ value: string; label: string; enabled: boolean; hint?: string }> = [
+    {
+      value: 'pay_at_branch',
+      label: paymentMethodLabel(t, 'pay_at_branch'),
+      hint: t('cart.checkoutPayAtBranchHint'),
+      enabled: true,
+    },
+    {
+      value: 'payme',
+      label: paymentMethodLabel(t, 'payme'),
+      hint: t('cart.checkoutOnlinePaymentHint'),
+      enabled: true,
+    },
+    {
+      value: 'click',
+      label: paymentMethodLabel(t, 'click'),
+      hint: t('cart.checkoutOnlinePaymentHint'),
+      enabled: true,
+    },
+  ];
 
-  const handleMapConfirm = useCallback((selection: DeliveryAddressSelection) => {
-    setAddrCoords({ lat: selection.latitude, lng: selection.longitude });
-    const rawCoordPattern = /^-?\d+\.\d+,\s*-?\d+\.\d+$/;
-    const addr = selection.formattedAddress?.trim() || '';
-    if (addr && !rawCoordPattern.test(addr)) {
-      setMapAddressResolved(addr);
-    } else {
-      setMapAddressResolved('');
-    }
-    if (selection.district) setAddrDistrict(selection.district);
-    if (selection.street) setAddrStreet(selection.street);
-    if (selection.house) setAddrHouse(selection.house);
-  }, []);
-
-  // Structured address assembly for canonical delivery payload
-  const formattedAddress = useMemo(() => {
-    const parts: string[] = [];
-    const rawCoordPattern = /^-?\d+\.\d+,\s*-?\d+\.\d+$/;
-    const housePart = addrHouse.trim() ? `${addrHouse.trim()}-uy` : ''; // i18n-ignore
-    if (mapAddressResolved.trim() && !rawCoordPattern.test(mapAddressResolved.trim())) {
-      const resolved = mapAddressResolved.trim();
-      if (housePart && !resolved.includes(addrHouse.trim())) {
-        parts.push(`${resolved}, ${housePart}`);
-      } else {
-        parts.push(resolved);
-      }
-    } else {
-      const mainParts = [addrDistrict.trim(), addrStreet.trim(), housePart].filter(Boolean); // i18n-ignore
-      if (mainParts.length) parts.push(mainParts.join(', '));
-    }
-    const extraParts = [
-      addrApartment.trim() ? `${addrApartment.trim()}-xonadon` : '', // i18n-ignore
-      addrEntrance.trim() ? `${addrEntrance.trim()}-kirish` : '', // i18n-ignore
-      addrFloor.trim() ? `${addrFloor.trim()}-qavat` : '', // i18n-ignore
-    ].filter(Boolean);
-    if (extraParts.length) parts.push(extraParts.join(', '));
-    if (addrLandmark.trim()) parts.push(`Mo‘ljal: ${addrLandmark.trim()}`); // i18n-ignore
-    if (addrComment.trim()) parts.push(`Izoh: ${addrComment.trim()}`); // i18n-ignore
-    return parts.join(' | ');
-  }, [mapAddressResolved, addrDistrict, addrStreet, addrHouse, addrApartment, addrEntrance, addrFloor, addrLandmark, addrComment]);
-
-  const hasValidDeliveryAddress =
-    (
-      (Boolean(mapAddressResolved.trim()) && addrHouse.trim().length > 0) ||
-      (addrDistrict.trim().length > 0 && addrStreet.trim().length > 0 && addrHouse.trim().length > 0)
-    ) && formattedAddress.length >= MIN_ADDRESS_LENGTH;
-
-  const canSubmit =
-    hasItems
-    && branchId != null
-    && !submitting
-    && !(fulfillment === 'delivery' && !deliveryFeeKnown)
-    && !(fulfillment === 'delivery' && !hasValidDeliveryAddress);
+  const canSubmit = hasItems && branchId != null && !submitting;
 
   const explainBlocked = () => {
     if (!hasItems) {
@@ -280,19 +206,6 @@ export default function CheckoutScreen() {
     }
     if (!branchId) {
       notify(t('cart.branchLabel'), t('cart.checkoutBranchRequired'));
-      return;
-    }
-    if (fulfillment === 'delivery' && !deliveryFeeKnown) {
-      notify(t('cart.checkoutDeliveryTitle'), t('cart.checkoutDeliveryFeeFailed'));
-      return;
-    }
-    if (fulfillment === 'delivery' && !hasValidDeliveryAddress) {
-      const hasBaseLocation = Boolean(mapAddressResolved.trim()) || (addrDistrict.trim().length > 0 && addrStreet.trim().length > 0);
-      if (hasBaseLocation && !addrHouse.trim()) {
-        notify(t('cart.checkoutAddressTitle'), t('cart.checkoutHouseRequired'));
-        return;
-      }
-      notify(t('cart.checkoutAddressTitle'), t('cart.checkoutAddressRequired'));
       return;
     }
   };
@@ -310,14 +223,6 @@ export default function CheckoutScreen() {
     }
     if (!branchId) {
       notify(t('cart.branchLabel'), t('cart.checkoutBranchRequired'));
-      return;
-    }
-    if (fulfillment === 'delivery' && !deliveryFeeKnown) {
-      notify(t('cart.checkoutDeliveryTitle'), t('cart.checkoutDeliveryFeeFailed'));
-      return;
-    }
-    if (fulfillment === 'delivery' && !hasValidDeliveryAddress) {
-      notify(t('cart.checkoutAddressTitle'), t('cart.checkoutAddressRequired'));
       return;
     }
     if (stockIssues.length) {
@@ -351,12 +256,10 @@ export default function CheckoutScreen() {
       const result = await api.checkout(
         {
           branchId,
-          fulfillment,
+          fulfillment: 'pickup',
           paymentMethod,
-          address: formattedAddress,
+          address: '',
           useCashback: Boolean(useCashback && showCashback),
-          // Existing optional field — honest label, not a scheduled ETA/window.
-          ...(fulfillment === 'delivery' ? { window: DELIVERY_TIMING_HONEST } : {}),
         },
         { idempotencyKey: idempotencyRef.current },
       );
@@ -621,210 +524,15 @@ export default function CheckoutScreen() {
 
         {/* Fulfillment */}
         <Text style={styles.sectionTitle}>{t('cart.checkoutFulfillmentTitle')}</Text>
-        <View style={styles.pillRow}>
-          <Pressable
-            style={[styles.pill, fulfillment === 'pickup' && styles.pillActive]}
-            onPress={() => {
-              setFulfillment('pickup');
-              setPaymentMethod('pay_at_branch');
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ selected: fulfillment === 'pickup' }}
-            accessibilityLabel={fulfillmentTypeLabel(t, 'pickup')}
-          >
-            <Text style={[styles.pillText, fulfillment === 'pickup' && styles.pillTextActive]}>
-              {fulfillmentTypeLabel(t, 'pickup')}
+        <View style={styles.infoCard} accessibilityRole="text">
+          <Feather name="shopping-bag" size={18} color={PURPLE} />
+          <View style={styles.infoBody}>
+            <Text style={styles.infoTitle}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
+            <Text style={styles.infoText}>
+              {t('cart.checkoutPickupInfo')}
             </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.pill, fulfillment === 'delivery' && styles.pillActive]}
-            onPress={() => {
-              setFulfillment('delivery');
-              setPaymentMethod('payme');
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ selected: fulfillment === 'delivery' }}
-            accessibilityLabel={fulfillmentTypeLabel(t, 'delivery')}
-          >
-            <Text style={[styles.pillText, fulfillment === 'delivery' && styles.pillTextActive]}>
-              {fulfillmentTypeLabel(t, 'delivery')}
-            </Text>
-          </Pressable>
+          </View>
         </View>
-
-        {fulfillment === 'pickup' ? (
-          <View style={styles.infoCard} accessibilityRole="text">
-            <Feather name="shopping-bag" size={16} color={PURPLE} />
-            <View style={styles.infoBody}>
-              <Text style={styles.infoTitle}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
-              <Text style={styles.infoText}>
-                {t('cart.checkoutPickupInfo')}
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.deliveryBlock}>
-            <View style={styles.infoCard} accessibilityRole="text">
-              <Feather name="truck" size={16} color={PURPLE} />
-              <View style={styles.infoBody}>
-                <Text style={styles.infoTitle}>{fulfillmentTypeLabel(t, 'delivery')}</Text>
-                <Text style={styles.infoText}>
-                  {t('cart.checkoutDeliveryInfo')}
-                </Text>
-                <Text style={styles.infoTiming}>{t('cart.checkoutDeliveryTiming')}</Text>
-                {deliveryFeeKnown ? (
-                  <Text
-                    style={styles.infoFee}
-                    accessibilityLabel={t('cart.checkoutDeliveryFeeA11y', { amount: fmt.money(deliveryFee) })}
-                  >
-                    {t('cart.checkoutDeliveryFee', { amount: fmt.money(deliveryFee) })}
-                  </Text>
-                ) : (
-                  <Text style={styles.infoFeeWarn}>{t('cart.checkoutDeliveryFeePending')}</Text>
-                )}
-              </View>
-            </View>
-
-            <Text style={styles.fieldLabel}>{t('cart.checkoutAddressLabel')}</Text>
-
-            {/* Map Address Picker CTA & Resolved Card */}
-            {mapAddressResolved ? (
-              <View style={styles.resolvedAddressCard}>
-                <View style={styles.resolvedAddressHeader}>
-                  <View style={styles.resolvedIconWrap}>
-                    <Feather name="map-pin" size={18} color={PURPLE} />
-                  </View>
-                  <View style={styles.resolvedTextWrap}>
-                    <Text style={styles.resolvedLabel}>{t('cart.checkoutSelectedAddress')}</Text>
-                    <Text style={styles.resolvedAddressText} numberOfLines={2}>
-                      {mapAddressResolved}
-                    </Text>
-                  </View>
-                </View>
-                <Pressable
-                  style={styles.changeAddressBtn}
-                  onPress={() => setShowMapPicker(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('cart.checkoutChangeAddress')}
-                >
-                  <Feather name="edit-2" size={14} color={PURPLE} />
-                  <Text style={styles.changeAddressBtnText}>{t('cart.checkoutChangeAddress')}</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                style={styles.pickMapBtn}
-                onPress={() => setShowMapPicker(true)}
-                accessibilityRole="button"
-                accessibilityLabel={t('cart.checkoutPickOnMap')}
-              >
-                <Feather name="map" size={18} color={PURPLE} />
-                <Text style={styles.pickMapBtnText}>{t('cart.checkoutPickOnMap')}</Text>
-              </Pressable>
-            )}
-
-            {!mapAddressResolved ? (
-              <>
-                <TextInput
-                  value={addrDistrict}
-                  onChangeText={setAddrDistrict}
-                  placeholder={t('cart.checkoutAddrDistrict')}
-                  placeholderTextColor={MUTED}
-                  style={styles.input}
-                  accessibilityLabel={t('cart.checkoutAddrDistrict')}
-                  autoCorrect={false}
-                />
-
-                <TextInput
-                  value={addrStreet}
-                  onChangeText={setAddrStreet}
-                  placeholder={t('cart.checkoutAddrStreet')}
-                  placeholderTextColor={MUTED}
-                  style={styles.input}
-                  accessibilityLabel={t('cart.checkoutAddrStreet')}
-                  autoCorrect={false}
-                />
-              </>
-            ) : null}
-
-            <View style={styles.multiFieldRow}>
-              <View style={styles.multiFieldThird}>
-                <TextInput
-                  value={addrHouse}
-                  onChangeText={setAddrHouse}
-                  placeholder={`${t('cart.checkoutAddrHouse')} *`}
-                  placeholderTextColor={MUTED}
-                  style={styles.input}
-                  accessibilityLabel={`${t('cart.checkoutAddrHouse')} *`}
-                  autoCorrect={false}
-                />
-              </View>
-              <View style={styles.multiFieldThird}>
-                <TextInput
-                  value={addrApartment}
-                  onChangeText={setAddrApartment}
-                  placeholder={t('cart.checkoutAddrApartment')}
-                  placeholderTextColor={MUTED}
-                  style={styles.input}
-                  accessibilityLabel={t('cart.checkoutAddrApartment')}
-                  autoCorrect={false}
-                />
-              </View>
-              <View style={styles.multiFieldThird}>
-                <TextInput
-                  value={addrEntrance}
-                  onChangeText={setAddrEntrance}
-                  placeholder={t('cart.checkoutAddrEntrance')}
-                  placeholderTextColor={MUTED}
-                  style={styles.input}
-                  accessibilityLabel={t('cart.checkoutAddrEntrance')}
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-
-            <View style={styles.multiFieldRow}>
-              <View style={styles.multiFieldHalf}>
-                <TextInput
-                  value={addrFloor}
-                  onChangeText={setAddrFloor}
-                  placeholder={t('cart.checkoutAddrFloor')}
-                  placeholderTextColor={MUTED}
-                  style={styles.input}
-                  accessibilityLabel={t('cart.checkoutAddrFloor')}
-                  autoCorrect={false}
-                />
-              </View>
-              <View style={styles.multiFieldHalf}>
-                <TextInput
-                  value={addrLandmark}
-                  onChangeText={setAddrLandmark}
-                  placeholder={t('cart.checkoutAddrLandmark')}
-                  placeholderTextColor={MUTED}
-                  style={styles.input}
-                  accessibilityLabel={t('cart.checkoutAddrLandmark')}
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-
-            <TextInput
-              value={addrComment}
-              onChangeText={setAddrComment}
-              placeholder={t('cart.checkoutAddrComment')}
-              placeholderTextColor={MUTED}
-              style={styles.input}
-              accessibilityLabel={t('cart.checkoutAddrComment')}
-              autoCorrect={false}
-            />
-
-            {!hasValidDeliveryAddress && (addrDistrict.length > 0 || addrStreet.length > 0 || addrHouse.length > 0) ? (
-              <Text style={styles.inlineHintWarn}>
-                {t('cart.checkoutAddressTooShort', { min: MIN_ADDRESS_LENGTH })}
-              </Text>
-            ) : null}
-          </View>
-        )}
 
         {/* Cashback */}
         {showCashback ? (
@@ -920,13 +628,6 @@ export default function CheckoutScreen() {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>{t('cart.summaryTitle')}</Text>
           <SummaryRow label={t('cart.summaryItems')} value={fmt.money(goods)} />
-          {fulfillment === 'delivery' ? (
-            deliveryFeeKnown ? (
-              <SummaryRow label={fulfillmentTypeLabel(t, 'delivery')} value={fmt.money(deliveryFee)} />
-            ) : (
-              <SummaryRow label={fulfillmentTypeLabel(t, 'delivery')} value={t('common.unknown')} warn />
-            )
-          ) : null}
           {useCashback && cashbackUsed > 0 ? (
             <SummaryRow label={t('common.navCashback')} value={`− ${fmt.money(cashbackUsed)}`} warn />
           ) : null}
@@ -985,14 +686,6 @@ export default function CheckoutScreen() {
         </View>
       ) : null}
 
-      {/* Delivery Map Picker Modal */}
-      <DeliveryMapPickerModal
-        visible={showMapPicker}
-        onClose={() => setShowMapPicker(false)}
-        onConfirm={handleMapConfirm}
-        initialCoords={addrCoords}
-        initialAddress={mapAddressResolved}
-      />
     </View>
   );
 }

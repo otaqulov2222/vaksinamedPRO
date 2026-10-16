@@ -80,11 +80,22 @@ export function formatDate(
   return withTime ? `${out}, ${formatTime(d)}` : out;
 }
 
+const WEEKDAYS_SHORT: Record<Language, readonly string[]> = {
+  uz: ['Yak', 'Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan'],
+  ru: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
+  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+};
+
+export function formatWeekdayShort(date: Date, language: Language): string {
+  return WEEKDAYS_SHORT[language][date.getDay()];
+}
+
 export type Formatters = {
   money: (value: number) => string;
   number: (value: number) => string;
   date: (input: string | number | Date | null | undefined, options?: DateFormatOptions) => string;
   time: (input: string | number | Date | null | undefined) => string;
+  weekdayShort: (date: Date) => string;
 };
 
 export function createFormatters(language: Language): Formatters {
@@ -93,5 +104,6 @@ export function createFormatters(language: Language): Formatters {
     number: (value) => formatNumber(value, language),
     date: (input, options) => formatDate(input, language, options),
     time: (input) => formatTime(input),
+    weekdayShort: (date) => formatWeekdayShort(date, language),
   };
 }

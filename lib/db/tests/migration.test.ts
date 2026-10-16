@@ -89,6 +89,12 @@ describe("P1 migration foundation", () => {
     }
   });
 
+  it("creates Phase 15 medication reminders and logs tables", async () => {
+    const tables = await listPublicTables(db);
+    assert.ok(tables.includes("medication_reminders"), "missing medication_reminders table");
+    assert.ok(tables.includes("medication_logs"), "missing medication_logs table");
+  });
+
   it("re-applying migrations is idempotent (deterministic)", async () => {
     const before = await listAppliedMigrationHashes(db);
     await applyMigrations(db, "pglite", getMigrationsFolder());

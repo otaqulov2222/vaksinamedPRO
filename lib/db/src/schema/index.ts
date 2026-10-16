@@ -7,6 +7,7 @@ export * from "./auth";
 export * from "./inventory";
 export * from "./cashback";
 export * from "./payments";
+export * from "./medicationReminders";
 
 export { customers as loyaltyCustomers } from "./customers";
 export { loyaltyLedger as loyaltyTransactions } from "./commerce";

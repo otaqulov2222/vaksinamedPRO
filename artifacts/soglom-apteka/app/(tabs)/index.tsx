@@ -1,4 +1,5 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -34,7 +35,7 @@ const LAVENDER = '#F1EBFF';
 const HERO_AR = 1825 / 862;
 const SCREEN_PAD = 20;
 /** Vertical rhythm between major Home sections */
-const SPACE = 16;
+const SPACE = 12;
 
 
 function productIconName(icon?: string): React.ComponentProps<typeof MaterialCommunityIcons>['name'] {
@@ -55,7 +56,7 @@ function branchHoursLabel(t: TFunction, branch: { hours?: string; is24h?: boolea
 }
 
 const QUICK: {
-  icon: 'pill' | 'camera-outline' | 'map-marker-outline' | 'truck-delivery-outline';
+  icon: 'pill' | 'camera-outline' | 'alarm' | 'map-marker-outline';
   labelKey: TranslationKey;
   to: string;
   clearQ?: boolean;
@@ -63,8 +64,8 @@ const QUICK: {
 }[] = [
   { icon: 'pill', labelKey: 'home.quickSearch', to: '/(tabs)/catalog', clearQ: true, bg: '#FFF4CC' },
   { icon: 'camera-outline', labelKey: 'catalog.prescriptionScanAction', to: '/prescription', bg: '#EDE9FE' },
+  { icon: 'alarm', labelKey: 'reminders.quickActionReminders', to: '/reminders', bg: '#FEE2E2' },
   { icon: 'map-marker-outline', labelKey: 'common.navBranches', to: '/branches', bg: LAVENDER },
-  { icon: 'truck-delivery-outline', labelKey: 'home.quickDelivery', to: '/cart', bg: LAVENDER },
 ];
 
 const HERO_IMAGES: Record<string, any> = {
@@ -332,11 +333,7 @@ export default function HomeScreen() {
             }}
             style={({ pressed }) => [styles.quickItem, pressed && styles.pressed]}
             accessibilityRole="button"
-            accessibilityLabel={
-              item.to === '/cart'
-                ? t('home.quickDeliveryA11y')
-                : t(item.labelKey)
-            }
+            accessibilityLabel={t(item.labelKey)}
           >
             <View style={[styles.quickIcon, { backgroundColor: item.bg }]}>
               <MaterialCommunityIcons name={item.icon} size={24} color={PURPLE} />
@@ -347,133 +344,123 @@ export default function HomeScreen() {
           </Pressable>
         ))}
       </View>
-
-      {/* PRESCRIPTION SCANNER PROMO */}
+      {/* VIP LOYALTY & CASHBACK CARD */}
       <Pressable
-        onPress={() => router.push('/prescription')}
-        style={({ pressed }) => [styles.rxPromoCard, pressed && styles.pressed]}
+        onPress={() => router.push('/cashback')}
+        style={({ pressed }) => [styles.loyaltyCard, pressed && styles.cardPressed]}
         accessibilityRole="button"
-        accessibilityLabel={t('catalog.prescriptionScanAction')}
+        accessibilityLabel={`${t('home.balanceLabel')}: ${fmt.money(balance)}`}
       >
-        <View style={styles.rxPromoIconBox}>
-          <MaterialCommunityIcons name="file-document-edit-outline" size={24} color="#FFFFFF" />
-        </View>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={styles.rxPromoTitle}>{t('catalog.prescriptionScanBannerTitle')}</Text>
-          <Text style={styles.rxPromoSub}>{t('catalog.prescriptionScanBannerSub')}</Text>
-        </View>
-        <View style={styles.rxPromoArrowBox}>
-          <Feather name="chevron-right" size={18} color={PURPLE} />
-        </View>
-      </Pressable>
+        <LinearGradient
+          colors={['#2E105C', '#160430']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.loyaltyGradient}
+        >
+          <View style={styles.loyaltyDecorGlow} pointerEvents="none" />
 
-      {/* BALANCE + NEAREST */}
-      <View style={[styles.twoCol, { gap: colGap }]}>
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>{t('home.balanceLabel')}</Text>
-          <Text style={styles.balance} adjustsFontSizeToFit minimumFontScale={0.8} numberOfLines={1}>
-            {fmt.money(balance)}
-          </Text>
-          <View style={styles.tierRow}>
-            <MaterialCommunityIcons name="medal-outline" size={15} color="#C9A227" />
-            <Text style={styles.tier}>
-              {String(user.tier || '').trim()
-                ? t('home.tierName', { tier: String(user.tier).trim() })
-                : t('home.tierNone')}
-            </Text>
+          {/* Top Row: Label & Tier Badge */}
+          <View style={styles.loyaltyTopRow}>
+            <View style={styles.loyaltyBrandBadge}>
+              <View style={styles.sparkleWrap}>
+                <MaterialCommunityIcons name="star-four-points" size={12} color="#FFD166" />
+              </View>
+              <Text style={styles.loyaltyBrandTitle}>{t('home.balanceLabel')}</Text>
+            </View>
+
+            <View style={styles.tierCapsule}>
+              <MaterialCommunityIcons name="crown-outline" size={13} color="#FFD166" />
+              <Text style={styles.tierCapsuleText} numberOfLines={1}>
+                {String(user.tier || '').trim()
+                  ? t('home.tierName', { tier: String(user.tier).trim() })
+                  : t('home.tierNone')}
+              </Text>
+            </View>
           </View>
+
+          {/* Middle Row: Big bold Balance + Quick Action CTA */}
+          <View style={styles.loyaltyMainRow}>
+            <View style={styles.loyaltyBalanceWrap}>
+              <Text style={styles.loyaltyBalanceValue} numberOfLines={1}>
+                {fmt.money(balance)}
+              </Text>
+            </View>
+            <View style={styles.loyaltyActionPill}>
+              <Text style={styles.loyaltyActionText}>{t('home.cashbackHistory')}</Text>
+              <Feather name="chevron-right" size={13} color="#FFFFFF" />
+            </View>
+          </View>
+
+          {/* Bottom Section: Next tier progress */}
           {nextTierTarget != null ? (
-            <View style={styles.progressWrap}>
-              <ProgressLine progress={tierProgress} />
+            <View style={styles.loyaltyProgressSection}>
+              <View style={styles.loyaltyTrack}>
+                <View
+                  style={[
+                    styles.loyaltyFill,
+                    { width: `${Math.min(100, Math.max(0, Math.round(tierProgress * 100)))}%` },
+                  ]}
+                />
+              </View>
+              <Text style={styles.loyaltyProgressText} numberOfLines={1}>
+                {String(user?.tier || '').toLowerCase().includes('plat')
+                  ? t('home.tierTop')
+                  : left != null
+                    ? t('home.nextTierLeft', { amount: fmt.money(left) })
+                    : t('home.nextTierUnknown')}
+              </Text>
             </View>
           ) : null}
-          <Text style={styles.progressCaption}>
-            {String(user?.tier || '').toLowerCase().includes('plat')
-              ? t('home.tierTop')
-              : left != null
-                ? t('home.nextTierLeft', { amount: fmt.money(left) })
-                : t('home.nextTierUnknown')}
-          </Text>
-          <View style={styles.cardFooter}>
-            <Pressable
-              onPress={() => router.push('/checkout')}
-              style={({ pressed }) => [styles.primaryCardBtn, pressed && styles.pressed]}
-              accessibilityLabel={t('home.spendCashbackA11y')}
-            >
-              <Text style={styles.primaryCardBtnText}>{t('home.spendCashback')}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push('/cashback')}
-              style={({ pressed }) => [styles.secondaryCardBtn, pressed && styles.pressed]}
-              accessibilityLabel={t('home.cashbackHistory')}
-            >
-              <Text style={styles.secondaryCardBtnText}>{t('home.cashbackHistory')}</Text>
-            </Pressable>
-          </View>
+        </LinearGradient>
+      </Pressable>
+
+      {/* NEAREST PHARMACY BRANCH CARD */}
+      <Pressable
+        onPress={() => router.push('/branches')}
+        style={({ pressed }) => [styles.nearestCard, pressed && styles.cardPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={
+          nearest
+            ? `${t('home.nearestBranchLabel')}: ${localizedBranchName(language, nearest.name)}`
+            : t('home.viewBranches')
+        }
+      >
+        <View style={styles.nearestIconBox}>
+          <MaterialCommunityIcons name="storefront-outline" size={22} color={PURPLE} />
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>
-            {nearestLoading
-              ? t('home.branchLabel')
-              : nearestLocated
-                ? t('home.nearestBranchLabel')
-                : t('home.branchLabel')}
-          </Text>
-          <View
-            style={styles.nearPhotoWrap}
-            accessibilityLabel={t('home.nearPhotoA11y')}
-          >
-            <Image
-              source={require('../../assets/images/home-near-photo.jpg')}
-              style={styles.nearPhoto}
-              resizeMode="cover"
-              fadeDuration={0}
-              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-            />
-          </View>
-          {nearestLoading ? (
-            <View style={styles.nearLoadingRow}>
-              <ActivityIndicator size="small" color={PURPLE} />
-              <Text style={styles.nearMeta}>{t('home.branchLoading')}</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.nearName} numberOfLines={2}>
-                {nearest ? `VAKSINA MED — ${localizedBranchName(language, nearest.name)}` : t('home.branchesFallback')}
+        <View style={styles.nearestContentCol}>
+          <View style={styles.nearestHeaderRow}>
+            <Text style={styles.nearestHeaderLabel} numberOfLines={1}>
+              {nearestLocated ? t('home.nearestBranchLabel') : t('home.branchLabel')}
+            </Text>
+            <View style={styles.nearestStatusBadge}>
+              <View style={[styles.statusDot, !nearest && { backgroundColor: '#CBD5E1' }]} />
+              <Text style={styles.statusText} numberOfLines={1}>
+                {branchHoursLabel(t, nearest)}
               </Text>
-              <View style={styles.openRow}>
-                <View style={[styles.hoursDot, !nearest && { backgroundColor: '#CBD5E1' }]} />
-                <Text style={styles.hoursText} numberOfLines={1}>
-                  {branchHoursLabel(t, nearest)}
-                </Text>
-              </View>
-              {nearestLocated && nearest?.distanceKm != null ? (
-                <Text style={styles.nearMeta} numberOfLines={1}>
-                  {t('home.distanceNear', { distance: nearest.distanceKm })}
-                </Text>
-              ) : nearest?.address ? (
-                <Text style={styles.nearMeta} numberOfLines={2}>
-                  {localizedBranchAddress(language, nearest.address)}
-                </Text>
-              ) : (
-                <Text style={styles.nearMeta} numberOfLines={2}>
-                  {t('home.openBranchList')}
-                </Text>
-              )}
-            </>
-          )}
-          <View style={styles.cardFooter}>
-            <Pressable
-              onPress={() => router.push('/branches')}
-              style={({ pressed }) => [styles.secondaryCardBtn, pressed && styles.pressed]}
-              accessibilityLabel={t('home.viewBranches')}
-            >
-              <Text style={styles.secondaryCardBtnText}>{t('home.viewBranches')} →</Text>
-            </Pressable>
+            </View>
           </View>
+
+          <Text style={styles.nearestBranchName} numberOfLines={1}>
+            {nearest
+              ? `VAKSINA MED — ${localizedBranchName(language, nearest.name)}`
+              : t('home.branchesFallback')}
+          </Text>
+
+          <Text style={styles.nearestAddressText} numberOfLines={1}>
+            {nearestLocated && nearest?.distanceKm != null
+              ? `${t('home.distanceNear', { distance: nearest.distanceKm })} · ${localizedBranchAddress(language, nearest.address)}`
+              : nearest?.address
+                ? localizedBranchAddress(language, nearest.address)
+                : t('home.openBranchList')}
+          </Text>
         </View>
-      </View>
+
+        <View style={styles.nearestArrowWrap}>
+          <Feather name="chevron-right" size={16} color={PURPLE} />
+        </View>
+      </Pressable>
 
       <View style={styles.sectionRow}>
         <Text style={styles.section} numberOfLines={1}>
@@ -701,14 +688,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
-    minHeight: 88,
+    gap: 6,
+    paddingVertical: 3,
+    minHeight: 82,
   },
   quickIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -720,132 +707,223 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  twoCol: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    marginBottom: 0,
+  loyaltyCard: {
     width: '100%',
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#2A1054',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 10,
   },
-  card: {
-    flex: 1,
-    minWidth: 0,
-    backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
+  loyaltyGradient: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  cardLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    lineHeight: 16,
-    color: MUTED,
+  loyaltyDecorGlow: {
+    position: 'absolute',
+    top: -30,
+    right: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(106, 34, 214, 0.35)',
   },
-  balance: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    lineHeight: 28,
-    color: PURPLE_DEEP,
-    marginTop: 8,
-    letterSpacing: -0.3,
+  loyaltyTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  tierRow: {
+  loyaltyBrandBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginTop: 10,
   },
-  tier: {
+  sparkleWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 209, 102, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loyaltyBrandTitle: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
     lineHeight: 16,
-    color: '#5B4B72',
-    flexShrink: 1,
+    color: '#E0D4F7',
+    letterSpacing: 0.2,
   },
-  progressWrap: {
-    marginTop: 10,
+  tierCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
   },
-  progressCaption: {
-    fontFamily: 'Inter_400Regular',
+  tierCapsuleText: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 11,
     lineHeight: 15,
-    color: MUTED,
+    color: '#FFD166',
+  },
+  loyaltyMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  loyaltyBalanceWrap: {
+    flex: 1,
+  },
+  loyaltyBalanceValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 22,
+    lineHeight: 28,
+    color: '#FFFFFF',
+    letterSpacing: -0.4,
+  },
+  loyaltyActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  loyaltyActionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#FFFFFF',
+  },
+  loyaltyProgressSection: {
     marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
   },
-  cardFooter: {
-    marginTop: 'auto' as unknown as number,
-    paddingTop: 12,
-    gap: 8,
-  },
-  primaryCardBtn: {
-    minHeight: 42,
-    borderRadius: 12,
-    backgroundColor: PURPLE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-  },
-  primaryCardBtnText: {
-    color: '#fff',
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
-  },
-  secondaryCardBtn: {
-    minHeight: 40,
-    borderRadius: 12,
-    backgroundColor: '#F3EAFB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 9,
-  },
-  secondaryCardBtnText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    lineHeight: 16,
-    color: PURPLE,
-    textAlign: 'center',
-  },
-
-  nearPhotoWrap: {
-    marginTop: 10,
-    width: '100%',
-    aspectRatio: 688 / 256,
-    borderRadius: 12,
-    marginBottom: 10,
-    backgroundColor: '#1a0a2e',
+  loyaltyTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     overflow: 'hidden',
   },
-  nearPhoto: {
-    width: '100%',
+  loyaltyFill: {
     height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#FFD166',
   },
-  nearName: {
+  loyaltyProgressText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10.5,
+    lineHeight: 14,
+    color: '#D1C2EB',
+    marginTop: 4,
+  },
+
+  nearestCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    padding: 11,
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: '#1A1040',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    gap: 10,
+  },
+  nearestIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  nearestContentCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nearestHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 2,
+  },
+  nearestHeaderLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10.5,
+    lineHeight: 14,
+    color: MUTED,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  nearestStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: '#ECFDF5',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  statusText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10.5,
+    lineHeight: 13,
+    color: '#059669',
+  },
+  nearestBranchName: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 13,
+    fontSize: 13.5,
     lineHeight: 18,
     color: PURPLE_DEEP,
-    minHeight: 36,
   },
-  openRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  hoursDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#94A3B8', flexShrink: 0 },
-  hoursText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    lineHeight: 16,
-    color: MUTED,
-    flexShrink: 1,
-  },
-  nearLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  nearMeta: {
+  nearestAddressText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    fontSize: 11.5,
     lineHeight: 15,
     color: MUTED,
-    marginTop: 4,
+    marginTop: 1,
+  },
+  nearestArrowWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F7F5FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.995 }],
   },
 
   sectionRow: {
@@ -993,46 +1071,6 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 10,
     backgroundColor: '#EDE7F5',
-  },
-  rxPromoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAF5FF',
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 4,
-    marginBottom: SPACE,
-    borderWidth: 1,
-    borderColor: '#E8DEF8',
-  },
-  rxPromoIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: PURPLE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rxPromoTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 18,
-    color: PURPLE_DEEP,
-  },
-  rxPromoSub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
-    color: MUTED,
-    marginTop: 2,
-  },
-  rxPromoArrowBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#F1EBFF',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   bottomClearance: {
     height: Platform.OS === 'web' ? 48 : 68,
