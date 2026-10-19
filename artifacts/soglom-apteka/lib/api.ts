@@ -10,6 +10,9 @@ function resolveApiUrl(): string {
     if ((host === 'localhost' || host === '127.0.0.1') && (!envUrl || envUrl.includes('vaksinamedgps.uz'))) {
       return `http://${host}:5000`;
     }
+    if (window.location.origin && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')) {
+      return window.location.origin;
+    }
   }
   return envUrl || 'https://api-staging.vaksinamedgps.uz';
 }
@@ -334,6 +337,51 @@ export const api = {
       `/api/reminders/${id}/refill-to-cart`,
       { method: 'POST', body: JSON.stringify({}) }
     ),
+  familyMembers: () =>
+    request<{
+      members: Array<{
+        id: number;
+        fullName: string;
+        relationship: string;
+        birthDate: string | null;
+        phone: string | null;
+        chronicConditions: string;
+        notes: string;
+        notifyCaregiver: boolean;
+        activeRemindersCount: number;
+        lowStockCount: number;
+        hasLowStockAlert: boolean;
+      }>;
+      count: number;
+    }>('/api/family'),
+  createFamilyMember: (body: {
+    fullName: string;
+    relationship?: string;
+    birthDate?: string | null;
+    phone?: string | null;
+    chronicConditions?: string;
+    notes?: string;
+    notifyCaregiver?: boolean;
+  }) =>
+    request<{ ok: boolean; member: any }>('/api/family', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateFamilyMember: (id: number, body: Record<string, unknown>) =>
+    request<{ ok: boolean; member: any }>(`/api/family/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteFamilyMember: (id: number) =>
+    request<{ ok: boolean; id: number }>(`/api/family/${id}`, { method: 'DELETE' }),
+  familyMemberSummary: (id: number) =>
+    request<{
+      member: any;
+      reminders: any[];
+      todayLogs: any[];
+      lowStockAlerts: any[];
+      needsCaregiverAttention: boolean;
+    }>(`/api/family/${id}/summary`),
 };
 
 export { API_URL, newIdempotencyKey };

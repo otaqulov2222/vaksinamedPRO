@@ -173,10 +173,25 @@ export default function ProductScreen() {
     }
   }, [maxQty, qty]);
 
-  const analogs = useMemo(() => {
-    if (!product || !Array.isArray(data?.analogs)) return [];
-    return data.analogs.filter((item: any) => item?.id != null && item.id !== product.id);
+  const { cheaperAnalogs, regularAnalogs } = useMemo(() => {
+    if (!product || !Array.isArray(data?.analogs)) return { cheaperAnalogs: [], regularAnalogs: [] };
+    const originalPrice = Number(product.price) || 0;
+    const all = data.analogs
+      .filter((item: any) => item?.id != null && item.id !== product.id)
+      .map((item: any) => {
+        const price = Number(item.price) || 0;
+        const isCheaper = price < originalPrice;
+        const savings = Math.max(0, originalPrice - price);
+        const savingsPercent = isCheaper && originalPrice > 0 ? Math.round((savings / originalPrice) * 100) : 0;
+        return { ...item, isCheaper, savings, savingsPercent };
+      });
+
+    const cheaper = all.filter((a: any) => a.isCheaper).sort((a: any, b: any) => a.price - b.price);
+    const regular = all.filter((a: any) => !a.isCheaper);
+    return { cheaperAnalogs: cheaper, regularAnalogs: regular };
   }, [data?.analogs, product]);
+
+  const analogs = regularAnalogs;
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
@@ -486,6 +501,92 @@ export default function ProductScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('catalog.aboutProduct')}</Text>
             <Text style={styles.description}>{description}</Text>
+          </View>
+        ) : null}
+
+        {cheaperAnalogs.length > 0 ? (
+          <View style={styles.cheaperSection}>
+            <View style={styles.cheaperHeader}>
+              <View style={styles.cheaperBadgeIcon}>
+                <MaterialCommunityIcons name="lightning-bolt" size={20} color="#059669" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cheaperTitle}>{t('catalog.cheaperAnalogsTitle')}</Text>
+                <Text style={styles.cheaperSubtitle}>
+                  {t('catalog.cheaperAnalogsSubtitle', {
+                    amount: fmt.money(cheaperAnalogs[0].savings),
+                  })}
+                </Text>
+              </View>
+            </View>
+
+            {cheaperAnalogs.map((item: any) => (
+              <View key={item.id} style={styles.cheaperCard}>
+                <Pressable
+                  style={styles.cheaperCardTop}
+                  onPress={() => router.push(`/product/${item.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={localizedName(language, item)}
+                >
+                  <View style={styles.analogIcon}>
+                    <MaterialCommunityIcons
+                      name={
+                        (item.icon && item.icon in MaterialCommunityIcons.glyphMap
+                          ? item.icon
+                          : 'pill') as React.ComponentProps<typeof MaterialCommunityIcons>['name']
+                      }
+                      size={22}
+                      color="#059669"
+                    />
+                  </View>
+                  <View style={styles.analogBody}>
+                    <Text style={styles.analogName} numberOfLines={2}>
+                      {localizedName(language, item)}
+                    </Text>
+                    {item.manufacturer ? (
+                      <Text style={styles.analogMeta} numberOfLines={1}>
+                        {item.manufacturer}
+                      </Text>
+                    ) : null}
+                    <View style={styles.savingsPillWrap}>
+                      <Text style={styles.savingsPillText}>
+                        {t('catalog.savingsPill', {
+                          amount: fmt.money(item.savings),
+                          percent: item.savingsPercent,
+                        })}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Text style={styles.cheaperPrice}>{fmt.money(Number(item.price) || 0)}</Text>
+                    <Text style={styles.originalStrikethrough}>
+                      {fmt.money(Number(product.price) || 0)}
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={styles.substituteBtn}
+                  onPress={async () => {
+                    try {
+                      await api.addToCart(item.id, 1);
+                      await refresh();
+                      notify(
+                        t('catalog.addedToCartShort'),
+                        `${localizedName(language, item)} ${t('catalog.addedToCartShort')}`,
+                      );
+                    } catch {
+                      notify(t('catalog.addToCartFailed'), t('catalog.loadFailedHint'));
+                    }
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('catalog.substituteToCart')}
+                >
+                  <MaterialCommunityIcons name="cart-plus" size={16} color="#059669" />
+                  <Text style={styles.substituteBtnText}>{t('catalog.substituteToCart')}</Text>
+                </Pressable>
+              </View>
+            ))}
           </View>
         ) : null}
 
@@ -1016,6 +1117,93 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
+  },
+
+  cheaperSection: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    padding: 16,
+    gap: 12,
+  },
+  cheaperHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cheaperBadgeIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cheaperTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: '#065F46',
+  },
+  cheaperSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#047857',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  cheaperCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    padding: 12,
+    gap: 10,
+  },
+  cheaperCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  savingsPillWrap: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#DEF7EC',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginTop: 4,
+  },
+  savingsPillText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: '#03543F',
+  },
+  cheaperPrice: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: '#059669',
+  },
+  originalStrikethrough: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: MUTED,
+    textDecorationLine: 'line-through',
+  },
+  substituteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  substituteBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#059669',
   },
 
   skel: {

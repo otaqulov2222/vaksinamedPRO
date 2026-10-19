@@ -240,6 +240,101 @@ router.get("/catalog/products/:id", async (req, res, next) => {
   }
 });
 
+/**
+ * GET /catalog/products/:id/analogs or /api/catalog/products/:id/analogs
+ * Smart generic substitution engine: returns cheaper alternative medicines with identical or equivalent action,
+ * computes exact savings in UZS and percent, and returns real-time branch stock.
+ */
+router.get(["/catalog/products/:id/analogs", "/api/catalog/products/:id/analogs"], async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(404).json({ message: "Mahsulot topilmadi", code: "PRODUCT_NOT_FOUND" });
+    }
+
+    const prodRows = await db.select().from(products).where(eq(products.id, id)).limit(1);
+    const product = prodRows[0];
+    if (!product) {
+      return res.status(404).json({ message: "Mahsulot topilmadi", code: "PRODUCT_NOT_FOUND" });
+    }
+
+    let branchId = 0;
+    if (req.query.branchId != null && String(req.query.branchId).trim() !== "") {
+      branchId = Number(req.query.branchId);
+    }
+
+    // If product has analogGroup, find all other products in that group; otherwise fallback to same category
+    let analogRows: (typeof products.$inferSelect)[] = [];
+    if (product.analogGroup && product.analogGroup.trim()) {
+      analogRows = await db
+        .select()
+        .from(products)
+        .where(and(eq(products.analogGroup, product.analogGroup), sql`${products.id} != ${product.id}`))
+        .orderBy(asc(products.price));
+    } else {
+      analogRows = await db
+        .select()
+        .from(products)
+        .where(and(eq(products.category, product.category), sql`${products.id} != ${product.id}`))
+        .orderBy(asc(products.price))
+        .limit(6);
+    }
+
+    // Check stocks for all analog candidates
+    const analogIds = analogRows.map((a) => a.id);
+    const allStocks = analogIds.length > 0
+      ? await db
+          .select()
+          .from(productStocks)
+          .where(sql`${productStocks.productId} IN ${analogIds}`)
+      : [];
+
+    const enrichedAnalogs = analogRows.map((analog) => {
+      const stocksForAnalog = allStocks.filter((s) => s.productId === analog.id);
+      const totalAvailable = stocksForAnalog.reduce(
+        (sum, s) => sum + Math.max(0, Number(s.physicalQuantity || 0) - Number(s.reservedQuantity || 0)),
+        0,
+      );
+
+      const branchStock = branchId
+        ? stocksForAnalog.find((s) => s.branchId === branchId)
+        : null;
+      const branchAvailable = branchStock
+        ? Math.max(0, Number(branchStock.physicalQuantity || 0) - Number(branchStock.reservedQuantity || 0))
+        : totalAvailable;
+
+      const isCheaper = analog.price < product.price;
+      const savings = Math.max(0, product.price - analog.price);
+      const savingsPercent = isCheaper ? Math.round((savings / product.price) * 100) : 0;
+
+      return {
+        ...analog,
+        isCheaper,
+        savings,
+        savingsPercent,
+        inStock: branchAvailable > 0,
+        availableQuantity: branchAvailable,
+        totalAvailableAcrossBranches: totalAvailable,
+      };
+    });
+
+    const cheaperAnalogs = enrichedAnalogs.filter((a) => a.isCheaper);
+    const maxSavings = cheaperAnalogs.length > 0 ? cheaperAnalogs[0].savings : 0;
+    const maxSavingsPercent = cheaperAnalogs.length > 0 ? cheaperAnalogs[0].savingsPercent : 0;
+
+    return res.json({
+      product,
+      hasCheaperAlternative: cheaperAnalogs.length > 0,
+      cheaperCount: cheaperAnalogs.length,
+      maxSavings,
+      maxSavingsPercent,
+      analogs: enrichedAnalogs,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get("/catalog/promos", async (_req, res, next) => {
   try {
     return res.json({ promos: await db.select().from(promos).where(eq(promos.active, true)) });

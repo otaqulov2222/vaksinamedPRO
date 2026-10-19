@@ -1,12 +1,15 @@
 import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { customers } from "./customers";
 import { products } from "./catalog";
+import { familyMembers } from "./familyMembers";
 
 export const medicationReminders = pgTable("medication_reminders", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id")
     .notNull()
     .references(() => customers.id, { onDelete: "cascade" }),
+  familyMemberId: integer("family_member_id")
+    .references(() => familyMembers.id, { onDelete: "set null" }),
   medicineName: text("medicine_name").notNull(),
   productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
   dosage: text("dosage").notNull().default("1 tabletka"),
