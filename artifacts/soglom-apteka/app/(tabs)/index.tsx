@@ -201,15 +201,45 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      {/* HEADER — mark only */}
+      {/* HEADER — Logo + Active Branch Chip + Actions */}
       <View style={styles.header}>
-        <Image
-          source={require('../../assets/images/vaksina-mark-clean.png')}
-          style={styles.headerLogo}
-          resizeMode="contain"
-          fadeDuration={0}
-          accessibilityLabel={t('common.appName')}
-        />
+        <View style={styles.headerLeftCol}>
+          <Image
+            source={require('../../assets/images/vaksina-mark-clean.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+            fadeDuration={0}
+            accessibilityLabel={t('common.appName')}
+          />
+          <Pressable
+            style={({ pressed }) => [styles.headerBranchChip, pressed && styles.pressed]}
+            onPress={() => router.push('/branches')}
+            accessibilityRole="button"
+            accessibilityLabel={
+              nearest
+                ? `${t('home.nearestBranchLabel')}: ${localizedBranchName(language, nearest.name)}`
+                : t('home.viewBranches')
+            }
+          >
+            <View style={styles.headerBranchPinBox}>
+              <MaterialCommunityIcons name="map-marker" size={13} color={PURPLE} />
+            </View>
+            <View style={styles.headerBranchTextCol}>
+              <Text style={styles.headerBranchLabel} numberOfLines={1}>
+                {nearestLocated ? t('home.nearestBranchLabel') : t('home.branchLabel')}
+              </Text>
+              <View style={styles.headerBranchRow}>
+                <Text style={styles.headerBranchName} numberOfLines={1}>
+                  {nearest ? localizedBranchName(language, nearest.name) : t('home.branchesFallback')}
+                </Text>
+                <View style={styles.headerBranchDot} />
+                <Text style={styles.headerBranchHours}>{branchHoursLabel(t, nearest)}</Text>
+                <Feather name="chevron-down" size={11} color={PURPLE} style={styles.headerBranchChevron} />
+              </View>
+            </View>
+          </Pressable>
+        </View>
+
         <View style={styles.headerActions}>
           <Pressable
             style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
@@ -345,53 +375,79 @@ export default function HomeScreen() {
         ))}
       </View>
       {/* VIP LOYALTY & CASHBACK CARD */}
-      <Pressable
-        onPress={() => router.push('/cashback')}
-        style={({ pressed }) => [styles.loyaltyCard, pressed && styles.cardPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={`${t('home.balanceLabel')}: ${fmt.money(balance)}`}
-      >
+      <View style={styles.loyaltyCardContainer}>
         <LinearGradient
-          colors={['#2E105C', '#160430']}
+          colors={['#5414B8', '#7325E6', '#320970']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.loyaltyGradient}
         >
-          <View style={styles.loyaltyDecorGlow} pointerEvents="none" />
+          {/* Ambient Lighting Orbs for Glassmorphism Depth */}
+          <View style={styles.loyaltyAmbientWarm} pointerEvents="none" />
+          <View style={styles.loyaltyAmbientCool} pointerEvents="none" />
 
-          {/* Top Row: Label & Tier Badge */}
+          {/* Top Row: Brand & Crown Tier Badge */}
           <View style={styles.loyaltyTopRow}>
             <View style={styles.loyaltyBrandBadge}>
               <View style={styles.sparkleWrap}>
-                <MaterialCommunityIcons name="star-four-points" size={12} color="#FFD166" />
+                <MaterialCommunityIcons name="star-four-points" size={13} color="#FFD166" />
               </View>
               <Text style={styles.loyaltyBrandTitle}>{t('home.balanceLabel')}</Text>
             </View>
 
-            <View style={styles.tierCapsule}>
-              <MaterialCommunityIcons name="crown-outline" size={13} color="#FFD166" />
+            <Pressable
+              onPress={() => router.push('/bonuses')}
+              style={styles.tierCapsule}
+              accessibilityRole="button"
+              accessibilityLabel={
+                String(user.tier || '').trim()
+                  ? t('home.tierName', { tier: String(user.tier).trim() })
+                  : t('home.tierNone')
+              }
+            >
+              <MaterialCommunityIcons name="crown" size={13} color="#FFD166" />
               <Text style={styles.tierCapsuleText} numberOfLines={1}>
                 {String(user.tier || '').trim()
                   ? t('home.tierName', { tier: String(user.tier).trim() })
                   : t('home.tierNone')}
               </Text>
-            </View>
+            </Pressable>
           </View>
 
-          {/* Middle Row: Big bold Balance + Quick Action CTA */}
+          {/* Middle Row: Large Crisp Balance + Quick Cashier QR Button */}
           <View style={styles.loyaltyMainRow}>
             <View style={styles.loyaltyBalanceWrap}>
               <Text style={styles.loyaltyBalanceValue} numberOfLines={1}>
                 {fmt.money(balance)}
               </Text>
+              <Text style={styles.loyaltyBalanceSub}>{t('home.availableBonuses')}</Text>
             </View>
-            <View style={styles.loyaltyActionPill}>
-              <Text style={styles.loyaltyActionText}>{t('home.cashbackHistory')}</Text>
-              <Feather name="chevron-right" size={13} color="#FFFFFF" />
+
+            <View style={styles.loyaltyActionsGroup}>
+              {/* Instant QR for Cashier scanner */}
+              <Pressable
+                onPress={() => router.push('/qr')}
+                style={({ pressed }) => [styles.loyaltyQrBtn, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={t('home.qrCashier')}
+              >
+                <MaterialCommunityIcons name="qrcode-scan" size={16} color="#FFFFFF" />
+                <Text style={styles.loyaltyQrBtnText}>{t('home.qrCashier')}</Text>
+              </Pressable>
+
+              {/* History button */}
+              <Pressable
+                onPress={() => router.push('/cashback')}
+                style={({ pressed }) => [styles.loyaltyHistoryBtn, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={t('home.cashbackHistory')}
+              >
+                <Feather name="clock" size={14} color="#FFFFFF" />
+              </Pressable>
             </View>
           </View>
 
-          {/* Bottom Section: Next tier progress */}
+          {/* Bottom Progress Section: Next Tier Progress */}
           {nextTierTarget != null ? (
             <View style={styles.loyaltyProgressSection}>
               <View style={styles.loyaltyTrack}>
@@ -402,65 +458,22 @@ export default function HomeScreen() {
                   ]}
                 />
               </View>
-              <Text style={styles.loyaltyProgressText} numberOfLines={1}>
-                {String(user?.tier || '').toLowerCase().includes('plat')
-                  ? t('home.tierTop')
-                  : left != null
-                    ? t('home.nextTierLeft', { amount: fmt.money(left) })
-                    : t('home.nextTierUnknown')}
-              </Text>
+              <View style={styles.loyaltyProgressLabelsRow}>
+                <Text style={styles.loyaltyProgressText} numberOfLines={1}>
+                  {String(user?.tier || '').toLowerCase().includes('plat')
+                    ? t('home.tierTop')
+                    : left != null
+                      ? t('home.nextTierLeft', { amount: fmt.money(left) })
+                      : t('home.nextTierUnknown')}
+                </Text>
+                <Pressable onPress={() => router.push('/cashback')}>
+                  <Text style={styles.loyaltyHistoryLink}>{t('home.cashbackHistory')} →</Text>
+                </Pressable>
+              </View>
             </View>
           ) : null}
         </LinearGradient>
-      </Pressable>
-
-      {/* NEAREST PHARMACY BRANCH CARD */}
-      <Pressable
-        onPress={() => router.push('/branches')}
-        style={({ pressed }) => [styles.nearestCard, pressed && styles.cardPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={
-          nearest
-            ? `${t('home.nearestBranchLabel')}: ${localizedBranchName(language, nearest.name)}`
-            : t('home.viewBranches')
-        }
-      >
-        <View style={styles.nearestIconBox}>
-          <MaterialCommunityIcons name="storefront-outline" size={22} color={PURPLE} />
-        </View>
-
-        <View style={styles.nearestContentCol}>
-          <View style={styles.nearestHeaderRow}>
-            <Text style={styles.nearestHeaderLabel} numberOfLines={1}>
-              {nearestLocated ? t('home.nearestBranchLabel') : t('home.branchLabel')}
-            </Text>
-            <View style={styles.nearestStatusBadge}>
-              <View style={[styles.statusDot, !nearest && { backgroundColor: '#CBD5E1' }]} />
-              <Text style={styles.statusText} numberOfLines={1}>
-                {branchHoursLabel(t, nearest)}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.nearestBranchName} numberOfLines={1}>
-            {nearest
-              ? `VAKSINA MED — ${localizedBranchName(language, nearest.name)}`
-              : t('home.branchesFallback')}
-          </Text>
-
-          <Text style={styles.nearestAddressText} numberOfLines={1}>
-            {nearestLocated && nearest?.distanceKm != null
-              ? `${t('home.distanceNear', { distance: nearest.distanceKm })} · ${localizedBranchAddress(language, nearest.address)}`
-              : nearest?.address
-                ? localizedBranchAddress(language, nearest.address)
-                : t('home.openBranchList')}
-          </Text>
-        </View>
-
-        <View style={styles.nearestArrowWrap}>
-          <Feather name="chevron-right" size={16} color={PURPLE} />
-        </View>
-      </Pressable>
+      </View>
 
       <View style={styles.sectionRow}>
         <Text style={styles.section} numberOfLines={1}>
@@ -588,9 +601,82 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
     minHeight: 44,
+    gap: 8,
   },
-  headerLogo: { width: 40, height: 40 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerLeftCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+    marginRight: 4,
+  },
+  headerLogo: { width: 38, height: 38, flexShrink: 0 },
+  headerBranchChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: '#F5F0FB',
+    borderRadius: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#ECE4F7',
+  },
+  headerBranchPinBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    backgroundColor: '#EBE2F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  headerBranchTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  headerBranchLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 9,
+    lineHeight: 11,
+    color: '#8A7B9B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  headerBranchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  headerBranchName: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    lineHeight: 15,
+    color: PURPLE_DEEP,
+    flexShrink: 1,
+  },
+  headerBranchDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#10B981',
+    flexShrink: 0,
+  },
+  headerBranchHours: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10.5,
+    lineHeight: 14,
+    color: '#10B981',
+    flexShrink: 0,
+  },
+  headerBranchChevron: {
+    marginLeft: 1,
+    flexShrink: 0,
+  },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   roundBtn: {
     width: 44,
     height: 44,
@@ -707,32 +793,43 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  loyaltyCard: {
+  loyaltyCardContainer: {
     width: '100%',
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#2A1054',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    elevation: 3,
-    marginBottom: 10,
+    shadowColor: '#5414B8',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 4,
+    marginBottom: SPACE,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   loyaltyGradient: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 14,
+    paddingBottom: 13,
     position: 'relative',
     overflow: 'hidden',
   },
-  loyaltyDecorGlow: {
+  loyaltyAmbientWarm: {
     position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(106, 34, 214, 0.35)',
+    top: -35,
+    right: -25,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(255, 209, 102, 0.16)',
+  },
+  loyaltyAmbientCool: {
+    position: 'absolute',
+    bottom: -40,
+    left: -20,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
   },
   loyaltyTopRow: {
     flexDirection: 'row',
@@ -743,37 +840,41 @@ const styles = StyleSheet.create({
   loyaltyBrandBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
   },
   sparkleWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 209, 102, 0.18)',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255, 209, 102, 0.28)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   loyaltyBrandTitle: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#E0D4F7',
+    fontSize: 11.5,
+    lineHeight: 15,
+    color: '#F5EEFF',
     letterSpacing: 0.2,
   },
   tierCapsule: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 209, 102, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
+    borderColor: 'rgba(255, 209, 102, 0.42)',
   },
   tierCapsuleText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11.5,
     lineHeight: 15,
     color: '#FFD166',
   },
@@ -781,145 +882,93 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginVertical: 4,
   },
   loyaltyBalanceWrap: {
     flex: 1,
   },
   loyaltyBalanceValue: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 25,
+    lineHeight: 30,
     color: '#FFFFFF',
     letterSpacing: -0.4,
   },
-  loyaltyActionPill: {
+  loyaltyBalanceSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 14,
+    color: 'rgba(255, 255, 255, 0.72)',
+    marginTop: 1,
+  },
+  loyaltyActionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    gap: 6,
+  },
+  loyaltyQrBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.26)',
+  },
+  loyaltyQrBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#FFFFFF',
+  },
+  loyaltyHistoryBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  loyaltyActionText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    lineHeight: 15,
-    color: '#FFFFFF',
-  },
   loyaltyProgressSection: {
-    marginTop: 8,
+    marginTop: 10,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: 'rgba(255, 255, 255, 0.14)',
   },
   loyaltyTrack: {
-    height: 4,
-    borderRadius: 2,
+    height: 4.5,
+    borderRadius: 3,
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
     overflow: 'hidden',
   },
   loyaltyFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 3,
     backgroundColor: '#FFD166',
   },
-  loyaltyProgressText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10.5,
-    lineHeight: 14,
-    color: '#D1C2EB',
-    marginTop: 4,
-  },
-
-  nearestCard: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 11,
-    borderWidth: 1,
-    borderColor: BORDER,
-    shadowColor: '#1A1040',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    gap: 10,
-  },
-  nearestIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: LAVENDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  nearestContentCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  nearestHeaderRow: {
+  loyaltyProgressLabelsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
-    marginBottom: 2,
+    marginTop: 5,
   },
-  nearestHeaderLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 10.5,
-    lineHeight: 14,
-    color: MUTED,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  nearestStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: '#ECFDF5',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  statusText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10.5,
-    lineHeight: 13,
-    color: '#059669',
-  },
-  nearestBranchName: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13.5,
-    lineHeight: 18,
-    color: PURPLE_DEEP,
-  },
-  nearestAddressText: {
+  loyaltyProgressText: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 11.5,
+    fontSize: 11,
     lineHeight: 15,
-    color: MUTED,
-    marginTop: 1,
+    color: 'rgba(255, 255, 255, 0.85)',
+    flex: 1,
+    marginRight: 8,
   },
-  nearestArrowWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#F7F5FC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+  loyaltyHistoryLink: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#FFD166',
   },
   cardPressed: {
     opacity: 0.92,

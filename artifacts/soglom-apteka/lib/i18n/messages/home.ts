@@ -17,6 +17,8 @@ export default defineMessages({
     quickDeliveryA11y: 'Yetkazib berish — avval savatni ochish',
 
     balanceLabel: 'Mening balansim',
+    availableBonuses: 'Mavjud cashback',
+    qrCashier: 'Kassa QR',
     tierName: '{tier} daraja',
     tierNone: 'Daraja mavjud emas',
     tierTop: 'Eng yuqori daraja',
@@ -98,6 +100,8 @@ export default defineMessages({
     quickDeliveryA11y: 'Доставка — сначала откройте корзину',
 
     balanceLabel: 'Мой баланс',
+    availableBonuses: 'Доступный кэшбэк',
+    qrCashier: 'QR на кассе',
     tierName: 'Уровень {tier}',
     tierNone: 'Уровень не присвоен',
     tierTop: 'Наивысший уровень',
@@ -179,6 +183,8 @@ export default defineMessages({
     quickDeliveryA11y: 'Delivery — open the cart first',
 
     balanceLabel: 'My balance',
+    availableBonuses: 'Available cashback',
+    qrCashier: 'Cashier QR',
     tierName: '{tier} tier',
     tierNone: 'No tier yet',
     tierTop: 'Highest tier',
