@@ -3,6 +3,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -32,6 +33,54 @@ const CAT_BG = '#F1EBFF';
 const YELLOW = '#FFCC00';
 const BAD_RED = '#B91C1C';
 
+const PRODUCT_IMAGES: Record<string, any> = {
+  'cat-p1': require('../../assets/images/cat-p1-d3.png'),
+  'cat-p2': require('../../assets/images/cat-p2-c.png'),
+  'cat-p3': require('../../assets/images/cat-p3-mg.png'),
+  'cat-p4': require('../../assets/images/cat-p4-omega.png'),
+  'cat-p5': require('../../assets/images/cat-p5-zn.png'),
+  'cat-p6': require('../../assets/images/cat-p6-para.png'),
+};
+
+function getProductImage(item: { id?: number | string; analogGroup?: string; icon?: string }) {
+  const id = Number(item.id);
+  if (id === 1) return PRODUCT_IMAGES['cat-p1'];
+  if (id === 2) return PRODUCT_IMAGES['cat-p2'];
+  if (id === 3) return PRODUCT_IMAGES['cat-p3'];
+  if (id === 4) return PRODUCT_IMAGES['cat-p4'];
+  if (id === 5) return PRODUCT_IMAGES['cat-p5'];
+  if (id === 6 || id === 7 || id === 8) return PRODUCT_IMAGES['cat-p6'];
+
+  const group = String(item.analogGroup || '').toLowerCase();
+  if (group.includes('vitamin-d')) return PRODUCT_IMAGES['cat-p1'];
+  if (group.includes('vitamin-c')) return PRODUCT_IMAGES['cat-p2'];
+  if (group.includes('magnesium')) return PRODUCT_IMAGES['cat-p3'];
+  if (group.includes('omega')) return PRODUCT_IMAGES['cat-p4'];
+  if (group.includes('zinc')) return PRODUCT_IMAGES['cat-p5'];
+  if (group.includes('analgesic')) return PRODUCT_IMAGES['cat-p6'];
+
+  return null;
+}
+
+function getCategoryIcon(catId: string): React.ComponentProps<typeof MaterialCommunityIcons>['name'] {
+  const c = catId.toLowerCase();
+  if (c === 'all') return 'view-grid';
+  if (c.includes('vitamin')) return 'pill';
+  if (c.includes('allergiya') || c.includes('allerg')) return 'flower-outline';
+  if (c.includes('antibiotik') || c.includes('antibiot')) return 'shield-plus-outline';
+  if (c.includes('antiseptik') || c.includes('antisept')) return 'spray-bottle';
+  if (c.includes('og') || c.includes('pain') || c.includes('isitma')) return 'thermometer';
+  if (c.includes('shamollash') || c.includes('cold') || c.includes('gripp')) return 'weather-windy';
+  if (c.includes('yurak') || c.includes('heart') || c.includes('kardio')) return 'heart-pulse';
+  if (c.includes('oshqozon') || c.includes('hazm') || c.includes('stomach')) return 'stomach';
+  if (c.includes('koz') || c.includes('eye')) return 'eye-outline';
+  if (c.includes('teri') || c.includes('skin')) return 'hand-water';
+  if (c.includes('bola') || c.includes('baby') || c.includes('kid')) return 'baby-bottle-outline';
+  if (c.includes('tibbiy') || c.includes('buyum')) return 'medical-bag';
+  if (c.includes('surunkali') || c.includes('kasallik')) return 'clipboard-pulse-outline';
+  return 'medical-bag';
+}
+
 type CatId = string;
 type SortKey = 'default' | 'price_asc' | 'price_desc' | 'name';
 
@@ -54,6 +103,8 @@ type Product = {
   requiresPrescription?: boolean;
   availableQuantity?: number | null;
   availabilityKnown?: boolean;
+  analogGroup?: string;
+  image?: any;
 };
 
 const PAGE_SIZE = 20;
@@ -109,7 +160,6 @@ function ProductCard({
   const addDisabled = adding || !stock.canAdd;
   const showRx = Boolean(item.requiresPrescription);
   const priceText = fmt.money(item.price);
-  const stockHint = !hasBranch ? `\n${t('catalog.stockAfterBranchHint')}` : '';
   const addA11y = stock.canAdd ? t('catalog.addToCart') : t('catalog.addToCartUnavailableA11y');
 
   if (list) {
@@ -122,9 +172,18 @@ function ProductCard({
           accessibilityLabel={item.nameUz}
         >
           <View style={styles.cardImageWrapList}>
-            <View style={styles.iconBubble}>
-              <MaterialCommunityIcons name={productIconName(item.icon)} size={28} color={PURPLE} />
-            </View>
+            {item.image ? (
+              <Image
+                source={item.image}
+                style={styles.productImgList}
+                resizeMode="contain"
+                fadeDuration={0}
+              />
+            ) : (
+              <View style={styles.iconBubble}>
+                <MaterialCommunityIcons name={productIconName(item.icon)} size={28} color={PURPLE} />
+              </View>
+            )}
           </View>
           <View style={styles.cardBodyList}>
             <View style={styles.listTopRow}>
@@ -132,13 +191,13 @@ function ProductCard({
                 {item.nameUz}
               </Text>
               {showRx ? (
-                <View style={styles.rxChip} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <View style={styles.rxChip}>
                   <Text style={styles.rxChipText}>{t('catalog.rxShort')}</Text>
                 </View>
               ) : null}
             </View>
             <Text style={styles.cardBrand} numberOfLines={1}>
-              {item.manufacturer}
+              {item.manufacturer || item.category}
             </Text>
             <Text
               style={[
@@ -146,10 +205,9 @@ function ProductCard({
                 stock.tone === 'ok' && styles.stockOk,
                 stock.tone === 'bad' && styles.stockBad,
               ]}
-              numberOfLines={2}
+              numberOfLines={1}
             >
               {stock.text}
-              {stockHint}
             </Text>
           </View>
         </Pressable>
@@ -192,24 +250,44 @@ function ProductCard({
         accessibilityLabel={item.nameUz}
       >
         <View style={styles.cardMedia}>
-          <View style={styles.iconBubble}>
-            <MaterialCommunityIcons name={productIconName(item.icon)} size={44} color={PURPLE} />
+          {/* Floating +5% cashback badge */}
+          <View style={styles.cashbackBadge}>
+            <Text style={styles.cashbackBadgeText}>{t('catalog.cashbackBadge')}</Text>
           </View>
+
+          {/* Floating rating or Rx badge */}
           {showRx ? (
-            <View style={styles.rxCorner} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <View style={styles.rxCorner}>
               <Text style={styles.rxChipText}>{t('catalog.rxShort')}</Text>
             </View>
           ) : (
-            <View style={styles.mediaAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+            <View style={styles.ratingBadge}>
+              <Feather name="star" size={10} color="#D97706" />
+              {/* i18n-ignore */}
+              <Text style={styles.ratingBadgeText}>4.9</Text>
+            </View>
+          )}
+
+          {item.image ? (
+            <Image
+              source={item.image}
+              style={styles.productImg}
+              resizeMode="contain"
+              fadeDuration={0}
+            />
+          ) : (
+            <View style={styles.iconBubble}>
+              <MaterialCommunityIcons name={productIconName(item.icon)} size={44} color={PURPLE} />
+            </View>
           )}
         </View>
 
         <View style={styles.cardBody}>
+          <Text style={styles.cardBrand} numberOfLines={1}>
+            {item.manufacturer || item.category}
+          </Text>
           <Text style={styles.cardName} numberOfLines={2}>
             {item.nameUz}
-          </Text>
-          <Text style={styles.cardBrand} numberOfLines={1}>
-            {item.manufacturer}
           </Text>
 
           <View style={styles.cardSpacer} />
@@ -220,10 +298,9 @@ function ProductCard({
               stock.tone === 'ok' && styles.stockOk,
               stock.tone === 'bad' && styles.stockBad,
             ]}
-            numberOfLines={2}
+            numberOfLines={1}
           >
             {stock.text}
-            {stockHint}
           </Text>
         </View>
       </Pressable>
@@ -235,7 +312,7 @@ function ProductCard({
           accessibilityRole="button"
           accessibilityLabel={`${item.nameUz}, ${priceText}`}
         >
-          <Text style={styles.cardPrice} numberOfLines={2}>
+          <Text style={styles.cardPrice} numberOfLines={1}>
             {priceText}
           </Text>
         </Pressable>
@@ -501,18 +578,24 @@ export default function CatalogScreen() {
   }, [debouncedQuery, cat, sort, branchId]);
 
   const allProducts = useMemo((): Product[] => {
-    return apiProducts.map((p) => ({
-      id: p.id,
-      nameUz: localizedName(language, p),
-      manufacturer: String(p.manufacturer || ''),
-      category: String(p.category || ''),
-      price: Number(p.price || 0),
-      icon: String(p.icon || 'pill'),
-      unit: p.unit != null ? String(p.unit) : undefined,
-      requiresPrescription: Boolean(p.requiresPrescription),
-      availableQuantity: p.availableQuantity != null ? Number(p.availableQuantity) : null,
-      availabilityKnown: Boolean(p.availabilityKnown),
-    }));
+    return apiProducts.map((p) => {
+      const cleanName = localizedName(language, p).replace(/\s*\(Demo\)/gi, '').trim();
+      const cleanMan = String(p.manufacturer || '').replace(/\s*\(Demo\)/gi, '').trim();
+      return {
+        id: p.id,
+        nameUz: cleanName,
+        manufacturer: cleanMan,
+        category: String(p.category || ''),
+        price: Number(p.price || 0),
+        icon: String(p.icon || 'pill'),
+        unit: p.unit != null ? String(p.unit) : undefined,
+        requiresPrescription: Boolean(p.requiresPrescription),
+        availableQuantity: p.availableQuantity != null ? Number(p.availableQuantity) : null,
+        availabilityKnown: Boolean(p.availabilityKnown),
+        analogGroup: String(p.analogGroup || ''),
+        image: getProductImage(p),
+      };
+    });
   }, [apiProducts, language]);
 
   const products = allProducts;
@@ -719,8 +802,8 @@ export default function CatalogScreen() {
                 >
                   <View style={[styles.catIcon, active && styles.catIconActive]}>
                     <MaterialCommunityIcons
-                      name={c.id === 'all' ? 'view-grid' : 'tag-outline'}
-                      size={22}
+                      name={getCategoryIcon(c.id)}
+                      size={24}
                       color={active ? '#fff' : PURPLE}
                     />
                   </View>
@@ -1014,33 +1097,38 @@ const styles = StyleSheet.create({
   },
   catsScroll: { flexGrow: 0, width: '100%' },
   catsRow: { gap: 10, paddingBottom: 4, alignItems: 'flex-start' },
-  catItem: { width: 78, alignItems: 'center', minHeight: 88 },
+  catItem: { width: 76, alignItems: 'center', minHeight: 84 },
   catIcon: {
     width: 56,
     height: 56,
-    borderRadius: 16,
-    backgroundColor: CAT_BG,
+    borderRadius: 18,
+    backgroundColor: '#F8F6FD',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
   },
   catIconActive: {
     backgroundColor: PURPLE,
     borderColor: PURPLE,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 3,
   },
   catLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
     lineHeight: 13,
     minHeight: 26,
-    color: PURPLE_DEEP,
+    color: '#64748B',
     textAlign: 'center',
     includeFontPadding: false,
   },
   catLabelActive: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_700Bold',
     color: PURPLE,
   },
 
@@ -1115,16 +1203,16 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: CARD,
     borderRadius: 18,
-    padding: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E8E4F2',
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
     shadowColor: '#1A1040',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
     width: '100%',
-    minHeight: 236,
+    minHeight: 248,
     flexDirection: 'column',
   },
   cardMain: {
@@ -1135,11 +1223,11 @@ const styles = StyleSheet.create({
     backgroundColor: CARD,
     borderRadius: 18,
     padding: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E8E4F2',
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
     shadowColor: '#1A1040',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
     flexDirection: 'column',
@@ -1153,14 +1241,59 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   cardMedia: {
-    height: 88,
-    borderRadius: 14,
-    backgroundColor: '#F6F2FC',
+    height: 112,
+    borderRadius: 15,
+    backgroundColor: '#F8F6FD',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
     overflow: 'hidden',
     position: 'relative',
+  },
+  productImg: {
+    width: 92,
+    height: 92,
+  },
+  productImgList: {
+    width: 60,
+    height: 60,
+  },
+  cashbackBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: '#EDE9FE',
+    borderRadius: 6,
+    paddingHorizontal: 5.5,
+    paddingVertical: 2.5,
+    zIndex: 2,
+  },
+  cashbackBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9.5,
+    lineHeight: 12,
+    color: PURPLE,
+  },
+  ratingBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2.5,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 6,
+    paddingHorizontal: 4.5,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+    zIndex: 2,
+  },
+  ratingBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9.5,
+    lineHeight: 12,
+    color: '#B45309',
   },
   iconBubble: {
     width: 64,
@@ -1232,11 +1365,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   cardName: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 19,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13.5,
+    lineHeight: 17,
     color: PURPLE_DEEP,
-    minHeight: 38,
+    minHeight: 34,
     includeFontPadding: false,
   },
   cardNameList: {
@@ -1249,19 +1382,18 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   cardBrand: {
-    marginTop: 2,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 15,
-    height: 15,
+    marginBottom: 3,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    lineHeight: 14,
     color: MUTED,
     includeFontPadding: false,
   },
   stockText: {
-    marginTop: 6,
+    marginTop: 4,
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11.5,
+    lineHeight: 14,
     color: MUTED,
     includeFontPadding: false,
   },
@@ -1269,14 +1401,14 @@ const styles = StyleSheet.create({
   stockBad: { color: BAD_RED },
   cardSpacer: {
     flex: 1,
-    minHeight: 8,
+    minHeight: 6,
   },
   cardFooter: {
-    marginTop: 10,
+    marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 6,
   },
   cardFooterList: {
     flexDirection: 'row',
@@ -1287,15 +1419,16 @@ const styles = StyleSheet.create({
   priceCol: { flex: 1, minWidth: 0, paddingRight: 4 },
   cardPrice: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    lineHeight: 20,
-    color: PURPLE,
+    fontSize: 15,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
     includeFontPadding: false,
+    flexShrink: 1,
   },
   addBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',

@@ -42,6 +42,8 @@ export default defineMessages({
     stockQty: '{count} dona',
     rxShort: 'Rx',
     rxRequired: 'Retsept talab qilinadi',
+    cashbackBadge: '+5% keshbek',
+    otcBadge: 'Retseptsiz',
 
     addToCart: 'Savatga qo‘shish',
     addToCartUnavailableA11y: 'Filialda mavjud emas — savatga qo‘shib bo‘lmaydi',
@@ -135,6 +137,8 @@ export default defineMessages({
     stockQty: '{count} шт.',
     rxShort: 'Rx',
     rxRequired: 'Нужен рецепт',
+    cashbackBadge: '+5% кэшбэк',
+    otcBadge: 'Без рецепта',
 
     addToCart: 'В корзину',
     addToCartUnavailableA11y: 'Нет в аптеке — нельзя добавить в корзину',
@@ -228,6 +232,8 @@ export default defineMessages({
     stockQty: '{count} pcs',
     rxShort: 'Rx',
     rxRequired: 'Prescription required',
+    cashbackBadge: '+5% cashback',
+    otcBadge: 'OTC',
 
     addToCart: 'Add to cart',
     addToCartUnavailableA11y: 'Out of stock at pharmacy — cannot add to cart',
