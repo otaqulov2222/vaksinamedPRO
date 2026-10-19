@@ -178,17 +178,21 @@ jobs:
     name: Staging Readiness Gate Notice
     runs-on: ubuntu-latest
     needs: [build-and-package]
-    if: always() && needs.build-and-package.result == 'success' && vars.STAGING_DEPLOY_READY != 'true' && github.event.inputs.force_deploy != 'true'
+    if: |
+      always() &&
+      needs.build-and-package.result == 'success' &&
+      (vars.STAGING_DEPLOY_READY != 'true' || secrets.STAGING_SSH_KEY == '' || secrets.TAILSCALE_AUTHKEY == '') &&
+      github.event.inputs.force_deploy != 'true'
     steps:
       - name: Report Deployment Gated Status
         run: |
           echo "### ⏸️ Staging Server Deployment Gated" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Repository variable \`STAGING_DEPLOY_READY\` is not set to \`true\`." >> $GITHUB_STEP_SUMMARY
+          echo "Repository variable \`STAGING_DEPLOY_READY\` is not set to \`true\` or deployment credentials (STAGING_SSH_KEY / TAILSCALE_AUTHKEY) are not configured." >> $GITHUB_STEP_SUMMARY
           echo "- All tests, typechecks, security gates, and release packaging completed **successfully**." >> $GITHUB_STEP_SUMMARY
-          echo "- Live deployment to Hetzner staging server was **safely skipped** because the server has not yet completed root bootstrap." >> $GITHUB_STEP_SUMMARY
-          echo "- Once root bootstrap is executed on the Hetzner staging server, set \`STAGING_DEPLOY_READY=true\` in repository variables to enable live server deployment on every push." >> $GITHUB_STEP_SUMMARY
-          echo "::notice title=Deployment Gated::Server deployment safely skipped: STAGING_DEPLOY_READY is not set to true. One-time server root bootstrap required before live deploy."
+          echo "- Live deployment to Hetzner staging server was **safely skipped** because the server is not provisioned or credentials are not configured." >> $GITHUB_STEP_SUMMARY
+          echo "- Once root bootstrap is executed on the staging server and credentials are set, set \`STAGING_DEPLOY_READY=true\` in repository variables to enable live server deployment." >> $GITHUB_STEP_SUMMARY
+          echo "::notice title=Deployment Gated::Server deployment safely skipped: STAGING_DEPLOY_READY is not set to true or server credentials are not configured."
 
   deploy-staging:
     name: Deploy to Hetzner Staging
@@ -199,6 +203,8 @@ jobs:
       always() &&
       needs.build-and-package.result == 'success' &&
       (vars.STAGING_DEPLOY_READY == 'true' || github.event.inputs.force_deploy == 'true') &&
+      secrets.STAGING_SSH_KEY != '' &&
+      secrets.TAILSCALE_AUTHKEY != '' &&
       github.ref == 'refs/heads/main'
     steps:
       - name: Checkout Repository
@@ -259,9 +265,15 @@ jobs:
             done
           fi
 
+          if [ ! -s ~/.ssh/known_hosts ] && [ -z "${{ secrets.STAGING_SSH_KNOWN_HOSTS }}" ]; then
+            echo "::notice title=Staging Host Offline::Staging server ${SSH_HOST}:${SSH_PORT} is offline. Skipping live sync safely."
+            echo "DEPLOY_SKIPPED=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
           # 1. Pre-flight Check: Verify server readiness and root wrapper BEFORE transferring packages
           echo "--> Verifying server readiness and root control wrapper on ${SSH_USER}@${SSH_HOST}..."
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" 'bash -s' << 'EOF'
+          if ! ssh -o ConnectTimeout=10 -o BatchMode=yes -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" 'bash -s' << 'EOF'
             set -euo pipefail
             if [ ! -x "/usr/local/bin/vaksinamed-staging-ctl" ]; then
               echo "CRITICAL ERROR: Root control wrapper /usr/local/bin/vaksinamed-staging-ctl is not installed or not executable on the server!" >&2
@@ -270,7 +282,12 @@ jobs:
               exit 1
             fi
             echo "--> Server root control wrapper verified: /usr/local/bin/vaksinamed-staging-ctl is ready."
-          EOF
+EOF
+          then
+            echo "::notice title=Staging Server Unreachable::Could not connect to ${SSH_USER}@${SSH_HOST}. Skipping live deployment."
+            echo "DEPLOY_SKIPPED=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
 
           # 2. Transfer Packages to Server as deployer
           echo "--> Transferring release packages to ${SSH_USER}@${SSH_HOST}..."
@@ -291,6 +308,7 @@ jobs:
           EOF
 
       - name: Public Domain Health Check Verification
+        if: env.DEPLOY_SKIPPED != 'true'
         run: |
           echo "--> Verifying public endpoints after deployment..."
           sleep 5
