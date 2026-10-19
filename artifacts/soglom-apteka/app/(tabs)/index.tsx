@@ -14,9 +14,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import * as Location from 'expo-location';
 import { useApp } from '@/context/AppContext';
-import { localizedName, localizedBranchName, localizedBranchAddress } from '@/lib/i18n/data';
+import { localizedName } from '@/lib/i18n/data';
 import { ProgressLine, Screen } from '@/components/AppUI';
 import { api } from '@/lib/api';
 import { notify } from '@/lib/dialogs';
@@ -45,16 +44,6 @@ function productIconName(icon?: string): React.ComponentProps<typeof MaterialCom
   >['name'];
 }
 
-/** Hours display only — never claims live open/closed without a schedule engine. */
-function branchHoursLabel(t: TFunction, branch: { hours?: string; is24h?: boolean } | null): string {
-  if (!branch) return t('home.hoursUnknown');
-  if (branch.is24h) return '24/7';
-  const hours = String(branch.hours || '').trim();
-  if (!hours) return t('home.hoursUnknown');
-  if (/24\s*[\/·\-]\s*7|24\s*soat|круглосуточ/i.test(hours)) return '24/7'; // i18n-ignore: parses server-provided hours
-  return hours;
-}
-
 const QUICK: {
   icon: 'pill' | 'camera-outline' | 'alarm' | 'map-marker-outline';
   labelKey: TranslationKey;
@@ -81,9 +70,6 @@ export default function HomeScreen() {
   const productCardW = Math.min(168, Math.max(148, Math.round((contentW - 12) / 2.2)));
   const colGap = contentW < 340 ? 8 : 12;
 
-  const [nearest, setNearest] = useState<any>(null);
-  const [nearestLocated, setNearestLocated] = useState(false);
-  const [nearestLoading, setNearestLoading] = useState(true);
   const [products, setProducts] = useState<any[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState(false);
@@ -123,29 +109,6 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    setNearestLoading(true);
-    void (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          const data = await api.branches(pos.coords.latitude, pos.coords.longitude);
-          setNearest(data.branches?.[0] || null);
-          setNearestLocated(Boolean(data.branches?.[0]?.distanceKm != null));
-          return;
-        }
-      } catch {
-        // fall through — list without invented proximity
-      }
-      try {
-        const data = await api.branches();
-        setNearest(data.branches?.[0] || null);
-        setNearestLocated(false);
-      } catch {
-        setNearest(null);
-        setNearestLocated(false);
-      }
-    })().finally(() => setNearestLoading(false));
     void api.cashbackRules().then((r) => {
       const tiers = Array.isArray(r?.tiers) ? r.tiers : [];
       const gold = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes('gold'));
@@ -201,44 +164,15 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      {/* HEADER — Logo + Active Branch Chip + Actions */}
+      {/* HEADER — Clean Logo + Actions */}
       <View style={styles.header}>
-        <View style={styles.headerLeftCol}>
-          <Image
-            source={require('../../assets/images/vaksina-mark-clean.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-            fadeDuration={0}
-            accessibilityLabel={t('common.appName')}
-          />
-          <Pressable
-            style={({ pressed }) => [styles.headerBranchChip, pressed && styles.pressed]}
-            onPress={() => router.push('/branches')}
-            accessibilityRole="button"
-            accessibilityLabel={
-              nearest
-                ? `${t('home.nearestBranchLabel')}: ${localizedBranchName(language, nearest.name)}`
-                : t('home.viewBranches')
-            }
-          >
-            <View style={styles.headerBranchPinBox}>
-              <MaterialCommunityIcons name="map-marker" size={13} color={PURPLE} />
-            </View>
-            <View style={styles.headerBranchTextCol}>
-              <Text style={styles.headerBranchLabel} numberOfLines={1}>
-                {nearestLocated ? t('home.nearestBranchLabel') : t('home.branchLabel')}
-              </Text>
-              <View style={styles.headerBranchRow}>
-                <Text style={styles.headerBranchName} numberOfLines={1}>
-                  {nearest ? localizedBranchName(language, nearest.name) : t('home.branchesFallback')}
-                </Text>
-                <View style={styles.headerBranchDot} />
-                <Text style={styles.headerBranchHours}>{branchHoursLabel(t, nearest)}</Text>
-                <Feather name="chevron-down" size={11} color={PURPLE} style={styles.headerBranchChevron} />
-              </View>
-            </View>
-          </Pressable>
-        </View>
+        <Image
+          source={require('../../assets/images/vaksina-mark-clean.png')}
+          style={styles.headerLogo}
+          resizeMode="contain"
+          fadeDuration={0}
+          accessibilityLabel={t('common.appName')}
+        />
 
         <View style={styles.headerActions}>
           <Pressable
@@ -601,82 +535,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
     minHeight: 44,
-    gap: 8,
   },
-  headerLeftCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    minWidth: 0,
-    marginRight: 4,
-  },
-  headerLogo: { width: 38, height: 38, flexShrink: 0 },
-  headerBranchChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    minWidth: 0,
-    backgroundColor: '#F5F0FB',
-    borderRadius: 14,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderColor: '#ECE4F7',
-  },
-  headerBranchPinBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    backgroundColor: '#EBE2F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  headerBranchTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  headerBranchLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 9,
-    lineHeight: 11,
-    color: '#8A7B9B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  headerBranchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  headerBranchName: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    lineHeight: 15,
-    color: PURPLE_DEEP,
-    flexShrink: 1,
-  },
-  headerBranchDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#10B981',
-    flexShrink: 0,
-  },
-  headerBranchHours: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10.5,
-    lineHeight: 14,
-    color: '#10B981',
-    flexShrink: 0,
-  },
-  headerBranchChevron: {
-    marginLeft: 1,
-    flexShrink: 0,
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  headerLogo: { width: 40, height: 40 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   roundBtn: {
     width: 44,
     height: 44,
