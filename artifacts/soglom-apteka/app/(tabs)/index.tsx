@@ -63,17 +63,56 @@ const HERO_IMAGES: Record<string, any> = {
   en: require('../../assets/images/home-hero-clean-base.png'),
 };
 
+const PRODUCT_IMAGES: Record<string, any> = {
+  'cat-p1': require('../../assets/images/cat-p1-d3.png'),
+  'cat-p2': require('../../assets/images/cat-p2-c.png'),
+  'cat-p3': require('../../assets/images/cat-p3-mg.png'),
+  'cat-p4': require('../../assets/images/cat-p4-omega.png'),
+  'cat-p5': require('../../assets/images/cat-p5-zn.png'),
+  'cat-p6': require('../../assets/images/cat-p6-para.png'),
+};
+
+function getProductImage(item: { id?: number | string; nameUz?: string; nameRu?: string; analogGroup?: string; name?: string }) {
+  const id = Number(item.id);
+  if (id === 1) return PRODUCT_IMAGES['cat-p1'];
+  if (id === 2) return PRODUCT_IMAGES['cat-p2'];
+  if (id === 3) return PRODUCT_IMAGES['cat-p3'];
+  if (id === 4) return PRODUCT_IMAGES['cat-p4'];
+  if (id === 5) return PRODUCT_IMAGES['cat-p5'];
+  if (id === 6 || id === 7 || id === 8) return PRODUCT_IMAGES['cat-p6'];
+
+  const group = String(item.analogGroup || '').toLowerCase();
+  if (group.includes('vitamin-d')) return PRODUCT_IMAGES['cat-p1'];
+  if (group.includes('vitamin-c')) return PRODUCT_IMAGES['cat-p2'];
+  if (group.includes('magnesium')) return PRODUCT_IMAGES['cat-p3'];
+  if (group.includes('omega')) return PRODUCT_IMAGES['cat-p4'];
+  if (group.includes('zinc')) return PRODUCT_IMAGES['cat-p5'];
+  if (group.includes('analgesic')) return PRODUCT_IMAGES['cat-p6'];
+
+  return null;
+}
+
+type CategoryFilterKey = 'all' | 'vitamins' | 'pain' | 'cold';
+
+const CATEGORY_FILTERS: { key: CategoryFilterKey; labelKey: TranslationKey; icon: string }[] = [
+  { key: 'all', labelKey: 'home.categoryAll', icon: 'view-grid-outline' },
+  { key: 'vitamins', labelKey: 'home.categoryVitamins', icon: 'pill' },
+  { key: 'pain', labelKey: 'home.categoryPain', icon: 'medical-bag' },
+  { key: 'cold', labelKey: 'home.categoryCold', icon: 'weather-windy' },
+];
+
 export default function HomeScreen() {
   const { t, fmt, language, balance, user, cartCount, refresh } = useApp();
   const { width: windowW } = useWindowDimensions();
   const contentW = Math.max(280, Math.round(windowW - SCREEN_PAD * 2));
-  const productCardW = Math.min(168, Math.max(148, Math.round((contentW - 12) / 2.2)));
+  const productCardW = Math.min(180, Math.max(168, Math.round((contentW - 12) / 2.05)));
   const colGap = contentW < 340 ? 8 : 12;
 
   const [products, setProducts] = useState<any[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilterKey>('all');
   const [query, setQuery] = useState('');
   const [nextTierTarget, setNextTierTarget] = useState<number | null>(null);
   const [heroBoxW, setHeroBoxW] = useState(0);
@@ -96,7 +135,7 @@ export default function HomeScreen() {
     setProductsLoading(true);
     setProductsError(false);
     void api
-      .products('?limit=8&offset=0')
+      .products('?limit=16&offset=0')
       .then((data) => {
         setProducts(data.products || []);
         setProductsError(false);
@@ -154,13 +193,60 @@ export default function HomeScreen() {
     [addingId, refresh, t],
   );
 
-  const displayProducts = products.map((p) => ({
-    id: p.id,
-    name: localizedName(language, p),
-    price: Number(p.price || 0),
-    icon: String(p.icon || 'pill'),
-    manufacturer: String(p.manufacturer || ''),
-  }));
+  const displayProducts = useMemo(() => {
+    return products
+      .filter((p) => {
+        if (selectedCategory === 'all') return true;
+        const cat = String(p.category || '').toLowerCase();
+        const analog = String(p.analogGroup || '').toLowerCase();
+        const name = (String(p.nameUz || '') + ' ' + String(p.nameRu || '')).toLowerCase();
+
+        if (selectedCategory === 'vitamins') {
+          return (
+            cat.includes('vitamin') ||
+            analog.includes('vitamin') ||
+            analog.includes('magnesium') ||
+            analog.includes('omega') ||
+            analog.includes('zinc')
+          );
+        }
+        if (selectedCategory === 'pain') {
+          return (
+            cat.includes('og') ||
+            analog.includes('analgesic') ||
+            name.includes('paratsetamol') ||
+            name.includes('ibuprofen') ||
+            name.includes('nurofen')
+          );
+        }
+        if (selectedCategory === 'cold') {
+          return (
+            cat.includes('shamollash') ||
+            cat.includes('allergiya') ||
+            analog.includes('cough') ||
+            analog.includes('allergy') ||
+            name.includes('acc') ||
+            name.includes('loratadin')
+          );
+        }
+        return true;
+      })
+      .map((p) => {
+        const rawName = localizedName(language, p);
+        const cleanName = rawName.replace(/\s*\(Demo\)/gi, '').trim();
+        const rawMan = String(p.manufacturer || '').trim();
+        const cleanMan = rawMan.replace(/\s*\(Demo\)/gi, '').trim() || String(p.category || '').trim();
+        return {
+          id: p.id,
+          name: cleanName,
+          price: Number(p.price || 0),
+          icon: String(p.icon || 'pill'),
+          manufacturer: cleanMan,
+          analogGroup: String(p.analogGroup || ''),
+          image: getProductImage(p),
+        };
+      });
+  }, [products, selectedCategory, language]);
 
   return (
     <Screen>
@@ -421,6 +507,38 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
+      {/* Category filter pills */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryChipsRow}
+      >
+        {CATEGORY_FILTERS.map((cat) => {
+          const active = selectedCategory === cat.key;
+          return (
+            <Pressable
+              key={cat.key}
+              style={({ pressed }) => [
+                styles.categoryChip,
+                active && styles.categoryChipActive,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => setSelectedCategory(cat.key)}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons
+                name={cat.icon as any}
+                size={15}
+                color={active ? '#FFFFFF' : PURPLE}
+              />
+              <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>
+                {t(cat.labelKey)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       {productsLoading ? (
         <ScrollView
           horizontal
@@ -433,8 +551,8 @@ export default function HomeScreen() {
               <View style={styles.productImgWrap}>
                 <ActivityIndicator size="small" color={PURPLE} />
               </View>
-              <View style={styles.skelLineWide} />
               <View style={styles.skelLineNarrow} />
+              <View style={styles.skelLineWide} />
               <View style={styles.productBottom}>
                 <View style={styles.skelPrice} />
                 <View style={styles.skelAdd} />
@@ -456,9 +574,9 @@ export default function HomeScreen() {
           <Text style={styles.productsStateTitle}>{t('home.productsEmpty')}</Text>
           <Pressable
             style={styles.retryBtn}
-            onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
+            onPress={() => setSelectedCategory('all')}
           >
-            <Text style={styles.retryBtnText}>{t('home.browseCatalog')}</Text>
+            <Text style={styles.retryBtnText}>{t('home.categoryAll')}</Text>
           </Pressable>
         </View>
       ) : (
@@ -479,16 +597,31 @@ export default function HomeScreen() {
                 accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
               >
                 <View style={styles.productImgWrap}>
-                  <MaterialCommunityIcons name={productIconName(p.icon)} size={44} color={PURPLE} />
+                  <View style={styles.cashbackBadge}>
+                    <Text style={styles.cashbackBadgeText}>{t('home.cashbackBadge')}</Text>
+                  </View>
+                  <View style={styles.ratingBadge}>
+                    <Feather name="star" size={10} color="#D97706" />
+                    {/* i18n-ignore */}
+                    <Text style={styles.ratingBadgeText}>4.9</Text>
+                  </View>
+                  {p.image ? (
+                    <Image
+                      source={p.image}
+                      style={styles.productImg}
+                      resizeMode="contain"
+                      fadeDuration={0}
+                    />
+                  ) : (
+                    <MaterialCommunityIcons name={productIconName(p.icon)} size={44} color={PURPLE} />
+                  )}
                 </View>
+                <Text style={styles.productMeta} numberOfLines={1}>
+                  {p.manufacturer}
+                </Text>
                 <Text style={styles.productName} numberOfLines={2}>
                   {p.name}
                 </Text>
-                {p.manufacturer ? (
-                  <Text style={styles.productMeta} numberOfLines={1}>
-                    {p.manufacturer}
-                  </Text>
-                ) : null}
               </Pressable>
               <View style={styles.productBottom}>
                 <Pressable
@@ -502,7 +635,11 @@ export default function HomeScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.addBtn, addingId === String(p.id) ? { opacity: 0.55 } : null]}
+                  style={({ pressed }) => [
+                    styles.addBtn,
+                    addingId === String(p.id) ? { opacity: 0.55 } : null,
+                    pressed && styles.pressed,
+                  ]}
                   disabled={addingId != null}
                   onPress={() => void addToCart(Number(p.id), p.name)}
                   hitSlop={8}
@@ -895,13 +1032,54 @@ const styles = StyleSheet.create({
   },
   retryBtnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 13 },
 
-  productsRow: { gap: 12, paddingRight: 4, paddingBottom: 4 },
+  categoryChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 1,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
+  },
+  categoryChipActive: {
+    backgroundColor: PURPLE,
+    borderColor: PURPLE,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  categoryChipText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#64748B',
+  },
+  categoryChipTextActive: {
+    color: '#FFFFFF',
+  },
+
+  productsRow: { gap: 12, paddingRight: 4, paddingBottom: 6 },
   productCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 18,
+    padding: 10,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: '#ECEAF2',
+    shadowColor: '#1A1040',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   productCardMain: {
     minWidth: 0,
@@ -910,33 +1088,76 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   productImgWrap: {
-    height: 96,
+    height: 112,
     borderRadius: 14,
-    backgroundColor: LAVENDER,
+    backgroundColor: '#F8F6FD',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  productImg: {
+    width: 92,
+    height: 92,
+  },
+  cashbackBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: '#EDE9FE',
+    borderRadius: 6,
+    paddingHorizontal: 5.5,
+    paddingVertical: 2.5,
+    zIndex: 2,
+  },
+  cashbackBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    lineHeight: 12,
+    color: PURPLE,
+  },
+  ratingBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2.5,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2.5,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+    zIndex: 2,
+  },
+  ratingBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#B45309',
   },
   productName: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13.5,
+    lineHeight: 17,
     color: PURPLE_DEEP,
-    minHeight: 36,
+    minHeight: 34,
   },
   productMeta: {
-    marginTop: 4,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 15,
+    marginBottom: 3,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    lineHeight: 14,
     color: MUTED,
   },
   productBottom: {
-    marginTop: 10,
+    marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 6,
   },
   productPriceHit: {
     flex: 1,
@@ -944,14 +1165,14 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    lineHeight: 20,
-    color: PURPLE,
+    fontSize: 15,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
     flexShrink: 1,
   },
   addBtn: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: 11,
     backgroundColor: PURPLE,
     alignItems: 'center',
