@@ -21,8 +21,11 @@ function telegramWebApp(): TelegramWebApp | null {
   return app;
 }
 
+const LOG_LEVELS = new Set(['warning', 'error', 'success', 'info']);
+
 function joinText(title: string, message?: string) {
-  return message ? `${title}\n\n${message}` : title;
+  if (!message || LOG_LEVELS.has(message.toLowerCase().trim())) return title;
+  return `${title}\n\n${message}`;
 }
 
 export function notify(title: string, message?: string): void {

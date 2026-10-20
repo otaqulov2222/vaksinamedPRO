@@ -91,6 +91,7 @@ export default {
     activeTimesLabel: 'Belgilangan vaqtlar',
     stockLabelShort: 'Mavjud qoldiq (dona)',
     lowStockThresholdShort: 'Ogohlantirish qoldig‘i (dona)',
+    noTimesSelected: 'Qabul vaqtini pastdan tanlang yoki kiriting',
   },
   ru: {
     title: 'Напоминания лекарств',
@@ -184,6 +185,7 @@ export default {
     activeTimesLabel: 'Выбранное время',
     stockLabelShort: 'Текущий остаток (шт.)',
     lowStockThresholdShort: 'Оповестить при остатке (шт.)',
+    noTimesSelected: 'Выберите или введите время приема ниже',
   },
   en: {
     title: 'Pill Reminders',
@@ -277,5 +279,6 @@ export default {
     activeTimesLabel: 'Selected times',
     stockLabelShort: 'Current stock (units)',
     lowStockThresholdShort: 'Alert threshold (units)',
+    noTimesSelected: 'Select or enter intake time below',
   },
 } as const;

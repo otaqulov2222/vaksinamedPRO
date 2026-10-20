@@ -369,11 +369,7 @@ export default function RemindersScreen() {
 
   const toggleTimePreset = (timeStr: string) => {
     if (formTimes.includes(timeStr)) {
-      if (formTimes.length > 1) {
-        setFormTimes(formTimes.filter((t) => t !== timeStr));
-      } else {
-        notify(t('reminders.atLeastOneTimeRequired'), 'warning');
-      }
+      setFormTimes(formTimes.filter((t) => t !== timeStr));
     } else {
       setFormTimes([...formTimes, timeStr].sort());
     }
@@ -396,7 +392,7 @@ export default function RemindersScreen() {
 
     const parts = clean.split(':');
     if (parts.length !== 2) {
-      notify(t('reminders.invalidTimeError'), 'warning');
+      notify(t('reminders.invalidTimeError'));
       return;
     }
 
@@ -404,14 +400,13 @@ export default function RemindersScreen() {
     const mins = parseInt(parts[1], 10);
 
     if (isNaN(hours) || isNaN(mins) || hours < 0 || hours > 23 || mins < 0 || mins > 59) {
-      notify(t('reminders.invalidTimeError'), 'warning');
+      notify(t('reminders.invalidTimeError'));
       return;
     }
 
     const formatted = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 
     if (formTimes.includes(formatted)) {
-      notify(t('reminders.timeAlreadyAdded'), 'info');
       setCustomTimeInput('');
       return;
     }
@@ -421,10 +416,6 @@ export default function RemindersScreen() {
   };
 
   const handleRemoveTime = (timeStr: string) => {
-    if (formTimes.length <= 1) {
-      notify(t('reminders.atLeastOneTimeRequired'), 'warning');
-      return;
-    }
     setFormTimes((prev) => prev.filter((tVal) => tVal !== timeStr));
   };
 
@@ -907,22 +898,28 @@ export default function RemindersScreen() {
               <Text style={styles.fieldLabel}>{t('reminders.timesLabel')} *</Text>
               
               {/* Selected Times Row */}
-              <View style={styles.selectedTimesRow}>
-                {formTimes.map((timeStr) => (
-                  <View key={timeStr} style={styles.activeTimeChip}>
-                    <Feather name="clock" size={13} color={PURPLE} />
-                    <Text style={styles.activeTimeChipText}>{timeStr}</Text>
-                    <Pressable
-                      onPress={() => handleRemoveTime(timeStr)}
-                      style={styles.activeTimeRemoveBtn}
-                      hitSlop={6}
-                      accessibilityRole="button"
-                    >
-                      <Feather name="x" size={12} color={PURPLE_DEEP} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
+              {formTimes.length > 0 ? (
+                <View style={styles.selectedTimesRow}>
+                  {formTimes.map((timeStr) => (
+                    <View key={timeStr} style={styles.activeTimeChip}>
+                      <Feather name="clock" size={13} color={PURPLE} />
+                      <Text style={styles.activeTimeChipText}>{timeStr}</Text>
+                      <Pressable
+                        onPress={() => handleRemoveTime(timeStr)}
+                        style={styles.activeTimeRemoveBtn}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                      >
+                        <Feather name="x" size={12} color={PURPLE_DEEP} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.noTimesSelectedBox}>
+                  <Text style={styles.noTimesSelectedText}>{t('reminders.noTimesSelected')}</Text>
+                </View>
+              )}
 
               {/* Quick Presets */}
               <View style={styles.presetsSection}>
@@ -1782,6 +1779,21 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
     marginBottom: 6,
+  },
+  noTimesSelectedBox: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  noTimesSelectedText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
   },
   activeTimeChip: {
     flexDirection: 'row',
