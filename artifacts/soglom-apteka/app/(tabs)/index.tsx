@@ -264,7 +264,7 @@ export default function HomeScreen() {
           colors={['rgba(245, 243, 255, 0.95)', 'rgba(245, 243, 255, 0.72)', 'rgba(245, 243, 255, 0.08)']}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
 
