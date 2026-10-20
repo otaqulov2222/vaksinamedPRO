@@ -204,16 +204,25 @@ function ProductCard({
             <Text style={styles.cardBrand} numberOfLines={1}>
               {item.manufacturer || item.category}
             </Text>
-            <Text
-              style={[
-                styles.stockText,
-                stock.tone === 'ok' && styles.stockOk,
-                stock.tone === 'bad' && styles.stockBad,
-              ]}
-              numberOfLines={1}
-            >
-              {stock.text}
-            </Text>
+            <View style={styles.stockRow}>
+              <View
+                style={[
+                  styles.stockDot,
+                  stock.tone === 'ok' && styles.stockDotOk,
+                  stock.tone === 'bad' && styles.stockDotBad,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.stockText,
+                  stock.tone === 'ok' && styles.stockOk,
+                  stock.tone === 'bad' && styles.stockBad,
+                ]}
+                numberOfLines={1}
+              >
+                {stock.text}
+              </Text>
+            </View>
           </View>
         </Pressable>
         <View style={styles.cardFooterList}>
@@ -306,16 +315,25 @@ function ProductCard({
 
           <View style={styles.cardSpacer} />
 
-          <Text
-            style={[
-              styles.stockText,
-              stock.tone === 'ok' && styles.stockOk,
-              stock.tone === 'bad' && styles.stockBad,
-            ]}
-            numberOfLines={1}
-          >
-            {stock.text}
-          </Text>
+          <View style={styles.stockRow}>
+            <View
+              style={[
+                styles.stockDot,
+                stock.tone === 'ok' && styles.stockDotOk,
+                stock.tone === 'bad' && styles.stockDotBad,
+              ]}
+            />
+            <Text
+              style={[
+                styles.stockText,
+                stock.tone === 'ok' && styles.stockOk,
+                stock.tone === 'bad' && styles.stockBad,
+              ]}
+              numberOfLines={1}
+            >
+              {stock.text}
+            </Text>
+          </View>
         </View>
       </Pressable>
 
@@ -1523,17 +1541,17 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: CARD,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 10,
     borderWidth: 1,
     borderColor: '#ECEAF2',
     shadowColor: '#1A1040',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    elevation: 3,
     width: '100%',
-    minHeight: 248,
+    minHeight: 256,
     flexDirection: 'column',
   },
   cardMain: {
@@ -1542,15 +1560,15 @@ const styles = StyleSheet.create({
   },
   cardList: {
     backgroundColor: CARD,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 12,
     borderWidth: 1,
     borderColor: '#ECEAF2',
     shadowColor: '#1A1040',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    elevation: 3,
     flexDirection: 'column',
     gap: 10,
     width: '100%',
@@ -1562,17 +1580,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   cardMedia: {
-    height: 128,
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
+    height: 142,
+    borderRadius: 16,
+    backgroundColor: '#F8F7FC',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
     overflow: 'hidden',
     position: 'relative',
-    paddingHorizontal: 4,
-    paddingTop: 18,
-    paddingBottom: 4,
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
   },
   productImg: {
     width: '100%',
@@ -1584,12 +1601,12 @@ const styles = StyleSheet.create({
   },
   cashbackBadge: {
     position: 'absolute',
-    top: 6,
-    left: 6,
+    top: 8,
+    left: 8,
     backgroundColor: '#EDE9FE',
     borderRadius: 6,
-    paddingHorizontal: 5.5,
-    paddingVertical: 2.5,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     zIndex: 2,
   },
   cashbackBadgeText: {
@@ -1600,15 +1617,15 @@ const styles = StyleSheet.create({
   },
   ratingBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: 8,
+    right: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2.5,
     backgroundColor: '#FFFBEB',
     borderRadius: 6,
-    paddingHorizontal: 4.5,
-    paddingVertical: 2,
+    paddingHorizontal: 5.5,
+    paddingVertical: 2.5,
     borderWidth: 1,
     borderColor: '#FEF3C7',
     zIndex: 2,
@@ -1670,15 +1687,16 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   cardImageWrapList: {
-    width: 80,
-    height: 80,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    width: 90,
+    height: 90,
+    borderRadius: 16,
+    backgroundColor: '#F8F7FC',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    padding: 4,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
   },
   cardBody: {
     minWidth: 0,
@@ -1694,11 +1712,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   cardName: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_700Bold',
     fontSize: 13.5,
-    lineHeight: 17,
+    lineHeight: 18,
     color: PURPLE_DEEP,
-    minHeight: 34,
+    minHeight: 36,
     includeFontPadding: false,
   },
   cardNameList: {
@@ -1711,17 +1729,36 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   cardBrand: {
-    marginBottom: 3,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    lineHeight: 14,
-    color: MUTED,
+    marginBottom: 2,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    lineHeight: 13,
+    color: '#7C3AED',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     includeFontPadding: false,
   },
-  stockText: {
+  stockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginTop: 4,
+  },
+  stockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: MUTED,
+  },
+  stockDotOk: {
+    backgroundColor: '#10B981',
+  },
+  stockDotBad: {
+    backgroundColor: BAD_RED,
+  },
+  stockText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 11.5,
+    fontSize: 11,
     lineHeight: 14,
     color: MUTED,
     includeFontPadding: false,
@@ -1748,16 +1785,16 @@ const styles = StyleSheet.create({
   priceCol: { flex: 1, minWidth: 0, paddingRight: 4 },
   cardPrice: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-    lineHeight: 18,
+    fontSize: 15.5,
+    lineHeight: 19,
     color: PURPLE_DEEP,
     includeFontPadding: false,
     flexShrink: 1,
   },
   addBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
