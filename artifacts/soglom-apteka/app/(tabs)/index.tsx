@@ -117,9 +117,6 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilterKey>('all');
   const [query, setQuery] = useState('');
   const [nextTierTarget, setNextTierTarget] = useState<number | null>(null);
-  const [heroBoxW, setHeroBoxW] = useState(0);
-  const isOverlay = t('home.heroBannerType') === 'overlay';
-
   const spentTowardTier = Number(user?.total || 0);
   const left =
     nextTierTarget != null ? Math.max(0, nextTierTarget - spentTowardTier) : null;
@@ -127,11 +124,6 @@ export default function HomeScreen() {
     nextTierTarget != null
       ? Math.min(1, Math.max(0, spentTowardTier / Math.max(1, nextTierTarget)))
       : 0;
-
-  const heroSize = useMemo(() => {
-    const w = heroBoxW > 0 ? heroBoxW : contentW;
-    return { w, h: Math.max(1, Math.round(w / HERO_AR)) };
-  }, [heroBoxW, contentW]);
 
   const loadProducts = useCallback(() => {
     setProductsLoading(true);
@@ -260,51 +252,71 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      {/* HEADER — Clean Logo + Actions */}
-      <View style={styles.header}>
+      {/* IMMERSIVE 3D HERO HEADER */}
+      <View style={styles.heroHeader}>
         <Image
-          source={require('../../assets/images/vaksina-mark-clean.png')}
-          style={styles.headerLogo}
-          resizeMode="contain"
+          source={require('../../assets/images/home-hero-clean-base.png')}
+          style={styles.heroHeaderImg}
+          resizeMode="cover"
           fadeDuration={0}
-          accessibilityLabel={t('common.appName')}
+        />
+        <LinearGradient
+          colors={['rgba(245, 243, 255, 0.95)', 'rgba(245, 243, 255, 0.72)', 'rgba(245, 243, 255, 0.08)']}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
         />
 
-        <View style={styles.headerActions}>
-          <Pressable
-            style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
-            onPress={() => router.push('/notifications')}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.navNotifications')}
-            hitSlop={4}
-          >
-            <Feather name="bell" size={20} color={PURPLE_DEEP} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
-            onPress={() => router.push('/cart')}
-            accessibilityRole="button"
-            accessibilityLabel={
-              cartCount > 0 ? t('home.cartWithCountA11y', { count: cartCount }) : t('common.navCart')
-            }
-            hitSlop={4}
-          >
-            <Feather name="shopping-cart" size={20} color={PURPLE_DEEP} />
-            {cartCount > 0 ? (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>{cartCount > 9 ? '9+' : String(cartCount)}</Text>
-              </View>
-            ) : null}
-          </Pressable>
+        {/* Header Bar inside Hero */}
+        <View style={styles.header}>
+          <Image
+            source={require('../../assets/images/vaksina-mark-clean.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+            fadeDuration={0}
+            accessibilityLabel={t('common.appName')}
+          />
+
+          <View style={styles.headerActions}>
+            <Pressable
+              style={({ pressed }) => [styles.glassBtn, pressed && styles.pressed]}
+              onPress={() => router.push('/notifications')}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.navNotifications')}
+              hitSlop={4}
+            >
+              <Feather name="bell" size={20} color={PURPLE_DEEP} />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.glassBtn, pressed && styles.pressed]}
+              onPress={() => router.push('/cart')}
+              accessibilityRole="button"
+              accessibilityLabel={
+                cartCount > 0 ? t('home.cartWithCountA11y', { count: cartCount }) : t('common.navCart')
+              }
+              hitSlop={4}
+            >
+              <Feather name="shopping-cart" size={20} color={PURPLE_DEEP} />
+              {cartCount > 0 ? (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartCount > 9 ? '9+' : String(cartCount)}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Greeting Content */}
+        <View style={styles.greetWrap}>
+          <Text style={styles.greet} numberOfLines={1}>
+            {t('home.greeting', { name: user.name?.trim() || t('home.guestName') })}
+          </Text>
+          <Text style={styles.greetSub}>{t('home.greetingSubtitle')}</Text>
         </View>
       </View>
 
-      <Text style={styles.greet} numberOfLines={1}>
-        {t('home.greeting', { name: user.name?.trim() || t('home.guestName') })}
-      </Text>
-      <Text style={styles.greetSub}>{t('home.greetingSubtitle')}</Text>
-
-      {/* SEARCH */}
+      {/* FLOATING OVERLAPPING SEARCH BOX */}
       <View style={styles.searchBox}>
         <Feather name="search" size={20} color={MUTED} />
         <TextInput
@@ -328,56 +340,6 @@ export default function HomeScreen() {
           <MaterialCommunityIcons name="qrcode" size={22} color={PURPLE} />
         </Pressable>
       </View>
-
-      {/* HERO — approved full banner; entire card opens Catalog (no overlay text/CTA) */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('home.heroA11y')}
-        onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
-        style={({ pressed }) => [styles.heroWrap, { height: heroSize.h }, pressed && styles.pressed]}
-        onLayout={(e) => {
-          const w = Math.round(e.nativeEvent.layout.width);
-          if (w > 0 && w !== heroBoxW) setHeroBoxW(w);
-        }}
-      >
-        {heroBoxW > 0 ? (
-          <>
-            <Image
-              source={HERO_IMAGES[language] || HERO_IMAGES.uz}
-              style={{ width: heroSize.w, height: heroSize.h }}
-              resizeMode="contain"
-              fadeDuration={0}
-              resizeMethod={Platform.OS === 'android' ? 'resize' : undefined}
-            />
-            {isOverlay ? (
-              <View
-                pointerEvents="none"
-                style={[
-                  StyleSheet.absoluteFill,
-                  {
-                    paddingLeft: Math.round(heroSize.w * (117 / 1825)),
-                    paddingTop: Math.round(heroSize.h * (235 / 862)),
-                    width: Math.round(heroSize.w * 0.54),
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    fontFamily: 'Inter_700Bold',
-                    fontWeight: '700',
-                    color: '#1C025D',
-                    fontSize: Math.max(14, Math.round(heroSize.w * 0.043)),
-                    lineHeight: Math.max(18, Math.round(heroSize.w * 0.058)),
-                    letterSpacing: -0.3,
-                  }}
-                >
-                  {t('home.heroSlogan')}
-                </Text>
-              </View>
-            ) : null}
-          </>
-        ) : null}
-      </Pressable>
 
       {/* QUICK ACTIONS */}
       <View style={styles.quickRow}>
@@ -708,24 +670,49 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   pressed: { opacity: 0.82 },
 
+  heroHeader: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    position: 'relative',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 34,
+    backgroundColor: '#F3EEFF',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    minHeight: 180,
+  },
+  heroHeaderImg: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 8,
     minHeight: 44,
   },
   headerLogo: { width: 40, height: 40 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  roundBtn: {
+  glassBtn: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: CARD_BG,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: 'rgba(255, 255, 255, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#1A1040',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   cartBadge: {
     position: 'absolute',
@@ -749,21 +736,23 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
 
+  greetWrap: {
+    marginTop: 6,
+    maxWidth: '62%',
+  },
   greet: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 22,
+    lineHeight: 28,
     color: PURPLE_DEEP,
-    letterSpacing: -0.2,
-    marginTop: 0,
+    letterSpacing: -0.3,
   },
   greetSub: {
-    marginTop: 4,
-    marginBottom: SPACE,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    lineHeight: 20,
-    color: MUTED,
+    marginTop: 3,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#6B7280',
   },
 
   searchBox: {
@@ -775,7 +764,14 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: '#ECE7F6',
+    marginTop: -22,
+    zIndex: 10,
+    shadowColor: '#1A1040',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
     marginBottom: SPACE,
   },
   searchInput: {
@@ -794,14 +790,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F8F5FC',
-  },
-
-  heroWrap: {
-    width: '100%',
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: SPACE,
-    backgroundColor: '#F4F0FA',
   },
 
   quickRow: {
