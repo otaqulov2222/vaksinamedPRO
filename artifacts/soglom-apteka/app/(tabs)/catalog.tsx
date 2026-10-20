@@ -868,14 +868,6 @@ export default function CatalogScreen() {
           accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
         >
           <View style={styles.aiBannerLeft}>
-            <View style={styles.aiBadgeRow}>
-              <View style={styles.aiBadge}>
-                <Text style={styles.aiBadgeText}>AI SCANNER{/* i18n-ignore */}</Text>
-              </View>
-              <View style={styles.rxBadge}>
-                <Text style={styles.rxBadgeText}>{t('catalog.rxShort')}</Text>
-              </View>
-            </View>
             <Text style={styles.aiBannerTitle} numberOfLines={1}>
               {t('catalog.prescriptionScanBannerTitle')}
             </Text>

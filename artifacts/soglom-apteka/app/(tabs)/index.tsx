@@ -513,14 +513,6 @@ export default function HomeScreen() {
         accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
       >
         <View style={styles.rxBannerLeft}>
-          <View style={styles.rxBadgeRow}>
-            <View style={styles.rxBadge}>
-              <Text style={styles.rxBadgeText}>{/* i18n-ignore */}AI SCANNER</Text>
-            </View>
-            <View style={styles.rxTag}>
-              <Text style={styles.rxTagText}>{t('catalog.rxShort')}</Text>
-            </View>
-          </View>
           <Text style={styles.rxBannerTitle} numberOfLines={1}>
             {t('catalog.prescriptionScanBannerTitle')}
           </Text>
