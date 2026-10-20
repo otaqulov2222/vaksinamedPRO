@@ -152,7 +152,8 @@ export default function RemindersScreen() {
   const [formDosage, setFormDosage] = useState('1 tabletka');
   const [formMeal, setFormMeal] = useState<string>('after_meal');
   const [formTimes, setFormTimes] = useState<string[]>(['08:00']);
-  const [customTimeInput, setCustomTimeInput] = useState('');
+  const [customHour, setCustomHour] = useState('09');
+  const [customMinute, setCustomMinute] = useState('00');
   const [formStock, setFormStock] = useState('30');
   const [formPkg, setFormPkg] = useState('30');
   const [formThreshold, setFormThreshold] = useState('5');
@@ -358,7 +359,8 @@ export default function RemindersScreen() {
     setFormDosage('1 tabletka');
     setFormMeal('after_meal');
     setFormTimes(['08:00']);
-    setCustomTimeInput('');
+    setCustomHour('09');
+    setCustomMinute('00');
     setFormStock('30');
     setFormPkg('30');
     setFormThreshold('5');
@@ -375,44 +377,70 @@ export default function RemindersScreen() {
     }
   };
 
+  const incrementHour = () => {
+    setCustomHour((prev) => {
+      const h = (parseInt(prev, 10) || 0) + 1;
+      return String(h > 23 ? 0 : h).padStart(2, '0');
+    });
+  };
+
+  const decrementHour = () => {
+    setCustomHour((prev) => {
+      const h = (parseInt(prev, 10) || 0) - 1;
+      return String(h < 0 ? 23 : h).padStart(2, '0');
+    });
+  };
+
+  const incrementMinute = () => {
+    setCustomMinute((prev) => {
+      const m = (parseInt(prev, 10) || 0) + 5;
+      return String(m > 59 ? 0 : m).padStart(2, '0');
+    });
+  };
+
+  const decrementMinute = () => {
+    setCustomMinute((prev) => {
+      const m = (parseInt(prev, 10) || 0) - 5;
+      return String(m < 0 ? 55 : m).padStart(2, '0');
+    });
+  };
+
+  const handleHourChange = (val: string) => {
+    const clean = val.replace(/\D/g, '').slice(0, 2);
+    setCustomHour(clean);
+  };
+
+  const handleHourBlur = () => {
+    let num = parseInt(customHour, 10);
+    if (isNaN(num) || num < 0) num = 8;
+    if (num > 23) num = 23;
+    setCustomHour(String(num).padStart(2, '0'));
+  };
+
+  const handleMinuteChange = (val: string) => {
+    const clean = val.replace(/\D/g, '').slice(0, 2);
+    setCustomMinute(clean);
+  };
+
+  const handleMinuteBlur = () => {
+    let num = parseInt(customMinute, 10);
+    if (isNaN(num) || num < 0) num = 0;
+    if (num > 59) num = 59;
+    setCustomMinute(String(num).padStart(2, '0'));
+  };
+
   const handleAddCustomTime = () => {
-    const raw = customTimeInput.trim();
-    if (!raw) return;
+    let h = parseInt(customHour, 10);
+    let m = parseInt(customMinute, 10);
+    if (isNaN(h) || h < 0) h = 8;
+    if (h > 23) h = 23;
+    if (isNaN(m) || m < 0) m = 0;
+    if (m > 59) m = 59;
 
-    let clean = raw.replace(/[^\d:]/g, '');
-    if (!clean.includes(':')) {
-      if (clean.length === 1 || clean.length === 2) {
-        clean = `${clean.padStart(2, '0')}:00`;
-      } else if (clean.length === 3) {
-        clean = `0${clean[0]}:${clean.slice(1)}`;
-      } else if (clean.length === 4) {
-        clean = `${clean.slice(0, 2)}:${clean.slice(2)}`;
-      }
+    const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    if (!formTimes.includes(formatted)) {
+      setFormTimes((prev) => [...prev, formatted].sort());
     }
-
-    const parts = clean.split(':');
-    if (parts.length !== 2) {
-      notify(t('reminders.invalidTimeError'));
-      return;
-    }
-
-    const hours = parseInt(parts[0], 10);
-    const mins = parseInt(parts[1], 10);
-
-    if (isNaN(hours) || isNaN(mins) || hours < 0 || hours > 23 || mins < 0 || mins > 59) {
-      notify(t('reminders.invalidTimeError'));
-      return;
-    }
-
-    const formatted = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-
-    if (formTimes.includes(formatted)) {
-      setCustomTimeInput('');
-      return;
-    }
-
-    setFormTimes((prev) => [...prev, formatted].sort());
-    setCustomTimeInput('');
   };
 
   const handleRemoveTime = (timeStr: string) => {
@@ -942,30 +970,106 @@ export default function RemindersScreen() {
                 </View>
               </View>
 
-              {/* Custom Time Manual Entry */}
-              <View style={styles.customTimeSection}>
-                <Text style={styles.subFieldLabel}>{t('reminders.customTime')}</Text>
-                <View style={styles.customTimeRow}>
-                  <View style={styles.customTimeInputWrap}>
-                    <Feather name="clock" size={15} color={MUTED} style={styles.customTimeInputIcon} />
-                    <TextInput
-                      style={styles.customTimeInput}
-                      value={customTimeInput}
-                      onChangeText={setCustomTimeInput}
-                      placeholder={t('reminders.customTimePlaceholder')}
-                      placeholderTextColor="#9CA3AF"
-                      keyboardType="numbers-and-punctuation"
-                      maxLength={5}
-                      onSubmitEditing={handleAddCustomTime}
-                      returnKeyType="done"
-                    />
+              {/* Custom Time Picker Card */}
+              <View style={styles.timePickerCard}>
+                <View style={styles.timePickerHeader}>
+                  <View style={styles.timePickerTitleWrap}>
+                    <Feather name="clock" size={14} color={PURPLE} />
+                    <Text style={styles.timePickerTitle}>{t('reminders.customTimeTitle')}</Text>
                   </View>
+                </View>
+
+                <View style={styles.timePickerMainRow}>
+                  {/* Digital Clock Display & Steppers */}
+                  <View style={styles.timeDigitsWrap}>
+                    {/* Hour Column */}
+                    <View style={styles.timeDigitBlock}>
+                      <Pressable
+                        onPress={incrementHour}
+                        style={({ pressed }) => [styles.timeArrowBtn, pressed && styles.pressed]}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                      >
+                        <Feather name="chevron-up" size={16} color={PURPLE_DEEP} />
+                      </Pressable>
+                      <TextInput
+                        style={styles.timeDigitInput}
+                        value={customHour}
+                        onChangeText={handleHourChange}
+                        onBlur={handleHourBlur}
+                        keyboardType="number-pad"
+                        maxLength={2}
+                        selectTextOnFocus
+                      />
+                      <Pressable
+                        onPress={decrementHour}
+                        style={({ pressed }) => [styles.timeArrowBtn, pressed && styles.pressed]}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                      >
+                        <Feather name="chevron-down" size={16} color={PURPLE_DEEP} />
+                      </Pressable>
+                      <Text style={styles.timeDigitLabel}>{t('reminders.hourLabel')}</Text>
+                    </View>
+
+                    <Text style={styles.timeColonText}>{':'}</Text>
+
+                    {/* Minute Column */}
+                    <View style={styles.timeDigitBlock}>
+                      <Pressable
+                        onPress={incrementMinute}
+                        style={({ pressed }) => [styles.timeArrowBtn, pressed && styles.pressed]}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                      >
+                        <Feather name="chevron-up" size={16} color={PURPLE_DEEP} />
+                      </Pressable>
+                      <TextInput
+                        style={styles.timeDigitInput}
+                        value={customMinute}
+                        onChangeText={handleMinuteChange}
+                        onBlur={handleMinuteBlur}
+                        keyboardType="number-pad"
+                        maxLength={2}
+                        selectTextOnFocus
+                      />
+                      <Pressable
+                        onPress={decrementMinute}
+                        style={({ pressed }) => [styles.timeArrowBtn, pressed && styles.pressed]}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                      >
+                        <Feather name="chevron-down" size={16} color={PURPLE_DEEP} />
+                      </Pressable>
+                      <Text style={styles.timeDigitLabel}>{t('reminders.minuteLabel')}</Text>
+                    </View>
+                  </View>
+
+                  {/* Quick Minute Pills (:00, :15, :30, :45) */}
+                  <View style={styles.quickMinutesCol}>
+                    {['00', '15', '30', '45'].map((minStr) => {
+                      const isActive = customMinute === minStr;
+                      return (
+                        <Pressable
+                          key={minStr}
+                          onPress={() => setCustomMinute(minStr)}
+                          style={[styles.quickMinutePill, isActive && styles.quickMinutePillActive]}
+                        >
+                          <Text style={[styles.quickMinutePillText, isActive && styles.quickMinutePillTextActive]}>
+                            {`:${minStr}`}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {/* Add Button */}
                   <Pressable
-                    style={({ pressed }) => [styles.addCustomTimeBtn, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.addTimeBtnCard, pressed && styles.pressed]}
                     onPress={handleAddCustomTime}
                   >
                     <Feather name="plus" size={16} color="#FFFFFF" />
-                    <Text style={styles.addCustomTimeBtnText}>{t('reminders.addTimeBtn')}</Text>
+                    <Text style={styles.addTimeBtnCardText}>{t('reminders.addTimeBtn')}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -1822,45 +1926,115 @@ const styles = StyleSheet.create({
   presetsSection: {
     marginTop: 2,
   },
-  customTimeSection: {
-    marginTop: 4,
-  },
-  customTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  customTimeInputWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+  timePickerCard: {
+    backgroundColor: '#FBF9FE',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderColor: '#ECE7F6',
+    padding: 12,
+    marginTop: 6,
   },
-  customTimeInputIcon: {
-    marginRight: 6,
+  timePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  customTimeInput: {
-    flex: 1,
-    paddingVertical: 9,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
+  timePickerTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  timePickerTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
     color: PURPLE_DEEP,
   },
-  addCustomTimeBtn: {
+  timePickerMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  timeDigitsWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#ECE7F6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  timeDigitBlock: {
+    alignItems: 'center',
+    width: 38,
+  },
+  timeDigitInput: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    color: PURPLE_DEEP,
+    textAlign: 'center',
+    paddingVertical: 1,
+    width: '100%',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {}),
+  },
+  timeDigitLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 9.5,
+    color: MUTED,
+    marginTop: -2,
+  },
+  timeArrowBtn: {
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeColonText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    color: PURPLE,
+    marginHorizontal: 1,
+    marginTop: -10,
+  },
+  quickMinutesCol: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+    width: 76,
+  },
+  quickMinutePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 7,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+  },
+  quickMinutePillActive: {
+    backgroundColor: '#F3E8FF',
+    borderColor: PURPLE,
+  },
+  quickMinutePillText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: MUTED,
+  },
+  quickMinutePillTextActive: {
+    color: PURPLE,
+  },
+  addTimeBtnCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: PURPLE,
     borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     gap: 4,
   },
-  addCustomTimeBtnText: {
-    fontFamily: 'Inter_600SemiBold',
+  addTimeBtnCardText: {
+    fontFamily: 'Inter_700Bold',
     fontSize: 12.5,
     color: '#FFFFFF',
   },

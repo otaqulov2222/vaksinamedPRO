@@ -92,6 +92,9 @@ export default {
     stockLabelShort: 'Mavjud qoldiq (dona)',
     lowStockThresholdShort: 'Ogohlantirish qoldig‘i (dona)',
     noTimesSelected: 'Qabul vaqtini pastdan tanlang yoki kiriting',
+    customTimeTitle: 'Yangi qabul vaqti',
+    hourLabel: 'Soat',
+    minuteLabel: 'Daqiqa',
   },
   ru: {
     title: 'Напоминания лекарств',
@@ -186,6 +189,9 @@ export default {
     stockLabelShort: 'Текущий остаток (шт.)',
     lowStockThresholdShort: 'Оповестить при остатке (шт.)',
     noTimesSelected: 'Выберите или введите время приема ниже',
+    customTimeTitle: 'Новое время приема',
+    hourLabel: 'Час',
+    minuteLabel: 'Минуты',
   },
   en: {
     title: 'Pill Reminders',
@@ -280,5 +286,8 @@ export default {
     stockLabelShort: 'Current stock (units)',
     lowStockThresholdShort: 'Alert threshold (units)',
     noTimesSelected: 'Select or enter intake time below',
+    customTimeTitle: 'New intake time',
+    hourLabel: 'Hour',
+    minuteLabel: 'Minutes',
   },
 } as const;
