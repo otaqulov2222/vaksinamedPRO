@@ -37,6 +37,37 @@ const OK = '#3D7A55';
 const BAD = '#B91C1C';
 const WARN = '#B45309';
 
+const PRODUCT_IMAGES: Record<string, any> = {
+  'cat-p1': require('../../assets/images/cat-p1-d3.png'),
+  'cat-p2': require('../../assets/images/cat-p2-c.png'),
+  'cat-p3': require('../../assets/images/cat-p3-mg.png'),
+  'cat-p4': require('../../assets/images/cat-p4-omega.png'),
+  'cat-p5': require('../../assets/images/cat-p5-zn.png'),
+  'cat-p6': require('../../assets/images/cat-p6-para.png'),
+};
+
+function getProductThumb(item?: { productId?: number | string; id?: number | string; title?: string; name?: string; analogGroup?: string }) {
+  if (!item) return null;
+  const id = Number(item.productId ?? item.id);
+  if (id === 1) return PRODUCT_IMAGES['cat-p1'];
+  if (id === 2) return PRODUCT_IMAGES['cat-p2'];
+  if (id === 3) return PRODUCT_IMAGES['cat-p3'];
+  if (id === 4) return PRODUCT_IMAGES['cat-p4'];
+  if (id === 5) return PRODUCT_IMAGES['cat-p5'];
+  if (id === 6 || id === 7 || id === 8) return PRODUCT_IMAGES['cat-p6'];
+
+  const name = String(item.title || item.name || '').toLowerCase();
+  const group = String(item.analogGroup || '').toLowerCase();
+  if (name.includes('d3') || group.includes('vitamin-d')) return PRODUCT_IMAGES['cat-p1'];
+  if (name.includes('ascorb') || group.includes('vitamin-c')) return PRODUCT_IMAGES['cat-p2'];
+  if (name.includes('magne') || group.includes('magnesium')) return PRODUCT_IMAGES['cat-p3'];
+  if (name.includes('omega') || group.includes('omega')) return PRODUCT_IMAGES['cat-p4'];
+  if (name.includes('sink') || name.includes('zinc') || group.includes('zinc')) return PRODUCT_IMAGES['cat-p5'];
+  if (name.includes('para') || name.includes('ibup') || name.includes('nuro') || group.includes('analgesic')) return PRODUCT_IMAGES['cat-p6'];
+
+  return null;
+}
+
 type FilterKey = 'all' | 'progress' | 'completed' | 'cancelled';
 
 const FILTERS: { key: FilterKey; labelKey: TranslationKey }[] = [
@@ -130,6 +161,7 @@ function OrderCard({ order }: { order: any }) {
     items.reduce((s, it) => s + Math.max(1, Number(it.quantity) || 1), 0) || itemCount;
   const first = items[0];
   const firstTitle = String(first?.title || first?.nameUz || '').trim();
+  const firstThumb = getProductThumb(first);
   const moreItems = Math.max(0, itemCount - 1);
 
   const pay = String(order.paymentStatus || '').toUpperCase();
@@ -193,8 +225,19 @@ function OrderCard({ order }: { order: any }) {
       </View>
 
       <View style={styles.productBlock}>
-        <View style={styles.productIcon} importantForAccessibility="no-hide-descendants">
-          <MaterialCommunityIcons name="pill" size={18} color={PURPLE} />
+        <View style={styles.productIconWrap} importantForAccessibility="no-hide-descendants">
+          {firstThumb ? (
+            <Image
+              source={firstThumb}
+              style={styles.productThumb}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <View style={styles.productIconFallback}>
+              <MaterialCommunityIcons name="pill" size={20} color={PURPLE} />
+            </View>
+          )}
         </View>
         <View style={styles.productCopy}>
           <Text style={styles.productName} numberOfLines={2}>
@@ -206,17 +249,25 @@ function OrderCard({ order }: { order: any }) {
             </Text>
           ) : null}
         </View>
+        <Feather name="chevron-right" size={18} color="#C4B5FD" style={styles.cardChevron} />
       </View>
 
       <View style={styles.metaRow}>
         <View style={styles.metaLeft}>
           {placeLine ? (
-            <Text style={styles.metaText} numberOfLines={2}>
-              {placeLine}
-            </Text>
+            <View style={styles.metaWithIcon}>
+              <Feather
+                name={order.fulfillment === 'delivery' ? 'truck' : 'map-pin'}
+                size={12}
+                color={MUTED}
+              />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {placeLine}
+              </Text>
+            </View>
           ) : null}
           {qtyTotal > 0 ? (
-            <Text style={styles.metaText} numberOfLines={1}>
+            <Text style={styles.metaQtyText} numberOfLines={1}>
               {t('orders.itemsCount', { count: qtyTotal })}
             </Text>
           ) : null}
@@ -593,18 +644,18 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: CARD,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingTop: 15,
-    paddingBottom: 15,
+    borderColor: '#ECE7F6',
+    paddingTop: 16,
+    paddingBottom: 16,
     paddingLeft: 16,
-    paddingRight: 18,
-    shadowColor: '#1A1040',
-    shadowOpacity: 0.04,
+    paddingRight: 16,
+    shadowColor: '#5414B8',
+    shadowOpacity: 0.05,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
-    elevation: 1,
+    elevation: 2,
   },
   cardTop: {
     flexDirection: 'row',
@@ -614,10 +665,10 @@ const styles = StyleSheet.create({
   },
   cardTopLeft: { flex: 1, minWidth: 0 },
   orderRef: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
     lineHeight: 18,
-    color: MUTED,
+    color: PURPLE_DEEP,
   },
   orderWhen: {
     marginTop: 2,
@@ -628,45 +679,79 @@ const styles = StyleSheet.create({
   },
   productBlock: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+    alignItems: 'center',
+    gap: 12,
     marginBottom: 12,
+    backgroundColor: '#FAF8FD',
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#F1ECF8',
   },
-  productIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: LAVENDER,
+  productIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  productThumb: {
+    width: 38,
+    height: 38,
+  },
+  productIconFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: LAVENDER,
   },
   productCopy: { flex: 1, minWidth: 0 },
   productName: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 19,
     color: PURPLE_DEEP,
   },
   productMore: {
     marginTop: 2,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
     lineHeight: 16,
-    color: MUTED,
+    color: PURPLE,
+  },
+  cardChevron: {
+    marginLeft: 4,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 10,
+    marginBottom: 4,
   },
-  metaLeft: { flex: 1, minWidth: 0, gap: 2 },
+  metaLeft: { flex: 1, minWidth: 0, gap: 3 },
+  metaWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   metaText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
     lineHeight: 16,
     color: MUTED,
+    flex: 1,
+  },
+  metaQtyText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    lineHeight: 15,
+    color: PURPLE_DEEP,
   },
   totalCol: {
     flexShrink: 0,
@@ -686,6 +771,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    marginTop: 6,
   },
   chip: {
     borderRadius: 8,
@@ -722,18 +808,23 @@ const styles = StyleSheet.create({
 
   emptyCard: {
     backgroundColor: CARD,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 18,
+    borderColor: '#ECE7F6',
+    paddingHorizontal: 24,
+    paddingTop: 26,
+    paddingBottom: 26,
     alignItems: 'center',
+    shadowColor: '#5414B8',
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   emptyArt: {
-    width: 118,
-    height: 105,
-    marginBottom: 10,
+    width: 160,
+    height: 140,
+    marginBottom: 14,
   },
   emptyTitle: {
     fontFamily: 'Inter_700Bold',

@@ -1,9 +1,10 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
+  Image,
   Linking,
   Platform,
   Pressable,
@@ -37,6 +38,37 @@ const LAVENDER = '#F1EBFF';
 const OK = '#3D7A55';
 const BAD = '#B91C1C';
 const WARN = '#B45309';
+
+const PRODUCT_IMAGES: Record<string, any> = {
+  'cat-p1': require('../../assets/images/cat-p1-d3.png'),
+  'cat-p2': require('../../assets/images/cat-p2-c.png'),
+  'cat-p3': require('../../assets/images/cat-p3-mg.png'),
+  'cat-p4': require('../../assets/images/cat-p4-omega.png'),
+  'cat-p5': require('../../assets/images/cat-p5-zn.png'),
+  'cat-p6': require('../../assets/images/cat-p6-para.png'),
+};
+
+function getProductThumb(item?: { productId?: number | string; id?: number | string; title?: string; name?: string; analogGroup?: string }) {
+  if (!item) return null;
+  const id = Number(item.productId ?? item.id);
+  if (id === 1) return PRODUCT_IMAGES['cat-p1'];
+  if (id === 2) return PRODUCT_IMAGES['cat-p2'];
+  if (id === 3) return PRODUCT_IMAGES['cat-p3'];
+  if (id === 4) return PRODUCT_IMAGES['cat-p4'];
+  if (id === 5) return PRODUCT_IMAGES['cat-p5'];
+  if (id === 6 || id === 7 || id === 8) return PRODUCT_IMAGES['cat-p6'];
+
+  const name = String(item.title || item.name || '').toLowerCase();
+  const group = String(item.analogGroup || '').toLowerCase();
+  if (name.includes('d3') || group.includes('vitamin-d')) return PRODUCT_IMAGES['cat-p1'];
+  if (name.includes('ascorb') || group.includes('vitamin-c')) return PRODUCT_IMAGES['cat-p2'];
+  if (name.includes('magne') || group.includes('magnesium')) return PRODUCT_IMAGES['cat-p3'];
+  if (name.includes('omega') || group.includes('omega')) return PRODUCT_IMAGES['cat-p4'];
+  if (name.includes('sink') || name.includes('zinc') || group.includes('zinc')) return PRODUCT_IMAGES['cat-p5'];
+  if (name.includes('para') || name.includes('ibup') || name.includes('nuro') || group.includes('analgesic')) return PRODUCT_IMAGES['cat-p6'];
+
+  return null;
+}
 
 function StatusRow({
   label,
@@ -342,7 +374,46 @@ export default function OrderScreen() {
       >
         {/* Current status — honest single card, no fake timeline */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('orders.statusCardTitle')}</Text>
+          <View style={styles.statusHeaderRow}>
+            <View
+              style={[
+                styles.statusIconCircle,
+                {
+                  backgroundColor:
+                    fulfillTone === 'ok' ? '#ECFDF5' : fulfillTone === 'bad' ? '#FEF2F2' : '#F5F3FF',
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name={
+                  fulfill === 'COMPLETED'
+                    ? 'check-circle-outline'
+                    : fulfill === 'CANCELLED'
+                      ? 'close-circle-outline'
+                      : fulfill === 'OUT_FOR_DELIVERY'
+                        ? 'truck-delivery-outline'
+                        : fulfill === 'READY_FOR_PICKUP'
+                          ? 'storefront-outline'
+                          : 'clock-outline'
+                }
+                size={22}
+                color={fulfillTone === 'ok' ? OK : fulfillTone === 'bad' ? BAD : PURPLE}
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.cardTitle}>{t('orders.statusCardTitle')}</Text>
+              <Text
+                style={[
+                  styles.statusHeroValue,
+                  { color: fulfillTone === 'ok' ? OK : fulfillTone === 'bad' ? BAD : PURPLE_DEEP },
+                ]}
+                numberOfLines={1}
+              >
+                {fulfillmentLabel(t, order.fulfillmentStatus)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.statusDivider} />
           <StatusRow
             label={t('orders.statusRowFulfillment')}
             value={fulfillmentLabel(t, order.fulfillmentStatus)}
@@ -454,9 +525,14 @@ export default function OrderScreen() {
         {/* QR for pickup/active */}
         {fulfill !== 'CANCELLED' && !resExpired && order.qrPayload ? (
           <View style={styles.qrCard}>
-            <Text style={styles.qrCode} numberOfLines={1}>
-              {String(order.qrPayload)}
-            </Text>
+            <View style={styles.qrIconWrap}>
+              <MaterialCommunityIcons name="qrcode-scan" size={26} color="#FFFFFF" />
+            </View>
+            <View style={styles.qrCodeBadge}>
+              <Text style={styles.qrCode} numberOfLines={1}>
+                {String(order.qrPayload)}
+              </Text>
+            </View>
             <Text style={styles.qrHint}>{t('orders.qrHint')}</Text>
           </View>
         ) : null}
@@ -467,8 +543,16 @@ export default function OrderScreen() {
           const qty = Math.max(1, Number(item.quantity) || 1);
           const unit = Number(item.price) || 0;
           const line = unit * qty;
+          const thumb = getProductThumb(item);
           return (
             <View key={item.id ?? `${item.productId}-${item.title}`} style={styles.lineCard}>
+              <View style={styles.lineThumbWrap}>
+                {thumb ? (
+                  <Image source={thumb} style={styles.lineThumb} resizeMode="contain" />
+                ) : (
+                  <MaterialCommunityIcons name="pill" size={20} color={PURPLE} />
+                )}
+              </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.lineName} numberOfLines={2}>
                   {String(item.title || t('orders.itemUntitled'))}
@@ -652,11 +736,39 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: '#ECE7F6',
     marginBottom: 12,
+    shadowColor: '#5414B8',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  statusHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 10,
+  },
+  statusIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusHeroValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    lineHeight: 22,
+  },
+  statusDivider: {
+    height: 1,
+    backgroundColor: '#F1ECF8',
+    marginVertical: 10,
   },
   cardTitle: {
     fontFamily: 'Inter_600SemiBold',
@@ -742,21 +854,39 @@ const styles = StyleSheet.create({
 
   qrCard: {
     backgroundColor: PURPLE,
-    borderRadius: 16,
-    padding: 18,
+    borderRadius: 18,
+    padding: 20,
     marginBottom: 12,
     alignItems: 'center',
+    shadowColor: '#5414B8',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  qrIconWrap: {
+    marginBottom: 10,
+  },
+  qrCodeBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.32)',
+    marginBottom: 8,
   },
   qrCode: {
     color: '#fff',
     fontFamily: 'Inter_700Bold',
     fontSize: 18,
+    letterSpacing: 0.5,
   },
   qrHint: {
-    marginTop: 6,
     color: 'rgba(255,255,255,0.85)',
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
+    textAlign: 'center',
   },
 
   sectionTitle: {
@@ -768,14 +898,29 @@ const styles = StyleSheet.create({
   },
   lineCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+    alignItems: 'center',
+    gap: 12,
     backgroundColor: CARD,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: '#ECE7F6',
+  },
+  lineThumbWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#F8F5FC',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  lineThumb: {
+    width: 38,
+    height: 38,
   },
   lineName: {
     fontFamily: 'Inter_600SemiBold',
