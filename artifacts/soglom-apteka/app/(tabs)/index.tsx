@@ -1,5 +1,4 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -16,7 +15,7 @@ import {
 } from 'react-native';
 import { useApp } from '@/context/AppContext';
 import { localizedName } from '@/lib/i18n/data';
-import { ProgressLine, Screen } from '@/components/AppUI';
+import { Screen } from '@/components/AppUI';
 import { api } from '@/lib/api';
 import { notify } from '@/lib/dialogs';
 import type { TFunction, TranslationKey } from '@/lib/i18n';
@@ -58,11 +57,7 @@ const QUICK: {
   { icon: 'map-marker-outline', labelKey: 'common.navBranches', to: '/branches', bg: '#D1FAE5', iconColor: '#059669' },
 ];
 
-const HERO_IMAGES: Record<string, any> = {
-  uz: require('../../assets/images/home-hero-final-uz.png'),
-  ru: require('../../assets/images/home-hero-final-ru.png'),
-  en: require('../../assets/images/home-hero-final-en.png'),
-};
+const HERO_BASE_IMAGE = require('../../assets/images/home-hero-clean-base.png');
 
 const PRODUCT_IMAGES: Record<string, any> = {
   'cat-p1': require('../../assets/images/cat-p1-d3.png'),
@@ -103,7 +98,7 @@ const CATEGORY_FILTERS: { key: CategoryFilterKey; labelKey: TranslationKey; icon
 ];
 
 export default function HomeScreen() {
-  const { t, fmt, language, balance, user, cartCount, refresh } = useApp();
+  const { t, fmt, language, user, cartCount, refresh } = useApp();
   const { width: windowW } = useWindowDimensions();
   const contentW = Math.max(280, Math.round(windowW - SCREEN_PAD * 2));
   const productCardW = Math.min(180, Math.max(168, Math.round((contentW - 12) / 2.05)));
@@ -116,14 +111,6 @@ export default function HomeScreen() {
   const [addedIds, setAddedIds] = useState<Record<string, boolean>>({});
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilterKey>('all');
   const [query, setQuery] = useState('');
-  const [nextTierTarget, setNextTierTarget] = useState<number | null>(null);
-  const spentTowardTier = Number(user?.total || 0);
-  const left =
-    nextTierTarget != null ? Math.max(0, nextTierTarget - spentTowardTier) : null;
-  const tierProgress =
-    nextTierTarget != null
-      ? Math.min(1, Math.max(0, spentTowardTier / Math.max(1, nextTierTarget)))
-      : 0;
   const heroHeight = Math.max(140, Math.round(contentW / HERO_AR));
 
   const loadProducts = useCallback(() => {
@@ -143,26 +130,8 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    void api.cashbackRules().then((r) => {
-      const tiers = Array.isArray(r?.tiers) ? r.tiers : [];
-      const gold = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes('gold'));
-      const platinum = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes('plat'));
-      const userTier = String(user?.tier || '').toLowerCase();
-      const threshold = (t: any) => Number(t?.fromTotal ?? t?.minSpend);
-      if (userTier.includes('plat')) {
-        setNextTierTarget(null);
-      } else if (userTier.includes('gold') && Number.isFinite(threshold(platinum))) {
-        setNextTierTarget(threshold(platinum));
-      } else if (Number.isFinite(threshold(gold))) {
-        setNextTierTarget(threshold(gold));
-      } else if (Number.isFinite(threshold(platinum))) {
-        setNextTierTarget(threshold(platinum));
-      } else {
-        setNextTierTarget(null);
-      }
-    }).catch(() => setNextTierTarget(null));
     loadProducts();
-  }, [loadProducts, user?.tier]);
+  }, [loadProducts]);
 
   const onSearch = () => {
     const q = query.trim();
@@ -325,7 +294,7 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {/* HERO 3D BANNER — Apple Store widescreen artwork */}
+      {/* HERO 3D BANNER — Apple Store widescreen artwork with crisp vector typography */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('home.heroA11y')}
@@ -333,11 +302,24 @@ export default function HomeScreen() {
         style={({ pressed }) => [styles.heroWrap, { height: heroHeight }, pressed && styles.pressed]}
       >
         <Image
-          source={HERO_IMAGES[language] || HERO_IMAGES.uz}
+          source={HERO_BASE_IMAGE}
           style={styles.heroImg}
           resizeMode="cover"
           fadeDuration={0}
         />
+        <View style={styles.heroTextOverlay} pointerEvents="none">
+          <Text
+            style={[
+              styles.heroSloganText,
+              {
+                fontSize: Math.min(19, Math.max(14, Math.round(contentW * 0.046))),
+                lineHeight: Math.min(25, Math.max(18, Math.round(contentW * 0.058))),
+              },
+            ]}
+          >
+            {t('home.heroSlogan')}
+          </Text>
+        </View>
       </Pressable>
 
       {/* QUICK ACTIONS */}
@@ -365,132 +347,8 @@ export default function HomeScreen() {
           </Pressable>
         ))}
       </View>
-      {/* VIP LOYALTY & CASHBACK CARD */}
-      <View style={styles.loyaltyCardContainer}>
-        <LinearGradient
-          colors={['#5414B8', '#7325E6', '#320970']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.loyaltyGradient}
-        >
-          {/* Ambient Lighting Orbs for Glassmorphism Depth */}
-          <View style={styles.loyaltyAmbientWarm} pointerEvents="none" />
-          <View style={styles.loyaltyAmbientCool} pointerEvents="none" />
 
-          {/* Top Row: Brand & Crown Tier Badge */}
-          <View style={styles.loyaltyTopRow}>
-            <View style={styles.loyaltyBrandBadge}>
-              <View style={styles.sparkleWrap}>
-                <MaterialCommunityIcons name="star-four-points" size={13} color="#FFD166" />
-              </View>
-              <Text style={styles.loyaltyBrandTitle}>{t('home.balanceLabel')}</Text>
-            </View>
-
-            <Pressable
-              onPress={() => router.push('/bonuses')}
-              style={styles.tierCapsule}
-              accessibilityRole="button"
-              accessibilityLabel={
-                String(user.tier || '').trim()
-                  ? t('home.tierName', { tier: String(user.tier).trim() })
-                  : t('home.tierNone')
-              }
-            >
-              <MaterialCommunityIcons name="crown" size={13} color="#FFD166" />
-              <Text style={styles.tierCapsuleText} numberOfLines={1}>
-                {String(user.tier || '').trim()
-                  ? t('home.tierName', { tier: String(user.tier).trim() })
-                  : t('home.tierNone')}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Middle Row: Large Crisp Balance + Quick Cashier QR Button */}
-          <View style={styles.loyaltyMainRow}>
-            <View style={styles.loyaltyBalanceWrap}>
-              <Text style={styles.loyaltyBalanceValue} numberOfLines={1}>
-                {fmt.money(balance)}
-              </Text>
-              <Text style={styles.loyaltyBalanceSub}>{t('home.availableBonuses')}</Text>
-            </View>
-
-            <View style={styles.loyaltyActionsGroup}>
-              {/* Instant QR for Cashier scanner */}
-              <Pressable
-                onPress={() => router.push('/qr')}
-                style={({ pressed }) => [styles.loyaltyQrBtn, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={t('home.qrCashier')}
-              >
-                <MaterialCommunityIcons name="qrcode-scan" size={16} color="#FFFFFF" />
-                <Text style={styles.loyaltyQrBtnText}>{t('home.qrCashier')}</Text>
-              </Pressable>
-
-              {/* History button */}
-              <Pressable
-                onPress={() => router.push('/cashback')}
-                style={({ pressed }) => [styles.loyaltyHistoryBtn, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={t('home.cashbackHistory')}
-              >
-                <Feather name="clock" size={14} color="#FFFFFF" />
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Bottom Progress Section: Next Tier Progress */}
-          {nextTierTarget != null ? (
-            <View style={styles.loyaltyProgressSection}>
-              <View style={styles.loyaltyTrack}>
-                <View
-                  style={[
-                    styles.loyaltyFill,
-                    { width: `${Math.min(100, Math.max(0, Math.round(tierProgress * 100)))}%` },
-                  ]}
-                />
-              </View>
-              <View style={styles.loyaltyProgressLabelsRow}>
-                <Text style={styles.loyaltyProgressText} numberOfLines={1}>
-                  {String(user?.tier || '').toLowerCase().includes('plat')
-                    ? t('home.tierTop')
-                    : left != null
-                      ? t('home.nextTierLeft', { amount: fmt.money(left) })
-                      : t('home.nextTierUnknown')}
-                </Text>
-                <Pressable onPress={() => router.push('/cashback')}>
-                  <Text style={styles.loyaltyHistoryLink}>{t('home.cashbackHistory')} →</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-        </LinearGradient>
-      </View>
-
-      {/* AI Prescription Banner */}
-      <Pressable
-        style={({ pressed }) => [styles.rxBanner, pressed && styles.pressed]}
-        onPress={() => router.push('/prescription')}
-        accessibilityRole="button"
-        accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
-      >
-        <View style={styles.rxBannerLeft}>
-          <Text style={styles.rxBannerTitle} numberOfLines={1}>
-            {t('catalog.prescriptionScanBannerTitle')}
-          </Text>
-          <Text style={styles.rxBannerSub} numberOfLines={2}>
-            {t('catalog.prescriptionScanBannerSub')}
-          </Text>
-        </View>
-        <View style={styles.rxBannerRight}>
-          <View style={styles.rxCameraBubble}>
-            <MaterialCommunityIcons name="line-scan" size={22} color="#FFFFFF" />
-          </View>
-          <Text style={styles.rxActionText} numberOfLines={1}>
-            {t('catalog.prescriptionScanAction')}
-          </Text>
-        </View>
-      </Pressable>
-
+      {/* FEATURED PRODUCTS (Directly below Quick Actions) */}
       <View style={styles.sectionRow}>
         <Text style={styles.section} numberOfLines={1}>
           {t('home.featuredProducts')}
@@ -660,6 +518,32 @@ export default function HomeScreen() {
           })}
         </ScrollView>
       )}
+
+      {/* AI Prescription Banner */}
+      <Pressable
+        style={({ pressed }) => [styles.rxBanner, pressed && styles.pressed, { marginTop: SPACE }]}
+        onPress={() => router.push('/prescription')}
+        accessibilityRole="button"
+        accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
+      >
+        <View style={styles.rxBannerLeft}>
+          <Text style={styles.rxBannerTitle} numberOfLines={1}>
+            {t('catalog.prescriptionScanBannerTitle')}
+          </Text>
+          <Text style={styles.rxBannerSub} numberOfLines={2}>
+            {t('catalog.prescriptionScanBannerSub')}
+          </Text>
+        </View>
+        <View style={styles.rxBannerRight}>
+          <View style={styles.rxCameraBubble}>
+            <MaterialCommunityIcons name="line-scan" size={22} color="#FFFFFF" />
+          </View>
+          <Text style={styles.rxActionText} numberOfLines={1}>
+            {t('catalog.prescriptionScanAction')}
+          </Text>
+        </View>
+      </Pressable>
+
       {/* Clearance above floating tab bar */}
       <View style={styles.bottomClearance} />
     </Screen>
@@ -776,10 +660,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 10,
     elevation: 3,
+    position: 'relative',
   },
   heroImg: {
     width: '100%',
     height: '100%',
+  },
+  heroTextOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 18,
+    width: '52%',
+    justifyContent: 'center',
+  },
+  heroSloganText: {
+    fontFamily: 'Inter_700Bold',
+    color: '#160430',
+    letterSpacing: -0.3,
   },
 
   quickRow: {
@@ -811,187 +709,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  loyaltyCardContainer: {
-    width: '100%',
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#5414B8',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 4,
-    marginBottom: SPACE,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  loyaltyGradient: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 13,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  loyaltyAmbientWarm: {
-    position: 'absolute',
-    top: -35,
-    right: -25,
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: 'rgba(255, 209, 102, 0.16)',
-  },
-  loyaltyAmbientCool: {
-    position: 'absolute',
-    bottom: -40,
-    left: -20,
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: 'rgba(255, 255, 255, 0.09)',
-  },
-  loyaltyTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  loyaltyBrandBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-  },
-  sparkleWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'rgba(255, 209, 102, 0.28)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loyaltyBrandTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11.5,
-    lineHeight: 15,
-    color: '#F5EEFF',
-    letterSpacing: 0.2,
-  },
-  tierCapsule: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 209, 102, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 209, 102, 0.42)',
-  },
-  tierCapsuleText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11.5,
-    lineHeight: 15,
-    color: '#FFD166',
-  },
-  loyaltyMainRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: 4,
-  },
-  loyaltyBalanceWrap: {
-    flex: 1,
-  },
-  loyaltyBalanceValue: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 25,
-    lineHeight: 30,
-    color: '#FFFFFF',
-    letterSpacing: -0.4,
-  },
-  loyaltyBalanceSub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 14,
-    color: 'rgba(255, 255, 255, 0.72)',
-    marginTop: 1,
-  },
-  loyaltyActionsGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  loyaltyQrBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.26)',
-  },
-  loyaltyQrBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#FFFFFF',
-  },
-  loyaltyHistoryBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  loyaltyProgressSection: {
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.14)',
-  },
-  loyaltyTrack: {
-    height: 4.5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    overflow: 'hidden',
-  },
-  loyaltyFill: {
-    height: '100%',
-    borderRadius: 3,
-    backgroundColor: '#FFD166',
-  },
-  loyaltyProgressLabelsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 5,
-  },
-  loyaltyProgressText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 15,
-    color: 'rgba(255, 255, 255, 0.85)',
-    flex: 1,
-    marginRight: 8,
-  },
-  loyaltyHistoryLink: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    lineHeight: 15,
-    color: '#FFD166',
-  },
-  cardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.995 }],
-  },
+
 
   sectionRow: {
     flexDirection: 'row',
