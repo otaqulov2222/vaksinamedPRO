@@ -27,6 +27,15 @@ const MUTED = '#6B7280';
 const GREEN = '#10B981';
 const AMBER = '#F59E0B';
 
+function cleanText(text: string | null | undefined): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/\s*\(Demo\)/gi, '')
+    .replace(/\[TEST\s*\/\s*DEMO\]\s*/gi, '')
+    .replace(/\s*Ushbu ma'lumot staging sinov muhiti uchun demo hisoblanadi\.?\s*Haqiqiy dori narxi va zaxirasi emas\.?/gi, '')
+    .trim();
+}
+
 interface ScheduledDose {
   doseId: string;
   reminderId: number;
@@ -541,7 +550,7 @@ export default function RemindersScreen() {
                   </Text>
                   <Text style={styles.alertBody}>
                     {t('reminders.refillBody', {
-                      name: alert.medicineName,
+                      name: cleanText(alert.medicineName),
                       stock: alert.currentStock,
                       days: Math.max(1, alert.daysRemaining),
                     })}
@@ -647,7 +656,7 @@ export default function RemindersScreen() {
                       </View>
                       <View style={styles.doseMetaCol}>
                         <Text style={[styles.doseName, isTaken && styles.doseNameTaken]} numberOfLines={1}>
-                          {dose.medicineName}
+                          {cleanText(dose.medicineName)}
                         </Text>
                         <View style={styles.tagsRow}>
                           <View style={styles.chipPill}>
@@ -731,7 +740,7 @@ export default function RemindersScreen() {
                 <View key={`rem-${rem.id}`} style={styles.reminderCard}>
                   <View style={styles.remTopRow}>
                     <View style={styles.remTitleCol}>
-                      <Text style={styles.remName}>{rem.medicineName}</Text>
+                      <Text style={styles.remName}>{cleanText(rem.medicineName)}</Text>
                       <Text style={styles.remMeta}>
                         {rem.dosage} · {mealRelationLabel(rem.mealRelation)}
                       </Text>
@@ -1050,15 +1059,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: CARD_BG,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#EDE9FE',
     gap: 12,
   },
   headerBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#F1EBFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1077,12 +1086,17 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   addHeaderBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
 
   scroll: { flex: 1 },
@@ -1225,7 +1239,7 @@ const styles = StyleSheet.create({
 
   tabsRow: {
     flexDirection: 'row',
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#F1EBFF',
     borderRadius: 12,
     padding: 3,
     marginBottom: 14,
@@ -1239,6 +1253,11 @@ const styles = StyleSheet.create({
   },
   tabBtnActive: {
     backgroundColor: CARD_BG,
+    shadowColor: '#1A1040',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   tabBtnText: {
     fontFamily: 'Inter_500Medium',
