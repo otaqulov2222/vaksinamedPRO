@@ -62,6 +62,15 @@ function getProductImage(item: { id?: number | string; analogGroup?: string; ico
   return null;
 }
 
+function cleanText(text: string | null | undefined): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/\s*\(Demo\)/gi, '')
+    .replace(/\[TEST\s*\/\s*DEMO\]\s*/gi, '')
+    .replace(/\s*Ushbu ma'lumot staging sinov muhiti uchun demo hisoblanadi\.?\s*Haqiqiy dori narxi va zaxirasi emas\.?/gi, '')
+    .trim();
+}
+
 function getCategoryIcon(catId: string): React.ComponentProps<typeof MaterialCommunityIcons>['name'] {
   const c = catId.toLowerCase();
   if (c === 'all') return 'view-grid';
@@ -193,7 +202,7 @@ function ProductCard({
           <View style={styles.cardBodyList}>
             <View style={styles.listTopRow}>
               <Text style={styles.cardNameList} numberOfLines={2}>
-                {item.nameUz}
+                {cleanText(item.nameUz)}
               </Text>
               {showRx ? (
                 <View style={styles.rxChip}>
@@ -202,7 +211,7 @@ function ProductCard({
               ) : null}
             </View>
             <Text style={styles.cardBrand} numberOfLines={1}>
-              {item.manufacturer || item.category}
+              {cleanText(item.manufacturer || item.category)}
             </Text>
             <View style={styles.stockRow}>
               <View
@@ -307,10 +316,10 @@ function ProductCard({
 
         <View style={styles.cardBody}>
           <Text style={styles.cardBrand} numberOfLines={1}>
-            {item.manufacturer || item.category}
+            {cleanText(item.manufacturer || item.category)}
           </Text>
           <Text style={styles.cardName} numberOfLines={2}>
-            {item.nameUz}
+            {cleanText(item.nameUz)}
           </Text>
 
           <View style={styles.cardSpacer} />
@@ -754,7 +763,7 @@ export default function CatalogScreen() {
             width: '100%',
             maxWidth: 480,
             paddingHorizontal: sidePad,
-            paddingBottom: 32 + (Platform.OS === 'web' ? 20 : 8),
+            paddingBottom: 90 + (Platform.OS === 'web' ? 24 : 16),
           },
         ]}
         horizontal={false}
