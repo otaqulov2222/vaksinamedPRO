@@ -14,11 +14,9 @@ import { router } from 'expo-router';
 import { QrIcon } from '@/components/LineIcons';
 import { useApp } from '@/context/AppContext';
 
-const PRIMARY = '#4B248A';
-const DEEP = '#351765';
-const PURPLE_LIGHT = '#F1EBFF';
-const YELLOW = '#FFD233';
-const INACTIVE = 'rgba(107,114,128,0.8)';
+const PRIMARY = '#6A22D6';
+const DEEP = '#1A1040';
+const INACTIVE = '#8E8E93';
 
 type IconName = React.ComponentProps<typeof Feather>['name'];
 
@@ -55,32 +53,21 @@ function TabIcon({ name, color, focused }: { name: IconName; color: ColorValue; 
     }
     Animated.spring(anim, {
       toValue: focused ? 1 : 0,
-      stiffness: 280,
-      damping: 22,
+      stiffness: 300,
+      damping: 24,
       mass: 0.8,
       useNativeDriver: true,
     }).start();
   }, [focused, reduceMotion]);
 
-  const translateY = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -2.5],
-  });
-
   const scale = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.94, 1.05],
-  });
-
-  const pillOpacity = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
+    outputRange: [1, 1.08],
   });
 
   return (
-    <Animated.View style={[styles.tabIconWrapper, { transform: [{ translateY }, { scale }] }]}>
-      <Animated.View style={[styles.tabPill, { opacity: pillOpacity }]} />
-      <Feather name={name} size={20} color={focused ? PRIMARY : color} />
+    <Animated.View style={[styles.tabIconWrapper, { transform: [{ scale }] }]}>
+      <Feather name={name} size={21} color={focused ? PRIMARY : color} />
     </Animated.View>
   );
 }
@@ -119,7 +106,7 @@ function CenterQrButton() {
       >
         <Animated.View style={[styles.centerQrButton, { transform: [{ scale: pressAnim }] }]}>
           <View style={styles.qrButtonInner} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            <QrIcon size={24} color={DEEP} strokeWidth={2.2} />
+            <QrIcon size={22} color="#FFFFFF" strokeWidth={2.3} />
           </View>
         </Animated.View>
       </Pressable>
@@ -137,30 +124,37 @@ export default function TabLayout() {
         tabBarActiveTintColor: PRIMARY,
         tabBarInactiveTintColor: INACTIVE,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: 'rgba(23,22,44,0.05)',
+          backgroundColor: isWeb ? 'rgba(255, 255, 255, 0.86)' : '#FFFFFF',
+          borderTopColor: 'rgba(0, 0, 0, 0.08)',
           borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          elevation: 6,
-          shadowOpacity: 0,
-          boxShadow: '0px -6px 22px rgba(53,23,101,0.06)',
-          height: isWeb ? 78 : 64,
-          paddingTop: 8,
-          paddingBottom: isWeb ? 10 : 4,
+          elevation: 8,
+          shadowColor: '#000000',
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: 0.04,
+          shadowRadius: 10,
+          height: isWeb ? 70 : 60,
+          paddingTop: 6,
+          paddingBottom: isWeb ? 8 : 4,
+          ...(isWeb
+            ? ({
+                backdropFilter: 'blur(20px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              } as any)
+            : {}),
         },
         tabBarLabelStyle: {
           fontFamily: 'Inter_600SemiBold',
-          fontSize: 11,
-          lineHeight: 14,
-          marginBottom: isWeb ? 6 : 2,
+          fontSize: 10,
+          lineHeight: 13,
+          marginBottom: isWeb ? 4 : 2,
           alignSelf: 'stretch',
           marginHorizontal: -5,
           maxWidth: 200,
           textAlign: 'center',
+          letterSpacing: -0.1,
         },
         tabBarIconStyle: {
-          marginTop: 1,
+          marginTop: 2,
         },
       }}
     >
@@ -207,15 +201,10 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabIconWrapper: {
-    width: 48,
-    height: 30,
+    width: 36,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  tabPill: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: PURPLE_LIGHT,
-    borderRadius: 15,
   },
   centerQrSlot: {
     flex: 1,
@@ -227,23 +216,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   centerQrButton: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -22,
-    backgroundColor: '#FFFFFF',
-    boxShadow: '0px 4px 14px rgba(255,210,51,0.32), 0px 8px 24px rgba(53,23,101,0.18)',
-    elevation: 8,
+    marginTop: -14,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 6,
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0px 3px 12px rgba(106, 34, 214, 0.32), 0px 1px 3px rgba(0, 0, 0, 0.08)',
+        } as any)
+      : {}),
   },
   qrButtonInner: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: YELLOW,
-    boxShadow: '0px 1px 0px rgba(255,255,255,0.65) inset, 0px -2px 6px rgba(53,23,101,0.10) inset',
+    backgroundColor: PRIMARY,
+    ...(Platform.OS === 'web'
+      ? ({
+          boxShadow: '0px 1px 0px rgba(255, 255, 255, 0.3) inset',
+        } as any)
+      : {}),
   },
 });
