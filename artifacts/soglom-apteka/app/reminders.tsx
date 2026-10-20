@@ -152,6 +152,7 @@ export default function RemindersScreen() {
   const [formDosage, setFormDosage] = useState('1 tabletka');
   const [formMeal, setFormMeal] = useState<string>('after_meal');
   const [formTimes, setFormTimes] = useState<string[]>(['08:00']);
+  const [customTimeInput, setCustomTimeInput] = useState('');
   const [formStock, setFormStock] = useState('30');
   const [formPkg, setFormPkg] = useState('30');
   const [formThreshold, setFormThreshold] = useState('5');
@@ -319,7 +320,7 @@ export default function RemindersScreen() {
       return;
     }
     if (formTimes.length === 0) {
-      notify(t('reminders.timesLabel'), 'warning');
+      notify(t('reminders.atLeastOneTimeRequired'), 'warning');
       return;
     }
 
@@ -357,6 +358,7 @@ export default function RemindersScreen() {
     setFormDosage('1 tabletka');
     setFormMeal('after_meal');
     setFormTimes(['08:00']);
+    setCustomTimeInput('');
     setFormStock('30');
     setFormPkg('30');
     setFormThreshold('5');
@@ -369,10 +371,61 @@ export default function RemindersScreen() {
     if (formTimes.includes(timeStr)) {
       if (formTimes.length > 1) {
         setFormTimes(formTimes.filter((t) => t !== timeStr));
+      } else {
+        notify(t('reminders.atLeastOneTimeRequired'), 'warning');
       }
     } else {
       setFormTimes([...formTimes, timeStr].sort());
     }
+  };
+
+  const handleAddCustomTime = () => {
+    const raw = customTimeInput.trim();
+    if (!raw) return;
+
+    let clean = raw.replace(/[^\d:]/g, '');
+    if (!clean.includes(':')) {
+      if (clean.length === 1 || clean.length === 2) {
+        clean = `${clean.padStart(2, '0')}:00`;
+      } else if (clean.length === 3) {
+        clean = `0${clean[0]}:${clean.slice(1)}`;
+      } else if (clean.length === 4) {
+        clean = `${clean.slice(0, 2)}:${clean.slice(2)}`;
+      }
+    }
+
+    const parts = clean.split(':');
+    if (parts.length !== 2) {
+      notify(t('reminders.invalidTimeError'), 'warning');
+      return;
+    }
+
+    const hours = parseInt(parts[0], 10);
+    const mins = parseInt(parts[1], 10);
+
+    if (isNaN(hours) || isNaN(mins) || hours < 0 || hours > 23 || mins < 0 || mins > 59) {
+      notify(t('reminders.invalidTimeError'), 'warning');
+      return;
+    }
+
+    const formatted = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+
+    if (formTimes.includes(formatted)) {
+      notify(t('reminders.timeAlreadyAdded'), 'info');
+      setCustomTimeInput('');
+      return;
+    }
+
+    setFormTimes((prev) => [...prev, formatted].sort());
+    setCustomTimeInput('');
+  };
+
+  const handleRemoveTime = (timeStr: string) => {
+    if (formTimes.length <= 1) {
+      notify(t('reminders.atLeastOneTimeRequired'), 'warning');
+      return;
+    }
+    setFormTimes((prev) => prev.filter((tVal) => tVal !== timeStr));
   };
 
   const mealRelationLabel = (meal: string) => {
@@ -852,21 +905,72 @@ export default function RemindersScreen() {
 
               {/* Intake Times Selection */}
               <Text style={styles.fieldLabel}>{t('reminders.timesLabel')} *</Text>
-              <View style={styles.presetsRow}>
-                {PRESET_TIMES.map((timeStr) => {
-                  const isChecked = formTimes.includes(timeStr);
-                  return (
+              
+              {/* Selected Times Row */}
+              <View style={styles.selectedTimesRow}>
+                {formTimes.map((timeStr) => (
+                  <View key={timeStr} style={styles.activeTimeChip}>
+                    <Feather name="clock" size={13} color={PURPLE} />
+                    <Text style={styles.activeTimeChipText}>{timeStr}</Text>
                     <Pressable
-                      key={timeStr}
-                      onPress={() => toggleTimePreset(timeStr)}
-                      style={[styles.presetChip, isChecked && styles.presetChipActive]}
+                      onPress={() => handleRemoveTime(timeStr)}
+                      style={styles.activeTimeRemoveBtn}
+                      hitSlop={6}
+                      accessibilityRole="button"
                     >
-                      <Text style={[styles.presetChipText, isChecked && styles.presetChipTextActive]}>
-                        {timeStr}
-                      </Text>
+                      <Feather name="x" size={12} color={PURPLE_DEEP} />
                     </Pressable>
-                  );
-                })}
+                  </View>
+                ))}
+              </View>
+
+              {/* Quick Presets */}
+              <View style={styles.presetsSection}>
+                <Text style={styles.subFieldLabel}>{t('reminders.quickTimesLabel')}</Text>
+                <View style={styles.presetsRow}>
+                  {PRESET_TIMES.map((timeStr) => {
+                    const isChecked = formTimes.includes(timeStr);
+                    return (
+                      <Pressable
+                        key={timeStr}
+                        onPress={() => toggleTimePreset(timeStr)}
+                        style={[styles.presetChip, isChecked && styles.presetChipActive]}
+                      >
+                        <Text style={[styles.presetChipText, isChecked && styles.presetChipTextActive]}>
+                          {timeStr}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Custom Time Manual Entry */}
+              <View style={styles.customTimeSection}>
+                <Text style={styles.subFieldLabel}>{t('reminders.customTime')}</Text>
+                <View style={styles.customTimeRow}>
+                  <View style={styles.customTimeInputWrap}>
+                    <Feather name="clock" size={15} color={MUTED} style={styles.customTimeInputIcon} />
+                    <TextInput
+                      style={styles.customTimeInput}
+                      value={customTimeInput}
+                      onChangeText={setCustomTimeInput}
+                      placeholder={t('reminders.customTimePlaceholder')}
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={5}
+                      onSubmitEditing={handleAddCustomTime}
+                      returnKeyType="done"
+                    />
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.addCustomTimeBtn, pressed && styles.pressed]}
+                    onPress={handleAddCustomTime}
+                  >
+                    <Feather name="plus" size={16} color="#FFFFFF" />
+                    <Text style={styles.addCustomTimeBtnText}>{t('reminders.addTimeBtn')}</Text>
+                  </Pressable>
+                </View>
               </View>
 
               {/* Meal Relation */}
@@ -896,7 +1000,9 @@ export default function RemindersScreen() {
               {/* Stock and Package Size */}
               <View style={styles.dualRow}>
                 <View style={styles.dualCol}>
-                  <Text style={styles.fieldLabel}>{t('reminders.stockLabel')}</Text>
+                  <View style={styles.dualColLabelWrap}>
+                    <Text style={styles.fieldLabel}>{t('reminders.stockLabelShort')}</Text>
+                  </View>
                   <TextInput
                     style={styles.textInput}
                     value={formStock}
@@ -905,7 +1011,9 @@ export default function RemindersScreen() {
                   />
                 </View>
                 <View style={styles.dualCol}>
-                  <Text style={styles.fieldLabel}>{t('reminders.lowStockThresholdLabel')}</Text>
+                  <View style={styles.dualColLabelWrap}>
+                    <Text style={styles.fieldLabel}>{t('reminders.lowStockThresholdShort')}</Text>
+                  </View>
                   <TextInput
                     style={styles.textInput}
                     value={formThreshold}
@@ -1662,8 +1770,95 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     color: PURPLE,
   },
+  subFieldLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: MUTED,
+    marginBottom: 6,
+  },
+  selectedTimesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  activeTimeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#C084FC',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  activeTimeChipText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: PURPLE_DEEP,
+  },
+  activeTimeRemoveBtn: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(108, 56, 204, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presetsSection: {
+    marginTop: 2,
+  },
+  customTimeSection: {
+    marginTop: 4,
+  },
+  customTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customTimeInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  customTimeInputIcon: {
+    marginRight: 6,
+  },
+  customTimeInput: {
+    flex: 1,
+    paddingVertical: 9,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: PURPLE_DEEP,
+  },
+  addCustomTimeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: PURPLE,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  addCustomTimeBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    color: '#FFFFFF',
+  },
   dualRow: { flexDirection: 'row', gap: 10 },
   dualCol: { flex: 1 },
+  dualColLabelWrap: {
+    minHeight: 34,
+    justifyContent: 'flex-end',
+    marginBottom: 4,
+  },
   submitBtn: {
     backgroundColor: PURPLE,
     borderRadius: 14,
