@@ -50,11 +50,12 @@ const QUICK: {
   to: string;
   clearQ?: boolean;
   bg: string;
+  iconColor: string;
 }[] = [
-  { icon: 'pill', labelKey: 'home.quickSearch', to: '/(tabs)/catalog', clearQ: true, bg: '#FFF4CC' },
-  { icon: 'camera-outline', labelKey: 'catalog.prescriptionScanAction', to: '/prescription', bg: '#EDE9FE' },
-  { icon: 'alarm', labelKey: 'reminders.quickActionReminders', to: '/reminders', bg: '#FEE2E2' },
-  { icon: 'map-marker-outline', labelKey: 'common.navBranches', to: '/branches', bg: LAVENDER },
+  { icon: 'pill', labelKey: 'home.quickSearch', to: '/(tabs)/catalog', clearQ: true, bg: '#EDE9FE', iconColor: '#7C3AED' },
+  { icon: 'camera-outline', labelKey: 'catalog.prescriptionScanAction', to: '/prescription', bg: '#DBEAFE', iconColor: '#2563EB' },
+  { icon: 'alarm', labelKey: 'reminders.quickActionReminders', to: '/reminders', bg: '#FFE4E6', iconColor: '#E11D48' },
+  { icon: 'map-marker-outline', labelKey: 'common.navBranches', to: '/branches', bg: '#D1FAE5', iconColor: '#059669' },
 ];
 
 const HERO_IMAGES: Record<string, any> = {
@@ -112,6 +113,8 @@ export default function HomeScreen() {
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [addedIds, setAddedIds] = useState<Record<string, boolean>>({});
+  const [activeBranch, setActiveBranch] = useState<{ id: number; name: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilterKey>('all');
   const [query, setQuery] = useState('');
   const [nextTierTarget, setNextTierTarget] = useState<number | null>(null);
@@ -148,6 +151,12 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
+    void api.cart().then((c) => {
+      if (c?.branchId && c?.branchName) {
+        setActiveBranch({ id: c.branchId, name: c.branchName });
+      }
+    }).catch(() => {});
+
     void api.cashbackRules().then((r) => {
       const tiers = Array.isArray(r?.tiers) ? r.tiers : [];
       const gold = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes('gold'));
@@ -182,6 +191,14 @@ export default function HomeScreen() {
       try {
         await api.addToCart(productId, 1);
         await refresh();
+        setAddedIds((prev) => ({ ...prev, [key]: true }));
+        setTimeout(() => {
+          setAddedIds((prev) => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          });
+        }, 1600);
         notify(t('common.navCart'), t('home.addedToCart', { name: productName || t('common.navProduct') }));
       } catch (e) {
         // Badge unchanged — refresh only ran on success above.
@@ -250,15 +267,29 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      {/* HEADER — Clean Logo + Actions */}
+      {/* HEADER — Clean Logo + Branch Pill + Actions */}
       <View style={styles.header}>
-        <Image
-          source={require('../../assets/images/vaksina-mark-clean.png')}
-          style={styles.headerLogo}
-          resizeMode="contain"
-          fadeDuration={0}
-          accessibilityLabel={t('common.appName')}
-        />
+        <View style={styles.headerBrandCol}>
+          <Image
+            source={require('../../assets/images/vaksina-mark-clean.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+            fadeDuration={0}
+            accessibilityLabel={t('common.appName')}
+          />
+          <Pressable
+            style={({ pressed }) => [styles.headerBranchPill, pressed && styles.pressed]}
+            onPress={() => router.push('/branches')}
+            accessibilityRole="button"
+            accessibilityLabel={activeBranch?.name || t('home.nearestBranchLabel')}
+          >
+            <Feather name="map-pin" size={12} color={PURPLE} />
+            <Text style={styles.headerBranchText} numberOfLines={1}>
+              {activeBranch?.name ? activeBranch.name.replace(/^Vaksina Med\s*[·•]\s*/i, '') : t('home.nearestBranchLabel')}
+            </Text>
+            <Feather name="chevron-down" size={12} color={MUTED} />
+          </Pressable>
+        </View>
 
         <View style={styles.headerActions}>
           <Pressable
@@ -386,7 +417,7 @@ export default function HomeScreen() {
             accessibilityLabel={t(item.labelKey)}
           >
             <View style={[styles.quickIcon, { backgroundColor: item.bg }]}>
-              <MaterialCommunityIcons name={item.icon} size={24} color={PURPLE} />
+              <MaterialCommunityIcons name={item.icon} size={24} color={item.iconColor} />
             </View>
             <Text style={styles.quickLabel} numberOfLines={2}>
               {t(item.labelKey)}
@@ -495,6 +526,39 @@ export default function HomeScreen() {
         </LinearGradient>
       </View>
 
+      {/* AI Prescription Banner */}
+      <Pressable
+        style={({ pressed }) => [styles.rxBanner, pressed && styles.pressed]}
+        onPress={() => router.push('/prescription')}
+        accessibilityRole="button"
+        accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
+      >
+        <View style={styles.rxBannerLeft}>
+          <View style={styles.rxBadgeRow}>
+            <View style={styles.rxBadge}>
+              <Text style={styles.rxBadgeText}>{/* i18n-ignore */}AI SCANNER</Text>
+            </View>
+            <View style={styles.rxTag}>
+              <Text style={styles.rxTagText}>{t('catalog.rxShort')}</Text>
+            </View>
+          </View>
+          <Text style={styles.rxBannerTitle} numberOfLines={1}>
+            {t('catalog.prescriptionScanBannerTitle')}
+          </Text>
+          <Text style={styles.rxBannerSub} numberOfLines={2}>
+            {t('catalog.prescriptionScanBannerSub')}
+          </Text>
+        </View>
+        <View style={styles.rxBannerRight}>
+          <View style={styles.rxCameraBubble}>
+            <MaterialCommunityIcons name="line-scan" size={22} color="#FFFFFF" />
+          </View>
+          <Text style={styles.rxActionText} numberOfLines={1}>
+            {t('catalog.prescriptionScanAction')}
+          </Text>
+        </View>
+      </Pressable>
+
       <View style={styles.sectionRow}>
         <Text style={styles.section} numberOfLines={1}>
           {t('home.featuredProducts')}
@@ -588,73 +652,80 @@ export default function HomeScreen() {
           snapToAlignment="start"
           contentContainerStyle={styles.productsRow}
         >
-          {displayProducts.map((p) => (
-            <View key={String(p.id)} style={[styles.productCard, { width: productCardW }]}>
-              <Pressable
-                style={({ pressed }) => [styles.productCardMain, pressed && styles.pressed]}
-                onPress={() => router.push(`/product/${p.id}` as any)}
-                accessibilityRole="button"
-                accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
-              >
-                <View style={styles.productImgWrap}>
-                  <View style={styles.cashbackBadge}>
-                    <Text style={styles.cashbackBadgeText}>{t('home.cashbackBadge')}</Text>
-                  </View>
-                  <View style={styles.ratingBadge}>
-                    <Feather name="star" size={10} color="#D97706" />
-                    {/* i18n-ignore */}
-                    <Text style={styles.ratingBadgeText}>4.9</Text>
-                  </View>
-                  {p.image ? (
-                    <Image
-                      source={p.image}
-                      style={styles.productImg}
-                      resizeMode="contain"
-                      fadeDuration={0}
-                    />
-                  ) : (
-                    <MaterialCommunityIcons name={productIconName(p.icon)} size={44} color={PURPLE} />
-                  )}
-                </View>
-                <Text style={styles.productMeta} numberOfLines={1}>
-                  {p.manufacturer}
-                </Text>
-                <Text style={styles.productName} numberOfLines={2}>
-                  {p.name}
-                </Text>
-              </Pressable>
-              <View style={styles.productBottom}>
+          {displayProducts.map((p) => {
+            const isAdded = Boolean(addedIds[String(p.id)]);
+            return (
+              <View key={String(p.id)} style={[styles.productCard, { width: productCardW }]}>
                 <Pressable
-                  style={styles.productPriceHit}
+                  style={({ pressed }) => [styles.productCardMain, pressed && styles.pressed]}
                   onPress={() => router.push(`/product/${p.id}` as any)}
                   accessibilityRole="button"
                   accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
                 >
-                  <Text style={styles.productPrice} numberOfLines={1}>
-                    {fmt.money(p.price)}
+                  <View style={styles.productImgWrap}>
+                    <View style={styles.ambientGlow} />
+                    <View style={styles.cashbackBadge}>
+                      <Text style={styles.cashbackBadgeText}>{t('home.cashbackBadge')}</Text>
+                    </View>
+                    <View style={styles.ratingBadge}>
+                      <MaterialCommunityIcons name="star" size={11} color="#F59E0B" />
+                      {/* i18n-ignore */}
+                      <Text style={styles.ratingBadgeText}>4.9</Text>
+                    </View>
+                    {p.image ? (
+                      <Image
+                        source={p.image}
+                        style={styles.productImg}
+                        resizeMode="contain"
+                        fadeDuration={0}
+                      />
+                    ) : (
+                      <MaterialCommunityIcons name={productIconName(p.icon)} size={44} color={PURPLE} />
+                    )}
+                  </View>
+                  <Text style={styles.productMeta} numberOfLines={1}>
+                    {p.manufacturer}
+                  </Text>
+                  <Text style={styles.productName} numberOfLines={2}>
+                    {p.name}
                   </Text>
                 </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.addBtn,
-                    addingId === String(p.id) ? { opacity: 0.55 } : null,
-                    pressed && styles.pressed,
-                  ]}
-                  disabled={addingId != null}
-                  onPress={() => void addToCart(Number(p.id), p.name)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('home.addToCartA11y', { name: p.name })}
-                >
-                  {addingId === String(p.id) ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Feather name="plus" size={16} color="#fff" />
-                  )}
-                </Pressable>
+                <View style={styles.productBottom}>
+                  <Pressable
+                    style={styles.productPriceHit}
+                    onPress={() => router.push(`/product/${p.id}` as any)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
+                  >
+                    <Text style={styles.productPrice} numberOfLines={1}>
+                      {fmt.money(p.price)}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.addBtn,
+                      isAdded && styles.addBtnSuccess,
+                      addingId === String(p.id) ? { opacity: 0.55 } : null,
+                      pressed && styles.pressed,
+                    ]}
+                    disabled={addingId != null}
+                    onPress={() => void addToCart(Number(p.id), p.name)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('home.addToCartA11y', { name: p.name })}
+                  >
+                    {addingId === String(p.id) ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : isAdded ? (
+                      <Feather name="check" size={16} color="#fff" />
+                    ) : (
+                      <Feather name="plus" size={16} color="#fff" />
+                    )}
+                  </Pressable>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
       {/* Clearance above floating tab bar */}
@@ -673,7 +744,30 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     minHeight: 44,
   },
-  headerLogo: { width: 40, height: 40 },
+  headerBrandCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    marginRight: 8,
+  },
+  headerBranchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F4F0FA',
+    borderRadius: 14,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    maxWidth: 170,
+  },
+  headerBranchText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    color: PURPLE_DEEP,
+    flexShrink: 1,
+  },
+  headerLogo: { width: 38, height: 38 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   roundBtn: {
     width: 44,
@@ -1204,6 +1298,103 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 10,
     backgroundColor: '#EDE7F5',
+  },
+  rxBanner: {
+    backgroundColor: '#FAF5FF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACE,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  rxBannerLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  rxBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 5,
+  },
+  rxBadge: {
+    backgroundColor: PURPLE,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  rxBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  rxTag: {
+    backgroundColor: '#EDE9FE',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  rxTagText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9,
+    color: PURPLE,
+  },
+  rxBannerTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
+    marginBottom: 3,
+  },
+  rxBannerSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11.5,
+    lineHeight: 15,
+    color: '#6B7280',
+  },
+  rxBannerRight: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  rxCameraBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  rxActionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    color: PURPLE,
+  },
+  ambientGlow: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: '#EDE9FE',
+    opacity: 0.6,
+  },
+  addBtnSuccess: {
+    backgroundColor: '#10B981',
   },
   bottomClearance: {
     height: Platform.OS === 'web' ? 48 : 68,

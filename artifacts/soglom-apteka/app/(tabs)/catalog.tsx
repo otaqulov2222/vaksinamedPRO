@@ -863,7 +863,7 @@ export default function CatalogScreen() {
         {/* AI Prescription Banner */}
         <Pressable
           style={styles.aiBanner}
-          onPress={() => router.push('/qr')}
+          onPress={() => router.push('/prescription')}
           accessibilityRole="button"
           accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
         >
