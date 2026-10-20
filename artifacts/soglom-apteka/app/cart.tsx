@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -30,6 +31,45 @@ const OK = '#3D7A55';
 const BAD = '#B91C1C';
 const WARN = '#B45309';
 const YELLOW = '#FFCC00';
+
+const PRODUCT_IMAGES: Record<string, any> = {
+  'cat-p1': require('../assets/images/cat-p1-d3.png'),
+  'cat-p2': require('../assets/images/cat-p2-c.png'),
+  'cat-p3': require('../assets/images/cat-p3-mg.png'),
+  'cat-p4': require('../assets/images/cat-p4-omega.png'),
+  'cat-p5': require('../assets/images/cat-p5-zn.png'),
+  'cat-p6': require('../assets/images/cat-p6-para.png'),
+};
+
+function getProductImage(item: { id?: number | string; analogGroup?: string; icon?: string } | null | undefined) {
+  if (!item) return null;
+  const id = Number(item.id);
+  if (id === 1) return PRODUCT_IMAGES['cat-p1'];
+  if (id === 2) return PRODUCT_IMAGES['cat-p2'];
+  if (id === 3) return PRODUCT_IMAGES['cat-p3'];
+  if (id === 4) return PRODUCT_IMAGES['cat-p4'];
+  if (id === 5) return PRODUCT_IMAGES['cat-p5'];
+  if (id === 6 || id === 7 || id === 8) return PRODUCT_IMAGES['cat-p6'];
+
+  const group = String(item.analogGroup || '').toLowerCase();
+  if (group.includes('vitamin-d')) return PRODUCT_IMAGES['cat-p1'];
+  if (group.includes('vitamin-c')) return PRODUCT_IMAGES['cat-p2'];
+  if (group.includes('magnesium')) return PRODUCT_IMAGES['cat-p3'];
+  if (group.includes('omega')) return PRODUCT_IMAGES['cat-p4'];
+  if (group.includes('zinc')) return PRODUCT_IMAGES['cat-p5'];
+  if (group.includes('analgesic')) return PRODUCT_IMAGES['cat-p6'];
+
+  return null;
+}
+
+function cleanText(text: string | null | undefined): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/\s*\(Demo\)/gi, '')
+    .replace(/\[TEST\s*\/\s*DEMO\]\s*/gi, '')
+    .replace(/\s*Ushbu ma'lumot staging sinov muhiti uchun demo hisoblanadi\.?\s*Haqiqiy dori narxi va zaxirasi emas\.?/gi, '')
+    .trim();
+}
 
 const PRICE_SNAP_KEY = 'vaksinamed-cart-price-snap';
 const FOCUS_FRESH_MS = 400;
@@ -478,9 +518,10 @@ export default function CartScreen() {
           <View style={styles.list}>
             {items.map((item: any) => {
               const product = item.product || {};
-              const name = (localizedName(language, product) || t('cart.productFallbackName'));
-              const manufacturer = String(product.manufacturer || '').trim();
-              const unit = String(product.unit || '').trim();
+              const rawName = localizedName(language, product) || t('cart.productFallbackName');
+              const name = cleanText(rawName);
+              const manufacturer = cleanText(product.manufacturer);
+              const unit = cleanText(product.unit);
               const metaLine = [manufacturer, unit].filter(Boolean).join(' · ');
               const unitPrice = Number(item.unitPrice ?? product.price ?? 0);
               const lineTotal = Number(item.lineTotal ?? unitPrice * Number(item.quantity || 0));
@@ -498,6 +539,7 @@ export default function CartScreen() {
               const minusDisabled = qty <= 1 || itemBusy;
               const plusDisabled =
                 itemBusy || (availableKnownQty != null && qty >= availableKnownQty);
+              const itemImg = getProductImage(product);
 
               return (
                 <View key={item.id} style={styles.card}>
@@ -513,11 +555,16 @@ export default function CartScreen() {
                         accessibilityElementsHidden
                         importantForAccessibility="no-hide-descendants"
                       >
-                        <MaterialCommunityIcons
-                          name={productIconName(product.icon)}
-                          size={26}
-                          color={PURPLE}
-                        />
+                        <View style={styles.itemAmbientGlow} />
+                        {itemImg ? (
+                          <Image source={itemImg} style={styles.itemImg} resizeMode="contain" />
+                        ) : (
+                          <MaterialCommunityIcons
+                            name={productIconName(product.icon)}
+                            size={26}
+                            color={PURPLE}
+                          />
+                        )}
                       </View>
                       <View style={styles.itemBody}>
                         <Text style={styles.itemName} numberOfLines={2}>
@@ -890,14 +937,29 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   itemIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    backgroundColor: LAVENDER,
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    backgroundColor: '#F8F7FC',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  itemImg: {
+    width: '88%',
+    height: '88%',
+    zIndex: 1,
+  },
+  itemAmbientGlow: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EDE9FE',
+    opacity: 0.7,
   },
   itemBody: { flex: 1, minWidth: 0, paddingTop: 1 },
   itemName: {
