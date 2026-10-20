@@ -50,7 +50,7 @@ function parseTimes(raw: unknown): string[] {
  * GET /api/reminders
  * List active reminders, today's schedule, and adherence progress.
  */
-router.get("/api/reminders", async (req: Request, res: Response) => {
+router.get(["/reminders", "/api/reminders"], async (req: Request, res: Response) => {
   try {
     const customer = await requireCustomer(req);
     const dateQuery = typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
@@ -183,7 +183,7 @@ router.get("/api/reminders", async (req: Request, res: Response) => {
  * POST /api/reminders
  * Create a new medication reminder.
  */
-router.post("/api/reminders", async (req: Request, res: Response) => {
+router.post(["/reminders", "/api/reminders"], async (req: Request, res: Response) => {
   try {
     const customer = await requireCustomer(req);
     const {
@@ -279,7 +279,7 @@ router.post("/api/reminders", async (req: Request, res: Response) => {
  * PUT /api/reminders/:id
  * Update an existing reminder.
  */
-router.put("/api/reminders/:id", async (req: Request, res: Response) => {
+router.put(["/reminders/:id", "/api/reminders/:id"], async (req: Request, res: Response) => {
   try {
     const customer = await requireCustomer(req);
     const reminderId = Number(req.params.id);
@@ -363,7 +363,7 @@ router.put("/api/reminders/:id", async (req: Request, res: Response) => {
  * DELETE /api/reminders/:id
  * Deactivate / archive a reminder.
  */
-router.delete("/api/reminders/:id", async (req: Request, res: Response) => {
+router.delete(["/reminders/:id", "/api/reminders/:id"], async (req: Request, res: Response) => {
   try {
     const customer = await requireCustomer(req);
     const reminderId = Number(req.params.id);
@@ -398,7 +398,7 @@ router.delete("/api/reminders/:id", async (req: Request, res: Response) => {
  * Mark dose as taken, skipped, or snoozed.
  * When status is 'taken', automatically decrements currentStock by 1!
  */
-router.post("/api/reminders/:id/take", async (req: Request, res: Response) => {
+router.post(["/reminders/:id/take", "/api/reminders/:id/take"], async (req: Request, res: Response) => {
   try {
     const customer = await requireCustomer(req);
     const reminderId = Number(req.params.id);
@@ -515,7 +515,7 @@ router.post("/api/reminders/:id/take", async (req: Request, res: Response) => {
  * GET /api/reminders/refill-alerts
  * Low-stock reminders that need refilling, with catalog product details.
  */
-router.get("/api/reminders/refill-alerts", async (req: Request, res: Response) => {
+router.get(["/reminders/refill-alerts", "/api/reminders/refill-alerts"], async (req: Request, res: Response) => {
   try {
     const customer = await requireCustomer(req);
 
@@ -582,7 +582,7 @@ router.get("/api/reminders/refill-alerts", async (req: Request, res: Response) =
  * POST /api/reminders/:id/refill-to-cart
  * 1-Click refill: adds the linked product directly to the customer's active cart!
  */
-router.post("/api/reminders/:id/refill-to-cart", async (req: Request, res: Response) => {
+router.post(["/reminders/:id/refill-to-cart", "/api/reminders/:id/refill-to-cart"], async (req: Request, res: Response) => {
   try {
     const customer = await requireCustomer(req);
     const reminderId = Number(req.params.id);
