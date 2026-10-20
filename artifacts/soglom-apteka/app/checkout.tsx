@@ -1314,17 +1314,19 @@ const styles = StyleSheet.create({
   },
   cta: {
     minHeight: 52,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    borderBottomWidth: 3,
-    borderBottomColor: YELLOW,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 4,
   },
   ctaDisabled: {
     opacity: 0.5,
-    borderBottomColor: 'transparent',
   },
   ctaText: {
     color: '#fff',

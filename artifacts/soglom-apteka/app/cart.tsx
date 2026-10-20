@@ -452,7 +452,7 @@ export default function CartScreen() {
         <View style={[styles.branchCard, !cart?.branch?.name && styles.branchCardWarn]}>
           <View style={styles.branchRow}>
             <View style={styles.branchIconWrap}>
-              <Feather name="map-pin" size={16} color={cart?.branch?.name ? PURPLE : WARN} />
+              <Feather name="map-pin" size={18} color={PURPLE} />
             </View>
             <View style={styles.branchBody}>
               {cart?.branch?.name ? (
@@ -615,13 +615,6 @@ export default function CartScreen() {
                     <Text style={styles.stockOk}>
                       {t('cart.cartStockAvailable', { count: availableKnownQty })}
                     </Text>
-                  ) : !known ? (
-                    <View style={styles.stockWarnBlock} accessibilityLiveRegion="polite">
-                      <Text style={styles.stockWarn}>{t('cart.branchNotSelected')}</Text>
-                      <Text style={styles.stockWarnHint}>
-                        {t('cart.cartBranchStockHint')}
-                      </Text>
-                    </View>
                   ) : null}
 
                   <View style={styles.cardFooter}>
@@ -799,18 +792,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   branchCardWarn: {
-    borderColor: '#FDE68A',
-    backgroundColor: '#FFFEF8',
+    borderColor: '#DDD6FE',
+    backgroundColor: '#FAF8FF',
   },
   branchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   branchIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
@@ -841,7 +834,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
     lineHeight: 18,
-    color: WARN,
+    color: PURPLE_DEEP,
   },
   branchHint: {
     marginTop: 2,
@@ -852,15 +845,15 @@ const styles = StyleSheet.create({
   },
   branchAction: {
     flexShrink: 0,
-    paddingHorizontal: 10,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: LAVENDER,
+    backgroundColor: PURPLE,
   },
   branchActionText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
-    color: PURPLE,
+    color: '#FFFFFF',
   },
 
   notice: {
@@ -983,12 +976,12 @@ const styles = StyleSheet.create({
     color: PURPLE,
   },
   removeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#FEF2F2',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#FECACA',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FFE4E6',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -1050,20 +1043,27 @@ const styles = StyleSheet.create({
   qtyWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: LAVENDER,
+    backgroundColor: '#F5F3FF',
     borderRadius: 12,
     paddingHorizontal: 3,
     paddingVertical: 3,
-    gap: 2,
+    gap: 3,
     flexShrink: 0,
+    borderWidth: 1,
+    borderColor: '#EDE9FE',
   },
   qtyBtn: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: 10,
     backgroundColor: CARD,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   qtyValue: {
     minWidth: 30,
@@ -1180,17 +1180,19 @@ const styles = StyleSheet.create({
   },
   cta: {
     minHeight: 52,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    borderBottomWidth: 3,
-    borderBottomColor: YELLOW,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 4,
   },
   ctaBusy: {
     opacity: 0.72,
-    borderBottomColor: 'transparent',
   },
   ctaText: {
     color: '#fff',
@@ -1233,12 +1235,15 @@ const styles = StyleSheet.create({
     minHeight: 48,
     minWidth: 180,
     paddingHorizontal: 22,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: YELLOW,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   primaryBtnText: {
     color: '#fff',
