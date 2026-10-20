@@ -83,6 +83,9 @@ function getCategoryIcon(catId: string): React.ComponentProps<typeof MaterialCom
 
 type CatId = string;
 type SortKey = 'default' | 'price_asc' | 'price_desc' | 'name';
+type QuickFilterKey = 'all' | 'otc' | 'cashback' | 'under50k';
+
+const POPULAR_SEARCHES = ['Vitamin D3', 'Omega-3', 'Magniy B6', 'Paratsetamol', 'Rux', 'ACC']; // i18n-ignore
 
 const SORT_OPTIONS: { key: SortKey; labelKey: TranslationKey }[] = [
   { key: 'default', labelKey: 'catalog.sortDefault' },
@@ -147,6 +150,7 @@ function ProductCard({
   onOpen,
   onAdd,
   adding,
+  isRecentlyAdded,
 }: {
   item: Product;
   list: boolean;
@@ -154,6 +158,7 @@ function ProductCard({
   onOpen: () => void;
   onAdd: () => void;
   adding: boolean;
+  isRecentlyAdded?: boolean;
 }) {
   const { t, fmt } = useApp();
   const stock = stockPresentation(t, item, hasBranch);
@@ -221,21 +226,30 @@ function ProductCard({
             <Text style={styles.cardPrice} numberOfLines={1}>
               {priceText}
             </Text>
+            <Text style={styles.cashbackHintText} numberOfLines={1}>
+              {t('catalog.cashbackEarnHint', { amount: fmt.money(Math.round(item.price * 0.05)) })}
+            </Text>
           </Pressable>
-          <Pressable
-            style={[styles.addBtn, addDisabled && styles.addBtnDisabled, adding && styles.addBtnBusy]}
-            disabled={addDisabled}
-            onPress={onAdd}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: addDisabled }}
-            accessibilityLabel={addA11y}
-          >
-            {adding ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Feather name="shopping-cart" size={16} color="#fff" />
-            )}
-          </Pressable>
+          {isRecentlyAdded ? (
+            <View style={[styles.addBtn, styles.addBtnSuccess]}>
+              <Feather name="check" size={16} color="#fff" />
+            </View>
+          ) : (
+            <Pressable
+              style={[styles.addBtn, addDisabled && styles.addBtnDisabled, adding && styles.addBtnBusy]}
+              disabled={addDisabled}
+              onPress={onAdd}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: addDisabled }}
+              accessibilityLabel={addA11y}
+            >
+              {adding ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name="shopping-cart" size={16} color="#fff" />
+              )}
+            </Pressable>
+          )}
         </View>
       </View>
     );
@@ -315,21 +329,30 @@ function ProductCard({
           <Text style={styles.cardPrice} numberOfLines={1}>
             {priceText}
           </Text>
+          <Text style={styles.cashbackHintText} numberOfLines={1}>
+            {t('catalog.cashbackEarnHint', { amount: fmt.money(Math.round(item.price * 0.05)) })}
+          </Text>
         </Pressable>
-        <Pressable
-          style={[styles.addBtn, addDisabled && styles.addBtnDisabled, adding && styles.addBtnBusy]}
-          disabled={addDisabled}
-          onPress={onAdd}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: addDisabled }}
-          accessibilityLabel={addA11y}
-        >
-          {adding ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Feather name="shopping-cart" size={16} color="#fff" />
-          )}
-        </Pressable>
+        {isRecentlyAdded ? (
+          <View style={[styles.addBtn, styles.addBtnSuccess]}>
+            <Feather name="check" size={16} color="#fff" />
+          </View>
+        ) : (
+          <Pressable
+            style={[styles.addBtn, addDisabled && styles.addBtnDisabled, adding && styles.addBtnBusy]}
+            disabled={addDisabled}
+            onPress={onAdd}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: addDisabled }}
+            accessibilityLabel={addA11y}
+          >
+            {adding ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Feather name="shopping-cart" size={16} color="#fff" />
+            )}
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -415,6 +438,8 @@ export default function CatalogScreen() {
   /** Branch context comes from cart API (`cart.branchId` / `branch.id`) — no second store. */
   const [branchId, setBranchId] = useState<number | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [recentlyAddedId, setRecentlyAddedId] = useState<string | null>(null);
+  const [quickFilter, setQuickFilter] = useState<QuickFilterKey>('all');
   const [sortOpen, setSortOpen] = useState(false);
 
   const loadGenRef = useRef(0);
@@ -598,7 +623,23 @@ export default function CatalogScreen() {
     });
   }, [apiProducts, language]);
 
-  const products = allProducts;
+  const products = useMemo((): Product[] => {
+    return allProducts.filter((p) => {
+      if (quickFilter === 'otc' && p.requiresPrescription) return false;
+      if (quickFilter === 'under50k' && p.price > 50000) return false;
+      return true;
+    });
+  }, [allProducts, quickFilter]);
+
+  const quickFilters = useMemo(
+    () => [
+      { key: 'all' as const, label: t('catalog.filterAll'), icon: 'view-grid' as const },
+      { key: 'otc' as const, label: t('catalog.filterOtc'), icon: 'shield-check-outline' as const },
+      { key: 'cashback' as const, label: t('catalog.filterCashback'), icon: 'wallet-giftcard' as const },
+      { key: 'under50k' as const, label: t('catalog.filterUnder50k'), icon: 'tag-outline' as const },
+    ],
+    [t],
+  );
 
   const categoryChips = useMemo(
     () => [{ id: 'all', label: t('common.all') }, ...apiCategories.map((c) => ({ id: c, label: c }))],
@@ -643,6 +684,10 @@ export default function CatalogScreen() {
       try {
         await api.addToCart(Number(p.id));
         await refresh();
+        setRecentlyAddedId(key);
+        setTimeout(() => {
+          setRecentlyAddedId((cur) => (cur === key ? null : cur));
+        }, 1800);
         notify(t('common.navCart'), t('catalog.addedToCart', { name: p.nameUz }));
       } catch (e) {
         notify(
@@ -678,6 +723,7 @@ export default function CatalogScreen() {
     clearSearch();
     setCat('all');
     setSort('default');
+    setQuickFilter('all');
   };
 
   return (
@@ -764,6 +810,71 @@ export default function CatalogScreen() {
           </Pressable>
         </View>
 
+        {/* Popular Quick Searches */}
+        {!query.trim() ? (
+          <View style={styles.quickSearchRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickSearchScroll}
+            >
+              <View style={styles.quickSearchLabelBadge}>
+                <Feather name="trending-up" size={12} color={PURPLE} />
+                <Text style={styles.quickSearchLabelText}>{t('catalog.popularSearchTitle')}</Text>
+              </View>
+              {POPULAR_SEARCHES.map((term) => (
+                <Pressable
+                  key={term}
+                  style={styles.quickSearchChip}
+                  onPress={() => {
+                    setQuery(term);
+                    setDebouncedQuery(term);
+                    syncQueryToRoute(term);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={term}
+                >
+                  {/* i18n-ignore */}
+                  <Text style={styles.quickSearchChipText}>{term}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        {/* AI Prescription Banner */}
+        <Pressable
+          style={styles.aiBanner}
+          onPress={() => router.push('/qr')}
+          accessibilityRole="button"
+          accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
+        >
+          <View style={styles.aiBannerLeft}>
+            <View style={styles.aiBadgeRow}>
+              <View style={styles.aiBadge}>
+                <Text style={styles.aiBadgeText}>AI SCANNER{/* i18n-ignore */}</Text>
+              </View>
+              <View style={styles.rxBadge}>
+                <Text style={styles.rxBadgeText}>{t('catalog.rxShort')}</Text>
+              </View>
+            </View>
+            <Text style={styles.aiBannerTitle} numberOfLines={1}>
+              {t('catalog.prescriptionScanBannerTitle')}
+            </Text>
+            <Text style={styles.aiBannerSub} numberOfLines={2}>
+              {t('catalog.prescriptionScanBannerSub')}
+            </Text>
+          </View>
+          <View style={styles.aiBannerRight}>
+            <View style={styles.aiCameraBubble}>
+              <MaterialCommunityIcons name="line-scan" size={22} color="#FFFFFF" />
+            </View>
+            <Text style={styles.aiActionText} numberOfLines={1}>
+              {t('catalog.prescriptionScanAction')}
+            </Text>
+          </View>
+        </Pressable>
+
         {catError ? (
           <View style={styles.catErrorRow}>
             <Text style={styles.catErrorText}>{t('catalog.categoriesLoadFailed')}</Text>
@@ -816,7 +927,47 @@ export default function CatalogScreen() {
           </ScrollView>
         </View>
 
+        {/* Quick Filter Sub-bar */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.subFiltersRow}
+          style={styles.subFiltersScroll}
+        >
+          {quickFilters.map((qf) => {
+            const active = quickFilter === qf.key;
+            return (
+              <Pressable
+                key={qf.key}
+                style={[styles.subFilterChip, active && styles.subFilterChipActive]}
+                onPress={() => setQuickFilter(qf.key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={qf.label}
+              >
+                <MaterialCommunityIcons
+                  name={qf.icon}
+                  size={14}
+                  color={active ? '#FFFFFF' : PURPLE_DEEP}
+                />
+                <Text
+                  style={[styles.subFilterChipText, active && styles.subFilterChipTextActive]}
+                  numberOfLines={1}
+                >
+                  {qf.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         <View style={styles.toolsRow}>
+          <View style={styles.foundCountBadge}>
+            <Text style={styles.foundCountText}>
+              {t('catalog.foundCount', { count: products.length })}
+            </Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 4 }} />
           <Pressable
             style={[styles.toolChip, narrow && styles.toolChipNarrow]}
             onPress={() => setSortOpen(true)}
@@ -829,7 +980,6 @@ export default function CatalogScreen() {
             </Text>
             <Feather name="chevron-down" size={14} color={MUTED} />
           </Pressable>
-          <View style={{ flex: 1, minWidth: 4 }} />
           <View style={styles.viewToggle}>
             <Pressable
               style={[styles.viewBtn, viewMode === 'grid' && styles.viewBtnActive]}
@@ -914,6 +1064,7 @@ export default function CatalogScreen() {
                   list={viewMode === 'list'}
                   hasBranch={hasBranch}
                   adding={addingId === String(p.id)}
+                  isRecentlyAdded={recentlyAddedId === String(p.id)}
                   onOpen={() => openProduct(p)}
                   onAdd={() => void addToCart(p)}
                 />
@@ -1055,6 +1206,176 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+  },
+
+  quickSearchRow: {
+    marginBottom: 12,
+    marginTop: -2,
+  },
+  quickSearchScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 12,
+  },
+  quickSearchLabelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  quickSearchLabelText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    color: PURPLE,
+  },
+  quickSearchChip: {
+    backgroundColor: CARD,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
+  },
+  quickSearchChipText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    color: PURPLE_DEEP,
+  },
+
+  aiBanner: {
+    backgroundColor: '#1E1346',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  aiBannerLeft: {
+    flex: 1,
+    minWidth: 0,
+  },
+  aiBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  aiBadge: {
+    backgroundColor: '#FEF08A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  aiBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9.5,
+    color: '#854D0E',
+    letterSpacing: 0.5,
+  },
+  rxBadge: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  rxBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9.5,
+    color: '#FFFFFF',
+  },
+  aiBannerTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14.5,
+    lineHeight: 18,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  aiBannerSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11.5,
+    lineHeight: 15,
+    color: '#D1CBE5',
+  },
+  aiBannerRight: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    width: 72,
+  },
+  aiCameraBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    shadowColor: '#6A22D6',
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  aiActionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    color: '#EDE9FE',
+    textAlign: 'center',
+  },
+
+  subFiltersScroll: {
+    marginBottom: 12,
+  },
+  subFiltersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 2,
+  },
+  subFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: CARD,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
+  },
+  subFilterChipActive: {
+    backgroundColor: PURPLE,
+    borderColor: PURPLE,
+  },
+  subFilterChipText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: PURPLE_DEEP,
+  },
+  subFilterChipTextActive: {
+    color: '#FFFFFF',
+  },
+
+  foundCountBadge: {
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  foundCountText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: PURPLE,
   },
 
   catErrorRow: {
@@ -1444,6 +1765,14 @@ const styles = StyleSheet.create({
   },
   addBtnBusy: { opacity: 0.75 },
   addBtnDisabled: { backgroundColor: '#C4B5D8', opacity: 1 },
+  addBtnSuccess: { backgroundColor: '#10B981' },
+  cashbackHintText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10.5,
+    lineHeight: 13,
+    color: PURPLE,
+    marginTop: 2,
+  },
 
   empty: {
     alignItems: 'center',
