@@ -60,8 +60,8 @@ const QUICK: {
 
 const HERO_IMAGES: Record<string, any> = {
   uz: require('../../assets/images/home-hero-final-uz.png'),
-  ru: require('../../assets/images/home-hero-clean-base.png'),
-  en: require('../../assets/images/home-hero-clean-base.png'),
+  ru: require('../../assets/images/home-hero-final-ru.png'),
+  en: require('../../assets/images/home-hero-final-en.png'),
 };
 
 const PRODUCT_IMAGES: Record<string, any> = {
@@ -124,6 +124,7 @@ export default function HomeScreen() {
     nextTierTarget != null
       ? Math.min(1, Math.max(0, spentTowardTier / Math.max(1, nextTierTarget)))
       : 0;
+  const heroHeight = Math.max(140, Math.round(contentW / HERO_AR));
 
   const loadProducts = useCallback(() => {
     setProductsLoading(true);
@@ -252,71 +253,54 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      {/* IMMERSIVE 3D HERO HEADER */}
-      <View style={styles.heroHeader}>
+      {/* HEADER — Clean Brand Logo + Actions */}
+      <View style={styles.header}>
         <Image
-          source={require('../../assets/images/home-hero-clean-base.png')}
-          style={styles.heroHeaderImg}
-          resizeMode="cover"
+          source={require('../../assets/images/vaksina-mark-clean.png')}
+          style={styles.headerLogo}
+          resizeMode="contain"
           fadeDuration={0}
-        />
-        <LinearGradient
-          colors={['rgba(245, 243, 255, 0.95)', 'rgba(245, 243, 255, 0.72)', 'rgba(245, 243, 255, 0.08)']}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
+          accessibilityLabel={t('common.appName')}
         />
 
-        {/* Header Bar inside Hero */}
-        <View style={styles.header}>
-          <Image
-            source={require('../../assets/images/vaksina-mark-clean.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-            fadeDuration={0}
-            accessibilityLabel={t('common.appName')}
-          />
-
-          <View style={styles.headerActions}>
-            <Pressable
-              style={({ pressed }) => [styles.glassBtn, pressed && styles.pressed]}
-              onPress={() => router.push('/notifications')}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.navNotifications')}
-              hitSlop={4}
-            >
-              <Feather name="bell" size={20} color={PURPLE_DEEP} />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.glassBtn, pressed && styles.pressed]}
-              onPress={() => router.push('/cart')}
-              accessibilityRole="button"
-              accessibilityLabel={
-                cartCount > 0 ? t('home.cartWithCountA11y', { count: cartCount }) : t('common.navCart')
-              }
-              hitSlop={4}
-            >
-              <Feather name="shopping-cart" size={20} color={PURPLE_DEEP} />
-              {cartCount > 0 ? (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartCount > 9 ? '9+' : String(cartCount)}</Text>
-                </View>
-              ) : null}
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Greeting Content */}
-        <View style={styles.greetWrap}>
-          <Text style={styles.greet} numberOfLines={1}>
-            {t('home.greeting', { name: user.name?.trim() || t('home.guestName') })}
-          </Text>
-          <Text style={styles.greetSub}>{t('home.greetingSubtitle')}</Text>
+        <View style={styles.headerActions}>
+          <Pressable
+            style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
+            onPress={() => router.push('/notifications')}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.navNotifications')}
+            hitSlop={4}
+          >
+            <Feather name="bell" size={20} color={PURPLE_DEEP} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
+            onPress={() => router.push('/cart')}
+            accessibilityRole="button"
+            accessibilityLabel={
+              cartCount > 0 ? t('home.cartWithCountA11y', { count: cartCount }) : t('common.navCart')
+            }
+            hitSlop={4}
+          >
+            <Feather name="shopping-cart" size={20} color={PURPLE_DEEP} />
+            {cartCount > 0 ? (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{cartCount > 9 ? '9+' : String(cartCount)}</Text>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
       </View>
 
-      {/* FLOATING OVERLAPPING SEARCH BOX */}
+      {/* GREETING */}
+      <View style={styles.greetWrap}>
+        <Text style={styles.greet} numberOfLines={1}>
+          {t('home.greeting', { name: user.name?.trim() || t('home.guestName') })}
+        </Text>
+        <Text style={styles.greetSub}>{t('home.greetingSubtitle')}</Text>
+      </View>
+
+      {/* SEARCH BOX */}
       <View style={styles.searchBox}>
         <Feather name="search" size={20} color={MUTED} />
         <TextInput
@@ -340,6 +324,21 @@ export default function HomeScreen() {
           <MaterialCommunityIcons name="qrcode" size={22} color={PURPLE} />
         </Pressable>
       </View>
+
+      {/* HERO 3D BANNER — Apple Store widescreen artwork */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('home.heroA11y')}
+        onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
+        style={({ pressed }) => [styles.heroWrap, { height: heroHeight }, pressed && styles.pressed]}
+      >
+        <Image
+          source={HERO_IMAGES[language] || HERO_IMAGES.uz}
+          style={styles.heroImg}
+          resizeMode="cover"
+          fadeDuration={0}
+        />
+      </Pressable>
 
       {/* QUICK ACTIONS */}
       <View style={styles.quickRow}>
@@ -670,49 +669,24 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   pressed: { opacity: 0.82 },
 
-  heroHeader: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    position: 'relative',
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 34,
-    backgroundColor: '#F3EEFF',
-    borderWidth: 1,
-    borderColor: '#ECE7F6',
-    minHeight: 180,
-  },
-  heroHeaderImg: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 14,
     minHeight: 44,
   },
-  headerLogo: { width: 40, height: 40 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  glassBtn: {
+  headerLogo: { width: 42, height: 42 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  roundBtn: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    backgroundColor: '#F3EEFF',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.7)',
+    borderColor: '#ECE7F6',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#1A1040',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
   },
   cartBadge: {
     position: 'absolute',
@@ -737,22 +711,21 @@ const styles = StyleSheet.create({
   },
 
   greetWrap: {
-    marginTop: 6,
-    maxWidth: '62%',
+    marginBottom: 14,
   },
   greet: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 24,
+    lineHeight: 30,
     color: PURPLE_DEEP,
     letterSpacing: -0.3,
   },
   greetSub: {
-    marginTop: 3,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#6B7280',
+    marginTop: 4,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 19,
+    color: MUTED,
   },
 
   searchBox: {
@@ -765,14 +738,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: '#ECE7F6',
-    marginTop: -22,
-    zIndex: 10,
-    shadowColor: '#1A1040',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
     marginBottom: SPACE,
+    shadowColor: '#1A1040',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
@@ -790,6 +761,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F8F5FC',
+  },
+
+  heroWrap: {
+    width: '100%',
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: SPACE,
+    backgroundColor: '#F3EEFF',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    shadowColor: '#5414B8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  heroImg: {
+    width: '100%',
+    height: '100%',
   },
 
   quickRow: {
