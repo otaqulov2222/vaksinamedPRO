@@ -114,7 +114,6 @@ export default function HomeScreen() {
   const [productsError, setProductsError] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Record<string, boolean>>({});
-  const [activeBranch, setActiveBranch] = useState<{ id: number; name: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilterKey>('all');
   const [query, setQuery] = useState('');
   const [nextTierTarget, setNextTierTarget] = useState<number | null>(null);
@@ -151,12 +150,6 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    void api.cart().then((c) => {
-      if (c?.branchId && c?.branchName) {
-        setActiveBranch({ id: c.branchId, name: c.branchName });
-      }
-    }).catch(() => {});
-
     void api.cashbackRules().then((r) => {
       const tiers = Array.isArray(r?.tiers) ? r.tiers : [];
       const gold = tiers.find((t: any) => String(t.tier || '').toLowerCase().includes('gold'));
@@ -267,29 +260,15 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      {/* HEADER — Clean Logo + Branch Pill + Actions */}
+      {/* HEADER — Clean Logo + Actions */}
       <View style={styles.header}>
-        <View style={styles.headerBrandCol}>
-          <Image
-            source={require('../../assets/images/vaksina-mark-clean.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-            fadeDuration={0}
-            accessibilityLabel={t('common.appName')}
-          />
-          <Pressable
-            style={({ pressed }) => [styles.headerBranchPill, pressed && styles.pressed]}
-            onPress={() => router.push('/branches')}
-            accessibilityRole="button"
-            accessibilityLabel={activeBranch?.name || t('home.nearestBranchLabel')}
-          >
-            <Feather name="map-pin" size={12} color={PURPLE} />
-            <Text style={styles.headerBranchText} numberOfLines={1}>
-              {activeBranch?.name ? activeBranch.name.replace(/^Vaksina Med\s*[·•]\s*/i, '') : t('home.nearestBranchLabel')}
-            </Text>
-            <Feather name="chevron-down" size={12} color={MUTED} />
-          </Pressable>
-        </View>
+        <Image
+          source={require('../../assets/images/vaksina-mark-clean.png')}
+          style={styles.headerLogo}
+          resizeMode="contain"
+          fadeDuration={0}
+          accessibilityLabel={t('common.appName')}
+        />
 
         <View style={styles.headerActions}>
           <Pressable
@@ -744,30 +723,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     minHeight: 44,
   },
-  headerBrandCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    marginRight: 8,
-  },
-  headerBranchPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F4F0FA',
-    borderRadius: 14,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    maxWidth: 170,
-  },
-  headerBranchText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11.5,
-    color: PURPLE_DEEP,
-    flexShrink: 1,
-  },
-  headerLogo: { width: 38, height: 38 },
+  headerLogo: { width: 40, height: 40 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   roundBtn: {
     width: 44,
