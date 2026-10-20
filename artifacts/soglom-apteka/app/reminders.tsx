@@ -447,6 +447,14 @@ export default function RemindersScreen() {
     setFormTimes((prev) => prev.filter((tVal) => tVal !== timeStr));
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  };
+
   const mealRelationLabel = (meal: string) => {
     switch (meal) {
       case 'before_meal':
@@ -483,7 +491,7 @@ export default function RemindersScreen() {
       {/* Top Header */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={handleBack}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
           hitSlop={8}
           accessibilityRole="button"
