@@ -3,6 +3,7 @@ import { useFocusEffect, useLocalSearchParams, router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -28,6 +29,45 @@ const LAVENDER = '#F1EBFF';
 const YELLOW = '#FFCC00';
 const OK = '#3D7A55';
 const BAD = '#B91C1C';
+
+const PRODUCT_IMAGES: Record<string, any> = {
+  'cat-p1': require('../../assets/images/cat-p1-d3.png'),
+  'cat-p2': require('../../assets/images/cat-p2-c.png'),
+  'cat-p3': require('../../assets/images/cat-p3-mg.png'),
+  'cat-p4': require('../../assets/images/cat-p4-omega.png'),
+  'cat-p5': require('../../assets/images/cat-p5-zn.png'),
+  'cat-p6': require('../../assets/images/cat-p6-para.png'),
+};
+
+function getProductImage(item: { id?: number | string; analogGroup?: string; icon?: string } | null | undefined) {
+  if (!item) return null;
+  const id = Number(item.id);
+  if (id === 1) return PRODUCT_IMAGES['cat-p1'];
+  if (id === 2) return PRODUCT_IMAGES['cat-p2'];
+  if (id === 3) return PRODUCT_IMAGES['cat-p3'];
+  if (id === 4) return PRODUCT_IMAGES['cat-p4'];
+  if (id === 5) return PRODUCT_IMAGES['cat-p5'];
+  if (id === 6 || id === 7 || id === 8) return PRODUCT_IMAGES['cat-p6'];
+
+  const group = String(item.analogGroup || '').toLowerCase();
+  if (group.includes('vitamin-d')) return PRODUCT_IMAGES['cat-p1'];
+  if (group.includes('vitamin-c')) return PRODUCT_IMAGES['cat-p2'];
+  if (group.includes('magnesium')) return PRODUCT_IMAGES['cat-p3'];
+  if (group.includes('omega')) return PRODUCT_IMAGES['cat-p4'];
+  if (group.includes('zinc')) return PRODUCT_IMAGES['cat-p5'];
+  if (group.includes('analgesic')) return PRODUCT_IMAGES['cat-p6'];
+
+  return null;
+}
+
+function cleanText(text: string | null | undefined): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/\s*\(Demo\)/gi, '')
+    .replace(/\[TEST\s*\/\s*DEMO\]\s*/gi, '')
+    .replace(/\s*Ushbu ma'lumot staging sinov muhiti uchun demo hisoblanadi\.?\s*Haqiqiy dori narxi va zaxirasi emas\.?/gi, '')
+    .trim();
+}
 
 type BranchMeta = {
   id: number | null;
@@ -348,11 +388,13 @@ export default function ProductScreen() {
     );
   }
 
-  const description = String(product.description || '').trim();
-  const manufacturer = String(product.manufacturer || '').trim();
-  const category = String(product.category || '').trim();
-  const unit = String(product.unit || '').trim();
+  const cleanName = cleanText(localizedName(language, product));
+  const cleanManufacturer = cleanText(product.manufacturer);
+  const cleanDescription = cleanText(product.description);
+  const category = cleanText(product.category);
+  const unit = cleanText(product.unit);
   const metaBits = [category, unit || null].filter(Boolean) as string[];
+  const productImg = getProductImage(product);
 
   return (
     <View style={styles.root}>
@@ -379,20 +421,40 @@ export default function ProductScreen() {
         <View
           style={[styles.visual, narrow && styles.visualNarrow]}
           accessibilityRole="image"
-          accessibilityLabel={t('catalog.productIconA11y', { name: localizedName(language, product) })}
+          accessibilityLabel={t('catalog.productIconA11y', { name: cleanName })}
         >
-          <View style={styles.iconBubble}>
-            <MaterialCommunityIcons
-              name={iconName as React.ComponentProps<typeof MaterialCommunityIcons>['name']}
-              size={narrow ? 56 : 64}
-              color={PURPLE}
-            />
+          {/* Studio ambient glow backdrop */}
+          <View style={styles.ambientGlow} />
+
+          {/* Floating Badges */}
+          <View style={styles.cashbackBadge}>
+            <Text style={styles.cashbackBadgeText}>{t('catalog.cashbackBadge')}</Text>
           </View>
+          <View style={styles.ratingBadge}>
+            <MaterialCommunityIcons name="star" size={13} color="#F59E0B" />
+            <Text style={styles.ratingBadgeText}>{/* i18n-ignore */}4.9</Text>
+          </View>
+
+          {productImg ? (
+            <Image
+              source={productImg}
+              style={styles.productImg}
+              resizeMode="contain"
+            />
+          ) : (
+            <View style={styles.iconBubble}>
+              <MaterialCommunityIcons
+                name={iconName as React.ComponentProps<typeof MaterialCommunityIcons>['name']}
+                size={narrow ? 56 : 64}
+                color={PURPLE}
+              />
+            </View>
+          )}
         </View>
 
-        <Text style={[styles.name, narrow && styles.nameNarrow]}>{localizedName(language, product)}</Text>
+        <Text style={[styles.name, narrow && styles.nameNarrow]}>{cleanName}</Text>
 
-        {manufacturer ? <Text style={styles.manufacturer}>{manufacturer}</Text> : null}
+        {cleanManufacturer ? <Text style={styles.manufacturer}>{cleanManufacturer}</Text> : null}
 
         {metaBits.length ? (
           <Text style={styles.metaLine} numberOfLines={2}>
@@ -478,7 +540,7 @@ export default function ProductScreen() {
             router.push({
               pathname: '/reminders',
               params: {
-                medicineName: localizedName(language, product),
+                medicineName: cleanName,
                 dosage: product.dosage || '',
                 productId: String(product.id),
               },
@@ -497,10 +559,10 @@ export default function ProductScreen() {
           <Feather name="chevron-right" size={18} color={MUTED} />
         </Pressable>
 
-        {description ? (
+        {cleanDescription ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('catalog.aboutProduct')}</Text>
-            <Text style={styles.description}>{description}</Text>
+            <Text style={styles.description}>{cleanDescription}</Text>
           </View>
         ) : null}
 
@@ -520,111 +582,129 @@ export default function ProductScreen() {
               </View>
             </View>
 
-            {cheaperAnalogs.map((item: any) => (
-              <View key={item.id} style={styles.cheaperCard}>
-                <Pressable
-                  style={styles.cheaperCardTop}
-                  onPress={() => router.push(`/product/${item.id}`)}
-                  accessibilityRole="button"
-                  accessibilityLabel={localizedName(language, item)}
-                >
-                  <View style={styles.analogIcon}>
-                    <MaterialCommunityIcons
-                      name={
-                        (item.icon && item.icon in MaterialCommunityIcons.glyphMap
-                          ? item.icon
-                          : 'pill') as React.ComponentProps<typeof MaterialCommunityIcons>['name']
-                      }
-                      size={22}
-                      color="#059669"
-                    />
-                  </View>
-                  <View style={styles.analogBody}>
-                    <Text style={styles.analogName} numberOfLines={2}>
-                      {localizedName(language, item)}
-                    </Text>
-                    {item.manufacturer ? (
-                      <Text style={styles.analogMeta} numberOfLines={1}>
-                        {item.manufacturer}
+            {cheaperAnalogs.map((item: any) => {
+              const itemImg = getProductImage(item);
+              const cName = cleanText(localizedName(language, item));
+              const cMan = cleanText(item.manufacturer);
+              return (
+                <View key={item.id} style={styles.cheaperCard}>
+                  <Pressable
+                    style={styles.cheaperCardTop}
+                    onPress={() => router.push(`/product/${item.id}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={cName}
+                  >
+                    <View style={styles.analogIcon}>
+                      {itemImg ? (
+                        <Image source={itemImg} style={styles.analogImg} resizeMode="contain" />
+                      ) : (
+                        <MaterialCommunityIcons
+                          name={
+                            (item.icon && item.icon in MaterialCommunityIcons.glyphMap
+                              ? item.icon
+                              : 'pill') as React.ComponentProps<typeof MaterialCommunityIcons>['name']
+                          }
+                          size={22}
+                          color="#059669"
+                        />
+                      )}
+                    </View>
+                    <View style={styles.analogBody}>
+                      <Text style={styles.analogName} numberOfLines={2}>
+                        {cName}
                       </Text>
-                    ) : null}
-                    <View style={styles.savingsPillWrap}>
-                      <Text style={styles.savingsPillText}>
-                        {t('catalog.savingsPill', {
-                          amount: fmt.money(item.savings),
-                          percent: item.savingsPercent,
-                        })}
+                      {cMan ? (
+                        <Text style={styles.analogMeta} numberOfLines={1}>
+                          {cMan}
+                        </Text>
+                      ) : null}
+                      <View style={styles.savingsPillWrap}>
+                        <Text style={styles.savingsPillText}>
+                          {t('catalog.savingsPill', {
+                            amount: fmt.money(item.savings),
+                            percent: item.savingsPercent,
+                          })}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      <Text style={styles.cheaperPrice}>{fmt.money(Number(item.price) || 0)}</Text>
+                      <Text style={styles.originalStrikethrough}>
+                        {fmt.money(Number(product.price) || 0)}
                       </Text>
                     </View>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                    <Text style={styles.cheaperPrice}>{fmt.money(Number(item.price) || 0)}</Text>
-                    <Text style={styles.originalStrikethrough}>
-                      {fmt.money(Number(product.price) || 0)}
-                    </Text>
-                  </View>
-                </Pressable>
+                  </Pressable>
 
-                <Pressable
-                  style={styles.substituteBtn}
-                  onPress={async () => {
-                    try {
-                      await api.addToCart(item.id, 1);
-                      await refresh();
-                      notify(
-                        t('catalog.addedToCartShort'),
-                        `${localizedName(language, item)} ${t('catalog.addedToCartShort')}`,
-                      );
-                    } catch {
-                      notify(t('catalog.addToCartFailed'), t('catalog.loadFailedHint'));
-                    }
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('catalog.substituteToCart')}
-                >
-                  <MaterialCommunityIcons name="cart-plus" size={16} color="#059669" />
-                  <Text style={styles.substituteBtnText}>{t('catalog.substituteToCart')}</Text>
-                </Pressable>
-              </View>
-            ))}
+                  <Pressable
+                    style={styles.substituteBtn}
+                    onPress={async () => {
+                      try {
+                        await api.addToCart(item.id, 1);
+                        await refresh();
+                        notify(
+                          t('catalog.addedToCartShort'),
+                          `${cName} ${t('catalog.addedToCartShort')}`,
+                        );
+                      } catch {
+                        notify(t('catalog.addToCartFailed'), t('catalog.loadFailedHint'));
+                      }
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('catalog.substituteToCart')}
+                  >
+                    <MaterialCommunityIcons name="cart-plus" size={16} color="#059669" />
+                    <Text style={styles.substituteBtnText}>{t('catalog.substituteToCart')}</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
           </View>
         ) : null}
 
         {analogs.length ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('catalog.similarProducts')}</Text>
-            {analogs.map((item: any) => (
-              <Pressable
-                key={item.id}
-                onPress={() => router.push(`/product/${item.id}`)}
-                style={styles.analogRow}
-                accessibilityRole="button"
-                accessibilityLabel={localizedName(language, item)}
-              >
-                <View style={styles.analogIcon}>
-                  <MaterialCommunityIcons
-                    name={
-                      (item.icon && item.icon in MaterialCommunityIcons.glyphMap
-                        ? item.icon
-                        : 'pill') as React.ComponentProps<typeof MaterialCommunityIcons>['name']
-                    }
-                    size={22}
-                    color={PURPLE}
-                  />
-                </View>
-                <View style={styles.analogBody}>
-                  <Text style={styles.analogName} numberOfLines={2}>
-                    {localizedName(language, item)}
-                  </Text>
-                  {item.manufacturer ? (
-                    <Text style={styles.analogMeta} numberOfLines={1}>
-                      {item.manufacturer}
+            {analogs.map((item: any) => {
+              const itemImg = getProductImage(item);
+              const cName = cleanText(localizedName(language, item));
+              const cMan = cleanText(item.manufacturer);
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => router.push(`/product/${item.id}`)}
+                  style={styles.analogRow}
+                  accessibilityRole="button"
+                  accessibilityLabel={cName}
+                >
+                  <View style={styles.analogIcon}>
+                    {itemImg ? (
+                      <Image source={itemImg} style={styles.analogImg} resizeMode="contain" />
+                    ) : (
+                      <MaterialCommunityIcons
+                        name={
+                          (item.icon && item.icon in MaterialCommunityIcons.glyphMap
+                            ? item.icon
+                            : 'pill') as React.ComponentProps<typeof MaterialCommunityIcons>['name']
+                        }
+                        size={22}
+                        color={PURPLE}
+                      />
+                    )}
+                  </View>
+                  <View style={styles.analogBody}>
+                    <Text style={styles.analogName} numberOfLines={2}>
+                      {cName}
                     </Text>
-                  ) : null}
-                </View>
-                <Text style={styles.analogPrice}>{fmt.money(Number(item.price) || 0)}</Text>
-              </Pressable>
-            ))}
+                    {cMan ? (
+                      <Text style={styles.analogMeta} numberOfLines={1}>
+                        {cMan}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.analogPrice}>{fmt.money(Number(item.price) || 0)}</Text>
+                </Pressable>
+              );
+            })}
           </View>
         ) : null}
       </ScrollView>
@@ -772,16 +852,71 @@ const styles = StyleSheet.create({
   },
 
   visual: {
-    height: 168,
-    borderRadius: 22,
-    backgroundColor: LAVENDER,
+    height: 250,
+    borderRadius: 24,
+    backgroundColor: '#F8F7FC',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   visualNarrow: {
-    height: 148,
+    height: 210,
+  },
+  ambientGlow: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: '#EDE9FE',
+    opacity: 0.7,
+  },
+  productImg: {
+    width: '88%',
+    height: '88%',
+    zIndex: 1,
+  },
+  cashbackBadge: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    backgroundColor: '#EDE9FE',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    zIndex: 2,
+  },
+  cashbackBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    color: PURPLE,
+  },
+  ratingBadge: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+    zIndex: 2,
+  },
+  ratingBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    color: '#B45309',
   },
   iconBubble: {
     width: 100,
@@ -792,6 +927,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: BORDER,
+    zIndex: 1,
+  },
+  analogImg: {
+    width: 36,
+    height: 36,
   },
 
   name: {
