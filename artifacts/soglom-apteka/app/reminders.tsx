@@ -970,92 +970,45 @@ export default function RemindersScreen() {
                 </View>
               </View>
 
-              {/* Custom Time Picker Card */}
-              <View style={styles.timePickerCard}>
-                <View style={styles.timePickerHeader}>
-                  <View style={styles.timePickerTitleWrap}>
-                    <Feather name="clock" size={14} color={PURPLE} />
-                    <Text style={styles.timePickerTitle}>{t('reminders.customTimeTitle')}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.timePickerMainRow}>
-                  {/* Digital Clock Display & Steppers */}
-                  <View style={styles.timeDigitsWrap}>
-                    {/* Hour Column */}
-                    <View style={styles.timeDigitBlock}>
-                      <Pressable
-                        onPress={incrementHour}
-                        style={({ pressed }) => [styles.timeArrowBtn, pressed && styles.pressed]}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                      >
-                        <Feather name="chevron-up" size={16} color={PURPLE_DEEP} />
-                      </Pressable>
-                      <TextInput
-                        style={styles.timeDigitInput}
-                        value={customHour}
-                        onChangeText={handleHourChange}
-                        onBlur={handleHourBlur}
-                        keyboardType="number-pad"
-                        maxLength={2}
-                        selectTextOnFocus
-                      />
-                      <Pressable
-                        onPress={decrementHour}
-                        style={({ pressed }) => [styles.timeArrowBtn, pressed && styles.pressed]}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                      >
-                        <Feather name="chevron-down" size={16} color={PURPLE_DEEP} />
-                      </Pressable>
-                      <Text style={styles.timeDigitLabel}>{t('reminders.hourLabel')}</Text>
-                    </View>
-
-                    <Text style={styles.timeColonText}>{':'}</Text>
-
-                    {/* Minute Column */}
-                    <View style={styles.timeDigitBlock}>
-                      <Pressable
-                        onPress={incrementMinute}
-                        style={({ pressed }) => [styles.timeArrowBtn, pressed && styles.pressed]}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                      >
-                        <Feather name="chevron-up" size={16} color={PURPLE_DEEP} />
-                      </Pressable>
-                      <TextInput
-                        style={styles.timeDigitInput}
-                        value={customMinute}
-                        onChangeText={handleMinuteChange}
-                        onBlur={handleMinuteBlur}
-                        keyboardType="number-pad"
-                        maxLength={2}
-                        selectTextOnFocus
-                      />
-                      <Pressable
-                        onPress={decrementMinute}
-                        style={({ pressed }) => [styles.timeArrowBtn, pressed && styles.pressed]}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                      >
-                        <Feather name="chevron-down" size={16} color={PURPLE_DEEP} />
-                      </Pressable>
-                      <Text style={styles.timeDigitLabel}>{t('reminders.minuteLabel')}</Text>
-                    </View>
+              {/* Compact Custom Time Row */}
+              <View style={styles.compactTimeSection}>
+                <Text style={styles.subFieldLabel}>{t('reminders.customTimeTitle')}</Text>
+                <View style={styles.compactTimeBar}>
+                  {/* Digital Time Capsule */}
+                  <View style={styles.compactTimeCapsule}>
+                    <Feather name="clock" size={14} color={PURPLE} style={{ marginRight: 4 }} />
+                    <TextInput
+                      style={styles.compactDigitInput}
+                      value={customHour}
+                      onChangeText={handleHourChange}
+                      onBlur={handleHourBlur}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      selectTextOnFocus
+                    />
+                    <Text style={styles.compactColon}>{':'}</Text>
+                    <TextInput
+                      style={styles.compactDigitInput}
+                      value={customMinute}
+                      onChangeText={handleMinuteChange}
+                      onBlur={handleMinuteBlur}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      selectTextOnFocus
+                    />
                   </View>
 
                   {/* Quick Minute Pills (:00, :15, :30, :45) */}
-                  <View style={styles.quickMinutesCol}>
+                  <View style={styles.compactPillsRow}>
                     {['00', '15', '30', '45'].map((minStr) => {
                       const isActive = customMinute === minStr;
                       return (
                         <Pressable
                           key={minStr}
                           onPress={() => setCustomMinute(minStr)}
-                          style={[styles.quickMinutePill, isActive && styles.quickMinutePillActive]}
+                          style={[styles.compactPill, isActive && styles.compactPillActive]}
                         >
-                          <Text style={[styles.quickMinutePillText, isActive && styles.quickMinutePillTextActive]}>
+                          <Text style={[styles.compactPillText, isActive && styles.compactPillTextActive]}>
                             {`:${minStr}`}
                           </Text>
                         </Pressable>
@@ -1065,11 +1018,11 @@ export default function RemindersScreen() {
 
                   {/* Add Button */}
                   <Pressable
-                    style={({ pressed }) => [styles.addTimeBtnCard, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.compactAddBtn, pressed && styles.pressed]}
                     onPress={handleAddCustomTime}
                   >
-                    <Feather name="plus" size={16} color="#FFFFFF" />
-                    <Text style={styles.addTimeBtnCardText}>{t('reminders.addTimeBtn')}</Text>
+                    <Feather name="plus" size={15} color="#FFFFFF" />
+                    <Text style={styles.compactAddBtnText}>{t('reminders.addTimeBtn')}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -1926,116 +1879,81 @@ const styles = StyleSheet.create({
   presetsSection: {
     marginTop: 2,
   },
-  timePickerCard: {
-    backgroundColor: '#FBF9FE',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#ECE7F6',
-    padding: 12,
-    marginTop: 6,
+  compactTimeSection: {
+    marginTop: 4,
   },
-  timePickerHeader: {
+  compactTimeBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  timePickerTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  timePickerTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    color: PURPLE_DEEP,
-  },
-  timePickerMainRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 8,
   },
-  timeDigitsWrap: {
+  compactTimeCapsule: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#ECE7F6',
+    borderRadius: 12,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    height: 38,
   },
-  timeDigitBlock: {
-    alignItems: 'center',
-    width: 38,
-  },
-  timeDigitInput: {
+  compactDigitInput: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 20,
+    fontSize: 15,
     color: PURPLE_DEEP,
+    width: 22,
     textAlign: 'center',
-    paddingVertical: 1,
-    width: '100%',
+    padding: 0,
+    margin: 0,
     ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {}),
   },
-  timeDigitLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 9.5,
-    color: MUTED,
-    marginTop: -2,
-  },
-  timeArrowBtn: {
-    padding: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timeColonText: {
+  compactColon: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 20,
+    fontSize: 15,
     color: PURPLE,
     marginHorizontal: 1,
-    marginTop: -10,
+    marginTop: -2,
   },
-  quickMinutesCol: {
+  compactPillsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 5,
-    width: 76,
+    alignItems: 'center',
+    gap: 4,
   },
-  quickMinutePill: {
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 7,
-    backgroundColor: '#FFFFFF',
+  compactPill: {
+    paddingHorizontal: 7,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: '#ECE7F6',
+    borderColor: 'transparent',
   },
-  quickMinutePillActive: {
+  compactPillActive: {
     backgroundColor: '#F3E8FF',
     borderColor: PURPLE,
   },
-  quickMinutePillText: {
+  compactPillText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 11,
     color: MUTED,
   },
-  quickMinutePillTextActive: {
+  compactPillTextActive: {
     color: PURPLE,
   },
-  addTimeBtnCard: {
+  compactAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: PURPLE,
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 11,
+    height: 38,
     gap: 4,
   },
-  addTimeBtnCardText: {
+  compactAddBtnText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#FFFFFF',
   },
   dualRow: { flexDirection: 'row', gap: 10 },
