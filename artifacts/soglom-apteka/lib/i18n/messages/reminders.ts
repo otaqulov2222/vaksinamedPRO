@@ -1,7 +1,7 @@
 export default {
   uz: {
     title: 'Dori eslatmasi',
-    subtitle: 'Sog‘lig‘ingizni nazorat qiling va dori qabul qilish jadvalini yuriting',
+    subtitle: 'Kunlik dori qabul qilish jadvali',
     tabToday: 'Bugun',
     tabMyMedicines: 'Mening dorilarim',
     tabHistory: 'Tarix',
@@ -68,7 +68,7 @@ export default {
     takeSuccess: 'Qabul qilinganligi qayd etildi!',
     familyFilterAll: 'Barchasi',
     familyMyOwn: 'O‘zim',
-    familyAddMember: '+ Oila a‘zosi',
+    familyAddMember: 'Oila a‘zosi',
     familyManageTitle: 'Oila salomatlik profili',
     familyManageSubtitle: 'Yaqinlaringiz va keksalar dori qabul qilishini nazorat qiling',
     memberNameLabel: 'Ism-familiya',
@@ -84,7 +84,7 @@ export default {
   },
   ru: {
     title: 'Напоминания лекарств',
-    subtitle: 'Контролируйте здоровье и ведите график приема лекарств',
+    subtitle: 'График ежедневного приема лекарств',
     tabToday: 'Сегодня',
     tabMyMedicines: 'Мои лекарства',
     tabHistory: 'История',
@@ -151,7 +151,7 @@ export default {
     takeSuccess: 'Прием лекарства отмечен!',
     familyFilterAll: 'Все',
     familyMyOwn: 'Мои',
-    familyAddMember: '+ Член семьи',
+    familyAddMember: 'Член семьи',
     familyManageTitle: 'Профиль здоровья семьи',
     familyManageSubtitle: 'Контролируйте прием лекарств близких и пожилых',
     memberNameLabel: 'Имя и фамилия',
@@ -167,7 +167,7 @@ export default {
   },
   en: {
     title: 'Pill Reminders',
-    subtitle: 'Track your health and keep a personal medication schedule',
+    subtitle: 'Daily medication schedule',
     tabToday: 'Today',
     tabMyMedicines: 'My Medicines',
     tabHistory: 'History',
@@ -234,7 +234,7 @@ export default {
     takeSuccess: 'Medication marked as taken!',
     familyFilterAll: 'All',
     familyMyOwn: 'Myself',
-    familyAddMember: '+ Family Member',
+    familyAddMember: 'Family Member',
     familyManageTitle: 'Family Health Profile',
     familyManageSubtitle: 'Monitor medications for your loved ones & elders',
     memberNameLabel: 'Full Name',

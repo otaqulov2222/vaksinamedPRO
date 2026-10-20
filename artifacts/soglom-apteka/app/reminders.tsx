@@ -127,7 +127,7 @@ export default function RemindersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [schedule, setSchedule] = useState<ScheduledDose[]>([]);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
-  const [compliance, setCompliance] = useState({ totalDoses: 0, takenDoses: 0, skippedDoses: 0, pendingDoses: 0, percent: 100 });
+  const [compliance, setCompliance] = useState({ totalDoses: 0, takenDoses: 0, skippedDoses: 0, pendingDoses: 0, percent: 0 });
   const [refillAlerts, setRefillAlerts] = useState<RefillAlert[]>([]);
   const [refillingId, setRefillingId] = useState<number | null>(null);
   const [takingId, setTakingId] = useState<string | null>(null);
@@ -197,7 +197,12 @@ export default function RemindersScreen() {
 
       setSchedule(scheduleRes.schedule || []);
       setReminders(scheduleRes.reminders || []);
-      setCompliance(scheduleRes.todayCompliance || { totalDoses: 0, takenDoses: 0, skippedDoses: 0, pendingDoses: 0, percent: 100 });
+      const rawComp = scheduleRes.todayCompliance || { totalDoses: 0, takenDoses: 0, skippedDoses: 0, pendingDoses: 0, percent: 0 };
+      const safeComp = {
+        ...rawComp,
+        percent: rawComp.totalDoses > 0 ? Number(rawComp.percent ?? 0) : 0,
+      };
+      setCompliance(safeComp);
       setRefillAlerts(alertsRes.alerts || []);
       setFamilyMembers(familyRes.members || []);
     } catch {
@@ -578,7 +583,7 @@ export default function RemindersScreen() {
         {/* Compliance & Adherence Card */}
         <View style={styles.complianceCard}>
           <View style={styles.complianceTop}>
-            <View>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.complianceTitle}>
                 {t('reminders.adherenceToday', {
                   taken: compliance.takenDoses,
@@ -586,18 +591,33 @@ export default function RemindersScreen() {
                 })}
               </Text>
               <Text style={styles.complianceSub}>
-                {compliance.percent === 100 && compliance.totalDoses > 0
-                  ? t('reminders.allTaken')
-                  : t('reminders.pendingDoses', { count: compliance.pendingDoses })}
+                {compliance.totalDoses === 0
+                  ? t('reminders.emptyScheduleSub')
+                  : compliance.percent === 100
+                    ? t('reminders.allTaken')
+                    : t('reminders.pendingDoses', { count: compliance.pendingDoses })}
               </Text>
             </View>
-            <View style={styles.complianceBadge}>
-              <Text style={styles.complianceBadgeText}>{compliance.percent}%</Text>
+            <View style={[styles.complianceBadge, compliance.totalDoses === 0 && styles.complianceBadgeInactive]}>
+              <Text
+                style={[
+                  styles.complianceBadgeText,
+                  compliance.totalDoses === 0 && styles.complianceBadgeTextInactive,
+                ]}
+              >
+                {compliance.totalDoses === 0 ? '—' : `${compliance.percent}%`}
+              </Text>
             </View>
           </View>
 
           <View style={styles.progressBarTrack}>
-            <View style={[styles.progressBarFill, { width: `${compliance.percent}%` }]} />
+            <View
+              style={[
+                styles.progressBarFill,
+                { width: `${compliance.percent}%` },
+                compliance.totalDoses === 0 && { backgroundColor: '#E2E8F0' },
+              ]}
+            />
           </View>
         </View>
 
@@ -630,7 +650,9 @@ export default function RemindersScreen() {
           /* Today's Schedule Timeline */
           filteredSchedule.length === 0 ? (
             <View style={styles.emptyCard}>
-              <MaterialCommunityIcons name="calendar-clock" size={48} color="#C4B5FD" />
+              <View style={styles.emptyIconCircle}>
+                <MaterialCommunityIcons name="pill" size={32} color={PURPLE} />
+              </View>
               <Text style={styles.emptyTitle}>{t('reminders.emptySchedule')}</Text>
               <Text style={styles.emptySub}>{t('reminders.emptyScheduleSub')}</Text>
               <Pressable
@@ -1067,7 +1089,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: '#F1EBFF',
+    backgroundColor: '#F3EEFF',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1102,22 +1126,38 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 40 },
 
-  dateStripWrap: { marginBottom: 14 },
-  dateStrip: { gap: 8 },
+  dateStripWrap: {
+    marginHorizontal: -16,
+    marginBottom: 14,
+  },
+  dateStrip: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
   dateCell: {
-    width: 50,
-    height: 64,
-    borderRadius: 14,
+    width: 52,
+    height: 66,
+    borderRadius: 16,
     backgroundColor: CARD_BG,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: '#ECE7F6',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   dateCellSelected: {
     backgroundColor: PURPLE,
     borderColor: PURPLE,
+    shadowColor: PURPLE,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   dateCellLabel: {
     fontFamily: 'Inter_500Medium',
@@ -1191,11 +1231,16 @@ const styles = StyleSheet.create({
 
   complianceCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: '#ECE7F6',
     marginBottom: 14,
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   complianceTop: {
     flexDirection: 'row',
@@ -1220,10 +1265,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
+  complianceBadgeInactive: {
+    backgroundColor: '#F1F5F9',
+  },
   complianceBadgeText: {
     fontFamily: 'Inter_700Bold',
     fontSize: 13,
     color: PURPLE,
+  },
+  complianceBadgeTextInactive: {
+    color: MUTED,
   },
   progressBarTrack: {
     height: 6,
@@ -1471,35 +1522,59 @@ const styles = StyleSheet.create({
   centerBox: { paddingVertical: 40, alignItems: 'center', justifyContent: 'center' },
   emptyCard: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 24,
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: '#ECE7F6',
     gap: 8,
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#F3EEFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
   },
   emptyTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    fontSize: 16,
     color: PURPLE_DEEP,
     textAlign: 'center',
   },
   emptySub: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 18,
     color: MUTED,
     textAlign: 'center',
+    maxWidth: 260,
   },
   emptyAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: PURPLE,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 12,
-    marginTop: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+    marginTop: 8,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   emptyAddBtnText: {
     fontFamily: 'Inter_600SemiBold',
@@ -1604,27 +1679,39 @@ const styles = StyleSheet.create({
   },
 
   familyStripWrap: {
-    marginBottom: 10,
+    marginHorizontal: -16,
+    marginBottom: 14,
   },
   familyStrip: {
     flexDirection: 'row',
+    paddingHorizontal: 16,
     gap: 8,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   familyChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 12,
+    borderColor: '#ECE7F6',
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 14,
     gap: 6,
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   familyChipSelected: {
     backgroundColor: PURPLE,
     borderColor: PURPLE,
+    shadowColor: PURPLE,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   familyChipText: {
     fontFamily: 'Inter_600SemiBold',
@@ -1635,9 +1722,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   familyChipAdd: {
-    borderStyle: 'dashed',
-    borderColor: PURPLE,
-    backgroundColor: '#FAF5FF',
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+    backgroundColor: '#F7F3FF',
   },
   familyChipAddText: {
     fontFamily: 'Inter_600SemiBold',
