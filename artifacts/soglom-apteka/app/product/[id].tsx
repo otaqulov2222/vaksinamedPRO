@@ -22,13 +22,13 @@ import { localizeError } from '@/lib/i18n/errors';
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F3F1F7';
+const BG = '#F4F2F8';
 const CARD = '#FFFFFF';
 const BORDER = '#E9E6F0';
 const LAVENDER = '#F1EBFF';
 const YELLOW = '#FFCC00';
-const OK = '#3D7A55';
-const BAD = '#B91C1C';
+const OK = '#16A34A';
+const BAD = '#DC2626';
 
 const PRODUCT_IMAGES: Record<string, any> = {
   'cat-p1': require('../../assets/images/cat-p1-d3.png'),
@@ -107,19 +107,26 @@ export default function ProductScreen() {
   const [data, setData] = useState<any>(null);
   const [branchMeta, setBranchMeta] = useState<BranchMeta>({ id: null, name: null, address: null });
   const [loading, setLoading] = useState(true);
-  /** Raw load error; localized at render so the message follows language changes. */
   const [error, setError] = useState<unknown>(null);
   const [notFound, setNotFound] = useState(false);
   const [adding, setAdding] = useState(false);
   const [qty, setQty] = useState(1);
+  const [addedBanner, setAddedBanner] = useState(false);
 
   const loadGen = useRef(0);
   const addingLock = useRef(false);
   const dataRef = useRef<any>(null);
   const branchIdRef = useRef<number | null>(null);
   const productKeyRef = useRef<string>('');
+  const bannerTimerRef = useRef<any>(null);
 
   dataRef.current = data;
+
+  useEffect(() => {
+    return () => {
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    };
+  }, []);
 
   const load = useCallback(async (force = false) => {
     const productId = Number(id);
@@ -245,15 +252,6 @@ export default function ProductScreen() {
       return q + 1;
     });
 
-  const [addedBanner, setAddedBanner] = useState(false);
-  const bannerTimerRef = useRef<any>(null);
-
-  useEffect(() => {
-    return () => {
-      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-    };
-  }, []);
-
   const onAdd = async () => {
     if (!product || !canAdd || adding || addingLock.current) return;
     const productId = Number(product.id);
@@ -291,8 +289,8 @@ export default function ProductScreen() {
   };
 
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 12) : Math.max(insets.top, 8);
-  const bottomPad = Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 12);
-  const sidePad = narrow ? 14 : 20;
+  const bottomPad = Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 14);
+  const sidePad = narrow ? 14 : 18;
   const footerReserve = 24 + 72 + bottomPad;
 
   const iconName =
@@ -319,7 +317,7 @@ export default function ProductScreen() {
         accessibilityRole="button"
         accessibilityLabel={cartCount > 0 ? t('catalog.cartA11yCount', { count: cartCount }) : t('common.navCart')}
       >
-        <Feather name="shopping-cart" size={18} color={PURPLE_DEEP} />
+        <Feather name="shopping-cart" size={19} color={PURPLE_DEEP} />
         {cartCount > 0 ? (
           <View style={styles.cartBadge}>
             <Text style={styles.cartBadgeText}>{cartCount > 9 ? '9+' : String(cartCount)}</Text>
@@ -360,7 +358,7 @@ export default function ProductScreen() {
         <View style={styles.state}>
           <MaterialCommunityIcons
             name={notFound ? 'package-variant-closed' : 'cloud-off-outline'}
-            size={44}
+            size={48}
             color={MUTED}
           />
           <Text style={styles.stateTitle}>{errorMessage}</Text>
@@ -410,23 +408,17 @@ export default function ProductScreen() {
             paddingBottom: footerReserve,
           },
         ]}
-        horizontal={false}
-        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
-        alwaysBounceHorizontal={false}
-        bounces={false}
-        directionalLockEnabled
         keyboardShouldPersistTaps="handled"
       >
+        {/* Hero Visual Card */}
         <View
           style={[styles.visual, narrow && styles.visualNarrow]}
           accessibilityRole="image"
           accessibilityLabel={t('catalog.productIconA11y', { name: cleanName })}
         >
-          {/* Studio ambient glow backdrop */}
           <View style={styles.ambientGlow} />
 
-          {/* Floating Badges */}
           <View style={styles.cashbackBadge}>
             <Text style={styles.cashbackBadgeText}>{t('catalog.cashbackBadge')}</Text>
           </View>
@@ -452,34 +444,46 @@ export default function ProductScreen() {
           )}
         </View>
 
+        {/* Product Info */}
         <Text style={[styles.name, narrow && styles.nameNarrow]}>{cleanName}</Text>
 
         {cleanManufacturer ? <Text style={styles.manufacturer}>{cleanManufacturer}</Text> : null}
 
         {metaBits.length ? (
-          <Text style={styles.metaLine} numberOfLines={2}>
-            {metaBits.join(' · ')}
-          </Text>
-        ) : null}
-
-        <Text style={styles.price}>{fmt.money(Number(product.price) || 0)}</Text>
-
-        {product.requiresPrescription ? (
-          <View style={styles.rxBadge}>
-            <MaterialCommunityIcons name="clipboard-text-outline" size={16} color={PURPLE} />
-            <Text style={styles.rxBadgeText}>{t('catalog.rxRequired')}</Text>
+          <View style={styles.pillsRow}>
+            {metaBits.map((bit, idx) => (
+              <View key={idx} style={styles.pillTag}>
+                <Text style={styles.pillTagText}>{bit}</Text>
+              </View>
+            ))}
           </View>
         ) : null}
 
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>{fmt.money(Number(product.price) || 0)}</Text>
+          {product.requiresPrescription ? (
+            <View style={styles.rxBadge}>
+              <MaterialCommunityIcons name="clipboard-text-outline" size={15} color={PURPLE} />
+              <Text style={styles.rxBadgeText}>{t('catalog.rxRequired')}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Pharmacy & Stock Availability Card */}
         <View style={styles.stockCard}>
           {stock.kind === 'no_branch' ? (
-            <>
-              <Text style={styles.stockLabel}>{t('catalog.stockNoBranch')}</Text>
-              <Text style={styles.stockHint}>
-                {t('catalog.stockAfterBranchHint')}
-              </Text>
+            <View style={styles.stockBranchBox}>
+              <View style={styles.stockBranchHeader}>
+                <View style={styles.pinIconWrap}>
+                  <Feather name="map-pin" size={16} color={PURPLE} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stockBranchTitle}>{t('catalog.stockNoBranch')}</Text>
+                  <Text style={styles.stockBranchSub}>{t('catalog.stockAfterBranchHint')}</Text>
+                </View>
+              </View>
               <Pressable
-                style={styles.branchBtn}
+                style={styles.branchSelectCta}
                 onPress={() =>
                   router.push({
                     pathname: '/branches',
@@ -489,51 +493,66 @@ export default function ProductScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t('catalog.selectBranchA11y')}
               >
-                <Feather name="map-pin" size={14} color={PURPLE} />
-                <Text style={styles.branchBtnText}>{t('catalog.selectBranch')}</Text>
+                <Feather name="map-pin" size={14} color="#FFFFFF" />
+                <Text style={styles.branchSelectCtaText}>{t('catalog.selectBranch')}</Text>
               </Pressable>
-            </>
+            </View>
           ) : (
-            <>
-              {branchMeta.name ? (
-                <Text style={styles.branchName} numberOfLines={2}>
-                  {branchMeta.name}
-                </Text>
-              ) : null}
-              {branchMeta.address ? (
-                <Text style={styles.branchAddress} numberOfLines={2}>
-                  {branchMeta.address}
-                </Text>
-              ) : null}
-              {stock.kind === 'available' ? (
-                <>
-                  <Text style={[styles.stockLabel, styles.stockOk, branchMeta.name ? { marginTop: 8 } : null]}>
-                    {t('catalog.stockAvailable')}
-                  </Text>
-                  <Text style={styles.stockHint}>{t('catalog.stockQty', { count: fmt.number(stock.qty) })}</Text>
-                </>
-              ) : (
-                <Text style={[styles.stockLabel, styles.stockBad, branchMeta.name ? { marginTop: 8 } : null]}>
-                  {t('catalog.stockUnavailable')}
-                </Text>
-              )}
-              <Pressable
-                style={styles.branchBtnGhost}
-                onPress={() =>
-                  router.push({
-                    pathname: '/branches',
-                    params: { from: 'product', productId: String(id) },
-                  })
-                }
-                accessibilityRole="button"
-                accessibilityLabel={t('catalog.changeBranch')}
-              >
-                <Text style={styles.branchBtnGhostText}>{t('catalog.changeBranch')}</Text>
-              </Pressable>
-            </>
+            <View style={styles.stockBranchBox}>
+              <View style={styles.stockBranchHeader}>
+                <View style={styles.pinIconWrap}>
+                  <Feather name="map-pin" size={16} color={PURPLE} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  {branchMeta.name ? (
+                    <Text style={styles.branchName} numberOfLines={1}>
+                      {branchMeta.name}
+                    </Text>
+                  ) : null}
+                  {branchMeta.address ? (
+                    <Text style={styles.branchAddress} numberOfLines={1}>
+                      {branchMeta.address}
+                    </Text>
+                  ) : null}
+                </View>
+                <Pressable
+                  style={styles.branchChangeBtn}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/branches',
+                      params: { from: 'product', productId: String(id) },
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={t('catalog.changeBranch')}
+                >
+                  <Text style={styles.branchChangeBtnText}>{t('catalog.changeBranch')}</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.stockDivider} />
+
+              <View style={styles.stockStatusRow}>
+                {stock.kind === 'available' ? (
+                  <View style={styles.stockStatusWrap}>
+                    <View style={styles.stockOkDot} />
+                    <Text style={styles.stockOkText}>{t('catalog.stockAvailable')}</Text>
+                    <Text style={styles.stockQtyText}>
+                      ({t('catalog.stockQty', { count: fmt.number(stock.qty) })})
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.stockStatusWrap}>
+                    <View style={styles.stockBadDot} />
+                    <Text style={styles.stockBadText}>{t('catalog.stockUnavailable')}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
           )}
         </View>
 
+        {/* Medication Reminder Card */}
         <Pressable
           style={styles.reminderCard}
           onPress={() =>
@@ -559,13 +578,7 @@ export default function ProductScreen() {
           <Feather name="chevron-right" size={18} color={MUTED} />
         </Pressable>
 
-        {cleanDescription ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('catalog.aboutProduct')}</Text>
-            <Text style={styles.description}>{cleanDescription}</Text>
-          </View>
-        ) : null}
-
+        {/* Smart Generic Substitution ("Arzonroq muqobili mavjud") */}
         {cheaperAnalogs.length > 0 ? (
           <View style={styles.cheaperSection}>
             <View style={styles.cheaperHeader}>
@@ -661,6 +674,7 @@ export default function ProductScreen() {
           </View>
         ) : null}
 
+        {/* Similar Regular Products */}
         {analogs.length ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('catalog.similarProducts')}</Text>
@@ -707,14 +721,25 @@ export default function ProductScreen() {
             })}
           </View>
         ) : null}
+
+        {/* About Product / Description */}
+        {cleanDescription ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('catalog.aboutProduct')}</Text>
+            <View style={styles.descriptionCard}>
+              <Text style={styles.description}>{cleanDescription}</Text>
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
 
+      {/* Sticky Bottom Bar */}
       <View style={[styles.footer, { paddingBottom: bottomPad, paddingHorizontal: sidePad }]}>
         <View style={{ maxWidth: contentWidth - sidePad * 2, width: '100%', gap: 10 }}>
           {addedBanner ? (
             <View style={styles.bannerRow} accessibilityRole="alert">
               <View style={styles.bannerLeft}>
-                <Feather name="check" size={15} color={OK} />
+                <Feather name="check-circle" size={16} color={OK} />
                 <Text style={styles.bannerText} numberOfLines={1}>
                   {t('catalog.addedToCartShort')}
                 </Text>
@@ -732,56 +757,56 @@ export default function ProductScreen() {
           ) : null}
 
           <View style={styles.footerInner}>
-          {canAdd ? (
-            <View style={styles.qtyWrap}>
-              <Pressable
-                style={[styles.qtyBtn, qty <= 1 && styles.qtyBtnDisabled]}
-                onPress={onDec}
-                disabled={qty <= 1 || adding}
-                accessibilityRole="button"
-                accessibilityLabel={t('catalog.qtyDecreaseA11y')}
-              >
-                <Feather name="minus" size={16} color={PURPLE_DEEP} />
-              </Pressable>
-              <Text style={styles.qtyValue} accessibilityLabel={t('catalog.qtyA11y', { count: qty })}>
-                {qty}
-              </Text>
-              <Pressable
-                style={[
-                  styles.qtyBtn,
-                  maxQty != null && qty >= maxQty && styles.qtyBtnDisabled,
-                ]}
-                onPress={onInc}
-                disabled={adding || (maxQty != null && qty >= maxQty)}
-                accessibilityRole="button"
-                accessibilityLabel={t('catalog.qtyIncreaseA11y')}
-              >
-                <Feather name="plus" size={16} color={PURPLE_DEEP} />
-              </Pressable>
-            </View>
-          ) : null}
-
-          <Pressable
-            testID="add-to-cart-btn"
-            style={[styles.cta, (!canAdd || adding) && styles.ctaDisabled]}
-            onPress={() => void onAdd()}
-            disabled={!canAdd || adding}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canAdd || adding }}
-            accessibilityLabel={canAdd ? t('catalog.addToCart') : t('catalog.stockUnavailable')}
-          >
-            {adding ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Feather name="shopping-cart" size={16} color="#fff" />
-                <Text style={styles.ctaText} numberOfLines={1}>
-                  {canAdd ? t('catalog.addToCart') : t('catalog.stockUnavailable')}
+            {canAdd ? (
+              <View style={styles.qtyWrap}>
+                <Pressable
+                  style={[styles.qtyBtn, qty <= 1 && styles.qtyBtnDisabled]}
+                  onPress={onDec}
+                  disabled={qty <= 1 || adding}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('catalog.qtyDecreaseA11y')}
+                >
+                  <Feather name="minus" size={16} color={PURPLE_DEEP} />
+                </Pressable>
+                <Text style={styles.qtyValue} accessibilityLabel={t('catalog.qtyA11y', { count: qty })}>
+                  {qty}
                 </Text>
-              </>
-            )}
-          </Pressable>
-        </View>
+                <Pressable
+                  style={[
+                    styles.qtyBtn,
+                    maxQty != null && qty >= maxQty && styles.qtyBtnDisabled,
+                  ]}
+                  onPress={onInc}
+                  disabled={adding || (maxQty != null && qty >= maxQty)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('catalog.qtyIncreaseA11y')}
+                >
+                  <Feather name="plus" size={16} color={PURPLE_DEEP} />
+                </Pressable>
+              </View>
+            ) : null}
+
+            <Pressable
+              testID="add-to-cart-btn"
+              style={[styles.cta, (!canAdd || adding) && styles.ctaDisabled]}
+              onPress={() => void onAdd()}
+              disabled={!canAdd || adding}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canAdd || adding }}
+              accessibilityLabel={canAdd ? t('catalog.addToCart') : t('catalog.stockUnavailable')}
+            >
+              {adding ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={styles.ctaContent}>
+                  <Feather name="shopping-bag" size={17} color="#fff" />
+                  <Text style={styles.ctaText} numberOfLines={1}>
+                    {canAdd ? t('catalog.addToCart') : t('catalog.stockUnavailable')}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
         </View>
       </View>
     </View>
@@ -797,7 +822,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  scroll: { flex: 1, width: '100%', maxWidth: '100%' },
+  scroll: {
+    flex: 1,
+    width: '100%',
+    maxWidth: '100%',
+  },
   content: {
     alignSelf: 'center',
     paddingTop: 12,
@@ -808,23 +837,23 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingBottom: 10,
+    justifyContent: 'space-between',
+    paddingBottom: 12,
     backgroundColor: CARD,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
+    zIndex: 10,
   },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
     fontFamily: 'Inter_700Bold',
-    fontSize: 18,
+    fontSize: 17,
     color: PURPLE_DEEP,
-    includeFontPadding: false,
   },
   iconBtn: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     backgroundColor: LAVENDER,
     alignItems: 'center',
@@ -846,26 +875,30 @@ const styles = StyleSheet.create({
   },
   cartBadgeText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 11,
+    fontSize: 10.5,
     color: PURPLE_DEEP,
-    includeFontPadding: false,
   },
 
   visual: {
     height: 250,
     borderRadius: 24,
-    backgroundColor: '#F8F7FC',
+    backgroundColor: '#FAF9FD',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#ECE7F6',
     position: 'relative',
     overflow: 'hidden',
-    shadowColor: '#1A1040',
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 16px rgba(26, 16, 64, 0.05)' } as any,
+      default: {
+        shadowColor: '#1A1040',
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 2,
+      },
+    }),
   },
   visualNarrow: {
     height: 210,
@@ -879,8 +912,8 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   productImg: {
-    width: '88%',
-    height: '88%',
+    width: '86%',
+    height: '86%',
     zIndex: 1,
   },
   cashbackBadge: {
@@ -889,7 +922,7 @@ const styles = StyleSheet.create({
     left: 14,
     backgroundColor: '#EDE9FE',
     borderRadius: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 4,
     zIndex: 2,
   },
@@ -907,7 +940,7 @@ const styles = StyleSheet.create({
     gap: 3,
     backgroundColor: '#FFFBEB',
     borderRadius: 8,
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: '#FEF3C7',
@@ -937,122 +970,200 @@ const styles = StyleSheet.create({
   name: {
     marginTop: 16,
     fontFamily: 'Inter_700Bold',
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 22,
+    lineHeight: 28,
     color: PURPLE_DEEP,
   },
   nameNarrow: {
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 26,
   },
   manufacturer: {
-    marginTop: 6,
+    marginTop: 4,
     fontFamily: 'Inter_500Medium',
-    fontSize: 15,
+    fontSize: 14,
     color: MUTED,
   },
-  metaLine: {
-    marginTop: 4,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: MUTED,
+  pillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  pillTag: {
+    backgroundColor: '#EBE7F6',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pillTagText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    color: PURPLE_DEEP,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
   },
   price: {
-    marginTop: 12,
     fontFamily: 'Inter_700Bold',
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 26,
     color: PURPLE,
   },
   rxBadge: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     backgroundColor: '#F3EAFB',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#DCCEF2',
   },
   rxBadgeText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
+    fontSize: 11.5,
     color: PURPLE,
   },
 
+  /* Stock & Branch Card */
   stockCard: {
-    marginTop: 16,
+    marginTop: 14,
     backgroundColor: CARD,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: BORDER,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 8px rgba(26, 16, 64, 0.04)' } as any,
+      default: {
+        shadowColor: '#1A1040',
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
+      },
+    }),
+  },
+  stockBranchBox: {
+    gap: 10,
+  },
+  stockBranchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pinIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stockBranchTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13.5,
+    color: PURPLE_DEEP,
+  },
+  stockBranchSub: {
+    marginTop: 2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11.5,
+    color: MUTED,
+  },
+  branchSelectCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: PURPLE,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignSelf: 'flex-start',
+  },
+  branchSelectCtaText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#FFFFFF',
   },
   branchName: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13.5,
     color: PURPLE_DEEP,
   },
   branchAddress: {
-    marginTop: 4,
+    marginTop: 2,
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11.5,
     color: MUTED,
   },
-  stockLabel: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-    color: PURPLE_DEEP,
+  branchChangeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: LAVENDER,
   },
-  stockOk: { color: OK },
-  stockBad: { color: BAD },
-  stockHint: {
-    marginTop: 4,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 18,
-    color: MUTED,
+  branchChangeBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    color: PURPLE,
   },
-  branchBtn: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
+  stockDivider: {
+    height: 1,
+    backgroundColor: '#F0EEF5',
+  },
+  stockStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stockStatusWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: LAVENDER,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
   },
-  branchBtnText: {
+  stockOkDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: OK,
+  },
+  stockOkText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
-    color: PURPLE,
+    color: OK,
   },
-  branchBtnGhost: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
+  stockQtyText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: MUTED,
   },
-  branchBtnGhostText: {
+  stockBadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: BAD,
+  },
+  stockBadText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
-    color: PURPLE,
+    color: BAD,
   },
 
+  /* Reminder Card */
   reminderCard: {
-    marginTop: 14,
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: CARD,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E0E7FF',
+    borderColor: '#ECE7F6',
     gap: 12,
   },
   reminderIconWrap: {
@@ -1078,211 +1189,20 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  section: { marginTop: 22 },
-  sectionTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-    color: PURPLE_DEEP,
-    marginBottom: 8,
-  },
-  description: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    lineHeight: 23,
-    color: '#4A5160',
-  },
-
-  analogRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: CARD,
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-  },
-  analogIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: LAVENDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  analogBody: { flex: 1, minWidth: 0 },
-  analogName: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: PURPLE_DEEP,
-  },
-  analogMeta: {
-    marginTop: 2,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: MUTED,
-  },
-  analogPrice: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    color: PURPLE,
-    flexShrink: 0,
-    maxWidth: '34%',
-  },
-
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: CARD,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
-    alignItems: 'center',
-    paddingTop: 12,
-    shadowColor: '#1A1040',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 8,
-  },
-  bannerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  bannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    minWidth: 0,
-  },
-  bannerText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: OK,
-    flex: 1,
-  },
-  bannerLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 2,
-    paddingLeft: 8,
-  },
-  bannerLinkText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13,
-    color: PURPLE,
-  },
-  footerInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  qtyWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F3FF',
-    borderRadius: 14,
-    paddingHorizontal: 3,
-    paddingVertical: 3,
-    gap: 3,
-    borderWidth: 1,
-    borderColor: '#EDE9FE',
-  },
-  qtyBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  qtyBtnDisabled: { opacity: 0.4 },
-  qtyValue: {
-    minWidth: 28,
-    textAlign: 'center',
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    color: PURPLE_DEEP,
-  },
-  cta: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 16,
-    backgroundColor: PURPLE,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    shadowColor: PURPLE,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  ctaDisabled: { backgroundColor: '#C4B5D8' },
-  ctaText: {
-    color: '#fff',
-    fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-  },
-
-  state: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-    gap: 10,
-  },
-  stateTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    color: PURPLE_DEEP,
-    textAlign: 'center',
-  },
-  primaryBtn: {
-    marginTop: 12,
-    minHeight: 48,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    backgroundColor: PURPLE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryBtnText: {
-    color: '#fff',
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-  },
-
+  /* Cheaper Analogs */
   cheaperSection: {
+    marginTop: 16,
     backgroundColor: '#ECFDF5',
     borderRadius: 20,
     borderWidth: 1.5,
     borderColor: '#A7F3D0',
-    padding: 16,
+    padding: 14,
     gap: 12,
   },
   cheaperHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   cheaperBadgeIcon: {
     width: 36,
@@ -1358,6 +1278,224 @@ const styles = StyleSheet.create({
     color: '#059669',
   },
 
+  /* Sections */
+  section: {
+    marginTop: 18,
+  },
+  sectionTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    color: PURPLE_DEEP,
+    marginBottom: 8,
+  },
+  descriptionCard: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  description: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#4A5160',
+  },
+
+  analogRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: CARD,
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  analogIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  analogBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  analogName: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13.5,
+    color: PURPLE_DEEP,
+  },
+  analogMeta: {
+    marginTop: 2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: MUTED,
+  },
+  analogPrice: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: PURPLE,
+    flexShrink: 0,
+  },
+
+  /* Sticky Footer */
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: CARD,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    alignItems: 'center',
+    paddingTop: 10,
+    ...Platform.select({
+      web: { boxShadow: '0 -4px 20px rgba(26, 16, 64, 0.08)' } as any,
+      default: {
+        shadowColor: '#1A1040',
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: -2 },
+        elevation: 8,
+      },
+    }),
+    zIndex: 100,
+  },
+  bannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  bannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+  },
+  bannerText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: OK,
+    flex: 1,
+  },
+  bannerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 2,
+    paddingLeft: 8,
+  },
+  bannerLinkText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: PURPLE,
+  },
+  footerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  qtyWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F3FF',
+    borderRadius: 12,
+    paddingHorizontal: 3,
+    paddingVertical: 2,
+    gap: 2,
+    borderWidth: 1,
+    borderColor: '#EDE9FE',
+  },
+  qtyBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    backgroundColor: CARD,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyBtnDisabled: {
+    opacity: 0.4,
+  },
+  qtyValue: {
+    minWidth: 28,
+    textAlign: 'center',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+  },
+  cta: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: { boxShadow: '0 4px 14px rgba(106, 34, 214, 0.35)' } as any,
+      default: {
+        shadowColor: PURPLE,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.28,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
+  },
+  ctaDisabled: {
+    backgroundColor: '#C4B5D8',
+  },
+  ctaContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ctaText: {
+    color: '#fff',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+  },
+
+  /* Error & States */
+  state: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    gap: 10,
+  },
+  stateTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    color: PURPLE_DEEP,
+    textAlign: 'center',
+  },
+  primaryBtn: {
+    marginTop: 12,
+    minHeight: 46,
+    paddingHorizontal: 22,
+    borderRadius: 14,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnText: {
+    color: '#fff',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+  },
   skel: {
     backgroundColor: '#E6E1F2',
     borderRadius: 10,
