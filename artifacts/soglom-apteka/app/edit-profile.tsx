@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -69,6 +70,18 @@ export default function EditProfileScreen() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  // Forgot Password / OTP Reset state
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpNewPassword, setOtpNewPassword] = useState('');
+  const [otpConfirmPassword, setOtpConfirmPassword] = useState('');
+  const [showOtpNewPass, setShowOtpNewPass] = useState(false);
+  const [showOtpConfirmPass, setShowOtpConfirmPass] = useState(false);
+  const [otpResetting, setOtpResetting] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
 
   const dirty = firstName.trim() !== initialFirst || lastName.trim() !== initialLast;
   const allowLeaveRef = useRef(false);
@@ -208,6 +221,57 @@ export default function EditProfileScreen() {
       }
     } finally {
       setPasswordSaving(false);
+    }
+  };
+
+  const onSendOtp = async () => {
+    if (otpSending || !phone) return;
+    setOtpError(null);
+    setOtpSending(true);
+    try {
+      await api.requestOtp(phone, 'login');
+      setOtpSent(true);
+    } catch (err: any) {
+      setOtpError(err?.message || t('profile.editSaveFailed'));
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const onResetWithOtp = async () => {
+    if (otpResetting) return;
+    setOtpError(null);
+
+    const safeCode = otpCode.replace(/\D/g, '');
+    if (safeCode.length !== 6) {
+      setOtpError(t('profile.editOtpRequired'));
+      return;
+    }
+    if (otpNewPassword.trim().length < 6) {
+      setOtpError(t('profile.editPasswordTooShort'));
+      return;
+    }
+    if (otpNewPassword !== otpConfirmPassword) {
+      setOtpError(t('profile.editPasswordMismatch'));
+      return;
+    }
+
+    setOtpResetting(true);
+    try {
+      await api.resetPasswordWithOtp({
+        code: safeCode,
+        newPassword: otpNewPassword.trim(),
+      });
+      setShowOtpModal(false);
+      setOtpCode('');
+      setOtpNewPassword('');
+      setOtpConfirmPassword('');
+      setOtpSent(false);
+      setPasswordSuccess(true);
+    } catch (err: any) {
+      setOtpError(err?.message || t('profile.editSaveFailed'));
+    } finally {
+      setOtpResetting(false);
     }
   };
 
@@ -354,6 +418,19 @@ export default function EditProfileScreen() {
               </Pressable>
             </View>
 
+            {/* Forgot password link */}
+            <Pressable
+              onPress={() => {
+                setShowOtpModal(true);
+                setOtpError(null);
+              }}
+              style={styles.forgotPassBtn}
+              hitSlop={6}
+            >
+              <Feather name="help-circle" size={13} color={PURPLE} />
+              <Text style={styles.forgotPassText}>{t('profile.editForgotPassword')}</Text>
+            </Pressable>
+
             <Text style={[styles.label, { marginTop: 14 }]}>{t('profile.editNewPassword')}</Text>
             <View style={styles.inputWithIcon}>
               <TextInput
@@ -447,6 +524,136 @@ export default function EditProfileScreen() {
               <Text style={styles.tipBody}>{t('profile.editSecurityTipsBody')}</Text>
             </View>
           </View>
+
+          {/* Modal: SMS OTP Password Reset */}
+          <Modal
+            visible={showOtpModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowOtpModal(false)}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalIconWrap}>
+                    <Feather name="message-square" size={18} color={PURPLE} />
+                  </View>
+                  <View style={styles.modalHeaderInfo}>
+                    <Text style={styles.modalTitle}>{t('profile.editOtpModalTitle')}</Text>
+                    <Text style={styles.modalSubtitle}>{formatPhone(phone)}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setShowOtpModal(false)}
+                    hitSlop={8}
+                    style={styles.modalCloseBtn}
+                  >
+                    <Feather name="x" size={20} color={MUTED} />
+                  </Pressable>
+                </View>
+
+                {!otpSent ? (
+                  <View style={styles.modalBody}>
+                    <Text style={styles.modalDesc}>{t('profile.editOtpModalSubtitle')}</Text>
+                    <Pressable
+                      style={[styles.primaryBtn, otpSending && styles.primaryBtnDisabled]}
+                      onPress={() => void onSendOtp()}
+                      disabled={otpSending}
+                    >
+                      {otpSending ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.primaryBtnText}>{t('profile.editSendOtpBtn')}</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.modalBody}>
+                    <Text style={styles.label}>{t('profile.editOtpCode')}</Text>
+                    <TextInput
+                      value={otpCode}
+                      onChangeText={(v) => {
+                        setOtpCode(v);
+                        setOtpError(null);
+                      }}
+                      placeholder={t('profile.editOtpCodePlaceholder')}
+                      placeholderTextColor={MUTED}
+                      style={styles.input}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                    />
+
+                    <Text style={[styles.label, { marginTop: 12 }]}>{t('profile.editNewPassword')}</Text>
+                    <View style={styles.inputWithIcon}>
+                      <TextInput
+                        value={otpNewPassword}
+                        onChangeText={(v) => {
+                          setOtpNewPassword(v);
+                          setOtpError(null);
+                        }}
+                        placeholder={t('profile.editNewPasswordPlaceholder')}
+                        placeholderTextColor={MUTED}
+                        style={styles.inputInner}
+                        secureTextEntry={!showOtpNewPass}
+                        autoCapitalize="none"
+                      />
+                      <Pressable
+                        onPress={() => setShowOtpNewPass(!showOtpNewPass)}
+                        style={styles.eyeBtn}
+                        hitSlop={8}
+                      >
+                        <Feather name={showOtpNewPass ? 'eye-off' : 'eye'} size={18} color={MUTED} />
+                      </Pressable>
+                    </View>
+
+                    <Text style={[styles.label, { marginTop: 12 }]}>{t('profile.editConfirmPassword')}</Text>
+                    <View style={styles.inputWithIcon}>
+                      <TextInput
+                        value={otpConfirmPassword}
+                        onChangeText={(v) => {
+                          setOtpConfirmPassword(v);
+                          setOtpError(null);
+                        }}
+                        placeholder={t('profile.editConfirmPasswordPlaceholder')}
+                        placeholderTextColor={MUTED}
+                        style={styles.inputInner}
+                        secureTextEntry={!showOtpConfirmPass}
+                        autoCapitalize="none"
+                      />
+                      <Pressable
+                        onPress={() => setShowOtpConfirmPass(!showOtpConfirmPass)}
+                        style={styles.eyeBtn}
+                        hitSlop={8}
+                      >
+                        <Feather name={showOtpConfirmPass ? 'eye-off' : 'eye'} size={18} color={MUTED} />
+                      </Pressable>
+                    </View>
+
+                    {otpError ? (
+                      <View style={styles.errorBox}>
+                        <Feather name="alert-circle" size={16} color={DANGER} />
+                        <Text style={styles.errorText}>{otpError}</Text>
+                      </View>
+                    ) : null}
+
+                    <Pressable
+                      style={[
+                        styles.primaryBtn,
+                        (otpResetting || otpCode.length < 6 || !otpNewPassword) && styles.primaryBtnDisabled,
+                      ]}
+                      onPress={() => void onResetWithOtp()}
+                      disabled={otpResetting || otpCode.length < 6 || !otpNewPassword}
+                    >
+                      {otpResetting ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.primaryBtnText}>{t('profile.editResetPasswordBtn')}</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            </View>
+          </Modal>
         </ScrollView>
       )}
     </KeyboardAvoidingView>
@@ -558,6 +765,19 @@ const styles = StyleSheet.create({
   eyeBtn: {
     padding: 6,
     marginLeft: 6,
+  },
+  forgotPassBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingVertical: 2,
+  },
+  forgotPassText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: PURPLE,
   },
   readOnly: {
     minHeight: 48,
@@ -700,5 +920,61 @@ const styles = StyleSheet.create({
     color: MUTED,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(26,16,64,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    padding: 20,
+    boxShadow: '0 12px 36px rgba(26,16,64,0.18)',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  modalIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: PURPLE_LIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalHeaderInfo: {
+    flex: 1,
+  },
+  modalTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+  },
+  modalSubtitle: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalBody: {
+    marginTop: 4,
+  },
+  modalDesc: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+    lineHeight: 18,
+    marginBottom: 8,
   },
 });

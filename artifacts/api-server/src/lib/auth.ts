@@ -404,6 +404,27 @@ export async function verifyOtpAndLogin(phoneRaw: string, code: string, req?: Re
   return verifyOtpAndAuth({ phone: phoneRaw, code, purpose: "login" }, req);
 }
 
+export async function verifyAndConsumeOtp(phoneRaw: string, codeRaw: string): Promise<boolean> {
+  const phone = normalizePhone(phoneRaw);
+  const safeCode = String(codeRaw || "").replace(/\D/g, "");
+  if (safeCode.length !== 6) return false;
+  const allowDevBypass = allowOtpDevBypass() && safeCode === "000000";
+  const codeHash = hashOtp(phone, safeCode);
+  const result: any = await db.execute(sql`
+    SELECT id FROM auth_otps
+    WHERE phone = ${phone} AND code = ${codeHash} AND expires_at > now()
+    ORDER BY id DESC LIMIT 1
+  `);
+  const list = Array.isArray(result) ? result : (result?.rows || []);
+  if (!list[0] && !allowDevBypass) {
+    return false;
+  }
+  if (list[0]?.id) {
+    await db.execute(sql`DELETE FROM auth_otps WHERE phone = ${phone}`);
+  }
+  return true;
+}
+
 /** @deprecated Prefer issueAdminSession — kept for dual-accept / tests. */
 export function signAdminToken(userId: number, role: string, branchId: number | null) {
   const payload = `${userId}:${normalizeAdminRole(role)}:${branchId ?? ""}:${Date.now() + 1000 * 60 * 60 * 12}`;

@@ -5,6 +5,7 @@ import {
   registerCustomer,
   createOtp,
   verifyOtpAndAuth,
+  verifyAndConsumeOtp,
   requireCustomer,
 } from "../lib/auth";
 import { customers, db, hashPassword, verifyPassword } from "@workspace/db";
@@ -130,6 +131,31 @@ router.post("/auth/change-password", authLimiter, async (req, res, next) => {
       success: true,
     });
     return res.json({ ok: true, message: "Parol muvaffaqiyatli yangilandi" });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/auth/reset-password-with-otp", authLimiter, async (req, res, next) => {
+  try {
+    const user = await requireCustomer(req);
+    const { code, newPassword } = req.body || {};
+    if (!newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ message: "Yangi parol kamida 6 ta belgidan iborat bo‘lishi kerak" });
+    }
+    const ok = await verifyAndConsumeOtp(user.phone, code);
+    if (!ok) {
+      return res.status(400).json({ message: "SMS kod noto‘g‘ri yoki muddati tugagan" });
+    }
+    const newHash = hashPassword(String(newPassword));
+    await db.update(customers).set({ passwordHash: newHash }).where(eq(customers.id, user.id));
+    await recordAuthEvent({
+      actorType: "customer",
+      actorId: user.id,
+      eventType: "password.reset_otp",
+      success: true,
+    });
+    return res.json({ ok: true, message: "Parol muvaffaqiyatli tiklandi" });
   } catch (error) {
     return next(error);
   }

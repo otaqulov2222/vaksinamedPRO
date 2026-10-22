@@ -146,6 +146,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  resetPasswordWithOtp: (body: { code: string; newPassword: string }) =>
+    request<{ ok: boolean; message: string }>('/api/auth/reset-password-with-otp', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   posCard: () => request<any>('/api/pos/card'),
   /** SoT cashback history (source-aware). Auth = session customer only. */
   cashbackHistory: (opts?: { limit?: number; offset?: number }) => {
