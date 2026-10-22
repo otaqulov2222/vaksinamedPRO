@@ -616,45 +616,81 @@ export default function OrderScreen() {
           ) : null}
         </View>
 
-        {/* Real Scannable QR Code for pickup/active */}
+        {/* Real Scannable Digital Ticket & QR Code */}
         {fulfill !== 'CANCELLED' && !resExpired && order.qrPayload ? (
-          <View style={styles.qrCard}>
-            <View style={styles.qrHeader}>
-              <View style={styles.qrIconWrap}>
-                <MaterialCommunityIcons name="qrcode-scan" size={20} color={PURPLE} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.qrTitle}>{t('orders.qrScanTitle')}</Text>
-                <Text style={styles.qrHint}>{t('orders.qrHint')}</Text>
-              </View>
-            </View>
-
-            <View style={styles.qrContainer}>
-              <QRCode
-                value={String(order.qrPayload)}
-                size={164}
-                color={PURPLE_DEEP}
-                backgroundColor="#FFFFFF"
-                ecl="M"
-                quietZone={8}
-              />
-            </View>
-
-            <View style={styles.qrCodeBadge}>
-              <Text style={styles.qrCodeText} numberOfLines={1}>
-                {String(order.code || order.qrPayload)}
-              </Text>
-              <Pressable
-                style={styles.copyBtn}
-                onPress={() => void onCopyCode()}
-                accessibilityRole="button"
-                accessibilityLabel={copied ? t('orders.copiedCode') : t('orders.copyCode')}
-              >
-                <Feather name={copied ? 'check' : 'copy'} size={14} color={PURPLE} />
-                <Text style={styles.copyBtnText}>
-                  {copied ? t('orders.copiedCode') : t('orders.copyCode')}
+          <View style={styles.ticketCard}>
+            {/* Top Purple Ticket Header */}
+            <View style={styles.ticketHeader}>
+              <View style={styles.ticketHeaderLeft}>
+                <View style={styles.ticketKickerPill}>
+                  <MaterialCommunityIcons name="shield-check-outline" size={12} color="#FFFFFF" />
+                  <Text style={styles.ticketKickerText}>{t('orders.qrScanTitle')}</Text>
+                </View>
+                <Text style={styles.ticketCodeHero} numberOfLines={1}>
+                  {String(order.code || order.qrPayload)}
                 </Text>
-              </Pressable>
+              </View>
+              <View style={styles.ticketStatusPill}>
+                <Text style={styles.ticketStatusText}>
+                  {fulfillmentLabel(t, order.fulfillmentStatus)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Perforation Row with Circular Notches */}
+            <View style={styles.perforationRow}>
+              <View style={styles.notchLeft} />
+              <View style={styles.dashedDivider} />
+              <View style={styles.notchRight} />
+            </View>
+
+            {/* Ticket Body with Scannable QR Code */}
+            <View style={styles.ticketBody}>
+              <Text style={styles.ticketHintText}>
+                {t('orders.qrHint')}
+              </Text>
+
+              <View style={styles.qrContainer}>
+                <QRCode
+                  value={String(order.qrPayload)}
+                  size={168}
+                  color={PURPLE_DEEP}
+                  backgroundColor="#FFFFFF"
+                  ecl="M"
+                  quietZone={8}
+                />
+              </View>
+
+              {/* Barcode Visual Strip */}
+              <View style={styles.barcodeVisualRow}>
+                {[2, 1, 3, 1, 2, 4, 1, 2, 1, 3, 2, 1, 4, 1, 2, 3, 1, 2, 1, 4, 1, 3, 2, 1, 2, 4, 1, 3, 2, 1].map((w, idx) => (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.barcodeBar,
+                      { width: w, backgroundColor: idx % 2 === 0 ? PURPLE_DEEP : '#D8B4FE' },
+                    ]}
+                  />
+                ))}
+              </View>
+
+              {/* Formatted Code & Copy Button */}
+              <View style={styles.ticketCodeRow}>
+                <Text style={styles.ticketCodeValue} numberOfLines={1}>
+                  {String(order.code || order.qrPayload)}
+                </Text>
+                <Pressable
+                  style={[styles.ticketCopyBtn, copied && styles.ticketCopyBtnActive]}
+                  onPress={() => void onCopyCode()}
+                  accessibilityRole="button"
+                  accessibilityLabel={copied ? t('orders.copiedCode') : t('orders.copyCode')}
+                >
+                  <Feather name={copied ? 'check' : 'copy'} size={13} color={copied ? '#FFFFFF' : PURPLE} />
+                  <Text style={[styles.ticketCopyBtnText, copied && { color: '#FFFFFF' }]}>
+                    {copied ? t('orders.copiedCode') : t('orders.copyCode')}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         ) : null}
@@ -1126,82 +1162,168 @@ const styles = StyleSheet.create({
     color: PURPLE,
   },
 
-  qrCard: {
+  ticketCard: {
     backgroundColor: CARD,
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E9D5FF',
-    boxShadow: '0 4px 16px rgba(106, 34, 214, 0.08)',
+    borderRadius: 22,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: '#DDD6FE',
+    overflow: 'hidden',
+    boxShadow: '0 8px 24px rgba(106, 34, 214, 0.12)',
   },
-  qrHeader: {
+  ticketHeader: {
+    backgroundColor: PURPLE,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    width: '100%',
-    marginBottom: 14,
+    justifyContent: 'space-between',
   },
-  qrIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: LAVENDER,
+  ticketHeaderLeft: {
+    gap: 4,
+    flex: 1,
+  },
+  ticketKickerPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
-  qrTitle: {
+  ticketKickerText: {
+    color: '#FFFFFF',
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    color: PURPLE_DEEP,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  qrHint: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11.5,
+  ticketCodeHero: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+    letterSpacing: 1,
+  },
+  ticketStatusPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  ticketStatusText: {
+    color: PURPLE,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+  },
+
+  perforationRow: {
+    height: 20,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  notchLeft: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: BG,
+    position: 'absolute',
+    left: -10,
+  },
+  dashedDivider: {
+    flex: 1,
+    height: 1,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    borderStyle: 'dashed',
+    marginHorizontal: 16,
+  },
+  notchRight: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: BG,
+    position: 'absolute',
+    right: -10,
+  },
+
+  ticketBody: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingBottom: 20,
+    paddingTop: 4,
+    alignItems: 'center',
+  },
+  ticketHintText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
     color: MUTED,
-    marginTop: 1,
+    textAlign: 'center',
+    marginBottom: 12,
   },
   qrContainer: {
     padding: 12,
-    borderRadius: 16,
+    borderRadius: 18,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#ECE7F6',
-    boxShadow: '0 2px 8px rgba(26, 16, 64, 0.05)',
+    boxShadow: '0 4px 12px rgba(26, 16, 64, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  qrCodeBadge: {
+  barcodeVisualRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    height: 22,
+    marginTop: 14,
+    width: 180,
+  },
+  barcodeBar: {
+    height: '100%',
+    borderRadius: 1,
+  },
+  ticketCodeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#F7F4FD',
+    backgroundColor: '#F8F6FD',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E9D5FF',
-    marginTop: 14,
+    marginTop: 12,
   },
-  qrCodeText: {
+  ticketCodeValue: {
     fontFamily: 'Inter_700Bold',
     fontSize: 16,
-    letterSpacing: 0.5,
+    letterSpacing: 1.2,
     color: PURPLE_DEEP,
   },
-  copyBtn: {
+  ticketCopyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#D8B4FE',
   },
-  copyBtnText: {
+  ticketCopyBtnActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  ticketCopyBtnText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 11,
     color: PURPLE,

@@ -55,9 +55,10 @@ type AppContextValue = {
   rewards: Reward[];
   redeemedRewards: string[];
   cartCount: number;
+  cartSubtotal: number;
   refresh: () => Promise<void>;
-  /** Update badge from an already-fetched cart payload (avoids a second GET). */
-  syncCartCount: (count: number) => void;
+  /** Update badge and subtotal from an already-fetched cart payload (avoids a second GET). */
+  syncCartCount: (count: number, subtotal?: number) => void;
   /** Ends the customer session locally (always) and server-side (when reachable). Keeps the language. */
   logout: () => Promise<void>;
   redeemReward: (reward: Reward) => Promise<boolean>;
@@ -72,6 +73,7 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [cartCount, setCartCount] = useState(0);
+  const [cartSubtotal, setCartSubtotal] = useState(0);
   const languageRef = useRef<Language>(DEFAULT_LANGUAGE);
   const hasLocalLanguageRef = useRef(false);
   const languageLoadRef = useRef<Promise<void> | null>(null);
@@ -104,6 +106,7 @@ export function AppProvider({ children }: PropsWithChildren) {
     setIsAuthenticated(false);
     setProfile(null);
     setCartCount(0);
+    setCartSubtotal(0);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -118,11 +121,14 @@ export function AppProvider({ children }: PropsWithChildren) {
       }
       const [nextProfile, cart] = await Promise.all([
         api.profile(),
-        api.cart().catch(() => ({ items: [] })),
+        api.cart().catch(() => ({ items: [], subtotal: 0 })),
       ]);
       if (epoch !== sessionEpochRef.current) return;
       setProfile(nextProfile);
-      setCartCount(cart.items?.length ?? 0);
+      const items = Array.isArray(cart.items) ? cart.items : [];
+      const totalQty = items.reduce((s: number, i: any) => s + Math.max(1, Number(i.quantity) || 1), 0);
+      setCartCount(totalQty || items.length);
+      setCartSubtotal(Number(cart.subtotal) || 0);
       setIsAuthenticated(true);
       const decision = decideProfileLanguage({
         local: languageRef.current,
@@ -180,8 +186,9 @@ export function AppProvider({ children }: PropsWithChildren) {
     }
   }, [refresh]);
 
-  const syncCartCount = useCallback((count: number) => {
+  const syncCartCount = useCallback((count: number, subtotal = 0) => {
     setCartCount(Math.max(0, Math.floor(Number(count) || 0)));
+    setCartSubtotal(Math.max(0, Math.floor(Number(subtotal) || 0)));
   }, []);
 
   const t = useMemo(() => createT(language), [language]);
@@ -273,11 +280,12 @@ export function AppProvider({ children }: PropsWithChildren) {
     rewards: profile?.rewards ?? [],
     redeemedRewards: profile?.redeemedRewards ?? [],
     cartCount,
+    cartSubtotal,
     refresh,
     syncCartCount,
     logout,
     redeemReward,
-  }), [profile, language, t, fmt, loading, cartCount, isAuthenticated, refresh, setLanguage, syncCartCount, logout, redeemReward]);
+  }), [profile, language, t, fmt, loading, cartCount, cartSubtotal, isAuthenticated, refresh, setLanguage, syncCartCount, logout, redeemReward]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

@@ -443,7 +443,7 @@ export default function CatalogScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ q?: string | string[] }>();
-  const { refresh, cartCount, t, fmt, language } = useApp();
+  const { refresh, cartCount, cartSubtotal, t, fmt, language } = useApp();
   const narrow = width < 380;
 
   const initialQ = routeQueryValue(params);
@@ -763,7 +763,7 @@ export default function CatalogScreen() {
             width: '100%',
             maxWidth: 480,
             paddingHorizontal: sidePad,
-            paddingBottom: 90 + (Platform.OS === 'web' ? 24 : 16),
+            paddingBottom: (cartCount > 0 ? 140 : 90) + (Platform.OS === 'web' ? 24 : 16),
           },
         ]}
         horizontal={false}
@@ -1108,6 +1108,56 @@ export default function CatalogScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Uzum & Yandex Style Floating Cart Bar */}
+      {cartCount > 0 ? (
+        <View
+          style={[
+            styles.floatingCartContainer,
+            { width: '100%', maxWidth: 480, paddingHorizontal: sidePad },
+          ]}
+          pointerEvents="box-none"
+        >
+          <Pressable
+            style={({ pressed }) => [
+              styles.floatingCartBtn,
+              pressed && { opacity: 0.94, transform: [{ scale: 0.985 }] },
+            ]}
+            onPress={() => router.push('/cart')}
+            accessibilityRole="button"
+            accessibilityLabel={t('catalog.floatingCartA11y', {
+              count: cartCount,
+              total: fmt.money(cartSubtotal),
+            })}
+          >
+            <View style={styles.floatingCartLeft}>
+              <View style={styles.floatingCartIconWrap}>
+                <Feather name="shopping-bag" size={18} color="#FFFFFF" />
+                <View style={styles.floatingCartBadge}>
+                  <Text style={styles.floatingCartBadgeText}>
+                    {cartCount > 99 ? '99+' : String(cartCount)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.floatingCartTexts}>
+                <Text style={styles.floatingCartTitle}>
+                  {t('catalog.floatingCartTitle', { count: cartCount })}
+                </Text>
+                {cartSubtotal > 0 ? (
+                  <Text style={styles.floatingCartTotal}>
+                    {fmt.money(cartSubtotal)}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.floatingCartRight}>
+              <Text style={styles.floatingCartCtaText}>{t('catalog.floatingCartCta')}</Text>
+              <Feather name="arrow-right" size={16} color="#FFFFFF" />
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
 
       <Sheet
         visible={sortOpen}
@@ -1889,5 +1939,83 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     color: MUTED,
+  },
+
+  floatingCartContainer: {
+    position: 'absolute',
+    bottom: Platform.OS === 'web' ? 16 : 12,
+    alignSelf: 'center',
+    zIndex: 100,
+  },
+  floatingCartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: PURPLE,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    boxShadow: '0 8px 24px rgba(106, 34, 214, 0.38)',
+  },
+  floatingCartLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  floatingCartIconWrap: {
+    position: 'relative',
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingCartBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: PURPLE,
+  },
+  floatingCartBadgeText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+  },
+  floatingCartTexts: {
+    justifyContent: 'center',
+  },
+  floatingCartTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  floatingCartTotal: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: '#F3E8FF',
+    marginTop: 1,
+  },
+  floatingCartRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  floatingCartCtaText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: '#FFFFFF',
   },
 });
