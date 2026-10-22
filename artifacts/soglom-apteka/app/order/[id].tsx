@@ -50,6 +50,15 @@ const PRODUCT_IMAGES: Record<string, any> = {
   'cat-p6': require('../../assets/images/cat-p6-para.png'),
 };
 
+function cleanText(text: string | null | undefined): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/\s*\(Demo\)/gi, '')
+    .replace(/\[TEST\s*\/\s*DEMO\]\s*/gi, '')
+    .replace(/\s*Ushbu ma'lumot staging sinov muhiti uchun demo hisoblanadi\.?\s*Haqiqiy dori narxi va zaxirasi emas\.?/gi, '')
+    .trim();
+}
+
 function getProductThumb(item?: { productId?: number | string; id?: number | string; title?: string; name?: string; analogGroup?: string }) {
   if (!item) return null;
   const id = Number(item.productId ?? item.id);
@@ -653,25 +662,12 @@ export default function OrderScreen() {
               <View style={styles.qrContainer}>
                 <QRCode
                   value={String(order.qrPayload)}
-                  size={168}
+                  size={172}
                   color={PURPLE_DEEP}
                   backgroundColor="#FFFFFF"
                   ecl="M"
                   quietZone={8}
                 />
-              </View>
-
-              {/* Barcode Visual Strip */}
-              <View style={styles.barcodeVisualRow}>
-                {[2, 1, 3, 1, 2, 4, 1, 2, 1, 3, 2, 1, 4, 1, 2, 3, 1, 2, 1, 4, 1, 3, 2, 1, 2, 4, 1, 3, 2, 1].map((w, idx) => (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.barcodeBar,
-                      { width: w, backgroundColor: idx % 2 === 0 ? PURPLE_DEEP : '#D8B4FE' },
-                    ]}
-                  />
-                ))}
               </View>
 
               {/* Formatted Code & Copy Button */}
@@ -713,7 +709,7 @@ export default function OrderScreen() {
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.lineName} numberOfLines={2}>
-                  {String(item.title || t('orders.itemUntitled'))}
+                  {cleanText(String(item.title || t('orders.itemUntitled')))}
                 </Text>
                 <Text style={styles.lineMeta}>
                   {t('orders.lineQtyPrice', { qty, price: fmt.money(unit) })}
@@ -1277,30 +1273,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  barcodeVisualRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    height: 22,
-    marginTop: 14,
-    width: 180,
-  },
-  barcodeBar: {
-    height: '100%',
-    borderRadius: 1,
-  },
   ticketCodeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#F8F6FD',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E9D5FF',
-    marginTop: 12,
+    marginTop: 16,
   },
   ticketCodeValue: {
     fontFamily: 'Inter_700Bold',
