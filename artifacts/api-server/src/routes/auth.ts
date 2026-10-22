@@ -105,6 +105,35 @@ router.get("/auth/me", async (req, res, next) => {
   }
 });
 
+router.post("/auth/change-password", authLimiter, async (req, res, next) => {
+  try {
+    const user = await requireCustomer(req);
+    const { currentPassword, newPassword } = req.body || {};
+    if (!newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ message: "Yangi parol kamida 6 ta belgidan iborat bo‘lishi kerak" });
+    }
+    if (user.passwordHash && user.passwordHash.length > 0) {
+      if (!currentPassword) {
+        return res.status(400).json({ message: "Joriy parolni kiriting" });
+      }
+      if (!verifyPassword(String(currentPassword), user.passwordHash)) {
+        return res.status(400).json({ message: "Joriy parol noto‘g‘ri kiritildi" });
+      }
+    }
+    const newHash = hashPassword(String(newPassword));
+    await db.update(customers).set({ passwordHash: newHash }).where(eq(customers.id, user.id));
+    await recordAuthEvent({
+      actorType: "customer",
+      actorId: user.id,
+      eventType: "password.change",
+      success: true,
+    });
+    return res.json({ ok: true, message: "Parol muvaffaqiyatli yangilandi" });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/auth/logout", async (req, res, next) => {
   try {
     const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");

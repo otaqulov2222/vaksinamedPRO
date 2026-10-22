@@ -20,11 +20,15 @@ import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
+const PURPLE_LIGHT = '#F3E8FF';
 const MUTED = '#8B93A7';
 const BG = '#F7F8FC';
 const CARD = '#FFFFFF';
 const BORDER = '#EEF0F6';
 const DANGER = '#DC2626';
+const SUCCESS = '#15803D';
+const SUCCESS_BG = '#F0FDF4';
+const SUCCESS_BORDER = '#BBF7D0';
 
 function formatPhone(phone: string) {
   const d = String(phone || '').replace(/\D/g, '');
@@ -48,11 +52,23 @@ export default function EditProfileScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Basic profile state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [initialFirst, setInitialFirst] = useState('');
   const [initialLast, setInitialLast] = useState('');
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   const dirty = firstName.trim() !== initialFirst || lastName.trim() !== initialLast;
   const allowLeaveRef = useRef(false);
@@ -158,6 +174,43 @@ export default function EditProfileScreen() {
     }
   };
 
+  const onSavePassword = async () => {
+    if (passwordSaving) return;
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (newPassword.trim().length < 6) {
+      setPasswordError(t('profile.editPasswordTooShort'));
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError(t('profile.editPasswordMismatch'));
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      await api.changePassword({
+        currentPassword: currentPassword.trim() || undefined,
+        newPassword: newPassword.trim(),
+      });
+      setPasswordSuccess(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      if (err?.message) {
+        setPasswordError(err.message);
+      } else if (err?.status === 401 || err?.status === 403) {
+        setPasswordError(t('common.errorSessionExpired'));
+      } else {
+        setPasswordError(t('profile.editSaveFailed'));
+      }
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.root, { paddingBottom: Math.max(insets.bottom, 12) }]}
@@ -183,9 +236,21 @@ export default function EditProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.lead}>{t('profile.editLead')}</Text>
+          {/* Top Instruction Banner */}
+          <View style={styles.leadBox}>
+            <Feather name="info" size={16} color={PURPLE} />
+            <Text style={styles.leadText}>{t('profile.editLead')}</Text>
+          </View>
 
+          {/* Section 1: Basic Info */}
           <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconWrap}>
+                <Feather name="user" size={16} color={PURPLE} />
+              </View>
+              <Text style={styles.cardTitle}>{t('profile.editSectionBasic')}</Text>
+            </View>
+
             <Text style={styles.label}>{t('profile.editFirstName')}</Text>
             <TextInput
               value={firstName}
@@ -224,33 +289,164 @@ export default function EditProfileScreen() {
               <Feather name="lock" size={16} color={MUTED} />
             </View>
             <Text style={styles.hint}>{t('profile.editPhoneHint')}</Text>
+
+            {saveError ? (
+              <View style={styles.errorBox}>
+                <Feather name="alert-circle" size={16} color={DANGER} />
+                <Text style={styles.errorText}>{saveError}</Text>
+              </View>
+            ) : null}
+
+            {success ? (
+              <View style={styles.successBox}>
+                <Feather name="check-circle" size={16} color={SUCCESS} />
+                <Text style={styles.successText}>{t('profile.editSaved')}</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              style={[styles.primaryBtn, (saving || !dirty) && styles.primaryBtnDisabled]}
+              onPress={() => void onSave()}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryBtnText}>{dirty ? t('common.save') : t('profile.editNoChanges')}</Text>
+              )}
+            </Pressable>
           </View>
 
-          {saveError ? (
-            <View style={styles.errorBox}>
-              <Feather name="alert-circle" size={16} color={DANGER} />
-              <Text style={styles.errorText}>{saveError}</Text>
+          {/* Section 2: Security & Password */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardIconWrap}>
+                <Feather name="lock" size={16} color={PURPLE} />
+              </View>
+              <View style={styles.cardHeaderTextWrap}>
+                <Text style={styles.cardTitle}>{t('profile.editSecurityTitle')}</Text>
+                <Text style={styles.cardSubtitle}>{t('profile.editSecuritySubtitle')}</Text>
+              </View>
             </View>
-          ) : null}
 
-          {success ? (
-            <View style={styles.successBox}>
-              <Feather name="check-circle" size={16} color="#15803D" />
-              <Text style={styles.successText}>{t('profile.editSaved')}</Text>
+            <Text style={styles.label}>{t('profile.editCurrentPassword')}</Text>
+            <View style={styles.inputWithIcon}>
+              <TextInput
+                value={currentPassword}
+                onChangeText={(v) => {
+                  setCurrentPassword(v);
+                  setPasswordError(null);
+                  setPasswordSuccess(false);
+                }}
+                placeholder={t('profile.editCurrentPasswordPlaceholder')}
+                placeholderTextColor={MUTED}
+                style={styles.inputInner}
+                secureTextEntry={!showCurrentPass}
+                editable={!passwordSaving}
+                autoCapitalize="none"
+              />
+              <Pressable
+                onPress={() => setShowCurrentPass(!showCurrentPass)}
+                style={styles.eyeBtn}
+                hitSlop={8}
+              >
+                <Feather name={showCurrentPass ? 'eye-off' : 'eye'} size={18} color={MUTED} />
+              </Pressable>
             </View>
-          ) : null}
 
-          <Pressable
-            style={[styles.primaryBtn, (saving || !dirty) && styles.primaryBtnDisabled]}
-            onPress={() => void onSave()}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryBtnText}>{dirty ? t('common.save') : t('profile.editNoChanges')}</Text>
-            )}
-          </Pressable>
+            <Text style={[styles.label, { marginTop: 14 }]}>{t('profile.editNewPassword')}</Text>
+            <View style={styles.inputWithIcon}>
+              <TextInput
+                value={newPassword}
+                onChangeText={(v) => {
+                  setNewPassword(v);
+                  setPasswordError(null);
+                  setPasswordSuccess(false);
+                }}
+                placeholder={t('profile.editNewPasswordPlaceholder')}
+                placeholderTextColor={MUTED}
+                style={styles.inputInner}
+                secureTextEntry={!showNewPass}
+                editable={!passwordSaving}
+                autoCapitalize="none"
+              />
+              <Pressable
+                onPress={() => setShowNewPass(!showNewPass)}
+                style={styles.eyeBtn}
+                hitSlop={8}
+              >
+                <Feather name={showNewPass ? 'eye-off' : 'eye'} size={18} color={MUTED} />
+              </Pressable>
+            </View>
+
+            <Text style={[styles.label, { marginTop: 14 }]}>{t('profile.editConfirmPassword')}</Text>
+            <View style={styles.inputWithIcon}>
+              <TextInput
+                value={confirmPassword}
+                onChangeText={(v) => {
+                  setConfirmPassword(v);
+                  setPasswordError(null);
+                  setPasswordSuccess(false);
+                }}
+                placeholder={t('profile.editConfirmPasswordPlaceholder')}
+                placeholderTextColor={MUTED}
+                style={styles.inputInner}
+                secureTextEntry={!showConfirmPass}
+                editable={!passwordSaving}
+                autoCapitalize="none"
+              />
+              <Pressable
+                onPress={() => setShowConfirmPass(!showConfirmPass)}
+                style={styles.eyeBtn}
+                hitSlop={8}
+              >
+                <Feather name={showConfirmPass ? 'eye-off' : 'eye'} size={18} color={MUTED} />
+              </Pressable>
+            </View>
+
+            {passwordError ? (
+              <View style={styles.errorBox}>
+                <Feather name="alert-circle" size={16} color={DANGER} />
+                <Text style={styles.errorText}>{passwordError}</Text>
+              </View>
+            ) : null}
+
+            {passwordSuccess ? (
+              <View style={styles.successBox}>
+                <Feather name="check-circle" size={16} color={SUCCESS} />
+                <Text style={styles.successText}>{t('profile.editPasswordSuccess')}</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              style={[
+                styles.secondaryActionBtn,
+                (passwordSaving || !newPassword.trim()) && styles.primaryBtnDisabled,
+              ]}
+              onPress={() => void onSavePassword()}
+              disabled={passwordSaving || !newPassword.trim()}
+            >
+              {passwordSaving ? (
+                <ActivityIndicator color={PURPLE} />
+              ) : (
+                <>
+                  <Feather name="shield" size={16} color={PURPLE} />
+                  <Text style={styles.secondaryActionBtnText}>{t('profile.editChangePasswordBtn')}</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+
+          {/* Section 3: Security Tips */}
+          <View style={styles.tipCard}>
+            <View style={styles.tipIconWrap}>
+              <Feather name="shield" size={18} color="#059669" />
+            </View>
+            <View style={styles.tipContent}>
+              <Text style={styles.tipTitle}>{t('profile.editSecurityTipsTitle')}</Text>
+              <Text style={styles.tipBody}>{t('profile.editSecurityTipsBody')}</Text>
+            </View>
+          </View>
         </ScrollView>
       )}
     </KeyboardAvoidingView>
@@ -262,16 +458,28 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 28,
+    paddingBottom: 32,
     maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
+    gap: 14,
   },
-  lead: {
+  leadBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FAF5FF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F3E8FF',
+  },
+  leadText: {
+    flex: 1,
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: MUTED,
-    marginBottom: 14,
+    color: PURPLE_DEEP,
     lineHeight: 18,
   },
   card: {
@@ -280,6 +488,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     padding: 16,
+    boxShadow: '0 2px 8px rgba(30,10,60,0.03)',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1EFF6',
+  },
+  cardIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: PURPLE_LIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardHeaderTextWrap: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+  },
+  cardSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 2,
   },
   label: {
     fontFamily: 'Inter_600SemiBold',
@@ -297,6 +537,27 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 15,
     color: PURPLE_DEEP,
+  },
+  inputWithIcon: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: '#FAFBFE',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+  },
+  inputInner: {
+    flex: 1,
+    minHeight: 46,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+  },
+  eyeBtn: {
+    padding: 6,
+    marginLeft: 6,
   },
   readOnly: {
     minHeight: 48,
@@ -344,30 +605,81 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: SUCCESS_BG,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: SUCCESS_BORDER,
   },
   successText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
-    color: '#15803D',
+    color: SUCCESS,
   },
   primaryBtn: {
     marginTop: 18,
-    minHeight: 52,
-    borderRadius: 16,
+    minHeight: 50,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryBtnDisabled: { opacity: 0.55 },
+  primaryBtnDisabled: { opacity: 0.5 },
   primaryBtnText: {
     color: '#fff',
     fontFamily: 'Inter_700Bold',
     fontSize: 15,
+  },
+  secondaryActionBtn: {
+    marginTop: 18,
+    minHeight: 50,
+    borderRadius: 14,
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1.5,
+    borderColor: '#E9D5FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  secondaryActionBtnText: {
+    color: PURPLE,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+  },
+  tipCard: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    alignItems: 'flex-start',
+  },
+  tipIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#065F46',
+    marginBottom: 4,
+  },
+  tipBody: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#047857',
+    lineHeight: 17,
   },
   center: {
     flex: 1,

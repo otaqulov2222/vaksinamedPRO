@@ -141,6 +141,11 @@ export const api = {
   profile: () => request<any>('/api/loyalty/profile'),
   updateProfile: (body: { firstName?: string; lastName?: string; language?: string }) =>
     request<any>('/api/loyalty/profile', { method: 'PATCH', body: JSON.stringify(body) }),
+  changePassword: (body: { currentPassword?: string; newPassword: string }) =>
+    request<{ ok: boolean; message: string }>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   posCard: () => request<any>('/api/pos/card'),
   /** SoT cashback history (source-aware). Auth = session customer only. */
   cashbackHistory: (opts?: { limit?: number; offset?: number }) => {
