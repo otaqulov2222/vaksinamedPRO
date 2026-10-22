@@ -56,12 +56,12 @@ export default defineMessages({
     categoryCold: 'Shamollash',
 
     promosTitle: 'Maxsus takliflar',
-    promosSubtitle: 'Marketing takliflari — yakuniy narx katalogda. Chegirma yoki cashback avtomatik qo‘llanilmaydi.',
+    promosSubtitle: 'Sog‘lom hayot uchun eng yaxshi takliflar va qulay narxlar',
     promosLoadFailed: 'Aksiyalarni yuklab bo‘lmadi',
     promosEmptyTitle: 'Hozircha aksiyalar mavjud emas',
     promosEmptyText: 'Yangi takliflar paydo bo‘lganda shu yerda ko‘rinadi.',
-    promoA11y: '{title}. Marketing taklifi — narx katalogda',
-    promoDisclaimer: 'Marketing taklifi — narx katalogda',
+    promoA11y: '{title}. Maxsus taklif — batafsil katalogda',
+    promoDisclaimer: 'Batafsil shartlar va mavjud mahsulotlar katalogda',
     promoOpenCatalog: 'Katalogga o‘tish',
 
     qrImageA11y: 'Vaksina Med loyalty QR kodi. Kassada skanerlash uchun ko‘rsating.',
@@ -145,12 +145,12 @@ export default defineMessages({
     categoryCold: 'От простуды',
 
     promosTitle: 'Специальные предложения',
-    promosSubtitle: 'Маркетинговые предложения — итоговая цена в каталоге. Скидка или кэшбэк не применяются автоматически.',
+    promosSubtitle: 'Лучшие предложения и выгодные цены для вашего здоровья',
     promosLoadFailed: 'Не удалось загрузить акции',
     promosEmptyTitle: 'Пока нет акций',
     promosEmptyText: 'Новые предложения появятся здесь.',
-    promoA11y: '{title}. Маркетинговое предложение — цена в каталоге',
-    promoDisclaimer: 'Маркетинговое предложение — цена в каталоге',
+    promoA11y: '{title}. Специальное предложение — подробнее в каталоге',
+    promoDisclaimer: 'Подробные условия и наличие товаров в каталоге',
     promoOpenCatalog: 'Перейти в каталог',
 
     qrImageA11y: 'QR-код программы лояльности Vaksina Med. Покажите его на кассе для сканирования.',
@@ -234,12 +234,12 @@ export default defineMessages({
     categoryCold: 'Cold & Flu',
 
     promosTitle: 'Special offers',
-    promosSubtitle: 'Marketing offers — the final price is in the catalog. Discounts or cashback are not applied automatically.',
+    promosSubtitle: 'Best offers and value deals for your health',
     promosLoadFailed: 'Could not load promotions',
     promosEmptyTitle: 'No promotions yet',
     promosEmptyText: 'New offers will appear here.',
-    promoA11y: '{title}. Marketing offer — price in the catalog',
-    promoDisclaimer: 'Marketing offer — price in the catalog',
+    promoA11y: '{title}. Special offer — check catalog for details',
+    promoDisclaimer: 'Full terms and available products in catalog',
     promoOpenCatalog: 'Go to catalog',
 
     qrImageA11y: 'Vaksina Med loyalty QR code. Show it at the checkout to be scanned.',

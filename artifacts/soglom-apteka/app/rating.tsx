@@ -287,16 +287,24 @@ export default function RatingScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ selected: item <= rating }}
                   accessibilityLabel={t('orders.ratingStarA11y', { value: item })}
+                  style={({ pressed }) => [styles.starBtn, pressed && { transform: [{ scale: 1.15 }] }]}
                 >
                   <Feather
                     name="star"
-                    size={34}
-                    color={item <= rating ? GOLD : BORDER}
+                    size={36}
+                    color={item <= rating ? GOLD : '#D1D5DB'}
                     fill={item <= rating ? GOLD : 'transparent'}
                   />
                 </Pressable>
               ))}
             </View>
+            {rating > 0 ? (
+              <View style={styles.ratingScoreBadge}>
+                <Text style={styles.ratingScoreText}>
+                  {t(`orders.ratingScore${rating}` as TranslationKey)}
+                </Text>
+              </View>
+            ) : null}
 
             <View style={styles.tags}>
               {TAGS.map((tag) => {
@@ -313,17 +321,20 @@ export default function RatingScreen() {
               })}
             </View>
 
-            <TextInput
-              value={comment}
-              onChangeText={setComment}
-              placeholder={t('orders.ratingCommentPlaceholder')}
-              placeholderTextColor={MUTED}
-              multiline
-              numberOfLines={5}
-              style={styles.input}
-              editable={!saving}
-              maxLength={2000}
-            />
+            <View style={styles.inputContainer}>
+              <TextInput
+                value={comment}
+                onChangeText={setComment}
+                placeholder={t('orders.ratingCommentPlaceholder')}
+                placeholderTextColor={MUTED}
+                multiline
+                numberOfLines={5}
+                style={styles.input}
+                editable={!saving}
+                maxLength={2000}
+              />
+              <Text style={styles.charCounter}>{comment.length} / 2000</Text>
+            </View>
 
             {saveError ? (
               <View style={styles.errorBox}>
@@ -370,11 +381,12 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: CARD,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    padding: 12,
+    borderColor: '#ECE7F6',
+    padding: 14,
     gap: 8,
+    boxShadow: '0 2px 10px rgba(26, 16, 64, 0.04)',
   },
   sectionLabel: {
     fontFamily: 'Inter_700Bold',
@@ -399,11 +411,12 @@ const styles = StyleSheet.create({
   targetCard: {
     alignItems: 'center',
     backgroundColor: CARD,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: BORDER,
-    paddingVertical: 20,
+    borderColor: '#ECE7F6',
+    paddingVertical: 22,
     paddingHorizontal: 16,
+    boxShadow: '0 2px 10px rgba(26, 16, 64, 0.04)',
   },
   avatar: {
     width: 80,
@@ -425,6 +438,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   stars: { flexDirection: 'row', justifyContent: 'center', gap: 7, marginTop: 12 },
+  starBtn: { padding: 4, alignItems: 'center', justifyContent: 'center' },
+  ratingScoreBadge: {
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#FEF3C7',
+    marginTop: 6,
+  },
+  ratingScoreText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    color: '#92400E',
+  },
   tags: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 16 },
   tag: {
     borderWidth: 1,
@@ -437,18 +464,28 @@ const styles = StyleSheet.create({
   tagActive: { backgroundColor: '#F3E8FF', borderColor: PURPLE },
   tagText: { fontFamily: 'Inter_500Medium', fontSize: 11, color: MUTED },
   tagTextActive: { color: PURPLE },
+  inputContainer: { marginTop: 8, position: 'relative' },
   input: {
     minHeight: 120,
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
-    marginTop: 8,
+    paddingBottom: 28,
     textAlignVertical: 'top',
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    borderColor: BORDER,
+    borderColor: '#ECE7F6',
     backgroundColor: CARD,
     color: PURPLE_DEEP,
+    boxShadow: '0 1px 4px rgba(26, 16, 64, 0.02)',
+  },
+  charCounter: {
+    position: 'absolute',
+    bottom: 8,
+    right: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    color: MUTED,
   },
   submit: {
     minHeight: 49,
@@ -459,6 +496,7 @@ const styles = StyleSheet.create({
     gap: 7,
     marginTop: 8,
     backgroundColor: PURPLE,
+    boxShadow: '0 3px 12px rgba(106, 34, 214, 0.28)',
   },
   submitText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 13 },
   state: {
@@ -490,6 +528,7 @@ const styles = StyleSheet.create({
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
+    boxShadow: '0 3px 12px rgba(106, 34, 214, 0.25)',
   },
   primaryBtnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 14 },
   secondaryBtn: {

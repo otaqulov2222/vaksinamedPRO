@@ -137,9 +137,10 @@ export default function PromosScreen() {
                   <Text style={styles.promoTitle}>{promo.title}</Text>
                   {promo.subtitle ? <Text style={styles.promoSubtitle}>{promo.subtitle}</Text> : null}
                   <Text style={styles.promoHonest}>{t('home.promoDisclaimer')}</Text>
-                  <Text style={styles.open}>
-                    {t('home.promoOpenCatalog')} <Feather name="arrow-right" size={13} color={PURPLE} />
-                  </Text>
+                  <View style={styles.openPill}>
+                    <Text style={styles.openText}>{t('home.promoOpenCatalog')}</Text>
+                    <Feather name="arrow-right" size={13} color={PURPLE} />
+                  </View>
                 </View>
                 <View style={styles.promoArt}>
                   <MaterialCommunityIcons name={iconName} size={66} color={PURPLE} />
@@ -160,10 +161,13 @@ const styles = StyleSheet.create({
   list: { gap: 12, paddingBottom: 24 },
   promo: {
     minHeight: 164,
-    borderRadius: 23,
+    borderRadius: 24,
     padding: 18,
     flexDirection: 'row',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(106, 34, 214, 0.08)',
+    boxShadow: '0 4px 14px rgba(26, 16, 64, 0.04)',
   },
   promoCopy: { flex: 1 },
   tag: {
@@ -196,7 +200,19 @@ const styles = StyleSheet.create({
     color: PURPLE,
     lineHeight: 14,
   },
-  open: { fontFamily: 'Inter_700Bold', fontSize: 11, marginTop: 12, color: PURPLE },
+  openPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginTop: 12,
+    boxShadow: '0 1px 4px rgba(26, 16, 64, 0.06)',
+  },
+  openText: { fontFamily: 'Inter_700Bold', fontSize: 11, color: PURPLE },
   promoArt: { width: 78, alignItems: 'center', justifyContent: 'center' },
   state: {
     alignItems: 'center',
@@ -226,6 +242,7 @@ const styles = StyleSheet.create({
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
+    boxShadow: '0 3px 12px rgba(106, 34, 214, 0.25)',
   },
   retryBtnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 14 },
 });
