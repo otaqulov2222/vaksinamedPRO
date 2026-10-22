@@ -123,7 +123,7 @@ export default function HelpScreen() {
       >
       <View style={styles.hero}>
         <View style={styles.iconWrap}>
-          <Feather name="help-circle" size={28} color={PURPLE} />
+          <Feather name="headphones" size={28} color={PURPLE} />
         </View>
         <Text style={styles.title}>{t('common.navHelp')}</Text>
         <Text style={styles.subtitle}>{t('profile.helpSubtitle')}</Text>

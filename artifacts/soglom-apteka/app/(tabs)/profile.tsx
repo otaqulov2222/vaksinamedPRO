@@ -295,7 +295,7 @@ export default function ProfileScreen() {
             iconColor="#0369A1"
           />
           <MenuRow
-            icon="help-circle"
+            icon="headphones"
             title={t('common.navHelp')}
             a11y={t('profile.helpA11y')}
             onPress={() => router.push('/help')}
