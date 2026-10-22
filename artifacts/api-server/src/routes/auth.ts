@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { eq } from "drizzle-orm";
 import {
   loginCustomer,
   registerCustomer,
@@ -6,7 +7,7 @@ import {
   verifyOtpAndAuth,
   requireCustomer,
 } from "../lib/auth";
-import { customers } from "@workspace/db";
+import { customers, db, hashPassword, verifyPassword } from "@workspace/db";
 import { rateLimit } from "../lib/rateLimit";
 import { loyaltyCardNumber, publicQrCode } from "../lib/pos";
 import { revokeSessionFromToken } from "../lib/sessions";
@@ -130,7 +131,7 @@ router.post("/auth/change-password", authLimiter, async (req, res, next) => {
     });
     return res.json({ ok: true, message: "Parol muvaffaqiyatli yangilandi" });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
