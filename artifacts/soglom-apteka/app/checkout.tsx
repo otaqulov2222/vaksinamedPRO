@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -11,7 +11,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -27,14 +26,15 @@ import { fulfillmentTypeLabel, paymentMethodLabel } from '@/lib/orderLabels';
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F3F1F7';
+const BG = '#F4F2F8';
 const CARD = '#FFFFFF';
 const BORDER = '#E9E6F0';
 const LAVENDER = '#F1EBFF';
 const WARN = '#B45309';
 const BAD = '#B91C1C';
-const OK = '#3D7A55';
-const YELLOW = '#FFCC00';
+const OK = '#16A34A';
+const PAYME_COLOR = '#00BFA5';
+const CLICK_COLOR = '#0073FF';
 
 const PRODUCT_IMAGES: Record<string, any> = {
   'cat-p1': require('../assets/images/cat-p1-d3.png'),
@@ -108,7 +108,6 @@ export default function CheckoutScreen() {
   const contentWidth = Math.min(width, 480);
 
   const [branchId, setBranchId] = useState<number | null>(null);
-  const fulfillment = 'pickup' as const;
   const [paymentMethod, setPaymentMethod] = useState('pay_at_branch');
   const [useCashback, setUseCashback] = useState(false);
   const [cart, setCart] = useState<any>(null);
@@ -148,8 +147,8 @@ export default function CheckoutScreen() {
       const showSkeleton = opts?.forceSkeleton || !cartRef.current;
       if (showSkeleton) setLoading(true);
       setLoadError(null);
+
       try {
-        // Refresh profile balance + cart/rules together so cashback toggle sees real balance.
         const [, c, r] = await Promise.all([
           refresh(),
           api.cart(),
@@ -187,11 +186,14 @@ export default function CheckoutScreen() {
     router.push({ pathname: '/branches', params: { from: 'checkout' } });
   };
 
+  const openCart = () => {
+    router.replace('/cart');
+  };
+
   const items = Array.isArray(cart?.items) ? cart.items : [];
   const hasItems = items.length > 0;
   const selectedBranch = cart?.branch || null;
 
-  const deliveryFee = 0;
   const goods = Number(cart?.subtotal) || 0;
   const balanceNum = Number(balance) || 0;
   const maxSpendRatio =
@@ -204,8 +206,7 @@ export default function CheckoutScreen() {
     maxSpendRatio != null
       ? Math.max(0, Math.min(1, Number(maxSpendRatio)))
       : 0;
-  // Show Cashback UI whenever the customer has a real positive balance on this order.
-  // Do NOT hide the whole section if rules briefly fail — toggle still sends useCashback boolean.
+
   const showCashback = balanceNum > 0 && goods > 0;
   const cashbackPreview =
     useCashback && showCashback && spendCap > 0
@@ -216,24 +217,37 @@ export default function CheckoutScreen() {
 
   const stockIssues = items.filter((item: any) => Boolean(item.stockInsufficient));
 
-  const paymentOptions: Array<{ value: string; label: string; enabled: boolean; hint?: string }> = [
+  const paymentOptions: Array<{
+    value: string;
+    label: string;
+    desc: string;
+    icon: string;
+    iconColor: string;
+    iconBg: string;
+  }> = [
     {
       value: 'pay_at_branch',
       label: paymentMethodLabel(t, 'pay_at_branch'),
-      hint: t('cart.checkoutPayAtBranchHint'),
-      enabled: true,
+      desc: t('cart.checkoutPayAtBranchDesc'),
+      icon: 'storefront-outline',
+      iconColor: PURPLE,
+      iconBg: '#F3EEFF',
     },
     {
       value: 'payme',
       label: paymentMethodLabel(t, 'payme'),
-      hint: t('cart.checkoutOnlinePaymentHint'),
-      enabled: true,
+      desc: t('cart.checkoutPaymeDesc'),
+      icon: 'credit-card-outline',
+      iconColor: PAYME_COLOR,
+      iconBg: '#E0F7F6',
     },
     {
       value: 'click',
       label: paymentMethodLabel(t, 'click'),
-      hint: t('cart.checkoutOnlinePaymentHint'),
-      enabled: true,
+      desc: t('cart.checkoutClickDesc'),
+      icon: 'cellphone-check',
+      iconColor: CLICK_COLOR,
+      iconBg: '#EBF3FF',
     },
   ];
 
@@ -350,11 +364,10 @@ export default function CheckoutScreen() {
   };
 
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 12) : Math.max(insets.top, 8);
-  const bottomPad = Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 12);
-  const sidePad = narrow ? 14 : 20;
-  // Measured sticky footer + breathing room so Click / last cards clear the CTA.
-  const footerFallback = 12 + 28 + 10 + 52 + bottomPad;
-  const scrollClearance = (footerHeight > 0 ? footerHeight : footerFallback) + 36;
+  const bottomPad = Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 14);
+  const sidePad = narrow ? 14 : 18;
+  const footerFallback = 14 + 56 + 12 + bottomPad;
+  const scrollClearance = (footerHeight > 0 ? footerHeight : footerFallback) + 32;
   const maxSpendPercent = spendCap > 0 ? Math.round(spendCap * 100) : null;
 
   const header = (
@@ -385,10 +398,10 @@ export default function CheckoutScreen() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <SkeletonBlock style={{ height: 88, borderRadius: 16, width: '100%' }} />
-          <SkeletonBlock style={{ height: 120, borderRadius: 16, width: '100%', marginTop: 12 }} />
-          <SkeletonBlock style={{ height: 120, borderRadius: 16, width: '100%', marginTop: 12 }} />
-          <SkeletonBlock style={{ height: 140, borderRadius: 16, width: '100%', marginTop: 12 }} />
+          <SkeletonBlock style={{ height: 110, borderRadius: 18, width: '100%', marginBottom: 14 }} />
+          <SkeletonBlock style={{ height: 160, borderRadius: 18, width: '100%', marginBottom: 14 }} />
+          <SkeletonBlock style={{ height: 140, borderRadius: 18, width: '100%', marginBottom: 14 }} />
+          <SkeletonBlock style={{ height: 120, borderRadius: 18, width: '100%' }} />
         </ScrollView>
       </View>
     );
@@ -399,7 +412,7 @@ export default function CheckoutScreen() {
       <View style={styles.root}>
         {header}
         <View style={styles.state}>
-          <MaterialCommunityIcons name="cloud-off-outline" size={44} color={MUTED} />
+          <MaterialCommunityIcons name="cloud-off-outline" size={48} color={MUTED} />
           <Text style={styles.stateTitle}>{t('cart.checkoutLoadFailed')}</Text>
           <Text style={styles.stateHint}>{loadError}</Text>
           <Pressable
@@ -421,7 +434,7 @@ export default function CheckoutScreen() {
         {header}
         <View style={styles.state}>
           <View style={styles.emptyIcon}>
-            <Feather name="shopping-cart" size={28} color={PURPLE} />
+            <Feather name="shopping-cart" size={32} color={PURPLE} />
           </View>
           <Text style={styles.stateTitle}>{t('cart.checkoutEmptyTitle')}</Text>
           <Text style={styles.stateHint}>{t('cart.checkoutEmptyHint')}</Text>
@@ -449,64 +462,93 @@ export default function CheckoutScreen() {
           {
             width: contentWidth,
             paddingHorizontal: sidePad,
-            paddingBottom: hasItems ? 8 : 24 + bottomPad,
+            paddingBottom: hasItems ? 12 : 24 + bottomPad,
           },
         ]}
-        horizontal={false}
-        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
-        alwaysBounceHorizontal={false}
-        bounces={false}
-        directionalLockEnabled
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
       >
-        {/* Branch — same /branches picker as Cart */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>{t('cart.branchLabel')}</Text>
-          {selectedBranch?.name ? (
-            <>
-              <Text style={styles.branchName} numberOfLines={2}>
-                {String(selectedBranch.name)}
-              </Text>
-              {selectedBranch.address ? (
-                <Text style={styles.branchMeta} numberOfLines={2}>
-                  {String(selectedBranch.address)}
-                </Text>
-              ) : null}
-              {selectedBranch.hours ? (
-                <Text style={styles.branchMeta} numberOfLines={1}>
-                  {String(selectedBranch.hours)}
-                </Text>
-              ) : null}
-              <Pressable
-                style={styles.linkBtn}
-                onPress={openBranches}
-                accessibilityRole="button"
-                accessibilityLabel={t('cart.changeBranchA11y')}
-              >
-                <Text style={styles.linkBtnText}>{t('cart.change')}</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Text style={styles.warnText}>{t('cart.branchNotSelected')}</Text>
-              <Pressable
-                style={[styles.primaryBtn, { marginTop: 12, alignSelf: 'stretch' }]}
-                onPress={openBranches}
-                accessibilityRole="button"
-                accessibilityLabel={t('cart.chooseBranch')}
-              >
-                <Text style={styles.primaryBtnText}>{t('cart.chooseBranch')}</Text>
-              </Pressable>
-            </>
-          )}
+        {/* SECTION 1: Fulfillment & Pharmacy (Unified Card) */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.fulfillmentCard}>
+            {/* Top Fulfillment Method Row */}
+            <View style={styles.fulfillmentHeader}>
+              <View style={styles.fulfillmentIconWrap}>
+                <Feather name="shopping-bag" size={18} color={PURPLE} />
+              </View>
+              <View style={styles.fulfillmentHeaderTextWrap}>
+                <Text style={styles.fulfillmentTitle}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
+                <Text style={styles.fulfillmentSub}>{t('cart.checkoutPickupReady')}</Text>
+              </View>
+              <View style={styles.freeBadge}>
+                <Text style={styles.freeBadgeText}>{t('cart.checkoutPickupFree')}</Text>
+              </View>
+            </View>
+
+            <View style={styles.branchBoxDivider} />
+
+            {/* Selected Branch Content */}
+            {selectedBranch?.name ? (
+              <View style={styles.branchDetails}>
+                <View style={styles.branchHeaderRow}>
+                  <View style={styles.branchPinWrap}>
+                    <Feather name="map-pin" size={15} color={PURPLE} />
+                  </View>
+                  <View style={styles.branchTitleWrap}>
+                    <Text style={styles.branchName} numberOfLines={2}>
+                      {String(selectedBranch.name)}
+                    </Text>
+                    {selectedBranch.address ? (
+                      <Text style={styles.branchAddress} numberOfLines={2}>
+                        {String(selectedBranch.address)}
+                      </Text>
+                    ) : null}
+                    {selectedBranch.hours ? (
+                      <View style={styles.branchHoursRow}>
+                        <Feather name="clock" size={12} color={MUTED} />
+                        <Text style={styles.branchHoursText} numberOfLines={1}>
+                          {String(selectedBranch.hours)}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+
+                <Pressable
+                  style={styles.changeBranchBtn}
+                  onPress={openBranches}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('cart.changeBranchA11y')}
+                >
+                  <Feather name="map" size={14} color={PURPLE} />
+                  <Text style={styles.changeBranchBtnText}>{t('cart.change')}</Text>
+                  <Feather name="chevron-right" size={14} color={PURPLE} />
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.branchEmptyBox}>
+                <Text style={styles.warnText}>{t('cart.branchNotSelected')}</Text>
+                <Pressable
+                  style={styles.selectBranchCta}
+                  onPress={openBranches}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('cart.chooseBranch')}
+                >
+                  <Feather name="plus-circle" size={16} color="#FFFFFF" />
+                  <Text style={styles.selectBranchCtaText}>{t('cart.chooseBranch')}</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
         </View>
 
-        {/* Stock preflight */}
+        {/* Stock Alert (if any issues) */}
         {stockIssues.length ? (
           <View style={styles.warnCard}>
-            <Text style={styles.warnTitle}>{t('cart.stockShortMessage')}</Text>
+            <View style={styles.warnCardHeader}>
+              <Feather name="alert-triangle" size={16} color={WARN} />
+              <Text style={styles.warnTitle}>{t('cart.stockShortMessage')}</Text>
+            </View>
             {stockIssues.map((item: any) => {
               const name = (localizedName(language, item.product) || t('cart.productFallbackName'));
               const avail =
@@ -515,8 +557,8 @@ export default function CheckoutScreen() {
                   : null;
               return (
                 <Text key={item.id} style={styles.warnLine} numberOfLines={2}>
-                  {name}
-                  {avail != null ? ` — ${t('cart.checkoutStockAvailableShort', { count: avail })}` : ''}
+                  • {name}
+                  {avail != null ? ` (${t('cart.checkoutStockAvailableShort', { count: avail })})` : ''}
                 </Text>
               );
             })}
@@ -524,67 +566,116 @@ export default function CheckoutScreen() {
           </View>
         ) : null}
 
-        {/* Order lines */}
-        <Text style={styles.sectionTitle}>{t('cart.checkoutOrderItems')}</Text>
-        {items.map((item: any) => {
-          const product = item.product || {};
-          const rawName = localizedName(language, product) || t('cart.productFallbackName');
-          const name = cleanText(rawName);
-          const qty = Math.max(1, Number(item.quantity) || 1);
-          const unitPrice = Number(item.unitPrice ?? product.price ?? 0);
-          const lineTotal = Number(item.lineTotal ?? unitPrice * qty);
-          const itemImg = getProductImage(product);
-          return (
-            <View key={item.id} style={styles.lineCard}>
-              <View
-                style={styles.lineIcon}
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-              >
-                <View style={styles.itemAmbientGlow} />
-                {itemImg ? (
-                  <Image source={itemImg} style={styles.lineImg} resizeMode="contain" />
-                ) : (
-                  <MaterialCommunityIcons
-                    name={productIconName(product.icon)}
-                    size={24}
-                    color={PURPLE}
-                  />
-                )}
-              </View>
-              <View style={styles.lineBody}>
-                <Text style={styles.lineName} numberOfLines={2}>
-                  {name}
-                </Text>
-                <View style={styles.lineBottom}>
-                  <Text style={styles.lineMeta} numberOfLines={1}>
-                    {t('cart.checkoutLineMeta', { qty, price: fmt.money(unitPrice) })}
-                  </Text>
-                  <Text style={styles.lineTotal} numberOfLines={1}>
-                    {fmt.money(lineTotal)}
-                  </Text>
-                </View>
+        {/* SECTION 2: Order Items (Buyurtma tarkibi) */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionTitle}>{t('cart.checkoutOrderItems')}</Text>
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{items.length}</Text>
               </View>
             </View>
-          );
-        })}
+            <Pressable
+              style={styles.editCartLink}
+              onPress={openCart}
+              accessibilityRole="button"
+              accessibilityLabel={t('cart.checkoutEditCart')}
+            >
+              <Feather name="edit-2" size={13} color={PURPLE} />
+              <Text style={styles.editCartLinkText}>{t('cart.checkoutEditCart')}</Text>
+            </Pressable>
+          </View>
 
-        {/* Fulfillment */}
-        <Text style={styles.sectionTitle}>{t('cart.checkoutFulfillmentTitle')}</Text>
-        <View style={styles.infoCard} accessibilityRole="text">
-          <Feather name="shopping-bag" size={18} color={PURPLE} />
-          <View style={styles.infoBody}>
-            <Text style={styles.infoTitle}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
-            <Text style={styles.infoText}>
-              {t('cart.checkoutPickupInfo')}
-            </Text>
+          <View style={styles.itemsCard}>
+            {items.map((item: any, idx: number) => {
+              const product = item.product || {};
+              const rawName = localizedName(language, product) || t('cart.productFallbackName');
+              const name = cleanText(rawName);
+              const qty = Math.max(1, Number(item.quantity) || 1);
+              const unitPrice = Number(item.unitPrice ?? product.price ?? 0);
+              const lineTotal = Number(item.lineTotal ?? unitPrice * qty);
+              const itemImg = getProductImage(product);
+              const isLast = idx === items.length - 1;
+
+              return (
+                <View key={item.id}>
+                  <View style={styles.lineItem}>
+                    <View style={styles.lineIconWrap}>
+                      {itemImg ? (
+                        <Image source={itemImg} style={styles.lineImg} resizeMode="contain" />
+                      ) : (
+                        <MaterialCommunityIcons
+                          name={productIconName(product.icon)}
+                          size={24}
+                          color={PURPLE}
+                        />
+                      )}
+                    </View>
+                    <View style={styles.lineBody}>
+                      <Text style={styles.lineName} numberOfLines={2}>
+                        {name}
+                      </Text>
+                      <View style={styles.lineBottomRow}>
+                        <View style={styles.qtyPill}>
+                          <Text style={styles.qtyPillText}>
+                            {t('cart.checkoutLineMeta', { qty, price: fmt.money(unitPrice) })}
+                          </Text>
+                        </View>
+                        <Text style={styles.lineTotalText} numberOfLines={1}>
+                          {fmt.money(lineTotal)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  {!isLast ? <View style={styles.itemDivider} /> : null}
+                </View>
+              );
+            })}
           </View>
         </View>
 
-        {/* Cashback */}
+        {/* SECTION 3: Payment Method (To'lov usuli) */}
+        <View style={styles.sectionWrap}>
+          <Text style={styles.sectionTitle}>{t('cart.checkoutPaymentTitle')}</Text>
+          <View style={styles.paymentCardsWrap}>
+            {paymentOptions.map((opt) => {
+              const selected = paymentMethod === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => setPaymentMethod(opt.value)}
+                  style={[styles.paymentCard, selected && styles.paymentCardSelected]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${opt.label}. ${opt.desc}`}
+                >
+                  <View style={[styles.paymentIconBox, { backgroundColor: opt.iconBg }]}>
+                    <MaterialCommunityIcons
+                      name={opt.icon as any}
+                      size={22}
+                      color={opt.iconColor}
+                    />
+                  </View>
+                  <View style={styles.paymentInfoBox}>
+                    <Text style={styles.paymentCardTitle} numberOfLines={1}>
+                      {opt.label}
+                    </Text>
+                    <Text style={styles.paymentCardDesc} numberOfLines={2}>
+                      {opt.desc}
+                    </Text>
+                  </View>
+                  <View style={[styles.radioCircle, selected && styles.radioCircleSelected]}>
+                    {selected ? <View style={styles.radioDot} /> : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* SECTION 4: Cashback (Keshbek) */}
         {showCashback ? (
-          <>
-            <Text style={styles.sectionTitle}>{t('common.navCashback')}</Text>
+          <View style={styles.sectionWrap}>
             <View style={styles.cashbackCard}>
               <Pressable
                 onPress={() => setUseCashback(!useCashback)}
@@ -593,13 +684,16 @@ export default function CheckoutScreen() {
                 accessibilityState={{ checked: useCashback }}
                 accessibilityLabel={t('cart.checkoutUseCashback')}
               >
-                <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={styles.cashbackCoinWrap}>
+                  <MaterialCommunityIcons name="star-circle" size={24} color="#D97706" />
+                </View>
+                <View style={styles.cashbackContent}>
                   <Text style={styles.cashbackTitle}>{t('cart.checkoutUseCashback')}</Text>
-                  <Text style={styles.cashbackMeta} numberOfLines={1}>
+                  <Text style={styles.cashbackBalance} numberOfLines={1}>
                     {t('cart.checkoutCashbackAvailable', { amount: fmt.money(balanceNum) })}
                   </Text>
                   {useCashback && cashbackUsed > 0 ? (
-                    <Text style={styles.cashbackPreview} numberOfLines={1}>
+                    <Text style={styles.cashbackDiscount} numberOfLines={1}>
                       {t('cart.checkoutCashbackPreview', { amount: fmt.money(cashbackUsed) })}
                     </Text>
                   ) : null}
@@ -618,70 +712,49 @@ export default function CheckoutScreen() {
                   : t('cart.checkoutCashbackHint')}
               </Text>
             </View>
-          </>
+          </View>
         ) : null}
 
-        {/* Payment */}
-        <Text style={styles.sectionTitle}>{t('cart.checkoutPaymentTitle')}</Text>
-        {paymentOptions.map((opt) => {
-          const selected = paymentMethod === opt.value && opt.enabled;
-          if (!opt.enabled) {
-            return (
-              <View
-                key={opt.value}
-                style={[styles.optionRow, styles.optionDisabled]}
-                accessibilityRole="text"
-                accessibilityState={{ disabled: true }}
-                accessibilityLabel={`${opt.label}. ${opt.hint || t('cart.checkoutUnavailable')}`}
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[styles.optionTitle, styles.optionTitleDisabled]} numberOfLines={2}>
-                    {opt.label}
-                  </Text>
-                  {opt.hint ? (
-                    <Text style={[styles.optionMeta, styles.optionMetaDisabled]} numberOfLines={2}>
-                      {opt.hint}
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-            );
-          }
-          return (
-            <Pressable
-              key={opt.value}
-              onPress={() => setPaymentMethod(opt.value)}
-              style={[styles.optionRow, selected && styles.optionRowActive]}
-              accessibilityRole="button"
-              accessibilityState={{ selected, disabled: false }}
-              accessibilityLabel={`${opt.label}. ${opt.hint || ''}`}
-            >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.optionTitle} numberOfLines={2}>
-                  {opt.label}
-                </Text>
-                {opt.hint ? (
-                  <Text style={styles.optionMeta} numberOfLines={2}>
-                    {opt.hint}
-                  </Text>
-                ) : null}
-              </View>
-              {selected ? <Feather name="check" size={20} color={PURPLE} /> : null}
-            </Pressable>
-          );
-        })}
-
-        {/* Summary */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>{t('cart.summaryTitle')}</Text>
-          <SummaryRow label={t('cart.summaryItems')} value={fmt.money(goods)} />
-          {useCashback && cashbackUsed > 0 ? (
-            <SummaryRow label={t('common.navCashback')} value={`− ${fmt.money(cashbackUsed)}`} warn />
-          ) : null}
-          <View style={styles.summaryDivider} />
-          <SummaryRow label={t('cart.checkoutTotalEstimate')} value={fmt.money(totalPreview)} bold />
+        {/* SECTION 5: Reassurance / QR-code guarantee banner */}
+        <View style={styles.reassuranceBanner}>
+          <Feather name="shield" size={18} color={PURPLE} />
+          <Text style={styles.reassuranceText}>
+            {t('cart.checkoutPickupGuarantee')}
+          </Text>
         </View>
 
+        {/* SECTION 6: Order Summary (Hisob-kitob) */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>{t('cart.summaryTitle')}</Text>
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>{t('cart.summaryItems')}</Text>
+              <Text style={styles.summaryValue}>{fmt.money(goods)}</Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
+              <Text style={styles.summaryValueFree}>{t('cart.checkoutPickupFree')}</Text>
+            </View>
+
+            {useCashback && cashbackUsed > 0 ? (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t('common.navCashback')}</Text>
+                <Text style={styles.summaryValueDiscount}>{`− ${fmt.money(cashbackUsed)}`}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.summaryDivider} />
+
+            <View style={styles.summaryTotalRow}>
+              <Text style={styles.summaryTotalLabel}>{t('cart.checkoutTotalToPay')}</Text>
+              <Text style={styles.summaryTotalValue}>{fmt.money(totalPreview)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Bottom clearance spacer */}
         {hasItems ? (
           <View
             style={{ height: scrollClearance }}
@@ -691,6 +764,7 @@ export default function CheckoutScreen() {
         ) : null}
       </ScrollView>
 
+      {/* Sticky Bottom Bar */}
       {hasItems ? (
         <View
           style={[styles.footer, { paddingBottom: bottomPad, paddingHorizontal: sidePad }]}
@@ -700,12 +774,13 @@ export default function CheckoutScreen() {
           }}
         >
           <View style={[styles.footerInner, { maxWidth: contentWidth - sidePad * 2, width: '100%' }]}>
-            <View style={styles.footerSum}>
-              <Text style={styles.footerSumLabel}>{t('cart.checkoutTotalEstimate')}</Text>
-              <Text style={styles.footerSumValue} numberOfLines={1}>
+            <View style={styles.footerPriceCol}>
+              <Text style={styles.footerPriceLabel}>{t('cart.checkoutTotalToPay')}</Text>
+              <Text style={styles.footerPriceValue} numberOfLines={1}>
                 {fmt.money(totalPreview)}
               </Text>
             </View>
+
             <Pressable
               style={[styles.cta, (!canSubmit || submitting) && styles.ctaDisabled]}
               disabled={submitting}
@@ -724,48 +799,17 @@ export default function CheckoutScreen() {
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.ctaText} numberOfLines={1}>
-                  {t('cart.checkoutSubmit')}
-                </Text>
+                <View style={styles.ctaContent}>
+                  <Text style={styles.ctaText} numberOfLines={1}>
+                    {t('cart.checkoutSubmit')}
+                  </Text>
+                  <Feather name="arrow-right" size={17} color="#FFFFFF" />
+                </View>
               )}
             </Pressable>
           </View>
         </View>
       ) : null}
-
-    </View>
-  );
-}
-
-function SummaryRow({
-  label,
-  value,
-  bold,
-  warn,
-  muted,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-  warn?: boolean;
-  muted?: boolean;
-}) {
-  return (
-    <View style={styles.summaryRow}>
-      <Text style={[styles.summaryLabel, bold && styles.summaryBold]} numberOfLines={2}>
-        {label}
-      </Text>
-      <Text
-        style={[
-          styles.summaryValue,
-          bold && styles.summaryBold,
-          warn && { color: WARN },
-          muted && { color: MUTED },
-        ]}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
     </View>
   );
 }
@@ -779,19 +823,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  scroll: { flex: 1, width: '100%', maxWidth: '100%' },
-  content: { alignSelf: 'center', paddingTop: 10 },
+  scroll: {
+    flex: 1,
+    width: '100%',
+    maxWidth: '100%',
+  },
+  content: {
+    alignSelf: 'center',
+    paddingTop: 14,
+  },
 
   header: {
     width: '100%',
     maxWidth: 480,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingBottom: 10,
+    justifyContent: 'space-between',
+    paddingBottom: 12,
     backgroundColor: CARD,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
+    zIndex: 10,
   },
   headerTitle: {
     flex: 1,
@@ -801,80 +853,238 @@ const styles = StyleSheet.create({
     color: PURPLE_DEEP,
   },
   iconBtn: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnGhost: { width: 42, height: 42 },
-
-  pageHint: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 17,
-    color: MUTED,
-    marginBottom: 12,
+  iconBtnGhost: {
+    width: 40,
+    height: 40,
   },
 
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-    marginBottom: 12,
+  sectionWrap: {
+    marginBottom: 14,
   },
-  cardLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: MUTED,
-    marginBottom: 6,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 2,
   },
-  branchName: {
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    fontSize: 16,
     color: PURPLE_DEEP,
   },
-  branchMeta: {
-    marginTop: 4,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: MUTED,
+  countBadge: {
+    backgroundColor: LAVENDER,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  linkBtn: { marginTop: 10, alignSelf: 'flex-start' },
-  linkBtnText: {
+  countBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    color: PURPLE,
+  },
+  editCartLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  editCartLinkText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
     color: PURPLE,
   },
-  warnText: {
+
+  /* Fulfillment & Branch Card */
+  fulfillmentCard: {
+    backgroundColor: CARD,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 10px rgba(26, 16, 64, 0.04)' } as any,
+      default: {
+        shadowColor: '#1A1040',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
+      },
+    }),
+  },
+  fulfillmentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  fulfillmentIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fulfillmentHeaderTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  fulfillmentTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+  },
+  fulfillmentSub: {
+    marginTop: 2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+  },
+  freeBadge: {
+    backgroundColor: '#E8F8F0',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  freeBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    color: OK,
+  },
+  branchBoxDivider: {
+    height: 1,
+    backgroundColor: '#F0EEF5',
+    marginVertical: 14,
+  },
+  branchDetails: {
+    backgroundColor: '#FAF9FD',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+  },
+  branchHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  branchPinWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  branchTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  branchName: {
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
+    color: PURPLE_DEEP,
+  },
+  branchAddress: {
+    marginTop: 4,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    lineHeight: 16,
+  },
+  branchHoursRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  branchHoursText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: MUTED,
+  },
+  changeBranchBtn: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#EBE6F5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
+  changeBranchBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: PURPLE,
+  },
+  branchEmptyBox: {
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  warnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
     color: WARN,
     marginBottom: 8,
   },
+  selectBranchCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: PURPLE,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  selectBranchCtaText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
 
+  /* Stock Warning Alert */
   warnCard: {
     backgroundColor: '#FFFBEB',
     borderRadius: 14,
     padding: 12,
-    marginBottom: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 14,
+    borderWidth: 1,
     borderColor: '#FDE68A',
+  },
+  warnCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
   },
   warnTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 13,
     color: WARN,
-    marginBottom: 6,
   },
   warnLine: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     color: BAD,
     marginTop: 2,
+    marginLeft: 4,
   },
   warnNote: {
     marginTop: 8,
@@ -883,464 +1093,395 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  sectionTitle: {
-    marginTop: 4,
-    marginBottom: 8,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    color: PURPLE_DEEP,
-  },
-
-  lineCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+  /* Order Items List */
+  itemsCard: {
     backgroundColor: CARD,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    borderWidth: 1,
     borderColor: BORDER,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 10px rgba(26, 16, 64, 0.04)' } as any,
+      default: {
+        shadowColor: '#1A1040',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
+      },
+    }),
   },
-  lineIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: '#F8F7FC',
+  lineItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  lineIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#FAF9FD',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#ECE7F6',
-    position: 'relative',
     overflow: 'hidden',
   },
   lineImg: {
-    width: '88%',
-    height: '88%',
-    zIndex: 1,
+    width: '84%',
+    height: '84%',
   },
-  itemAmbientGlow: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EDE9FE',
-    opacity: 0.7,
+  lineBody: {
+    flex: 1,
+    minWidth: 0,
   },
-  lineBody: { flex: 1, minWidth: 0 },
   lineName: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 19,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13.5,
+    lineHeight: 18,
     color: PURPLE_DEEP,
   },
-  lineBottom: {
+  lineBottomRow: {
     marginTop: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  lineMeta: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
+  qtyPill: {
+    backgroundColor: '#F3F1F7',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  qtyPillText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
     color: MUTED,
   },
-  lineTotal: {
+  lineTotalText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 13,
+    fontSize: 13.5,
     color: PURPLE,
-    flexShrink: 0,
     textAlign: 'right',
   },
+  itemDivider: {
+    height: 1,
+    backgroundColor: '#F3F1F7',
+  },
 
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-  pill: {
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: CARD,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-  },
-  pillActive: { backgroundColor: PURPLE, borderColor: PURPLE },
-  pillText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: PURPLE_DEEP,
-  },
-  pillTextActive: { color: '#fff' },
-  fieldLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: MUTED,
-    marginBottom: 6,
-  },
-  inlineHint: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
-    color: MUTED,
-    marginBottom: 8,
-  },
-  inlineHintWarn: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    lineHeight: 16,
-    color: WARN,
-    marginBottom: 8,
-    marginTop: -4,
-  },
-  deliveryBlock: {
-    marginBottom: 4,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: CARD,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    marginBottom: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-  },
-  infoBody: { flex: 1, minWidth: 0 },
-  infoTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 18,
-    color: PURPLE_DEEP,
-  },
-  infoText: {
-    marginTop: 4,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 18,
-    color: MUTED,
-  },
-  infoTiming: {
+  /* Payment Methods */
+  paymentCardsWrap: {
     marginTop: 8,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    lineHeight: 18,
-    color: PURPLE_DEEP,
+    gap: 10,
   },
-  infoFee: {
-    marginTop: 6,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 18,
-    color: PURPLE,
-  },
-  infoFeeWarn: {
-    marginTop: 6,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    lineHeight: 18,
-    color: WARN,
-  },
-  input: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    borderRadius: 14,
-    minHeight: 48,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    color: PURPLE_DEEP,
-  },
-  multiFieldRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  multiFieldThird: {
-    flex: 1,
-  },
-  multiFieldHalf: {
-    flex: 1,
-  },
-
-  optionRow: {
+  paymentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     backgroundColor: CARD,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 16,
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    marginBottom: 8,
-    minHeight: 64,
     borderWidth: 1.5,
     borderColor: BORDER,
   },
-  optionRowActive: {
+  paymentCardSelected: {
     borderColor: PURPLE,
-    backgroundColor: '#F8F4FF',
-    borderWidth: 2,
+    backgroundColor: '#FAF7FF',
+    ...Platform.select({
+      web: { boxShadow: '0 2px 10px rgba(106, 34, 214, 0.08)' } as any,
+    }),
   },
-  optionDisabled: {
-    opacity: 1,
-    backgroundColor: '#F1EEF6',
-    borderColor: '#E2DDEA',
-    borderWidth: 1,
+  paymentIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  optionTitle: {
-    fontFamily: 'Inter_600SemiBold',
+  paymentInfoBox: {
+    flex: 1,
+    minWidth: 0,
+  },
+  paymentCardTitle: {
+    fontFamily: 'Inter_700Bold',
     fontSize: 14,
     color: PURPLE_DEEP,
   },
-  optionTitleDisabled: { color: '#9AA0B0' },
-  optionMeta: {
-    marginTop: 3,
+  paymentCardDesc: {
+    marginTop: 2,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
     color: MUTED,
+    lineHeight: 16,
   },
-  optionMetaDisabled: { color: '#A8AEBC' },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#D4CDE6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioCircleSelected: {
+    borderColor: PURPLE,
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: PURPLE,
+  },
 
+  /* Cashback Card */
   cashbackCard: {
     backgroundColor: CARD,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1.5,
-    borderColor: BORDER,
-    marginBottom: 12,
+    borderColor: '#E8E1F8',
+    ...Platform.select({
+      web: { boxShadow: '0 2px 10px rgba(26, 16, 64, 0.04)' } as any,
+    }),
   },
   cashbackRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
+  cashbackCoinWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cashbackContent: {
+    flex: 1,
+    minWidth: 0,
+  },
   cashbackTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    fontSize: 14.5,
     color: PURPLE_DEEP,
   },
-  cashbackMeta: {
-    marginTop: 4,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
+  cashbackBalance: {
+    marginTop: 2,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
     color: MUTED,
   },
-  cashbackPreview: {
-    marginTop: 6,
+  cashbackDiscount: {
+    marginTop: 4,
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
+    fontSize: 13,
     color: OK,
   },
   cashbackHint: {
     marginTop: 10,
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11.5,
+    lineHeight: 16,
     color: MUTED,
   },
   toggleTrack: {
-    width: 48,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#E8E4F2',
-    padding: 3,
+    width: 46,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E5E1EE',
+    padding: 2.5,
     justifyContent: 'center',
     flexShrink: 0,
   },
-  toggleTrackOn: { backgroundColor: PURPLE },
-  toggleThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#fff',
+  toggleTrackOn: {
+    backgroundColor: PURPLE,
   },
-  toggleThumbOn: { alignSelf: 'flex-end' },
+  toggleThumb: {
+    width: 23,
+    height: 23,
+    borderRadius: 11.5,
+    backgroundColor: '#FFFFFF',
+  },
+  toggleThumbOn: {
+    alignSelf: 'flex-end',
+  },
 
+  /* Reassurance Banner */
+  reassuranceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F3EEFF',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E5DBFA',
+  },
+  reassuranceText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 17,
+    color: PURPLE_DEEP,
+  },
+
+  /* Order Summary Card */
   summaryCard: {
-    marginTop: 8,
-    marginBottom: 8,
     backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
     borderColor: BORDER,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 10px rgba(26, 16, 64, 0.04)' } as any,
+    }),
   },
   summaryTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 16,
     color: PURPLE_DEEP,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10,
+    alignItems: 'center',
     marginBottom: 8,
   },
   summaryLabel: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
     color: MUTED,
-    flex: 1,
-    minWidth: 0,
   },
   summaryValue: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
     color: PURPLE_DEEP,
-    maxWidth: '48%',
-    textAlign: 'right',
   },
-  summaryBold: { fontFamily: 'Inter_700Bold', color: PURPLE_DEEP, fontSize: 15 },
+  summaryValueFree: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: OK,
+  },
+  summaryValueDiscount: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: OK,
+  },
   summaryDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: BORDER,
-    marginVertical: 6,
+    height: 1,
+    backgroundColor: '#F0EEF5',
+    marginVertical: 10,
   },
-  summaryNote: {
-    marginTop: 6,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 17,
-    color: MUTED,
+  summaryTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  summaryTotalLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+  },
+  summaryTotalValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+    color: PURPLE,
   },
 
+  /* Sticky Footer */
   footer: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: CARD,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     borderTopColor: BORDER,
     alignItems: 'center',
     paddingTop: 12,
-    shadowColor: '#1A1040',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 8,
+    ...Platform.select({
+      web: { boxShadow: '0 -4px 20px rgba(26, 16, 64, 0.08)' } as any,
+      default: {
+        shadowColor: '#1A1040',
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 8,
+      },
+    }),
+    zIndex: 100,
   },
-  footerInner: { gap: 10 },
-  footerSum: {
+  footerInner: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
+    gap: 14,
   },
-  footerSumLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: MUTED,
-  },
-  footerSumValue: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-    color: PURPLE,
-    flexShrink: 1,
-  },
-  pickMapBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#F8F5FF',
-    borderWidth: 1.5,
-    borderColor: '#5C328E',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    paddingVertical: 14,
-    marginBottom: 12,
-  },
-  pickMapBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: '#5C328E',
-  },
-  resolvedAddressCard: {
-    backgroundColor: '#F8F5FF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    gap: 10,
-  },
-  resolvedAddressHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  resolvedIconWrap: {
-    marginTop: 2,
-  },
-  resolvedTextWrap: {
+  footerPriceCol: {
     flex: 1,
     minWidth: 0,
   },
-  resolvedLabel: {
+  footerPriceLabel: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 11,
+    fontSize: 11.5,
     color: MUTED,
-    textTransform: 'uppercase',
     marginBottom: 2,
   },
-  resolvedAddressText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
+  footerPriceValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
     color: PURPLE_DEEP,
-    lineHeight: 18,
-  },
-  changeAddressBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-end',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  changeAddressBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    color: '#5C328E',
   },
   cta: {
-    minHeight: 52,
-    borderRadius: 16,
+    minHeight: 48,
+    paddingHorizontal: 20,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    shadowColor: PURPLE,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 14px rgba(106, 34, 214, 0.35)' } as any,
+      default: {
+        shadowColor: PURPLE,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
   },
   ctaDisabled: {
     opacity: 0.5,
   },
+  ctaContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   ctaText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    letterSpacing: 0.2,
+    fontSize: 15,
   },
 
+  /* Loading & Empty States */
+  skel: {
+    backgroundColor: '#EBE7F5',
+    borderRadius: 12,
+  },
   state: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
-    gap: 8,
+    gap: 10,
   },
   stateTitle: {
     fontFamily: 'Inter_700Bold',
@@ -1350,33 +1491,32 @@ const styles = StyleSheet.create({
   },
   stateHint: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     color: MUTED,
     textAlign: 'center',
   },
   emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
+    width: 68,
+    height: 68,
+    borderRadius: 22,
     backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   primaryBtn: {
-    marginTop: 14,
-    minHeight: 48,
-    paddingHorizontal: 20,
-    borderRadius: 16,
+    marginTop: 12,
+    minHeight: 46,
+    paddingHorizontal: 22,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryBtnText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
   },
-  skel: { backgroundColor: '#E6E1F2', borderRadius: 10 },
 });
