@@ -275,7 +275,7 @@ export default function BranchesScreen() {
             onSelect={(branch) => void drawRoute(branch, false)}
             onRequestRoute={(branch) => void drawRoute(branch, true)}
             onPickBranch={(branch) => void pickForCart(branch)}
-            height={330}
+            height={360}
             countryView={!selected}
           />
         </View>

@@ -29,11 +29,11 @@ type Props = {
 };
 
 const UZ_BOUNDS: [[number, number], [number, number]] = [
-  [37.0, 59.2],
-  [42.6, 72.8],
+  [36.8, 58.8],
+  [42.9, 72.9],
 ];
 const UZ_CENTER: LatLng = { lat: 41.2, lng: 66.8 };
-const UZ_ZOOM = 6.4;
+const UZ_ZOOM = 5.2;
 
 function shortName(name: string) {
   return String(name).replace(/^Vaksina Med\s*[·•]\s*/i, '').trim();
@@ -202,10 +202,10 @@ export default function BranchMap({
         scrollWheelZoom: false,
         boxZoom: true,
         keyboard: true,
-        minZoom: 5.6,
+        minZoom: 4.6,
         maxBounds: [
-          [35.0, 55.0],
-          [46.5, 75.0],
+          [34.5, 54.0],
+          [46.8, 76.0],
         ],
         maxBoundsViscosity: 0.85,
       }).setView([UZ_CENTER.lat, UZ_CENTER.lng], UZ_ZOOM);
@@ -221,8 +221,12 @@ export default function BranchMap({
       layerRef.current = L.layerGroup().addTo(map);
       routeRef.current = L.layerGroup().addTo(map);
 
-      map.fitBounds(UZ_BOUNDS, { padding: [12, 12] });
-      setTimeout(() => map.invalidateSize(), 100);
+      map.fitBounds(UZ_BOUNDS, { padding: [10, 10] });
+      setTimeout(() => {
+        if (!mapRef.current) return;
+        mapRef.current.invalidateSize();
+        mapRef.current.fitBounds(UZ_BOUNDS, { padding: [10, 10] });
+      }, 140);
     }
 
     void boot();
@@ -344,9 +348,14 @@ export default function BranchMap({
         if (marker) {
           setTimeout(() => marker.openPopup(), 400);
         }
-      } else if (!fittedRef.current && mappable.length > 0) {
-        map.fitBounds(UZ_BOUNDS, { padding: [14, 14], animate: false });
-        fittedRef.current = true;
+      } else if (mappable.length > 0) {
+        if (mappable.length < 120) {
+          const regionBounds = L.latLngBounds(mappable.map((b) => [b.lat, b.lng] as [number, number]));
+          map.fitBounds(regionBounds.pad(0.08), { maxZoom: 13, animate: true });
+        } else if (!fittedRef.current) {
+          map.fitBounds(UZ_BOUNDS, { padding: [10, 10], animate: false });
+          fittedRef.current = true;
+        }
       }
     }
 
