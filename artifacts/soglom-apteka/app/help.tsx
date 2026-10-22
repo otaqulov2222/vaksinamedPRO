@@ -176,6 +176,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     padding: 20,
     alignItems: 'center',
+    boxShadow: '0 4px 16px rgba(42,16,78,0.04)',
   },
   iconWrap: {
     width: 64,
@@ -205,6 +206,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     overflow: 'hidden',
+    boxShadow: '0 2px 10px rgba(42,16,78,0.03)',
   },
   faqBlock: { paddingHorizontal: 14 },
   faqHead: {
@@ -264,6 +266,7 @@ const styles = StyleSheet.create({
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
+    boxShadow: '0 4px 14px rgba(106,34,214,0.22)',
   },
   primaryBtnText: {
     color: '#fff',

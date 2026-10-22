@@ -51,6 +51,7 @@ export default function BranchesScreen() {
   const insets = useSafeAreaInsets();
   const { refresh, t } = useApp();
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [region, setRegion] = useState('');
   const [branches, setBranches] = useState<any[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
@@ -64,6 +65,13 @@ export default function BranchesScreen() {
   const [loadError, setLoadError] = useState<{ err: unknown } | null>(null);
   const [picking, setPicking] = useState(false);
   const pickingRef = useRef(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 260);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const selected = useMemo(
     () => branches.find((item) => Number(item.id) === Number(selectedId)) || null,
@@ -107,7 +115,7 @@ export default function BranchesScreen() {
     const lat = userLocation?.lat;
     const lng = userLocation?.lng;
     void api
-      .branches(lat, lng, query, region)
+      .branches(lat, lng, debouncedQuery, region)
       .then((data) => {
         const list = data.branches || [];
         setBranches(list);
@@ -124,7 +132,7 @@ export default function BranchesScreen() {
         setLoadError({ err });
       })
       .finally(() => setLoading(false));
-  }, [query, region, userLocation?.lat, userLocation?.lng]);
+  }, [debouncedQuery, region, userLocation?.lat, userLocation?.lng]);
 
   useEffect(() => {
     // Wait until location permission attempt finishes so we don't fetch twice with fake coords.
@@ -324,6 +332,12 @@ export default function BranchesScreen() {
               <Text style={styles.selectedAddr} numberOfLines={2}>
                 {selected.address}
               </Text>
+              {selected.hours ? (
+                <View style={styles.hoursRow}>
+                  <Feather name="clock" size={12} color="#64748B" />
+                  <Text style={styles.hoursText}>{selected.hours}</Text>
+                </View>
+              ) : null}
             </View>
             {formatDistance(t, selected.distanceKm) ? (
               <Text style={styles.selectedKm}>{formatDistance(t, selected.distanceKm)}</Text>
@@ -454,11 +468,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderWidth: 1,
     borderColor: 'rgba(92,50,142,0.08)',
-    shadowColor: '#2A104E',
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
+    boxShadow: '0 8px 24px rgba(42,16,78,0.08)',
   },
   heroTitle: {
     fontFamily: 'Inter_700Bold',
@@ -477,11 +487,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 999,
     marginBottom: 10,
-    shadowColor: '#C9A000',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    boxShadow: '0 4px 12px rgba(201,160,0,0.35)',
   },
   nearestBtnText: {
     fontFamily: 'Inter_700Bold',
@@ -548,9 +554,10 @@ const styles = StyleSheet.create({
   selectedCard: {
     backgroundColor: '#fff',
     borderRadius: 20,
-    padding: 14,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#EADFF5',
+    boxShadow: '0 4px 16px rgba(42,16,78,0.06)',
   },
   selectedTop: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   pinBadge: {
@@ -563,6 +570,17 @@ const styles = StyleSheet.create({
   },
   selectedName: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#2A104E' },
   selectedAddr: { fontFamily: 'Inter_400Regular', fontSize: 12, color: '#64748B', marginTop: 3, lineHeight: 16 },
+  hoursRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 4,
+  },
+  hoursText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: '#64748B',
+  },
   selectedKm: { fontFamily: 'Inter_700Bold', fontSize: 12, color: '#5C328E' },
   routeHint: { marginTop: 10, fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#0D9488' },
   ctaRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
@@ -614,6 +632,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EEEAF5',
     minHeight: 56,
+    boxShadow: '0 2px 8px rgba(42,16,78,0.03)',
   },
   rowActive: { borderColor: '#5C328E', backgroundColor: '#FBF8FF' },
   rowMain: {
@@ -649,5 +668,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFCC00',
     alignItems: 'center',
     justifyContent: 'center',
+    boxShadow: '0 2px 6px rgba(201,160,0,0.25)',
   },
 });

@@ -29,60 +29,74 @@ export default function AboutScreen() {
       : null);
 
   return (
-    <ScrollView
-      style={[styles.root, { paddingBottom: Math.max(insets.bottom, 16) }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.hero}>
-        <Image
-          source={require('../assets/images/vaksina-mark-clean.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <Text style={styles.brand}>
-          <Text style={{ color: PURPLE }}>VAKSINA </Text>
-          <Text style={{ color: YELLOW }}>MED</Text>
-        </Text>
-        <Text style={styles.tagline}>{t('profile.aboutTagline')}</Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('common.navAbout')}</Text>
-        <Text style={styles.cardText}>{t('profile.aboutBody')}</Text>
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.metaRow}>
-          <Feather name="smartphone" size={18} color={PURPLE} />
-          <Text style={styles.metaLabel}>{t('profile.aboutVersion')}</Text>
-          <Text style={styles.metaValue}>{version}</Text>
+    <View style={styles.screenRoot}>
+      <ScrollView
+        style={[styles.root, { paddingBottom: Math.max(insets.bottom, 16) }]}
+        contentContainerStyle={styles.content}
+        horizontal={false}
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        bounces={false}
+        directionalLockEnabled
+      >
+        <View style={styles.hero}>
+          <Image
+            source={require('../assets/images/vaksina-mark-clean.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.brand}>
+            <Text style={{ color: PURPLE }}>VAKSINA </Text>
+            <Text style={{ color: YELLOW }}>MED</Text>
+          </Text>
+          <Text style={styles.tagline}>{t('profile.aboutTagline')}</Text>
         </View>
-        {build ? (
-          <>
-            <View style={styles.divider} />
-            <View style={styles.metaRow}>
-              <Feather name="hash" size={18} color={PURPLE} />
-              <Text style={styles.metaLabel}>{t('profile.aboutBuild')}</Text>
-              <Text style={styles.metaValue}>{build}</Text>
-            </View>
-          </>
-        ) : null}
-        <View style={styles.divider} />
-        <View style={styles.metaRow}>
-          <Feather name="package" size={18} color={PURPLE} />
-          <Text style={styles.metaLabel}>{t('profile.aboutApp')}</Text>
-          <Text style={styles.metaValue}>{t('common.appName')}</Text>
-        </View>
-      </View>
 
-      <Text style={styles.footerNote}>{t('profile.aboutLegalNote')}</Text>
-    </ScrollView>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('common.navAbout')}</Text>
+          <Text style={styles.cardText}>{t('profile.aboutBody')}</Text>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.metaRow}>
+            <Feather name="smartphone" size={18} color={PURPLE} />
+            <Text style={styles.metaLabel}>{t('profile.aboutVersion')}</Text>
+            <Text style={styles.metaValue}>{version}</Text>
+          </View>
+          {build ? (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.metaRow}>
+                <Feather name="hash" size={18} color={PURPLE} />
+                <Text style={styles.metaLabel}>{t('profile.aboutBuild')}</Text>
+                <Text style={styles.metaValue}>{build}</Text>
+              </View>
+            </>
+          ) : null}
+          <View style={styles.divider} />
+          <View style={styles.metaRow}>
+            <Feather name="package" size={18} color={PURPLE} />
+            <Text style={styles.metaLabel}>{t('profile.aboutApp')}</Text>
+            <Text style={styles.metaValue}>{t('common.appName')}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.footerNote}>{t('profile.aboutLegalNote')}</Text>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
+  screenRoot: {
+    flex: 1,
+    backgroundColor: BG,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
+  root: { flex: 1, width: '100%', maxWidth: '100%', backgroundColor: BG },
   content: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -100,6 +114,7 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
     paddingHorizontal: 20,
     alignItems: 'center',
+    boxShadow: '0 4px 16px rgba(42,16,78,0.04)',
   },
   logo: { width: 72, height: 72, marginBottom: 12 },
   brand: {
@@ -121,6 +136,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     padding: 16,
+    boxShadow: '0 2px 10px rgba(42,16,78,0.03)',
   },
   cardTitle: {
     fontFamily: 'Inter_700Bold',

@@ -96,6 +96,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     padding: 22,
     alignItems: 'center',
+    boxShadow: '0 4px 16px rgba(42,16,78,0.04)',
   },
   iconWrap: {
     width: 64,
@@ -126,6 +127,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     padding: 16,
+    boxShadow: '0 2px 10px rgba(42,16,78,0.03)',
   },
   cardTitle: {
     fontFamily: 'Inter_700Bold',
