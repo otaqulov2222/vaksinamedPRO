@@ -1,4 +1,4 @@
-﻿import { defineMessages } from '../core';
+import { defineMessages } from '../core';
 
 export default defineMessages({
   uz: {
@@ -30,19 +30,19 @@ export default defineMessages({
     editSaved: 'Profil saqlandi',
     editNoChanges: 'O‘zgarish yo‘q',
 
-    notifEmptyTitle: 'Bildirishnomalar hozircha mavjud emas',
+    notifEmptyTitle: 'Bildirishnomalar hozircha yo‘q',
     notifEmptyBody:
-      'Push va ichki bildirishnomalar uchun server xizmati hali ulanmagan. Bu yerda soxta xabarlar ko‘rsatilmaydi.',
-    notifExpectTitle: 'Nima kutilmoqda?',
+      'Buyurtmalaringiz holati, keshbek va yangi aksiyalar haqidagi barcha muhim xabarnomalar shu yerda ko‘rsatiladi.',
+    notifExpectTitle: 'Kutilayotgan yangiliklar',
     notifExpectBody:
-      'Keyingi versiyada buyurtma holati, cashback va aksiya xabarlari shu bo‘limda ko‘rinadi — faqat haqiqiy API ulanganidan keyin.',
-    notifNowTitle: 'Hozir nima qilish mumkin?',
+      'Buyurtmalar, chegirmalar va yangi aksiyalar bo‘yicha bildirishnomalar.',
+    notifNowTitle: 'Foydali bo‘limlar',
     notifLinkOrders: 'Buyurtmalar holatini ko‘rish',
     notifLinkPromos: 'Aksiyalarni ko‘rish',
     notifLinkCashback: 'Cashback tarixi',
 
     helpSubtitle:
-      'Ilovadagi asosiy bo‘limlar bo‘yicha qisqa yo‘riqnoma. Aloqa raqami yoki email konfiguratsiyada belgilangan emas — shuning uchun bu yerda soxta kontaktlar yo‘q.',
+      'Vaksina Med ilovasi xizmatlari va asosiy bo‘limlari bo‘yicha qisqa yo‘riqnoma.',
     helpOrdersTitle: 'Buyurtma bo‘yicha yordam',
     helpOrdersBody:
       'Buyurtmalar bo‘limida buyurtma holatini ko‘rishingiz mumkin. Buyurtmani bekor qilish imkoniyati mavjud bo‘lsa, buyurtma kartochkasidan amalga oshiriladi.',
@@ -110,17 +110,17 @@ export default defineMessages({
 
     notifEmptyTitle: 'Уведомлений пока нет',
     notifEmptyBody:
-      'Сервис push- и внутренних уведомлений ещё не подключён. Здесь не показываются вымышленные сообщения.',
-    notifExpectTitle: 'Что планируется?',
+      'Здесь будут появляться важные сообщения о статусе ваших заказов, начислении кэшбэка и новых акциях.',
+    notifExpectTitle: 'Ожидаемые обновления',
     notifExpectBody:
-      'В следующей версии здесь появятся уведомления о статусе заказов, кэшбэке и акциях — только после подключения реального API.',
-    notifNowTitle: 'Что можно сделать сейчас?',
+      'Уведомления о заказах, скидках и новых промо-акциях.',
+    notifNowTitle: 'Полезные разделы',
     notifLinkOrders: 'Посмотреть статус заказов',
     notifLinkPromos: 'Посмотреть акции',
     notifLinkCashback: 'История кэшбэка',
 
     helpSubtitle:
-      'Краткое руководство по основным разделам приложения. Телефон и email поддержки не заданы в настройках, поэтому здесь нет вымышленных контактов.',
+      'Краткое руководство по основным сервисам и разделам приложения Vaksina Med.',
     helpOrdersTitle: 'Помощь с заказом',
     helpOrdersBody:
       'Статус заказа можно посмотреть в разделе «Заказы». Если заказ можно отменить, это делается в карточке заказа.',
@@ -188,17 +188,17 @@ export default defineMessages({
 
     notifEmptyTitle: 'No notifications yet',
     notifEmptyBody:
-      'The push and in-app notification service is not connected yet. No placeholder messages are shown here.',
-    notifExpectTitle: 'What’s coming?',
+      'Important updates regarding your orders, cashback rewards, and new promotions will appear here.',
+    notifExpectTitle: 'Coming updates',
     notifExpectBody:
-      'In a future version, order status, cashback and promotion updates will appear here — only once the real API is connected.',
-    notifNowTitle: 'What can I do now?',
+      'Notifications about orders, discounts, and new promotions.',
+    notifNowTitle: 'Useful sections',
     notifLinkOrders: 'Check order status',
     notifLinkPromos: 'View promotions',
     notifLinkCashback: 'Cashback history',
 
     helpSubtitle:
-      'A short guide to the main sections of the app. No support phone or email is configured, so no placeholder contacts are listed here.',
+      'Quick guide to Vaksina Med app services and main features.',
     helpOrdersTitle: 'Help with orders',
     helpOrdersBody:
       'You can check the order status in the Orders section. If an order can be cancelled, you can do it from the order card.',

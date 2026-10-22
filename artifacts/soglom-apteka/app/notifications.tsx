@@ -42,11 +42,6 @@ export default function NotificationsScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('profile.notifExpectTitle')}</Text>
-        <Text style={styles.cardText}>{t('profile.notifExpectBody')}</Text>
-      </View>
-
-      <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('profile.notifNowTitle')}</Text>
         <Pressable style={styles.linkRow} onPress={() => router.push('/(tabs)/purchases')}>
           <MaterialCommunityIcons name="package-variant" size={20} color={PURPLE} />

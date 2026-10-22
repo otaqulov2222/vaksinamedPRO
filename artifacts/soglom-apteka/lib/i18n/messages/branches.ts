@@ -1,12 +1,12 @@
-﻿import { defineMessages } from '../core';
+import { defineMessages } from '../core';
 
 export default defineMessages({
   uz: {
     heroTitle: 'Har bir filial — o‘z nuqtasida',
     nearestBranch: 'Eng yaqin filial',
     chooseBranch: 'Filial tanlang',
-    locationDenied: 'Joylashuv ruxsati berilmagan — masofa ko‘rsatilmaydi. Filial tanlash ishlaydi.',
-    locationUnavailable: 'Joylashuvni aniqlab bo‘lmadi — masofa ko‘rsatilmaydi.',
+    locationDenied: 'Eng yaqin dorixonani aniqlash uchun geolokatsiyani yoqing.',
+    locationUnavailable: 'Joylashuvni aniqlab bo‘lmadi. Dorixonani ro‘yxatdan tanlashingiz mumkin.',
     searchPlaceholder: 'Filial, tuman, ko‘cha…',
     allRegions: 'Barchasi · {count}',
     emptyTitle: 'Filial topilmadi',
@@ -46,8 +46,8 @@ export default defineMessages({
     heroTitle: 'Каждая аптека — на своём месте',
     nearestBranch: 'Ближайшая аптека',
     chooseBranch: 'Выберите аптеку',
-    locationDenied: 'Нет доступа к геолокации — расстояние не показывается. Выбор аптеки работает.',
-    locationUnavailable: 'Не удалось определить местоположение — расстояние не показывается.',
+    locationDenied: 'Включите геолокацию, чтобы определить ближайшую аптеку.',
+    locationUnavailable: 'Не удалось определить местоположение. Выберите аптеку из списка.',
     searchPlaceholder: 'Аптека, район, улица…',
     allRegions: 'Все · {count}',
     emptyTitle: 'Аптеки не найдены',
@@ -87,8 +87,8 @@ export default defineMessages({
     heroTitle: 'Every pharmacy, right on the map',
     nearestBranch: 'Nearest pharmacy',
     chooseBranch: 'Choose a pharmacy',
-    locationDenied: 'Location access denied — distance is hidden. You can still choose a pharmacy.',
-    locationUnavailable: 'Could not determine your location — distance is hidden.',
+    locationDenied: 'Enable location access to find the nearest pharmacy.',
+    locationUnavailable: 'Could not determine location. You can choose a pharmacy from the list.',
     searchPlaceholder: 'Pharmacy, district, street…',
     allRegions: 'All · {count}',
     emptyTitle: 'No pharmacies found',

@@ -144,12 +144,15 @@ export default function BranchMap({
       const L = (await import('leaflet')).default;
       if (cancelled || !containerRef.current || mapRef.current) return;
 
-      const start = countryView
-        ? UZ_CENTER
-        : userLocation && hasValidCoords(userLocation)
-          ? userLocation
-          : UZ_CENTER;
-      const zoom = countryView ? UZ_ZOOM : 12;
+      const initialSelected = selectedId ? mappable.find((b) => b.id === selectedId) : null;
+      const start = initialSelected
+        ? { lat: initialSelected.lat, lng: initialSelected.lng }
+        : countryView
+          ? UZ_CENTER
+          : userLocation && hasValidCoords(userLocation)
+            ? userLocation
+            : UZ_CENTER;
+      const zoom = initialSelected ? 15 : countryView ? UZ_ZOOM : 12;
 
       const map = L.map(containerRef.current, {
         zoomControl: false,
@@ -268,15 +271,17 @@ export default function BranchMap({
         setTimeout(() => map.invalidateSize(), 50);
       }
 
-      if (!fittedRef.current && mappable.length > 0 && countryView) {
-        const bounds = L.latLngBounds(mappable.map((b) => [b.lat, b.lng] as [number, number]));
-        map.fitBounds(bounds.pad(0.18), { maxZoom: 7, animate: false });
+      const selected = selectedId ? mappable.find((item) => item.id === selectedId) : null;
+      if (selected && !route?.coordinates?.length) {
+        const targetZoom = Math.max(map.getZoom(), 15);
+        map.setView([selected.lat, selected.lng], targetZoom, { animate: true });
+        const marker = markersRef.current.get(selected.id);
+        if (marker) marker.openTooltip();
         fittedRef.current = true;
-      } else if (selectedId && markersRef.current.has(selectedId)) {
-        const selected = mappable.find((item) => item.id === selectedId);
-        if (selected && !route?.coordinates?.length && map.getZoom() > 8) {
-          map.panTo([selected.lat, selected.lng], { animate: true });
-        }
+      } else if (!fittedRef.current && mappable.length > 0) {
+        const bounds = L.latLngBounds(mappable.map((b) => [b.lat, b.lng] as [number, number]));
+        map.fitBounds(bounds.pad(0.08), { maxZoom: 12, animate: false });
+        fittedRef.current = true;
       }
     }
 

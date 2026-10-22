@@ -166,11 +166,27 @@ export default function BranchesScreen() {
   );
 
   const goNearest = useCallback(async () => {
-    if (!userLocation) {
+    let loc = userLocation;
+    if (!loc) {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserLocation(loc);
+          setLocStatus('granted');
+        } else {
+          setLocStatus('denied');
+        }
+      } catch {
+        setLocStatus('unavailable');
+      }
+    }
+    if (!loc) {
       notify(t('branches.locationTitle'), t('branches.locationRequiredMessage'));
       return;
     }
-    const nearest = branches.find((b) => b.distanceKm != null && hasValidCoords(b));
+    const nearest = branches.find((b) => b.distanceKm != null && hasValidCoords(b)) || branches.find((b) => hasValidCoords(b));
     if (!nearest) {
       notify(t('branches.branchTitle'), t('branches.nearestNotFound'));
       return;
@@ -241,13 +257,14 @@ export default function BranchesScreen() {
           ) : (
             <Feather name="navigation" size={16} color="#120724" />
           )}
-          <Text style={styles.nearestBtnText}>
-            {userLocation ? t('branches.nearestBranch') : t('branches.chooseBranch')}
-          </Text>
+          <Text style={styles.nearestBtnText}>{t('branches.nearestBranch')}</Text>
         </Pressable>
 
         {locBanner ? (
-          <Text style={styles.locBanner}>{locBanner}</Text>
+          <View style={styles.locBannerWrap}>
+            <Feather name="info" size={13} color="#64748B" />
+            <Text style={styles.locBanner}>{locBanner}</Text>
+          </View>
         ) : null}
 
         <View style={styles.mapFrame}>
@@ -494,11 +511,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#120724',
   },
+  locBannerWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
   locBanner: {
+    flex: 1,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
     color: '#64748B',
-    marginBottom: 10,
     lineHeight: 16,
   },
   mapFrame: {
