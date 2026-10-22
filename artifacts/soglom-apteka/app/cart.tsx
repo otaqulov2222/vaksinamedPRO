@@ -19,18 +19,18 @@ import { localizedName } from '@/lib/i18n/data';
 import { api, type ApiError } from '@/lib/api';
 import { confirmAction, notify } from '@/lib/dialogs';
 import { localizeError } from '@/lib/i18n/errors';
+import { fulfillmentTypeLabel } from '@/lib/orderLabels';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F3F1F7';
+const BG = '#F4F2F8';
 const CARD = '#FFFFFF';
 const BORDER = '#E9E6F0';
 const LAVENDER = '#F1EBFF';
-const OK = '#3D7A55';
-const BAD = '#B91C1C';
-const WARN = '#B45309';
-const YELLOW = '#FFCC00';
+const OK = '#16A34A';
+const BAD = '#DC2626';
+const WARN = '#D97706';
 
 const PRODUCT_IMAGES: Record<string, any> = {
   'cat-p1': require('../assets/images/cat-p1-d3.png'),
@@ -121,7 +121,7 @@ export default function CartScreen() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [priceFlags, setPriceFlags] = useState<Record<string, { previous: number; current: number }>>({});
   const [notices, setNotices] = useState<CartNotice[]>([]);
-  const [footerHeight, setFooterHeight] = useState(0); // sticky footer clearance
+  const [footerHeight, setFooterHeight] = useState(0);
 
   const loadGen = useRef(0);
   const busyItemsRef = useRef<Set<number>>(new Set());
@@ -218,7 +218,6 @@ export default function CartScreen() {
   const changeQty = async (item: any, nextQty: number, action: 'inc' | 'dec') => {
     const id = Number(item.id);
     const safeQty = Math.floor(Number(nextQty));
-    // Item stays in cart at min 1; remove uses confirmed trash action only.
     if (!Number.isFinite(id) || !Number.isFinite(safeQty) || safeQty < 1) return;
     if (!beginItemBusy(id, action)) return;
     try {
@@ -231,7 +230,6 @@ export default function CartScreen() {
         stock ? t('cart.stockTitle') : t('common.errorTitle'),
         localizeError(err, t, { fallback: stock ? 'cart.stockUnavailable' : 'cart.cartQtyUpdateFailed' }),
       );
-      // Keep prior UI until server refresh — do not pretend success.
       await load({ forceSkeleton: false, force: true });
     } finally {
       endItemBusy(id);
@@ -285,7 +283,6 @@ export default function CartScreen() {
     try {
       const hasBranch = Boolean(cart?.branch?.id ?? cart?.cart?.branchId);
       if (!hasBranch) {
-        // Cancel stays on cart; Confirm opens branch picker — never continue without branch.
         const goBranch = await confirmAction({
           title: t('cart.branchLabel'),
           message: t('cart.cartBranchRequiredMessage'),
@@ -326,13 +323,13 @@ export default function CartScreen() {
   };
 
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 12) : Math.max(insets.top, 8);
-  const bottomPad = Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 12);
-  const sidePad = narrow ? 14 : 20;
+  const bottomPad = Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 14);
+  const sidePad = narrow ? 14 : 18;
   const items = Array.isArray(cart?.items) ? cart.items : [];
   const hasItems = items.length > 0;
-  const footerFallback = 12 + 22 + 8 + 52 + bottomPad;
+  const footerFallback = 14 + 56 + 12 + bottomPad;
   const footerReserve = hasItems
-    ? (footerHeight > 0 ? footerHeight : footerFallback) + 20
+    ? (footerHeight > 0 ? footerHeight : footerFallback) + 24
     : 24 + bottomPad;
   const subtotalNum = Number(cart?.subtotal);
   const subtotalKnown = Number.isFinite(subtotalNum) && subtotalNum >= 0;
@@ -375,7 +372,7 @@ export default function CartScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {t('common.navCart')}
         </Text>
-        <Text style={styles.headerSub} numberOfLines={2}>
+        <Text style={styles.headerSub} numberOfLines={1}>
           {headerSubtitle}
         </Text>
       </View>
@@ -394,10 +391,10 @@ export default function CartScreen() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <SkeletonBlock style={{ height: 64, borderRadius: 16, width: '100%' }} />
-          <SkeletonBlock style={{ height: 120, borderRadius: 18, width: '100%', marginTop: 10 }} />
-          <SkeletonBlock style={{ height: 120, borderRadius: 18, width: '100%', marginTop: 10 }} />
-          <SkeletonBlock style={{ height: 72, borderRadius: 16, width: '100%', marginTop: 14 }} />
+          <SkeletonBlock style={{ height: 72, borderRadius: 16, width: '100%', marginBottom: 12 }} />
+          <SkeletonBlock style={{ height: 130, borderRadius: 18, width: '100%', marginBottom: 12 }} />
+          <SkeletonBlock style={{ height: 130, borderRadius: 18, width: '100%', marginBottom: 12 }} />
+          <SkeletonBlock style={{ height: 100, borderRadius: 16, width: '100%' }} />
         </ScrollView>
       </View>
     );
@@ -409,7 +406,7 @@ export default function CartScreen() {
         {header}
         <View style={styles.state}>
           <View style={styles.stateIcon}>
-            <MaterialCommunityIcons name="cloud-off-outline" size={32} color={MUTED} />
+            <MaterialCommunityIcons name="cloud-off-outline" size={36} color={MUTED} />
           </View>
           <Text style={styles.stateTitle}>{t('cart.cartLoadFailed')}</Text>
           <Text style={styles.stateHint}>{error}</Text>
@@ -440,15 +437,10 @@ export default function CartScreen() {
             paddingBottom: footerReserve,
           },
         ]}
-        horizontal={false}
-        showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
-        alwaysBounceHorizontal={false}
-        bounces={false}
-        directionalLockEnabled
         keyboardShouldPersistTaps="handled"
       >
-        {/* Branch — compact strip */}
+        {/* Branch Selection Card */}
         <View style={[styles.branchCard, !cart?.branch?.name && styles.branchCardWarn]}>
           <View style={styles.branchRow}>
             <View style={styles.branchIconWrap}>
@@ -489,9 +481,10 @@ export default function CartScreen() {
           </View>
         </View>
 
+        {/* Notices (Price/Stock Changes) */}
         {notices.map((n, i) => (
           <View key={`${n.code}-${i}`} style={styles.notice}>
-            <Feather name="info" size={14} color={WARN} />
+            <Feather name="info" size={15} color={WARN} style={{ marginTop: 1 }} />
             <Text style={styles.noticeText}>{noticeText(n)}</Text>
           </View>
         ))}
@@ -499,12 +492,10 @@ export default function CartScreen() {
         {!hasItems ? (
           <View style={styles.empty}>
             <View style={styles.emptyIcon}>
-              <Feather name="shopping-cart" size={26} color={PURPLE} />
+              <Feather name="shopping-bag" size={32} color={PURPLE} />
             </View>
             <Text style={styles.emptyTitle}>{t('cart.cartEmptyTitle')}</Text>
-            <Text style={styles.emptyHint}>
-              {t('cart.cartEmptyHint')}
-            </Text>
+            <Text style={styles.emptyHint}>{t('cart.cartEmptyHint')}</Text>
             <Pressable
               style={styles.primaryBtn}
               onPress={() => router.replace({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
@@ -561,7 +552,7 @@ export default function CartScreen() {
                         ) : (
                           <MaterialCommunityIcons
                             name={productIconName(product.icon)}
-                            size={26}
+                            size={24}
                             color={PURPLE}
                           />
                         )}
@@ -580,6 +571,7 @@ export default function CartScreen() {
                         </Text>
                       </View>
                     </Pressable>
+
                     <Pressable
                       style={[styles.removeBtn, itemBusy && styles.controlDisabled]}
                       onPress={() => void requestRemove(item)}
@@ -626,7 +618,7 @@ export default function CartScreen() {
                         accessibilityRole="button"
                         accessibilityState={{ disabled: minusDisabled }}
                         accessibilityLabel={t('cart.cartDecreaseA11y')}
-                        hitSlop={4}
+                        hitSlop={6}
                       >
                         {busyAction === 'dec' ? (
                           <ActivityIndicator size="small" color={PURPLE_DEEP} />
@@ -652,7 +644,7 @@ export default function CartScreen() {
                         accessibilityRole="button"
                         accessibilityState={{ disabled: plusDisabled }}
                         accessibilityLabel={t('cart.cartIncreaseA11y')}
-                        hitSlop={4}
+                        hitSlop={6}
                       >
                         {busyAction === 'inc' ? (
                           <ActivityIndicator size="small" color={PURPLE_DEEP} />
@@ -675,22 +667,34 @@ export default function CartScreen() {
           </View>
         )}
 
+        {/* Order Financial Summary Card */}
         {hasItems ? (
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>{t('cart.summaryTitle')}</Text>
+            
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>{t('cart.summaryItems')}</Text>
               <Text style={styles.summaryValue} numberOfLines={1}>
                 {subtotalLabel}
               </Text>
             </View>
-            <View style={styles.summaryDivider} />
+
             <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
+              <Text style={styles.summaryValueFree} numberOfLines={1}>
+                {t('cart.checkoutPickupFree')}
+              </Text>
+            </View>
+
+            <View style={styles.summaryDivider} />
+
+            <View style={styles.summaryTotalRow}>
               <Text style={styles.summaryTotalLabel}>{t('cart.cartTotal')}</Text>
               <Text style={styles.summaryTotalValue} numberOfLines={1}>
                 {subtotalLabel}
               </Text>
             </View>
+
             <Text style={styles.summaryNote}>
               {t('cart.cartSummaryNote')}
             </Text>
@@ -698,6 +702,7 @@ export default function CartScreen() {
         ) : null}
       </ScrollView>
 
+      {/* Sticky Bottom Action Bar */}
       {hasItems ? (
         <View
           style={[styles.footer, { paddingBottom: bottomPad, paddingHorizontal: sidePad }]}
@@ -707,6 +712,13 @@ export default function CartScreen() {
           }}
         >
           <View style={[styles.footerInner, { maxWidth: contentWidth - sidePad * 2, width: '100%' }]}>
+            <View style={styles.footerPriceCol}>
+              <Text style={styles.footerPriceLabel}>{t('cart.checkoutTotalToPay')}</Text>
+              <Text style={styles.footerPriceValue} numberOfLines={1}>
+                {subtotalLabel}
+              </Text>
+            </View>
+
             <Pressable
               style={[styles.cta, checkoutBusy && styles.ctaBusy]}
               onPress={() => void goCheckout()}
@@ -718,9 +730,12 @@ export default function CartScreen() {
               {checkoutBusy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.ctaText} numberOfLines={1}>
-                  {t('cart.cartCheckoutCta')}
-                </Text>
+                <View style={styles.ctaContent}>
+                  <Text style={styles.ctaText} numberOfLines={1}>
+                    {t('cart.cartCheckoutCta')}
+                  </Text>
+                  <Feather name="arrow-right" size={17} color="#FFFFFF" />
+                </View>
               )}
             </Pressable>
           </View>
@@ -739,7 +754,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  scroll: { flex: 1, width: '100%', maxWidth: '100%' },
+  scroll: {
+    flex: 1,
+    width: '100%',
+    maxWidth: '100%',
+  },
   content: {
     alignSelf: 'center',
     paddingTop: 12,
@@ -750,46 +769,61 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
     paddingBottom: 12,
     backgroundColor: CARD,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
+    zIndex: 10,
   },
-  headerCenter: { flex: 1, minWidth: 0, alignItems: 'center' },
+  headerCenter: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+  },
   headerTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 18,
     color: PURPLE_DEEP,
-    includeFontPadding: false,
   },
   headerSub: {
     marginTop: 2,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    lineHeight: 16,
     color: MUTED,
     textAlign: 'center',
   },
   iconBtn: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnGhost: { width: 42, height: 42 },
+  iconBtnGhost: {
+    width: 40,
+    height: 40,
+  },
 
+  /* Branch card */
   branchCard: {
     backgroundColor: CARD,
     borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    borderWidth: 1,
     borderColor: BORDER,
-    marginBottom: 10,
+    marginBottom: 12,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 8px rgba(26, 16, 64, 0.04)' } as any,
+      default: {
+        shadowColor: '#1A1040',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
+      },
+    }),
   },
   branchCardWarn: {
     borderColor: '#DDD6FE',
@@ -809,44 +843,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  branchBody: { flex: 1, minWidth: 0 },
+  branchBody: {
+    flex: 1,
+    minWidth: 0,
+  },
   branchLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
-    lineHeight: 14,
     color: MUTED,
     marginBottom: 2,
   },
   branchName: {
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
-    lineHeight: 18,
     color: PURPLE_DEEP,
   },
   branchAddress: {
     marginTop: 2,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    lineHeight: 16,
     color: MUTED,
   },
   branchWarn: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13.5,
     color: PURPLE_DEEP,
   },
   branchHint: {
     marginTop: 2,
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11.5,
     color: MUTED,
   },
   branchAction: {
     flexShrink: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 10,
     backgroundColor: PURPLE,
   },
@@ -856,6 +888,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
+  /* Notice */
   notice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -864,8 +897,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 10,
+    borderWidth: 1,
     borderColor: '#FDE68A',
   },
   noticeText: {
@@ -876,51 +909,62 @@ const styles = StyleSheet.create({
     color: WARN,
   },
 
+  /* Empty state */
   empty: {
     alignItems: 'center',
-    paddingTop: 36,
-    paddingBottom: 24,
+    paddingTop: 48,
+    paddingBottom: 32,
     paddingHorizontal: 20,
   },
   emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 68,
+    height: 68,
+    borderRadius: 22,
     backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
   },
   emptyTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 20,
     color: PURPLE_DEEP,
   },
   emptyHint: {
     marginTop: 8,
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13.5,
+    lineHeight: 19,
     color: MUTED,
     textAlign: 'center',
-    maxWidth: 300,
+    maxWidth: 280,
   },
 
-  list: { gap: 8 },
+  /* Products List */
+  list: {
+    gap: 10,
+  },
   card: {
     backgroundColor: CARD,
     borderRadius: 16,
-    padding: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    borderWidth: 1,
     borderColor: BORDER,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 8px rgba(26, 16, 64, 0.04)' } as any,
+      default: {
+        shadowColor: '#1A1040',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
+      },
+    }),
   },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 10,
   },
   productHit: {
     flex: 1,
@@ -930,10 +974,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   itemIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: '#F8F7FC',
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: '#FAF9FD',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -942,8 +986,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   itemImg: {
-    width: '88%',
-    height: '88%',
+    width: '84%',
+    height: '84%',
     zIndex: 1,
   },
   itemAmbientGlow: {
@@ -952,32 +996,33 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: '#EDE9FE',
-    opacity: 0.7,
+    opacity: 0.6,
   },
-  itemBody: { flex: 1, minWidth: 0, paddingTop: 1 },
+  itemBody: {
+    flex: 1,
+    minWidth: 0,
+  },
   itemName: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 19,
     color: PURPLE_DEEP,
   },
   itemMeta: {
     marginTop: 3,
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11.5,
     color: MUTED,
   },
   itemUnitPrice: {
-    marginTop: 6,
+    marginTop: 4,
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-    lineHeight: 19,
+    fontSize: 14,
     color: PURPLE,
   },
   removeBtn: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: 10,
     backgroundColor: '#FFF1F2',
     borderWidth: 1,
@@ -989,113 +1034,83 @@ const styles = StyleSheet.create({
   priceFlag: {
     marginTop: 8,
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11.5,
     color: WARN,
   },
   stockOk: {
-    marginTop: 8,
+    marginTop: 6,
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11.5,
     color: OK,
   },
   stockBad: {
-    marginTop: 8,
+    marginTop: 6,
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11.5,
     color: BAD,
   },
-  stockWarnBlock: {
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: '#FFFBEB',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#FDE68A',
-  },
-  stockWarn: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    lineHeight: 16,
-    color: WARN,
-  },
-  stockWarnHint: {
-    marginTop: 2,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
-    color: MUTED,
-  },
+
   cardFooter: {
     marginTop: 12,
     paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
+    borderTopWidth: 1,
+    borderTopColor: '#F0EEF5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
-    minHeight: 48,
   },
   qtyWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F3FF',
-    borderRadius: 12,
+    backgroundColor: '#F4F1FB',
+    borderRadius: 10,
     paddingHorizontal: 3,
-    paddingVertical: 3,
-    gap: 3,
-    flexShrink: 0,
+    paddingVertical: 2,
+    gap: 2,
     borderWidth: 1,
-    borderColor: '#EDE9FE',
+    borderColor: '#ECE7F6',
   },
   qtyBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: CARD,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   qtyValue: {
-    minWidth: 30,
+    minWidth: 28,
     textAlign: 'center',
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 15,
     color: PURPLE_DEEP,
   },
   lineTotal: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 15,
     color: PURPLE_DEEP,
-    flexShrink: 1,
-    maxWidth: '46%',
     textAlign: 'right',
   },
-  controlDisabled: { opacity: 0.42 },
+  controlDisabled: {
+    opacity: 0.45,
+  },
 
+  /* Order Summary Card */
   summaryCard: {
-    marginTop: 12,
+    marginTop: 14,
     backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
     borderColor: BORDER,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 8px rgba(26, 16, 64, 0.04)' } as any,
+    }),
   },
   summaryTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 16,
     color: PURPLE_DEEP,
     marginBottom: 12,
   },
@@ -1103,115 +1118,140 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    marginBottom: 8,
   },
   summaryLabel: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    lineHeight: 18,
     color: MUTED,
-    flexShrink: 0,
   },
   summaryValue: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13.5,
     color: PURPLE_DEEP,
-    flexShrink: 1,
-    textAlign: 'right',
+  },
+  summaryValueFree: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: OK,
   },
   summaryDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: BORDER,
+    height: 1,
+    backgroundColor: '#F0EEF5',
     marginVertical: 10,
+  },
+  summaryTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
   },
   summaryTotalLabel: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 15,
     color: PURPLE_DEEP,
   },
   summaryTotalValue: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 18,
     color: PURPLE,
-    flexShrink: 1,
-    textAlign: 'right',
   },
   summaryNote: {
-    marginTop: 10,
+    marginTop: 8,
     fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11.5,
+    lineHeight: 16,
     color: MUTED,
   },
 
+  /* Sticky Footer */
   footer: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: CARD,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     borderTopColor: BORDER,
     alignItems: 'center',
     paddingTop: 12,
+    ...Platform.select({
+      web: { boxShadow: '0 -4px 20px rgba(26, 16, 64, 0.08)' } as any,
+      default: {
+        shadowColor: '#1A1040',
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 8,
+      },
+    }),
+    zIndex: 100,
   },
-  footerInner: { gap: 10 },
-  footerSum: {
+  footerInner: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 14,
   },
-  footerSumLabel: {
+  footerPriceCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  footerPriceLabel: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 13,
+    fontSize: 11.5,
     color: MUTED,
+    marginBottom: 2,
   },
-  footerSumValue: {
+  footerPriceValue: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 18,
     color: PURPLE_DEEP,
-    flexShrink: 1,
-    textAlign: 'right',
   },
   cta: {
-    minHeight: 52,
-    borderRadius: 16,
+    minHeight: 48,
+    paddingHorizontal: 22,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    shadowColor: PURPLE,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 14px rgba(106, 34, 214, 0.35)' } as any,
+      default: {
+        shadowColor: PURPLE,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
   },
   ctaBusy: {
     opacity: 0.72,
   },
+  ctaContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   ctaText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    letterSpacing: 0.2,
+    fontSize: 15,
   },
 
+  /* State & Skeleton */
   state: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
-    gap: 8,
+    gap: 10,
   },
   stateIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 68,
+    height: 68,
+    borderRadius: 22,
     backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1219,7 +1259,7 @@ const styles = StyleSheet.create({
   },
   stateTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 17,
+    fontSize: 18,
     color: PURPLE_DEEP,
     textAlign: 'center',
   },
@@ -1232,27 +1272,20 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     marginTop: 14,
-    minHeight: 48,
-    minWidth: 180,
+    minHeight: 46,
     paddingHorizontal: 22,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: PURPLE,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
   },
   primaryBtnText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    fontSize: 14,
   },
-
   skel: {
-    backgroundColor: '#E6E1F2',
-    borderRadius: 10,
+    backgroundColor: '#EBE7F5',
+    borderRadius: 12,
   },
 });
