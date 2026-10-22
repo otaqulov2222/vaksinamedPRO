@@ -300,12 +300,6 @@ export default function EditProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Top Instruction Banner */}
-          <View style={styles.leadBox}>
-            <Feather name="info" size={16} color={PURPLE} />
-            <Text style={styles.leadText}>{t('profile.editLead')}</Text>
-          </View>
-
           {/* Section 1: Basic Info */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -427,7 +421,6 @@ export default function EditProfileScreen() {
               style={styles.forgotPassBtn}
               hitSlop={6}
             >
-              <Feather name="help-circle" size={13} color={PURPLE} />
               <Text style={styles.forgotPassText}>{t('profile.editForgotPassword')}</Text>
             </Pressable>
 
@@ -670,24 +663,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
     gap: 14,
-  },
-  leadBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FAF5FF',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#F3E8FF',
-  },
-  leadText: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: PURPLE_DEEP,
-    lineHeight: 18,
   },
   card: {
     backgroundColor: CARD,

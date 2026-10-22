@@ -43,7 +43,7 @@ export default defineMessages({
     editPasswordTooShort: 'Parol kamida 6 ta belgidan iborat bo‘lishi kerak',
     editPasswordCurrentRequired: 'Joriy parolni kiriting',
     editPasswordSuccess: 'Parol muvaffaqiyatli yangilandi',
-    editForgotPassword: 'Parolni unutdingizmi? SMS orqali tiklash',
+    editForgotPassword: 'Parolni unutdingizmi?',
     editOtpModalTitle: 'SMS orqali parolni tiklash',
     editOtpModalSubtitle:
       'Telefon raqamingizga 6 xonali tasdiqlash kodi yuboriladi',
@@ -148,7 +148,7 @@ export default defineMessages({
     editPasswordTooShort: 'Пароль должен содержать не менее 6 символов',
     editPasswordCurrentRequired: 'Введите текущий пароль',
     editPasswordSuccess: 'Пароль успешно обновлён',
-    editForgotPassword: 'Забыли пароль? Восстановить по SMS',
+    editForgotPassword: 'Забыли пароль?',
     editOtpModalTitle: 'Сброс пароля по SMS-коду',
     editOtpModalSubtitle:
       'На ваш номер будет отправлен 6-значный код подтверждения',
@@ -253,7 +253,7 @@ export default defineMessages({
     editPasswordTooShort: 'Password must be at least 6 characters',
     editPasswordCurrentRequired: 'Current password is required',
     editPasswordSuccess: 'Password successfully updated',
-    editForgotPassword: 'Forgot password? Reset via SMS',
+    editForgotPassword: 'Forgot password?',
     editOtpModalTitle: 'Reset password via SMS',
     editOtpModalSubtitle:
       'A 6-digit confirmation code will be sent to your phone number',
