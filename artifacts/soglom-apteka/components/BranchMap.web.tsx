@@ -1,3 +1,4 @@
+import { Feather } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApp } from '@/context/AppContext';
@@ -9,6 +10,8 @@ type Branch = {
   name: string;
   address: string;
   phone?: string;
+  hours?: string;
+  is24h?: boolean;
   lat: number;
   lng: number;
 };
@@ -20,9 +23,21 @@ type Props = {
   route: RouteInfo | null;
   onSelect: (branch: Branch) => void;
   onRequestRoute: (branch: Branch) => void;
+  onPickBranch?: (branch: Branch) => void;
   height?: number;
   countryView?: boolean;
 };
+
+const UZ_BOUNDS: [[number, number], [number, number]] = [
+  [37.0, 59.2],
+  [42.6, 72.8],
+];
+const UZ_CENTER: LatLng = { lat: 41.2, lng: 66.8 };
+const UZ_ZOOM = 6.4;
+
+function shortName(name: string) {
+  return String(name).replace(/^Vaksina Med\s*[·•]\s*/i, '').trim();
+}
 
 function ensureLeafletAssets() {
   if (typeof document === 'undefined') return;
@@ -33,72 +48,107 @@ function ensureLeafletAssets() {
     link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
     document.head.appendChild(link);
   }
-  if (!document.getElementById('vaksina-map-css-v3')) {
+  if (!document.getElementById('vaksina-map-css-v4')) {
     const style = document.createElement('style');
-    style.id = 'vaksina-map-css-v3';
+    style.id = 'vaksina-map-css-v4';
     style.textContent = `
       .vm-pin {
         width: 18px; height: 18px; background: #5C328E; border: 3px solid #FFCC00;
         border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
         box-shadow: 0 2px 8px rgba(42,16,78,.35);
+        cursor: pointer;
+        transition: transform 0.15s ease;
+      }
+      .vm-pin:hover {
+        transform: rotate(-45deg) scale(1.15);
       }
       .vm-pin.selected {
         width: 22px; height: 22px; background: #2A104E; border-width: 3.5px;
-        box-shadow: 0 0 0 5px rgba(92,50,142,.2), 0 3px 10px rgba(42,16,78,.4);
+        box-shadow: 0 0 0 5px rgba(92,50,142,.25), 0 3px 12px rgba(42,16,78,.45);
       }
       .vm-user {
         width: 14px; height: 14px; border-radius: 50%; background: #2563EB;
         border: 3px solid #fff; box-shadow: 0 0 0 5px rgba(37,99,235,.22);
       }
       .leaflet-container { font-family: Inter, Segoe UI, sans-serif; background: #F3F0EA; border-radius: 18px; }
-      .leaflet-container.vm-map-locked { touch-action: pan-y !important; cursor: pointer; }
-      .leaflet-container.vm-map-active { touch-action: none !important; cursor: grab; }
       .leaflet-control-zoom {
         border: 0 !important; margin: 12px 12px 0 0 !important;
         box-shadow: 0 4px 16px rgba(42,16,78,.14) !important;
         border-radius: 12px !important; overflow: hidden;
       }
       .leaflet-control-zoom a {
-        width: 38px !important; height: 38px !important; line-height: 38px !important;
+        width: 36px !important; height: 36px !important; line-height: 36px !important;
         color: #5C328E !important; font-weight: 700 !important; background: #fff !important;
       }
       .leaflet-control-attribution { font-size: 9px !important; background: rgba(255,255,255,.75) !important; }
+      .leaflet-popup-content-wrapper {
+        border-radius: 16px !important;
+        box-shadow: 0 10px 28px rgba(42, 16, 78, 0.22) !important;
+        padding: 4px !important;
+        border: 1px solid rgba(92, 50, 142, 0.12) !important;
+      }
+      .leaflet-popup-content {
+        margin: 10px 12px !important;
+        font-family: 'Inter', system-ui, sans-serif !important;
+        line-height: 1.4 !important;
+        min-width: 190px !important;
+        max-width: 250px !important;
+      }
+      .leaflet-popup-tip {
+        box-shadow: 0 4px 12px rgba(42, 16, 78, 0.15) !important;
+      }
+      .vm-popup-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #2A104E;
+        margin-bottom: 2px;
+      }
+      .vm-popup-addr {
+        font-size: 11px;
+        color: #64748B;
+        margin-bottom: 6px;
+        line-height: 1.35;
+      }
+      .vm-popup-hours {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        color: #0D9488;
+        background: #ECFDF5;
+        border-radius: 6px;
+        padding: 2px 7px;
+        margin-bottom: 8px;
+      }
+      .vm-popup-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      .vm-popup-btn {
+        flex: 1;
+        padding: 7px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+      .vm-popup-btn-nav {
+        background: #FFCC00;
+        color: #120724;
+      }
+      .vm-popup-btn-select {
+        background: #5C328E;
+        color: #ffffff;
+      }
     `;
     document.head.appendChild(style);
   }
 }
-
-function setMapInteractive(map: any, active: boolean) {
-  if (!map) return;
-  const el = map.getContainer?.() as HTMLElement | undefined;
-  if (active) {
-    map.dragging?.enable();
-    map.touchZoom?.enable();
-    map.doubleClickZoom?.enable();
-    map.scrollWheelZoom?.enable();
-    map.boxZoom?.enable();
-    map.keyboard?.enable();
-    if (el) {
-      el.classList.add('vm-map-active');
-      el.classList.remove('vm-map-locked');
-    }
-  } else {
-    map.dragging?.disable();
-    map.touchZoom?.disable();
-    map.doubleClickZoom?.disable();
-    map.scrollWheelZoom?.disable();
-    map.boxZoom?.disable();
-    map.keyboard?.disable();
-    if (map.tap) map.tap.disable();
-    if (el) {
-      el.classList.add('vm-map-locked');
-      el.classList.remove('vm-map-active');
-    }
-  }
-}
-
-const UZ_CENTER: LatLng = { lat: 41.3, lng: 64.5 };
-const UZ_ZOOM = 5.4;
 
 export default function BranchMap({
   branches,
@@ -106,8 +156,9 @@ export default function BranchMap({
   userLocation,
   route,
   onSelect,
+  onRequestRoute,
+  onPickBranch,
   height = 320,
-  countryView = true,
 }: Props) {
   const { t } = useApp();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -120,20 +171,18 @@ export default function BranchMap({
   const fittedRef = useRef(false);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
-  const [active, setActive] = useState(false);
-  const activeRef = useRef(false);
-  activeRef.current = active;
+  const onRequestRouteRef = useRef(onRequestRoute);
+  onRequestRouteRef.current = onRequestRoute;
+  const onPickBranchRef = useRef(onPickBranch);
+  onPickBranchRef.current = onPickBranch;
 
   const mappable = useMemo(() => branches.filter((b) => hasValidCoords(b)), [branches]);
 
-  const activate = useCallback(() => {
-    setActive(true);
-    setMapInteractive(mapRef.current, true);
-  }, []);
-
-  const deactivate = useCallback(() => {
-    setActive(false);
-    setMapInteractive(mapRef.current, false);
+  const resetToUzbekistan = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.closePopup();
+    map.fitBounds(UZ_BOUNDS, { padding: [16, 16], animate: true });
   }, []);
 
   useEffect(() => {
@@ -144,26 +193,22 @@ export default function BranchMap({
       const L = (await import('leaflet')).default;
       if (cancelled || !containerRef.current || mapRef.current) return;
 
-      const initialSelected = selectedId ? mappable.find((b) => b.id === selectedId) : null;
-      const start = initialSelected
-        ? { lat: initialSelected.lat, lng: initialSelected.lng }
-        : countryView
-          ? UZ_CENTER
-          : userLocation && hasValidCoords(userLocation)
-            ? userLocation
-            : UZ_CENTER;
-      const zoom = initialSelected ? 15 : countryView ? UZ_ZOOM : 12;
-
       const map = L.map(containerRef.current, {
         zoomControl: false,
         attributionControl: true,
-        dragging: false,
-        touchZoom: false,
-        doubleClickZoom: false,
+        dragging: true,
+        touchZoom: true,
+        doubleClickZoom: true,
         scrollWheelZoom: false,
-        boxZoom: false,
-        keyboard: false,
-      }).setView([start.lat, start.lng], zoom);
+        boxZoom: true,
+        keyboard: true,
+        minZoom: 5.6,
+        maxBounds: [
+          [35.0, 55.0],
+          [46.5, 75.0],
+        ],
+        maxBoundsViscosity: 0.85,
+      }).setView([UZ_CENTER.lat, UZ_CENTER.lng], UZ_ZOOM);
 
       L.control.zoom({ position: 'topright' }).addTo(map);
 
@@ -175,20 +220,11 @@ export default function BranchMap({
       mapRef.current = map;
       layerRef.current = L.layerGroup().addTo(map);
       routeRef.current = L.layerGroup().addTo(map);
-      setMapInteractive(map, false);
 
-      const unlock = () => {
-        if (activeRef.current) return;
-        setActive(true);
-        setMapInteractive(map, true);
-      };
-      map.on('click', unlock);
-      map.on('zoomstart', unlock);
-
+      map.fitBounds(UZ_BOUNDS, { padding: [12, 12] });
       setTimeout(() => map.invalidateSize(), 100);
     }
 
-    // Container must exist before Leaflet boots. Retry briefly if first paint raced.
     void boot();
     const retry = setTimeout(() => {
       if (!cancelled && !mapRef.current) void boot();
@@ -205,22 +241,6 @@ export default function BranchMap({
       }
     };
   }, []);
-
-  // Sahifa scroll bo‘lganda xaritani qayta qulflash
-  useEffect(() => {
-    if (!active) return;
-    const onScroll = () => deactivate();
-    const onPointerDown = (event: PointerEvent) => {
-      const root = containerRef.current?.parentElement;
-      if (root && !root.contains(event.target as Node)) deactivate();
-    };
-    window.addEventListener('scroll', onScroll, true);
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => {
-      window.removeEventListener('scroll', onScroll, true);
-      document.removeEventListener('pointerdown', onPointerDown, true);
-    };
-  }, [active, deactivate]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -239,30 +259,75 @@ export default function BranchMap({
       markersRef.current.clear();
 
       mappable.forEach((branch) => {
-        const selected = branch.id === selectedId;
-        const size = selected ? 22 : 18;
+        const isSelected = branch.id === selectedId;
+        const size = isSelected ? 22 : 18;
         const marker = L.marker([branch.lat, branch.lng], {
           icon: L.divIcon({
             className: '',
-            html: `<div class="vm-pin${selected ? ' selected' : ''}"></div>`,
+            html: `<div class="vm-pin${isSelected ? ' selected' : ''}"></div>`,
             iconSize: [size, size],
             iconAnchor: [size / 2, size],
           }),
-          zIndexOffset: selected ? 800 : 0,
+          zIndexOffset: isSelected ? 800 : 0,
         });
 
-        marker.bindTooltip(branch.name.replace(/^Vaksina Med\s*[·•]\s*/, ''), {
+        marker.bindTooltip(shortName(branch.name), {
           direction: 'top',
           offset: [0, -18],
           opacity: 0.95,
         });
-        marker.on('click', () => {
-          if (!activeRef.current) {
-            setActive(true);
-            setMapInteractive(map, true);
-          }
-          onSelectRef.current(branch);
+
+        // Rich interactive popup with action buttons
+        const popupContent = document.createElement('div');
+        popupContent.className = 'vm-popup-card';
+        const hoursHtml =
+          branch.is24h || String(branch.hours || '').includes('24')
+            ? '<div class="vm-popup-hours">24/7</div>'
+            : branch.hours
+              ? `<div class="vm-popup-hours">${branch.hours}</div>`
+              : '';
+        popupContent.innerHTML = `
+          <div class="vm-popup-title">${shortName(branch.name)}</div>
+          <div class="vm-popup-addr">${branch.address}</div>
+          ${hoursHtml}
+          <div class="vm-popup-actions">
+            <button class="vm-popup-btn vm-popup-btn-nav" type="button">
+              ↗ ${t('branches.showRoute')}
+            </button>
+            <button class="vm-popup-btn vm-popup-btn-select" type="button">
+              ✓ ${t('branches.select')}
+            </button>
+          </div>
+        `;
+
+        const navBtn = popupContent.querySelector('.vm-popup-btn-nav');
+        const selBtn = popupContent.querySelector('.vm-popup-btn-select');
+        navBtn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onRequestRouteRef.current?.(branch);
         });
+        selBtn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (onPickBranchRef.current) {
+            onPickBranchRef.current(branch);
+          } else {
+            onSelectRef.current?.(branch);
+          }
+        });
+
+        marker.bindPopup(popupContent, {
+          className: 'vm-popup',
+          offset: [0, -14],
+          closeButton: true,
+          autoPan: true,
+        });
+
+        marker.on('click', () => {
+          map.flyTo([branch.lat, branch.lng], 15, { duration: 0.5 });
+          marker.openPopup();
+          onSelectRef.current?.(branch);
+        });
+
         marker.addTo(layer);
         markersRef.current.set(branch.id, marker);
       });
@@ -274,24 +339,23 @@ export default function BranchMap({
       const selected = selectedId ? mappable.find((item) => item.id === selectedId) : null;
       if (selected && !route?.coordinates?.length) {
         const targetZoom = Math.max(map.getZoom(), 15);
-        map.setView([selected.lat, selected.lng], targetZoom, { animate: true });
+        map.flyTo([selected.lat, selected.lng], targetZoom, { duration: 0.5 });
         const marker = markersRef.current.get(selected.id);
-        if (marker) marker.openTooltip();
-        fittedRef.current = true;
+        if (marker) {
+          setTimeout(() => marker.openPopup(), 400);
+        }
       } else if (!fittedRef.current && mappable.length > 0) {
-        const bounds = L.latLngBounds(mappable.map((b) => [b.lat, b.lng] as [number, number]));
-        map.fitBounds(bounds.pad(0.08), { maxZoom: 12, animate: false });
+        map.fitBounds(UZ_BOUNDS, { padding: [14, 14], animate: false });
         fittedRef.current = true;
       }
     }
 
     void syncMarkers();
-    // If Leaflet is still booting when branches arrive, sync once more shortly after.
     const retry = setTimeout(() => {
       if (mapRef.current && layerRef.current) void syncMarkers();
     }, 200);
     return () => clearTimeout(retry);
-  }, [mappable, selectedId, countryView, route]);
+  }, [mappable, selectedId, route, t]);
 
   useEffect(() => {
     async function syncUser() {
@@ -341,8 +405,6 @@ export default function BranchMap({
     void syncRoute();
   }, [route]);
 
-  // Always mount the Leaflet container. Early-return when empty skipped the <div>,
-  // so boot() never saw containerRef and markers never appeared after load.
   return (
     <View ref={wrapRef} style={[styles.wrap, { height }]}>
       <div ref={containerRef as any} style={{ width: '100%', height: '100%', borderRadius: 18 }} />
@@ -350,14 +412,17 @@ export default function BranchMap({
         <View style={[styles.emptyOverlay, styles.emptyWrap]} pointerEvents="none">
           <Text style={styles.emptyText}>{t('branches.mapNoCoords')}</Text>
         </View>
-      ) : null}
-      {!active && mappable.length > 0 ? (
+      ) : (
         <Pressable
-          onPress={activate}
-          accessibilityLabel={t('branches.mapActivateA11y')}
-          style={[styles.lockOverlay, { touchAction: 'pan-y' } as any]}
-        />
-      ) : null}
+          style={styles.uzbBadge}
+          onPress={resetToUzbekistan}
+          accessibilityRole="button"
+          accessibilityLabel={t('branches.overviewUzbekistan')}
+        >
+          <Feather name="globe" size={12} color="#5C328E" />
+          <Text style={styles.uzbBadgeText}>{t('branches.overviewUzbekistan')}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -377,11 +442,23 @@ const styles = StyleSheet.create({
     zIndex: 500,
   },
   emptyText: { fontFamily: 'Inter_500Medium', fontSize: 13, color: '#64748B', textAlign: 'center' },
-  lockOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'transparent',
+  uzbBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
     zIndex: 400,
-    // Zoom tugmalari ochiq qolsin (o‘ng yuqori)
-    right: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    boxShadow: '0 4px 12px rgba(42, 16, 78, 0.14)',
+  },
+  uzbBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    color: '#2A104E',
   },
 });

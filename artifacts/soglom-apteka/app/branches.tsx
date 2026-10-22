@@ -123,8 +123,7 @@ export default function BranchesScreen() {
         if (Array.isArray(data.regions) && data.regions.length) setRegions(data.regions);
         setSelectedId((prev) => {
           if (prev != null && list.some((b: any) => Number(b.id) === Number(prev))) return prev;
-          const first = list[0]?.id;
-          return first != null && Number.isFinite(Number(first)) ? Number(first) : null;
+          return null;
         });
       })
       .catch((err: Error) => {
@@ -275,8 +274,9 @@ export default function BranchesScreen() {
             route={route}
             onSelect={(branch) => void drawRoute(branch, false)}
             onRequestRoute={(branch) => void drawRoute(branch, true)}
-            height={300}
-            countryView
+            onPickBranch={(branch) => void pickForCart(branch)}
+            height={330}
+            countryView={!selected}
           />
         </View>
         {branches.length > 0 && mappableCount === 0 ? (
@@ -335,6 +335,18 @@ export default function BranchesScreen() {
         <View style={styles.stateBox}>
           <Feather name="map-pin" size={28} color="#94A3B8" />
           <Text style={styles.stateTitle}>{t('branches.emptyTitle')}</Text>
+        </View>
+      ) : null}
+
+      {!selected && branches.length > 0 ? (
+        <View style={styles.hintCard}>
+          <View style={styles.hintIcon}>
+            <Feather name="map-pin" size={18} color="#5C328E" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.hintTitle}>{t('branches.networkSummary', { count: networkTotal || branches.length })}</Text>
+            <Text style={styles.hintText}>{t('branches.tapBranchHint')}</Text>
+          </View>
         </View>
       ) : null}
 
@@ -578,6 +590,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryBtnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 13 },
+  hintCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#EADFF5',
+    boxShadow: '0 2px 10px rgba(42,16,78,0.03)',
+  },
+  hintIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#F3EAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hintTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: '#2A104E',
+  },
+  hintText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
   selectedCard: {
     backgroundColor: '#fff',
     borderRadius: 20,

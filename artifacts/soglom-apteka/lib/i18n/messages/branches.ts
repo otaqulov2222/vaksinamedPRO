@@ -41,6 +41,9 @@ export default defineMessages({
     mapNativeTitle: 'Filiallar xaritasi',
     mapNativeNote:
       'Interaktiv xarita webda ishlaydi. Native uchun `react-native-maps` (yoki Mapbox) paketini qo‘shish kerak — hozircha o‘rnatilmagan.',
+    overviewUzbekistan: 'O‘zbekiston',
+    networkSummary: 'O‘zbekiston bo‘ylab {count} ta filial',
+    tapBranchHint: 'Filial ustiga bosing — yo‘nalish va tanlash ochiladi',
   },
   ru: {
     heroTitle: 'Каждая аптека — на своём месте',
@@ -82,6 +85,9 @@ export default defineMessages({
     mapNativeTitle: 'Карта аптек',
     mapNativeNote:
       'Интерактивная карта работает в веб-версии. Для приложения нужен пакет `react-native-maps` (или Mapbox) — пока не установлен.',
+    overviewUzbekistan: 'Узбекистан',
+    networkSummary: '{count} аптек по всему Узбекистану',
+    tapBranchHint: 'Нажмите на аптеку — откроется маршрут и выбор',
   },
   en: {
     heroTitle: 'Every pharmacy, right on the map',
@@ -123,5 +129,8 @@ export default defineMessages({
     mapNativeTitle: 'Pharmacy map',
     mapNativeNote:
       'The interactive map works on the web. The app needs the `react-native-maps` (or Mapbox) package — not installed yet.',
+    overviewUzbekistan: 'Uzbekistan',
+    networkSummary: '{count} pharmacies across Uzbekistan',
+    tapBranchHint: 'Tap any pharmacy to view route and select',
   },
 });

@@ -21,6 +21,7 @@ type Props = {
   route: RouteInfo | null;
   onSelect: (branch: Branch) => void;
   onRequestRoute?: (branch: Branch) => void;
+  onPickBranch?: (branch: Branch) => void;
   height?: number;
   countryView?: boolean;
 };
