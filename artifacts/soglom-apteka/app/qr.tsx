@@ -339,10 +339,6 @@ export default function QrScreen() {
           <View style={styles.navSpacer} />
         </View>
 
-        <View style={styles.kickerBadge}>
-          <Feather name="award" size={13} color={GOLD} />
-          <Text style={styles.kicker}>{t('home.qrKicker')}</Text>
-        </View>
         <Text style={styles.subtitle}>{t('home.qrSubtitle')}</Text>
 
         <View style={styles.qrCard}>
@@ -532,32 +528,13 @@ const styles = StyleSheet.create({
   },
   navSpacer: { width: 88 },
 
-  kickerBadge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    backgroundColor: '#FFFDF5',
-    borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.28)',
-    marginBottom: 8,
-  },
-  kicker: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
-    lineHeight: 15,
-    letterSpacing: 0.6,
-    color: GOLD,
-  },
   subtitle: {
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
     lineHeight: 20,
-    color: '#4B4463',
-    marginBottom: 16,
+    color: '#64748B',
+    marginBottom: 14,
+    textAlign: 'center',
   },
 
   qrCard: {
