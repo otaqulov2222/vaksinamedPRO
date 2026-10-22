@@ -14,6 +14,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
@@ -25,6 +26,7 @@ import {
   fulfillmentLabel,
   fulfillmentTypeLabel,
   paymentLabel,
+  paymentMethodLabel,
   reservationLabel,
 } from '@/lib/orderLabels';
 
@@ -113,6 +115,20 @@ export default function OrderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [msLeft, setMsLeft] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const onCopyCode = async () => {
+    if (!order?.code) return;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(String(order.code));
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // noop
+    }
+  };
 
   const skewRef = useRef(0);
   const loadGen = useRef(0);
@@ -372,7 +388,7 @@ export default function OrderScreen() {
         directionalLockEnabled
         keyboardShouldPersistTaps="handled"
       >
-        {/* Current status — honest single card, no fake timeline */}
+        {/* Current status — clean hero card without duplicate labels */}
         <View style={styles.card}>
           <View style={styles.statusHeaderRow}>
             <View
@@ -396,12 +412,12 @@ export default function OrderScreen() {
                           ? 'storefront-outline'
                           : 'clock-outline'
                 }
-                size={22}
+                size={24}
                 color={fulfillTone === 'ok' ? OK : fulfillTone === 'bad' ? BAD : PURPLE}
               />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.cardTitle}>{t('orders.statusCardTitle')}</Text>
+              <Text style={styles.cardSectionLabel}>{t('orders.statusCardTitle')}</Text>
               <Text
                 style={[
                   styles.statusHeroValue,
@@ -414,11 +430,19 @@ export default function OrderScreen() {
             </View>
           </View>
           <View style={styles.statusDivider} />
-          <StatusRow
-            label={t('orders.statusRowFulfillment')}
-            value={fulfillmentLabel(t, order.fulfillmentStatus)}
-            tone={fulfillTone}
-          />
+
+          {order.createdAt ? (
+            <StatusRow
+              label={t('orders.orderDate')}
+              value={fmt.date(order.createdAt, { withTime: true })}
+            />
+          ) : null}
+          {order.paymentMethod ? (
+            <StatusRow
+              label={t('orders.orderPaymentMethod')}
+              value={paymentMethodLabel(t, order.paymentMethod)}
+            />
+          ) : null}
           {fulfill !== 'CANCELLED' || pay === 'PAID' || pay === 'REFUNDED' || pay === 'PARTIALLY_REFUNDED' ? (
             <StatusRow
               label={t('orders.statusRowPayment')}
@@ -434,21 +458,37 @@ export default function OrderScreen() {
             />
           ) : null}
           {pay === 'PENDING' && fulfill !== 'CANCELLED' ? (
-            <Text style={styles.noteWarn}>
-              {t('orders.notePaymentPending')}
-            </Text>
+            <View style={styles.infoBanner}>
+              <Feather name="info" size={15} color={WARN} style={{ marginTop: 1 }} />
+              <Text style={styles.infoBannerText}>
+                {t('orders.notePaymentPending')}
+              </Text>
+            </View>
           ) : null}
           {pay === 'FAILED' && fulfill !== 'CANCELLED' ? (
-            <Text style={styles.noteBad}>
-              {t('orders.notePaymentFailed')}
-            </Text>
+            <View style={styles.badBanner}>
+              <Feather name="alert-triangle" size={15} color={BAD} style={{ marginTop: 1 }} />
+              <Text style={styles.badBannerText}>
+                {t('orders.notePaymentFailed')}
+              </Text>
+            </View>
           ) : null}
         </View>
 
         {order.reservationActive && order.reservedUntil && msLeft != null && msLeft > 0 ? (
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>{t('orders.countdownLabel')}</Text>
-            <Text style={styles.countdown}>{formatCountdown(msLeft)}</Text>
+          <View style={styles.countdownCard}>
+            <View style={styles.countdownLeft}>
+              <View style={styles.countdownIconWrap}>
+                <Feather name="clock" size={18} color={PURPLE} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.countdownLabel}>{t('orders.countdownLabel')}</Text>
+                <Text style={styles.countdownSub}>{t('orders.countdownNote')}</Text>
+              </View>
+            </View>
+            <View style={styles.countdownBadge}>
+              <Text style={styles.countdownValue}>{formatCountdown(msLeft)}</Text>
+            </View>
           </View>
         ) : null}
 
@@ -460,80 +500,162 @@ export default function OrderScreen() {
           </View>
         ) : null}
 
-        {/* Fulfillment */}
+        {/* Fulfillment & Location Unified */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('orders.fulfillmentCardTitle')}</Text>
-          <Text style={styles.bodyStrong}>
-            {fulfillmentTypeLabel(t, isDelivery ? 'delivery' : 'pickup')}
-          </Text>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionIconWrap}>
+              <MaterialCommunityIcons
+                name={isDelivery ? 'truck-delivery-outline' : 'storefront-outline'}
+                size={20}
+                color={PURPLE}
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.cardSectionLabel}>{t('orders.fulfillmentCardTitle')}</Text>
+              <Text style={styles.bodyStrong}>
+                {fulfillmentTypeLabel(t, isDelivery ? 'delivery' : 'pickup')}
+              </Text>
+            </View>
+          </View>
+
           {isDelivery ? (
-            <>
+            <View style={styles.deliveryDetails}>
               {order.address ? (
-                <Text style={styles.meta} numberOfLines={3}>
-                  {t('orders.addressLine', { address: String(order.address) })}
-                </Text>
+                <View style={styles.detailRow}>
+                  <Feather name="map-pin" size={15} color={MUTED} style={styles.detailIcon} />
+                  <Text style={styles.meta} numberOfLines={3}>
+                    {t('orders.addressLine', { address: String(order.address) })}
+                  </Text>
+                </View>
               ) : null}
-              <Text style={styles.meta}>
+              <Text style={styles.deliveryNotice}>
                 {t('orders.deliveryUpdatesNote')}
               </Text>
               {order.delivery?.status ? (
-                <Text style={styles.meta}>
-                  {t('orders.deliveryStatusLine', { status: deliveryStatusLabel(t, order.delivery.status) })}
-                  {order.delivery.timeWindow ? ` · ${String(order.delivery.timeWindow)}` : ''}
-                </Text>
+                <View style={styles.detailRow}>
+                  <Feather name="activity" size={15} color={MUTED} style={styles.detailIcon} />
+                  <Text style={styles.meta}>
+                    {t('orders.deliveryStatusLine', { status: deliveryStatusLabel(t, order.delivery.status) })}
+                    {order.delivery.timeWindow ? ` · ${String(order.delivery.timeWindow)}` : ''}
+                  </Text>
+                </View>
               ) : null}
               {order.delivery?.courierName ? (
-                <Text style={[styles.meta, { color: PURPLE_DEEP, fontWeight: '600', marginTop: 4 }]}>
-                  {t('orders.courierInfoLine', { name: String(order.delivery.courierName) })}
-                </Text>
+                <View style={styles.detailRow}>
+                  <Feather name="user" size={15} color={PURPLE_DEEP} style={styles.detailIcon} />
+                  <Text style={[styles.meta, { color: PURPLE_DEEP, fontWeight: '600' }]}>
+                    {t('orders.courierInfoLine', { name: String(order.delivery.courierName) })}
+                  </Text>
+                </View>
               ) : null}
               {order.delivery?.courierPhone ? (
                 <Pressable
                   onPress={() => void Linking.openURL(`tel:${order.delivery.courierPhone}`)}
+                  style={styles.detailRow}
                   accessibilityRole="link"
                   accessibilityLabel={t('orders.courierPhoneLine', { phone: String(order.delivery.courierPhone) })}
                 >
-                  <Text style={[styles.meta, { color: PURPLE, fontWeight: '600', marginTop: 2 }]}>
+                  <Feather name="phone" size={15} color={PURPLE} style={styles.detailIcon} />
+                  <Text style={[styles.meta, { color: PURPLE, fontWeight: '600' }]}>
                     {t('orders.courierPhoneLine', { phone: String(order.delivery.courierPhone) })}
                   </Text>
                 </Pressable>
               ) : null}
-            </>
+            </View>
+          ) : order.branch?.name ? (
+            <View style={styles.branchDetails}>
+              <View style={styles.statusDivider} />
+              <Text style={styles.branchName} numberOfLines={2}>
+                {String(order.branch.name)}
+              </Text>
+              {order.branch.address ? (
+                <View style={styles.detailRow}>
+                  <Feather name="map-pin" size={14} color={MUTED} style={styles.detailIcon} />
+                  <Text style={styles.branchAddress} numberOfLines={2}>
+                    {String(order.branch.address)}
+                  </Text>
+                </View>
+              ) : null}
+              {order.branch.hours ? (
+                <View style={styles.detailRow}>
+                  <Feather name="clock" size={14} color={MUTED} style={styles.detailIcon} />
+                  <Text style={styles.branchHours} numberOfLines={1}>
+                    {String(order.branch.hours)}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.branchActionsRow}>
+                {order.branch.lat && order.branch.lng ? (
+                  <Pressable
+                    style={styles.branchActionBtn}
+                    onPress={() => {
+                      const url = `https://yandex.com/maps/?rtext=~${order.branch.lat},${order.branch.lng}&rtt=auto`;
+                      void Linking.openURL(url);
+                    }}
+                    accessibilityRole="link"
+                    accessibilityLabel={t('orders.branchOpenMap')}
+                  >
+                    <Feather name="navigation" size={14} color={PURPLE} />
+                    <Text style={styles.branchActionText}>{t('orders.branchOpenMap')}</Text>
+                  </Pressable>
+                ) : null}
+                {order.branch.phone ? (
+                  <Pressable
+                    style={styles.branchActionBtn}
+                    onPress={() => void Linking.openURL(`tel:${order.branch.phone}`)}
+                    accessibilityRole="link"
+                    accessibilityLabel={t('orders.branchCall')}
+                  >
+                    <Feather name="phone" size={14} color={PURPLE} />
+                    <Text style={styles.branchActionText}>{t('orders.branchCall')}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
           ) : null}
         </View>
 
-        {/* Branch */}
-        {order.branch?.name ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t('orders.branchCardTitle')}</Text>
-            <Text style={styles.bodyStrong} numberOfLines={2}>
-              {String(order.branch.name)}
-            </Text>
-            {order.branch.address ? (
-              <Text style={styles.meta} numberOfLines={2}>
-                {String(order.branch.address)}
-              </Text>
-            ) : null}
-            {order.branch.hours ? (
-              <Text style={styles.meta} numberOfLines={1}>
-                {String(order.branch.hours)}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-
-        {/* QR for pickup/active */}
+        {/* Real Scannable QR Code for pickup/active */}
         {fulfill !== 'CANCELLED' && !resExpired && order.qrPayload ? (
           <View style={styles.qrCard}>
-            <View style={styles.qrIconWrap}>
-              <MaterialCommunityIcons name="qrcode-scan" size={26} color="#FFFFFF" />
+            <View style={styles.qrHeader}>
+              <View style={styles.qrIconWrap}>
+                <MaterialCommunityIcons name="qrcode-scan" size={20} color={PURPLE} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.qrTitle}>{t('orders.qrScanTitle')}</Text>
+                <Text style={styles.qrHint}>{t('orders.qrHint')}</Text>
+              </View>
             </View>
+
+            <View style={styles.qrContainer}>
+              <QRCode
+                value={String(order.qrPayload)}
+                size={164}
+                color={PURPLE_DEEP}
+                backgroundColor="#FFFFFF"
+                ecl="M"
+                quietZone={8}
+              />
+            </View>
+
             <View style={styles.qrCodeBadge}>
-              <Text style={styles.qrCode} numberOfLines={1}>
-                {String(order.qrPayload)}
+              <Text style={styles.qrCodeText} numberOfLines={1}>
+                {String(order.code || order.qrPayload)}
               </Text>
+              <Pressable
+                style={styles.copyBtn}
+                onPress={() => void onCopyCode()}
+                accessibilityRole="button"
+                accessibilityLabel={copied ? t('orders.copiedCode') : t('orders.copyCode')}
+              >
+                <Feather name={copied ? 'check' : 'copy'} size={14} color={PURPLE} />
+                <Text style={styles.copyBtnText}>
+                  {copied ? t('orders.copiedCode') : t('orders.copyCode')}
+                </Text>
+              </Pressable>
             </View>
-            <Text style={styles.qrHint}>{t('orders.qrHint')}</Text>
           </View>
         ) : null}
 
@@ -667,6 +789,17 @@ export default function OrderScreen() {
           </Text>
         ) : null}
 
+        {/* Support link */}
+        <Pressable
+          style={styles.supportBtn}
+          onPress={() => router.push('/help')}
+          accessibilityRole="button"
+          accessibilityLabel={t('orders.contactSupport')}
+        >
+          <Feather name="help-circle" size={16} color={PURPLE} />
+          <Text style={styles.supportBtnText}>{t('orders.needHelp')}</Text>
+        </Pressable>
+
         <Pressable
           style={styles.linkBtn}
           onPress={() => router.replace('/(tabs)/purchases')}
@@ -710,6 +843,8 @@ const styles = StyleSheet.create({
     backgroundColor: CARD,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: BORDER,
+    boxShadow: '0 2px 8px rgba(26, 16, 64, 0.05)',
+    zIndex: 10,
   },
   headerCenter: { flex: 1, minWidth: 0, alignItems: 'center' },
   headerTitle: {
@@ -736,16 +871,18 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: CARD,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: '#ECE7F6',
     marginBottom: 12,
-    shadowColor: '#5414B8',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    boxShadow: '0 2px 10px rgba(26, 16, 64, 0.04)',
+  },
+  cardSectionLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: MUTED,
+    marginBottom: 2,
   },
   statusHeaderRow: {
     flexDirection: 'row',
@@ -762,8 +899,8 @@ const styles = StyleSheet.create({
   },
   statusHeroValue: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 18,
+    lineHeight: 23,
   },
   statusDivider: {
     height: 1,
@@ -816,27 +953,94 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  noteWarn: {
-    marginTop: 6,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 17,
-    color: WARN,
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginTop: 8,
   },
-  noteBad: {
-    marginTop: 6,
-    fontFamily: 'Inter_400Regular',
+  infoBannerText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
-    lineHeight: 17,
+    color: '#92400E',
+    lineHeight: 16,
+  },
+  badBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    marginTop: 8,
+  },
+  badBannerText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
     color: BAD,
+    lineHeight: 16,
   },
 
-  countdown: {
-    marginTop: 6,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 24,
-    color: PURPLE,
+  countdownCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9F5FF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    marginBottom: 12,
+    boxShadow: '0 2px 8px rgba(106, 34, 214, 0.05)',
   },
+  countdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  countdownIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#EDE9FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countdownLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: PURPLE_DEEP,
+  },
+  countdownSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: MUTED,
+    marginTop: 1,
+  },
+  countdownBadge: {
+    backgroundColor: PURPLE,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    boxShadow: '0 2px 6px rgba(106, 34, 214, 0.25)',
+  },
+  countdownValue: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+
   warnCard: {
     backgroundColor: '#FFFBEB',
     borderRadius: 14,
@@ -852,41 +1056,155 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sectionIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deliveryDetails: { marginTop: 10 },
+  deliveryNotice: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: MUTED,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  detailIcon: { flexShrink: 0 },
+  branchDetails: { marginTop: 6 },
+  branchName: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+    marginBottom: 4,
+  },
+  branchAddress: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12.5,
+    color: MUTED,
+    lineHeight: 17,
+  },
+  branchHours: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: PURPLE,
+  },
+  branchActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  branchActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: LAVENDER,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
+  branchActionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: PURPLE,
+  },
+
   qrCard: {
-    backgroundColor: PURPLE,
-    borderRadius: 18,
-    padding: 20,
+    backgroundColor: CARD,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 12,
     alignItems: 'center',
-    shadowColor: '#5414B8',
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    boxShadow: '0 4px 16px rgba(106, 34, 214, 0.08)',
+  },
+  qrHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+    marginBottom: 14,
   },
   qrIconWrap: {
-    marginBottom: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+  },
+  qrHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11.5,
+    color: MUTED,
+    marginTop: 1,
+  },
+  qrContainer: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    boxShadow: '0 2px 8px rgba(26, 16, 64, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   qrCodeBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F7F4FD',
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.32)',
-    marginBottom: 8,
+    borderColor: '#E9D5FF',
+    marginTop: 14,
   },
-  qrCode: {
-    color: '#fff',
+  qrCodeText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 18,
+    fontSize: 16,
     letterSpacing: 0.5,
+    color: PURPLE_DEEP,
   },
-  qrHint: {
-    color: 'rgba(255,255,255,0.85)',
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    textAlign: 'center',
+  copyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+  },
+  copyBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: PURPLE,
   },
 
   sectionTitle: {
@@ -906,6 +1224,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#ECE7F6',
+    boxShadow: '0 2px 6px rgba(26, 16, 64, 0.03)',
   },
   lineThumbWrap: {
     width: 44,
@@ -986,13 +1305,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
+    boxShadow: '0 3px 12px rgba(106, 34, 214, 0.25)',
   },
   primaryBtnText: {
     color: '#fff',
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
   },
-  linkBtn: { marginTop: 14, alignItems: 'center', paddingVertical: 6 },
+  supportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  supportBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: PURPLE,
+  },
+  linkBtn: { marginTop: 8, alignItems: 'center', paddingVertical: 6 },
   linkBtnText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
