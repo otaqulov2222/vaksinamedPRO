@@ -33,6 +33,7 @@ type CardPayload = {
   qrPayload: string;
   cardNumber: string;
   displayCode: string;
+  dynamicCode?: string;
   expiresAt: string;
   expiresIn: number;
   balance: number;
@@ -203,6 +204,7 @@ export default function QrScreen() {
         && prev.name === data.name
         && prev.cashbackRateLabel === data.cashbackRateLabel
         && prev.cardNumber === data.cardNumber
+        && prev.dynamicCode === data.dynamicCode
       ) {
         next = prev;
       } else if (prev?.qrPayload === data.qrPayload) {
@@ -304,7 +306,7 @@ export default function QrScreen() {
   const cash = fmt.money(Math.max(0, Math.floor(Number(card?.balance) || 0)));
   const tier = card?.tier?.trim() || '—';
   const rate = card?.cashbackRateLabel || '—';
-  const memberCode = card?.cardNumber || '';
+  const memberCode = card?.dynamicCode || card?.cardNumber || '';
 
   const qrSize = narrow ? 184 : 200;
   const sidePad = narrow ? 14 : 18;
@@ -398,6 +400,7 @@ export default function QrScreen() {
 
               {memberCode ? (
                 <View style={styles.memberCodeBox}>
+                  <View style={styles.memberCodeDot} />
                   <Text
                     style={styles.memberCode}
                     numberOfLines={1}
@@ -702,17 +705,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   memberCodeBox: {
-    marginTop: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 12,
-    backgroundColor: '#F7F5FA',
-    borderWidth: 1,
-    borderColor: '#EDE8F5',
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: '#F8F6FC',
+    borderWidth: 1.2,
+    borderColor: '#EDE5F8',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  memberCodeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
   },
   memberCode: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 18,
     letterSpacing: 1.5,
     color: PURPLE_DEEP,

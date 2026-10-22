@@ -20,6 +20,49 @@ const POS_SECRET = requireConfiguredSecret(
 const QR_TTL_MS = 90_000;
 const VOID_WINDOW_MS = 15 * 60 * 1000;
 
+const activeDynamicCodes = new Map<string, { customerId: number; exp: number }>();
+
+function cleanupExpiredDynamicCodes() {
+  const now = Date.now();
+  for (const [code, entry] of activeDynamicCodes.entries()) {
+    if (entry.exp < now) {
+      activeDynamicCodes.delete(code);
+    }
+  }
+}
+
+/**
+ * Generate cryptographically strong dynamic alphanumeric code:
+ * E.g. "VM-8K42-9P17" (rotates with the signed QR token).
+ * Clean lookup keys accept both "VM-8K42-9P17", "8K42-9P17" and "8K429P17".
+ */
+export function registerDynamicCode(customerId: number, exp: number): string {
+  cleanupExpiredDynamicCodes();
+  const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const bytes = randomBytes(8);
+  let p1 = "";
+  let p2 = "";
+  for (let i = 0; i < 4; i++) p1 += alphabet[bytes[i] % alphabet.length];
+  for (let i = 4; i < 8; i++) p2 += alphabet[bytes[i] % alphabet.length];
+  const formatted = `VM-${p1}-${p2}`;
+  const normalized = `${p1}${p2}`;
+  activeDynamicCodes.set(normalized, { customerId, exp });
+  return formatted;
+}
+
+export function verifyDynamicCode(raw: string): { customerId: number } | null {
+  const text = String(raw || "").trim().toUpperCase();
+  const cleaned = text.replace(/^VM-?/, "").replace(/[^A-Z0-9]/g, "");
+  if (!cleaned) return null;
+  const entry = activeDynamicCodes.get(cleaned);
+  if (!entry) return null;
+  if (entry.exp < Date.now()) {
+    activeDynamicCodes.delete(cleaned);
+    return null;
+  }
+  return { customerId: entry.customerId };
+}
+
 /** Stable member display number — NOT a rotating scan token. */
 export function loyaltyCardNumber(customerId: number) {
   return `VM-${String(customerId).padStart(8, "0")}`;
@@ -53,6 +96,7 @@ export function issuePosToken(customerId: number, ttlMs = QR_TTL_MS) {
     qrPayload: `${body}.${sig}`,
     cardNumber: loyaltyCardNumber(customerId),
     displayCode: publicQrCode(customerId),
+    dynamicCode: registerDynamicCode(customerId, exp),
     expiresAt: new Date(exp).toISOString(),
     expiresIn: Math.floor(ttlMs / 1000),
   };
@@ -107,6 +151,13 @@ export async function resolveCustomerFromScan(raw: string) {
   const token = verifyPosToken(raw);
   if (token) {
     const rows = await db.select().from(customers).where(eq(customers.id, token.customerId)).limit(1);
+    if (!rows[0]) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
+    return { customer: rows[0], source: "signed_qr" as const };
+  }
+
+    const dynamic = verifyDynamicCode(raw);
+  if (dynamic) {
+    const rows = await db.select().from(customers).where(eq(customers.id, dynamic.customerId)).limit(1);
     if (!rows[0]) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
     return { customer: rows[0], source: "signed_qr" as const };
   }
@@ -558,6 +609,7 @@ export async function issueCustomerPosCard(customerId: number) {
     legacyStaticCode: view.displayCode,
     cardNumber: view.cardNumber,
     displayCode: view.displayCode,
+    dynamicCode: token.dynamicCode,
     ttlSeconds: token.expiresIn,
   };
 }
