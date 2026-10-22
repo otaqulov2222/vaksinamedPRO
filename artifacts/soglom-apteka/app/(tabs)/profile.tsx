@@ -12,28 +12,29 @@ import { api } from '@/lib/api';
 import { confirmAction } from '@/lib/dialogs';
 import { buildProfileSummary, EMPTY_VALUE, matchTierRate } from '@/lib/profileSummary';
 
-// Brand palette; the remaining tones below are fixed tints or reduced-opacity variants of it.
+// Brand palette; refined luxury pharmacy tones
 const PRIMARY = '#4B248A';
 const DEEP = '#351765';
 const PURPLE_LIGHT = '#F1EBFF';
 const SOFT = '#F8F5FF';
-const YELLOW = '#FFD233';
-const BG = '#F7F7F5';
+const YELLOW = '#F59E0B';
+const BG = '#F7F6FA';
 const SURFACE = '#FFFFFF';
 const INK = '#17162C';
-const SECONDARY = '#6B7280';
+const SECONDARY = '#64748B';
 const DANGER = '#DC2626';
 
-const MUTED = 'rgba(107,114,128,0.55)';
-const HAIRLINE = 'rgba(23,22,44,0.05)';
-const DIVIDER = '#EDEAF3';
-const EDIT_BG = '#F7F3FF';
-const EDIT_EDGE = '#E9E2F5';
-const DANGER_EDGE = 'rgba(220,38,38,0.14)';
-const DANGER_TINT = 'rgba(220,38,38,0.07)';
+const MUTED = '#94A3B8';
+const HAIRLINE = 'rgba(75,36,138,0.07)';
+const DIVIDER = '#F1EFF6';
+const EDIT_BG = '#F6F2FC';
+const EDIT_EDGE = '#E8E1F5';
+const DANGER_EDGE = 'rgba(220,38,38,0.12)';
+const DANGER_TINT = '#FEE2E2';
 
-const SHADOW_CONTROL = '0px 1px 2px rgba(23,22,44,0.04), 0px 4px 12px rgba(53,23,101,0.06)';
-const SHADOW_GROUP = '0px 1px 2px rgba(23,22,44,0.03), 0px 6px 20px rgba(53,23,101,0.04)';
+const SHADOW_CONTROL = '0px 2px 8px rgba(75,36,138,0.06), 0px 1px 2px rgba(23,22,44,0.04)';
+const SHADOW_GROUP = '0px 4px 20px rgba(53,23,101,0.05), 0px 1px 3px rgba(23,22,44,0.03)';
+const SHADOW_VIP = '0px 8px 24px rgba(75,36,138,0.08), 0px 1px 3px rgba(23,22,44,0.04)';
 
 type IconName = React.ComponentProps<typeof Feather>['name'];
 
@@ -46,6 +47,8 @@ function MenuRow({
   testID,
   accent,
   last,
+  iconBg,
+  iconColor,
 }: {
   icon: IconName | 'wallet';
   title: string;
@@ -55,8 +58,11 @@ function MenuRow({
   testID: string;
   accent?: boolean;
   last?: boolean;
+  iconBg?: string;
+  iconColor?: string;
 }) {
-  const color = accent ? DEEP : PRIMARY;
+  const resolvedColor = iconColor || (accent ? '#B45309' : PRIMARY);
+  const resolvedBg = iconBg || (accent ? '#FEF3C7' : PURPLE_LIGHT);
   return (
     <Pressable
       onPress={onPress}
@@ -65,17 +71,19 @@ function MenuRow({
       testID={testID}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
-      <View style={[styles.rowIcon, accent && styles.rowIconAccent]} importantForAccessibility="no-hide-descendants">
-        {icon === 'wallet' ? <WalletIcon size={19} color={color} strokeWidth={2} /> : <Feather name={icon} size={19} color={color} />}
+      <View style={[styles.rowIcon, { backgroundColor: resolvedBg }]} importantForAccessibility="no-hide-descendants">
+        {icon === 'wallet' ? <WalletIcon size={18} color={resolvedColor} strokeWidth={2.2} /> : <Feather name={icon} size={18} color={resolvedColor} />}
       </View>
       <View style={[styles.rowBody, !last && styles.divider]}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {title}
         </Text>
         {value && value !== EMPTY_VALUE ? (
-          <Text style={styles.rowValue} numberOfLines={1}>
-            {value}
-          </Text>
+          <View style={accent ? styles.rowPillBadge : undefined}>
+            <Text style={accent ? styles.rowPillText : styles.rowValue} numberOfLines={1}>
+              {value}
+            </Text>
+          </View>
         ) : null}
         <Feather name="chevron-right" size={16} color={MUTED} importantForAccessibility="no" />
       </View>
@@ -256,6 +264,8 @@ export default function ProfileScreen() {
             a11y={t('profile.cashbackA11y', { balance: summary.balance })}
             onPress={onCashback}
             testID="profile-cashback"
+            iconBg="#FEF3C7"
+            iconColor="#B45309"
           />
           <MenuRow
             icon="shopping-bag"
@@ -263,6 +273,8 @@ export default function ProfileScreen() {
             a11y={t('profile.ordersA11y')}
             onPress={() => router.push('/(tabs)/purchases')}
             testID="profile-orders"
+            iconBg="#EDE9FE"
+            iconColor="#6D28D9"
           />
           <MenuRow
             icon="map-pin"
@@ -270,6 +282,8 @@ export default function ProfileScreen() {
             a11y={t('profile.branchesA11y')}
             onPress={() => router.push('/branches')}
             testID="profile-branches"
+            iconBg="#D1FAE5"
+            iconColor="#047857"
           />
           <MenuRow
             icon="bell"
@@ -277,6 +291,8 @@ export default function ProfileScreen() {
             a11y={t('common.navNotifications')}
             onPress={onNotifications}
             testID="profile-notifications"
+            iconBg="#E0F2FE"
+            iconColor="#0369A1"
           />
           <MenuRow
             icon="help-circle"
@@ -284,6 +300,8 @@ export default function ProfileScreen() {
             a11y={t('profile.helpA11y')}
             onPress={() => router.push('/help')}
             testID="profile-help"
+            iconBg="#F3E8FF"
+            iconColor="#7E22CE"
           />
           <MenuRow
             icon="star"
@@ -291,6 +309,8 @@ export default function ProfileScreen() {
             a11y={t('common.navRating')}
             onPress={() => router.push('/rating')}
             testID="profile-rating"
+            iconBg="#FEF9C3"
+            iconColor="#B45309"
           />
           <MenuRow
             icon="info"
@@ -298,6 +318,8 @@ export default function ProfileScreen() {
             a11y={t('common.navAbout')}
             onPress={() => router.push('/about')}
             testID="profile-about"
+            iconBg="#F1F5F9"
+            iconColor="#475569"
             last
           />
         </View>
@@ -358,44 +380,44 @@ const styles = StyleSheet.create({
 
   identityCard: {
     marginTop: 20,
-    padding: 16,
-    borderRadius: 20,
+    padding: 18,
+    borderRadius: 22,
     backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: HAIRLINE,
-    boxShadow: SHADOW_GROUP,
+    borderWidth: 1.5,
+    borderColor: '#EFEBF6',
+    boxShadow: SHADOW_VIP,
   },
   identity: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     borderWidth: 3,
     borderColor: SURFACE,
     backgroundColor: PRIMARY,
     overflow: 'hidden',
-    boxShadow: '0px 0px 0px 1px rgba(75,36,138,0.10), 0px 6px 14px rgba(53,23,101,0.18)',
+    boxShadow: '0px 0px 0px 2px rgba(75,36,138,0.18), 0px 8px 18px rgba(53,23,101,0.22)',
   },
   avatarFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { fontFamily: 'Inter_700Bold', fontSize: 22, lineHeight: 26, color: SURFACE, textAlign: 'center' },
+  avatarLetter: { fontFamily: 'Inter_700Bold', fontSize: 24, lineHeight: 28, color: SURFACE, textAlign: 'center' },
   identityText: { flex: 1, minWidth: 0 },
-  name: { fontFamily: 'Inter_700Bold', fontSize: 26, lineHeight: 31, color: INK, letterSpacing: -0.7 },
-  phone: { marginTop: 1, fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: SECONDARY, letterSpacing: 0.2 },
+  name: { fontFamily: 'Inter_700Bold', fontSize: 22, lineHeight: 28, color: INK, letterSpacing: -0.6 },
+  phone: { marginTop: 2, fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20, color: SECONDARY, letterSpacing: 0.2 },
 
-  memberRow: { marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6 },
+  memberRow: { marginTop: 14, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, rowGap: 6 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    minHeight: 32,
-    paddingLeft: 5,
-    paddingRight: 9,
-    borderRadius: 16,
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: 'rgba(255,210,51,0.55)',
+    minHeight: 34,
+    paddingLeft: 6,
+    paddingRight: 10,
+    borderRadius: 17,
+    backgroundColor: '#FFFDF5',
+    borderWidth: 1.2,
+    borderColor: 'rgba(245,158,11,0.45)',
   },
-  chipNone: { borderColor: HAIRLINE },
+  chipNone: { borderColor: HAIRLINE, backgroundColor: SURFACE },
   chipMedal: { width: 22, height: 22, borderRadius: 11, backgroundColor: DEEP, alignItems: 'center', justifyContent: 'center' },
   chipMedalNone: { backgroundColor: PURPLE_LIGHT },
   chipText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 17, color: DEEP, letterSpacing: -0.1 },
@@ -406,33 +428,33 @@ const styles = StyleSheet.create({
 
   edit: {
     marginTop: 14,
-    minHeight: 46,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: EDIT_BG,
     borderWidth: 1,
     borderColor: EDIT_EDGE,
   },
   editPressed: { backgroundColor: PURPLE_LIGHT },
-  editText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, color: DEEP },
+  editText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14, lineHeight: 18, color: DEEP },
 
   menu: {
     marginTop: 16,
-    borderRadius: 20,
+    borderRadius: 22,
     backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: HAIRLINE,
+    borderWidth: 1.5,
+    borderColor: '#EFEBF6',
     overflow: 'hidden',
     boxShadow: SHADOW_GROUP,
   },
   row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, gap: 14 },
   rowPressed: { backgroundColor: SOFT },
-  rowIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: PURPLE_LIGHT, alignItems: 'center', justifyContent: 'center' },
-  rowIconAccent: { backgroundColor: 'rgba(255,210,51,0.26)' },
+  rowIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  rowIconAccent: { backgroundColor: '#FEF3C7' },
   rowBody: {
     flex: 1,
     minWidth: 0,
@@ -443,8 +465,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   divider: { borderBottomWidth: 1, borderBottomColor: DIVIDER },
-  rowTitle: { flex: 1, minWidth: 0, fontFamily: 'Inter_500Medium', fontSize: 16, lineHeight: 22, color: INK, letterSpacing: -0.2 },
-  rowValue: { flexShrink: 0, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, color: SECONDARY },
+  rowTitle: { flex: 1, minWidth: 0, fontFamily: 'Inter_500Medium', fontSize: 15, lineHeight: 20, color: INK, letterSpacing: -0.1 },
+  rowValue: { flexShrink: 0, fontFamily: 'Inter_600SemiBold', fontSize: 14, lineHeight: 18, color: SECONDARY },
+  rowPillBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.25)',
+  },
+  rowPillText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    lineHeight: 17,
+    color: '#B45309',
+  },
 
   logout: {
     marginTop: 16,
@@ -454,12 +490,13 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 18,
+    borderRadius: 20,
     backgroundColor: SURFACE,
-    borderWidth: 1,
+    borderWidth: 1.2,
     borderColor: DANGER_EDGE,
+    boxShadow: SHADOW_CONTROL,
   },
-  logoutPressed: { backgroundColor: 'rgba(220,38,38,0.04)' },
-  logoutIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: DANGER_TINT, alignItems: 'center', justifyContent: 'center' },
+  logoutPressed: { backgroundColor: '#FEF2F2' },
+  logoutIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: DANGER_TINT, alignItems: 'center', justifyContent: 'center' },
   logoutText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, color: DANGER },
 });
