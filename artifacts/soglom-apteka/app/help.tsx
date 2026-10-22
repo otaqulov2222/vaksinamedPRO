@@ -36,7 +36,7 @@ const FAQ: FaqItem[] = [
     key: 'delivery',
     title: 'profile.helpDeliveryTitle',
     body: 'profile.helpDeliveryBody',
-    cta: { label: 'profile.helpDeliveryCta', to: '/cart' },
+    cta: { label: 'profile.helpDeliveryCta', to: '/branches' },
   },
   {
     key: 'payment',

@@ -47,13 +47,13 @@ export default defineMessages({
     helpOrdersBody:
       'Buyurtmalar bo‘limida buyurtma holatini ko‘rishingiz mumkin. Buyurtmani bekor qilish imkoniyati mavjud bo‘lsa, buyurtma kartochkasidan amalga oshiriladi.',
     helpOrdersCta: 'Buyurtmalarga o‘tish',
-    helpDeliveryTitle: 'Yetkazib berish',
+    helpDeliveryTitle: 'Dorixonadan olib ketish va bron qilish',
     helpDeliveryBody:
-      'Buyurtmani rasmiylashtirishda filialdan olish yoki yetkazib berish usulini tanlash mumkin. Aniq muddat va narx buyurtma jarayonida ko‘rsatiladi.',
-    helpDeliveryCta: 'Savatga o‘tish',
+      'Buyurtma berilgan dorilar tanlangan dorixona filialida 24 soat davomida siz uchun bepul bron qilinadi. Dorixonaga tashrif buyurib, buyurtma kodi orqali navbatsiz qabul qilib olishingiz mumkin.',
+    helpDeliveryCta: 'Dorixonalarni ko‘rish',
     helpPaymentTitle: 'To‘lov',
     helpPaymentBody:
-      'Hozircha filialda to‘lash (FOM) va yetkazib berganda to‘lash (COD) mavjud. Onlayn Payme/Click production muhitida o‘chirilgan — yoqilmaguncha ilovada ishlamaydi.',
+      'Buyurtmani dorixona filialida qabul qilishda (naqd pul yoki bank kartasi orqali) to‘lashingiz yoki Payme orqali onlayn to‘lov qilishingiz mumkin.',
     helpPaymentCta: 'Rasmiylashtirish',
     helpCashbackBody:
       'Cashback balansi, daraja va tarixni Cashback bo‘limida ko‘ring. Bitta balans — yakunlangan xaridlardan (ilova yoki kassa); to‘lov usuli emas.',
@@ -125,13 +125,13 @@ export default defineMessages({
     helpOrdersBody:
       'Статус заказа можно посмотреть в разделе «Заказы». Если заказ можно отменить, это делается в карточке заказа.',
     helpOrdersCta: 'Перейти к заказам',
-    helpDeliveryTitle: 'Доставка',
+    helpDeliveryTitle: 'Самовывоз и бронирование',
     helpDeliveryBody:
-      'При оформлении заказа можно выбрать самовывоз из аптеки или доставку. Точные сроки и стоимость показываются при оформлении.',
-    helpDeliveryCta: 'Перейти в корзину',
+      'Ваш заказ бесплатно бронируется в выбранной аптеке на 24 часа. Вы можете забрать его без очереди, назвав номер заказа на кассе аптеки.',
+    helpDeliveryCta: 'Посмотреть аптеки',
     helpPaymentTitle: 'Оплата',
     helpPaymentBody:
-      'Сейчас доступны оплата в аптеке и оплата при получении. Онлайн-оплата Payme/Click в рабочей версии отключена и не будет работать, пока её не включат.',
+      'Вы можете оплатить заказ при получении в аптеке (наличными или банковской картой) или онлайн через Payme.',
     helpPaymentCta: 'Перейти к оформлению',
     helpCashbackBody:
       'Баланс кэшбэка, уровень и историю смотрите в разделе «Кэшбэк». Баланс единый — за завершённые покупки (в приложении или на кассе); это не способ оплаты.',
@@ -203,13 +203,13 @@ export default defineMessages({
     helpOrdersBody:
       'You can check the order status in the Orders section. If an order can be cancelled, you can do it from the order card.',
     helpOrdersCta: 'Go to orders',
-    helpDeliveryTitle: 'Delivery',
+    helpDeliveryTitle: 'Pharmacy pickup & reservation',
     helpDeliveryBody:
-      'At checkout you can choose pickup from a pharmacy or delivery. The exact time and cost are shown during checkout.',
-    helpDeliveryCta: 'Go to cart',
+      'Your order is reserved for free at the selected pharmacy for 24 hours. You can pick it up without waiting in line by providing your order code at the pharmacy checkout.',
+    helpDeliveryCta: 'View pharmacies',
     helpPaymentTitle: 'Payment',
     helpPaymentBody:
-      'Currently you can pay at the pharmacy or pay on delivery (COD). Online Payme/Click payments are disabled in production and won’t work in the app until enabled.',
+      'You can pay for your order at the pharmacy upon pickup (in cash or by bank card) or online via Payme.',
     helpPaymentCta: 'Go to checkout',
     helpCashbackBody:
       'See your cashback balance, tier and history in the Cashback section. There is one balance, earned from completed purchases (in the app or in store); it is not a payment method.',

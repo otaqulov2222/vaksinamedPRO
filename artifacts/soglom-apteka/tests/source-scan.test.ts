@@ -88,7 +88,7 @@ function looksLikeCopy(text: string): boolean {
   const s = text.trim();
   if (!/[A-Za-zА-Яа-яЁё]/.test(s)) return false;
   if (/^[a-z0-9_.\-/:#@]+$/i.test(s) && !/\s/.test(s) && !/^[A-Z][a-z]/.test(s)) return false; // identifiers, routes, enum values
-  if (/^(Inter_\w+|https?:\/\/\S+|\+998|VAKSINA MED|Vaksina Med|OK|QR|Rx|24\/7)$/.test(s)) return false;
+  if (/^(Inter_\w+|https?:\/\/\S+|\+998|VAKSINA MED|Vaksina Med|VAKSINA|MED|Vaksina|Med|OK|QR|Rx|24\/7)$/.test(s)) return false;
   return true;
 }
 

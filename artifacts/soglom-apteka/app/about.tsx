@@ -78,7 +78,10 @@ export default function AboutScreen() {
           <View style={styles.metaRow}>
             <Feather name="package" size={18} color={PURPLE} />
             <Text style={styles.metaLabel}>{t('profile.aboutApp')}</Text>
-            <Text style={styles.metaValue}>{t('common.appName')}</Text>
+            <Text style={styles.metaValue}>
+              <Text style={{ color: PURPLE }}>Vaksina </Text>
+              <Text style={{ color: YELLOW }}>Med</Text>
+            </Text>
           </View>
         </View>
 
