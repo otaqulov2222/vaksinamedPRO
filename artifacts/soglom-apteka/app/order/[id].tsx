@@ -21,10 +21,8 @@ import { api } from '@/lib/api';
 import { confirmAction, notify } from '@/lib/dialogs';
 import { localizeError } from '@/lib/i18n/errors';
 import {
-  deliveryStatusLabel,
   formatCountdown,
   fulfillmentLabel,
-  fulfillmentTypeLabel,
   paymentLabel,
   paymentMethodLabel,
   reservationLabel,
@@ -341,7 +339,6 @@ export default function OrderScreen() {
     Boolean(order.reservationExpired)
     || (msLeft != null && msLeft <= 0 && String(order.reservationStatus).toUpperCase() === 'ACTIVE');
   const items = Array.isArray(order.items) ? order.items : [];
-  const isDelivery = order.fulfillment === 'delivery';
   const showEarned =
     fulfill === 'COMPLETED'
     && Number(order.cashbackEarned) > 0;
@@ -354,7 +351,7 @@ export default function OrderScreen() {
       ? 'ok'
       : fulfill === 'CANCELLED'
         ? 'bad'
-        : fulfill === 'OUT_FOR_DELIVERY' || fulfill === 'READY_FOR_PICKUP'
+        : fulfill === 'READY_FOR_PICKUP'
           ? 'purple'
           : fulfill === 'PREPARING' || fulfill === 'CONFIRMED' || fulfill === 'CREATED'
             ? 'warn'
@@ -397,7 +394,159 @@ export default function OrderScreen() {
         directionalLockEnabled
         keyboardShouldPersistTaps="handled"
       >
-        {/* Current status — clean hero card without duplicate labels */}
+        {/* Real Scannable Digital Ticket & QR Code (Front and Center for pickup) */}
+        {fulfill !== 'CANCELLED' && !resExpired && order.qrPayload ? (
+          <View style={styles.ticketCard}>
+            {/* Top Purple Ticket Header */}
+            <View style={styles.ticketHeader}>
+              <View style={styles.ticketHeaderLeft}>
+                <View style={styles.ticketKickerPill}>
+                  <MaterialCommunityIcons name="shield-check-outline" size={12} color="#FFFFFF" />
+                  <Text style={styles.ticketKickerText}>{t('orders.qrScanTitle')}</Text>
+                </View>
+                <Text style={styles.ticketCodeHero} numberOfLines={1}>
+                  {String(order.code || order.qrPayload)}
+                </Text>
+              </View>
+              <View style={styles.ticketStatusPill}>
+                <Text style={styles.ticketStatusText}>
+                  {fulfillmentLabel(t, order.fulfillmentStatus)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Perforation Row with Circular Notches */}
+            <View style={styles.perforationRow}>
+              <View style={styles.notchLeft} />
+              <View style={styles.dashedDivider} />
+              <View style={styles.notchRight} />
+            </View>
+
+            {/* Ticket Body with Scannable QR Code */}
+            <View style={styles.ticketBody}>
+              <Text style={styles.ticketHintText}>
+                {t('orders.qrHint')}
+              </Text>
+
+              <View style={styles.qrContainer}>
+                <QRCode
+                  value={String(order.qrPayload)}
+                  size={176}
+                  color={PURPLE_DEEP}
+                  backgroundColor="#FFFFFF"
+                  ecl="M"
+                  quietZone={8}
+                />
+              </View>
+
+              {/* Formatted Code & Copy Button */}
+              <View style={styles.ticketCodeRow}>
+                <Text style={styles.ticketCodeValue} numberOfLines={1}>
+                  {String(order.code || order.qrPayload)}
+                </Text>
+                <Pressable
+                  style={[styles.ticketCopyBtn, copied && styles.ticketCopyBtnActive]}
+                  onPress={() => void onCopyCode()}
+                  accessibilityRole="button"
+                  accessibilityLabel={copied ? t('orders.copiedCode') : t('orders.copyCode')}
+                >
+                  <Feather name={copied ? 'check' : 'copy'} size={13} color={copied ? '#FFFFFF' : PURPLE} />
+                  <Text style={[styles.ticketCopyBtnText, copied && { color: '#FFFFFF' }]}>
+                    {copied ? t('orders.copiedCode') : t('orders.copyCode')}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Live 24-hour Reservation Countdown Bar inside Ticket */}
+              {order.reservationActive && order.reservedUntil && msLeft != null && msLeft > 0 ? (
+                <View style={styles.ticketCountdownBar}>
+                  <View style={styles.ticketCountdownIconWrap}>
+                    <Feather name="clock" size={15} color={PURPLE} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.ticketCountdownLabel}>
+                      {t('orders.countdownLabel')}: {formatCountdown(msLeft)}
+                    </Text>
+                    <Text style={styles.ticketCountdownNote}>
+                      {t('orders.countdownNote')}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Selected Pharmacy Branch Card */}
+        {order.branch?.name ? (
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionIconWrap}>
+                <MaterialCommunityIcons
+                  name="storefront-outline"
+                  size={20}
+                  color={PURPLE}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.cardSectionLabel}>{t('orders.branchCardTitle')}</Text>
+                <Text style={styles.bodyStrong} numberOfLines={2}>
+                  {String(order.branch.name)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.branchDetails}>
+              <View style={styles.statusDivider} />
+              {order.branch.address ? (
+                <View style={styles.detailRow}>
+                  <Feather name="map-pin" size={14} color={MUTED} style={styles.detailIcon} />
+                  <Text style={styles.branchAddress} numberOfLines={2}>
+                    {String(order.branch.address)}
+                  </Text>
+                </View>
+              ) : null}
+              {order.branch.hours ? (
+                <View style={styles.detailRow}>
+                  <Feather name="clock" size={14} color={MUTED} style={styles.detailIcon} />
+                  <Text style={styles.branchHours} numberOfLines={1}>
+                    {String(order.branch.hours)}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.branchActionsRow}>
+                {order.branch.lat && order.branch.lng ? (
+                  <Pressable
+                    style={styles.branchActionBtn}
+                    onPress={() => {
+                      const url = `https://yandex.com/maps/?rtext=~${order.branch.lat},${order.branch.lng}&rtt=auto`;
+                      void Linking.openURL(url);
+                    }}
+                    accessibilityRole="link"
+                    accessibilityLabel={t('orders.branchOpenMap')}
+                  >
+                    <Feather name="navigation" size={14} color={PURPLE} />
+                    <Text style={styles.branchActionText}>{t('orders.branchOpenMap')}</Text>
+                  </Pressable>
+                ) : null}
+                {order.branch.phone ? (
+                  <Pressable
+                    style={styles.branchActionBtn}
+                    onPress={() => void Linking.openURL(`tel:${order.branch.phone}`)}
+                    accessibilityRole="link"
+                    accessibilityLabel={t('orders.branchCall')}
+                  >
+                    <Feather name="phone" size={14} color={PURPLE} />
+                    <Text style={styles.branchActionText}>{t('orders.branchCall')}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Current status — clean hero card */}
         <View style={styles.card}>
           <View style={styles.statusHeaderRow}>
             <View
@@ -415,11 +564,9 @@ export default function OrderScreen() {
                     ? 'check-circle-outline'
                     : fulfill === 'CANCELLED'
                       ? 'close-circle-outline'
-                      : fulfill === 'OUT_FOR_DELIVERY'
-                        ? 'truck-delivery-outline'
-                        : fulfill === 'READY_FOR_PICKUP'
-                          ? 'storefront-outline'
-                          : 'clock-outline'
+                      : fulfill === 'READY_FOR_PICKUP'
+                        ? 'storefront-outline'
+                        : 'clock-outline'
                 }
                 size={24}
                 color={fulfillTone === 'ok' ? OK : fulfillTone === 'bad' ? BAD : PURPLE}
@@ -484,210 +631,11 @@ export default function OrderScreen() {
           ) : null}
         </View>
 
-        {order.reservationActive && order.reservedUntil && msLeft != null && msLeft > 0 ? (
-          <View style={styles.countdownCard}>
-            <View style={styles.countdownLeft}>
-              <View style={styles.countdownIconWrap}>
-                <Feather name="clock" size={18} color={PURPLE} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.countdownLabel}>{t('orders.countdownLabel')}</Text>
-                <Text style={styles.countdownSub}>{t('orders.countdownNote')}</Text>
-              </View>
-            </View>
-            <View style={styles.countdownBadge}>
-              <Text style={styles.countdownValue}>{formatCountdown(msLeft)}</Text>
-            </View>
-          </View>
-        ) : null}
-
         {resExpired && fulfill !== 'CANCELLED' && fulfill !== 'COMPLETED' ? (
           <View style={styles.warnCard}>
             <Text style={styles.warnText}>
               {t('orders.reservationExpiredWarn')}
             </Text>
-          </View>
-        ) : null}
-
-        {/* Fulfillment & Location Unified */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionIconWrap}>
-              <MaterialCommunityIcons
-                name={isDelivery ? 'truck-delivery-outline' : 'storefront-outline'}
-                size={20}
-                color={PURPLE}
-              />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.cardSectionLabel}>{t('orders.fulfillmentCardTitle')}</Text>
-              <Text style={styles.bodyStrong}>
-                {fulfillmentTypeLabel(t, isDelivery ? 'delivery' : 'pickup')}
-              </Text>
-            </View>
-          </View>
-
-          {isDelivery ? (
-            <View style={styles.deliveryDetails}>
-              {order.address ? (
-                <View style={styles.detailRow}>
-                  <Feather name="map-pin" size={15} color={MUTED} style={styles.detailIcon} />
-                  <Text style={styles.meta} numberOfLines={3}>
-                    {t('orders.addressLine', { address: String(order.address) })}
-                  </Text>
-                </View>
-              ) : null}
-              <Text style={styles.deliveryNotice}>
-                {t('orders.deliveryUpdatesNote')}
-              </Text>
-              {order.delivery?.status ? (
-                <View style={styles.detailRow}>
-                  <Feather name="activity" size={15} color={MUTED} style={styles.detailIcon} />
-                  <Text style={styles.meta}>
-                    {t('orders.deliveryStatusLine', { status: deliveryStatusLabel(t, order.delivery.status) })}
-                    {order.delivery.timeWindow ? ` · ${String(order.delivery.timeWindow)}` : ''}
-                  </Text>
-                </View>
-              ) : null}
-              {order.delivery?.courierName ? (
-                <View style={styles.detailRow}>
-                  <Feather name="user" size={15} color={PURPLE_DEEP} style={styles.detailIcon} />
-                  <Text style={[styles.meta, { color: PURPLE_DEEP, fontWeight: '600' }]}>
-                    {t('orders.courierInfoLine', { name: String(order.delivery.courierName) })}
-                  </Text>
-                </View>
-              ) : null}
-              {order.delivery?.courierPhone ? (
-                <Pressable
-                  onPress={() => void Linking.openURL(`tel:${order.delivery.courierPhone}`)}
-                  style={styles.detailRow}
-                  accessibilityRole="link"
-                  accessibilityLabel={t('orders.courierPhoneLine', { phone: String(order.delivery.courierPhone) })}
-                >
-                  <Feather name="phone" size={15} color={PURPLE} style={styles.detailIcon} />
-                  <Text style={[styles.meta, { color: PURPLE, fontWeight: '600' }]}>
-                    {t('orders.courierPhoneLine', { phone: String(order.delivery.courierPhone) })}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : order.branch?.name ? (
-            <View style={styles.branchDetails}>
-              <View style={styles.statusDivider} />
-              <Text style={styles.branchName} numberOfLines={2}>
-                {String(order.branch.name)}
-              </Text>
-              {order.branch.address ? (
-                <View style={styles.detailRow}>
-                  <Feather name="map-pin" size={14} color={MUTED} style={styles.detailIcon} />
-                  <Text style={styles.branchAddress} numberOfLines={2}>
-                    {String(order.branch.address)}
-                  </Text>
-                </View>
-              ) : null}
-              {order.branch.hours ? (
-                <View style={styles.detailRow}>
-                  <Feather name="clock" size={14} color={MUTED} style={styles.detailIcon} />
-                  <Text style={styles.branchHours} numberOfLines={1}>
-                    {String(order.branch.hours)}
-                  </Text>
-                </View>
-              ) : null}
-
-              <View style={styles.branchActionsRow}>
-                {order.branch.lat && order.branch.lng ? (
-                  <Pressable
-                    style={styles.branchActionBtn}
-                    onPress={() => {
-                      const url = `https://yandex.com/maps/?rtext=~${order.branch.lat},${order.branch.lng}&rtt=auto`;
-                      void Linking.openURL(url);
-                    }}
-                    accessibilityRole="link"
-                    accessibilityLabel={t('orders.branchOpenMap')}
-                  >
-                    <Feather name="navigation" size={14} color={PURPLE} />
-                    <Text style={styles.branchActionText}>{t('orders.branchOpenMap')}</Text>
-                  </Pressable>
-                ) : null}
-                {order.branch.phone ? (
-                  <Pressable
-                    style={styles.branchActionBtn}
-                    onPress={() => void Linking.openURL(`tel:${order.branch.phone}`)}
-                    accessibilityRole="link"
-                    accessibilityLabel={t('orders.branchCall')}
-                  >
-                    <Feather name="phone" size={14} color={PURPLE} />
-                    <Text style={styles.branchActionText}>{t('orders.branchCall')}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Real Scannable Digital Ticket & QR Code */}
-        {fulfill !== 'CANCELLED' && !resExpired && order.qrPayload ? (
-          <View style={styles.ticketCard}>
-            {/* Top Purple Ticket Header */}
-            <View style={styles.ticketHeader}>
-              <View style={styles.ticketHeaderLeft}>
-                <View style={styles.ticketKickerPill}>
-                  <MaterialCommunityIcons name="shield-check-outline" size={12} color="#FFFFFF" />
-                  <Text style={styles.ticketKickerText}>{t('orders.qrScanTitle')}</Text>
-                </View>
-                <Text style={styles.ticketCodeHero} numberOfLines={1}>
-                  {String(order.code || order.qrPayload)}
-                </Text>
-              </View>
-              <View style={styles.ticketStatusPill}>
-                <Text style={styles.ticketStatusText}>
-                  {fulfillmentLabel(t, order.fulfillmentStatus)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Perforation Row with Circular Notches */}
-            <View style={styles.perforationRow}>
-              <View style={styles.notchLeft} />
-              <View style={styles.dashedDivider} />
-              <View style={styles.notchRight} />
-            </View>
-
-            {/* Ticket Body with Scannable QR Code */}
-            <View style={styles.ticketBody}>
-              <Text style={styles.ticketHintText}>
-                {t('orders.qrHint')}
-              </Text>
-
-              <View style={styles.qrContainer}>
-                <QRCode
-                  value={String(order.qrPayload)}
-                  size={172}
-                  color={PURPLE_DEEP}
-                  backgroundColor="#FFFFFF"
-                  ecl="M"
-                  quietZone={8}
-                />
-              </View>
-
-              {/* Formatted Code & Copy Button */}
-              <View style={styles.ticketCodeRow}>
-                <Text style={styles.ticketCodeValue} numberOfLines={1}>
-                  {String(order.code || order.qrPayload)}
-                </Text>
-                <Pressable
-                  style={[styles.ticketCopyBtn, copied && styles.ticketCopyBtnActive]}
-                  onPress={() => void onCopyCode()}
-                  accessibilityRole="button"
-                  accessibilityLabel={copied ? t('orders.copiedCode') : t('orders.copyCode')}
-                >
-                  <Feather name={copied ? 'check' : 'copy'} size={13} color={copied ? '#FFFFFF' : PURPLE} />
-                  <Text style={[styles.ticketCopyBtnText, copied && { color: '#FFFFFF' }]}>
-                    {copied ? t('orders.copiedCode') : t('orders.copyCode')}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
           </View>
         ) : null}
 
@@ -729,12 +677,6 @@ export default function OrderScreen() {
             <Text style={styles.moneyLabel}>{t('orders.items')}</Text>
             <Text style={styles.moneyValue}>{fmt.money(Number(order.subtotal) || 0)}</Text>
           </View>
-          {Number(order.deliveryFee) > 0 ? (
-            <View style={styles.moneyRow}>
-              <Text style={styles.moneyLabel}>{t('orders.summaryDelivery')}</Text>
-              <Text style={styles.moneyValue}>{fmt.money(Number(order.deliveryFee) || 0)}</Text>
-            </View>
-          ) : null}
           {usedCashback > 0 ? (
             <View style={styles.moneyRow}>
               <Text style={styles.moneyLabel}>{t('orders.summaryCashbackUsed')}</Text>
@@ -1101,15 +1043,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  deliveryDetails: { marginTop: 10 },
-  deliveryNotice: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
-    color: MUTED,
-    marginTop: 4,
-    marginBottom: 4,
-  },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1310,6 +1243,38 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 11,
     color: PURPLE,
+  },
+  ticketCountdownBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8F6FD',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    marginTop: 12,
+    width: '100%',
+  },
+  ticketCountdownIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ticketCountdownLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: PURPLE_DEEP,
+  },
+  ticketCountdownNote: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10.5,
+    color: MUTED,
+    marginTop: 1,
   },
 
   sectionTitle: {

@@ -1,7 +1,7 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -19,6 +19,7 @@ import type { TranslationKey } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
 import type { Formatters } from '@/lib/i18n/format';
 import {
+  formatCountdown,
   isFulfillmentCancelled,
   isFulfillmentDelivered,
   fulfillmentLabel,
@@ -183,7 +184,29 @@ function OrderCard({ order }: { order: any }) {
 
   const placeLine = [branchName, methodLabel].filter(Boolean).join(' · ');
 
-  // Show secondary payment chip ONLY when customer action/attention is required
+  const [msLeft, setMsLeft] = useState<number | null>(() => {
+    if (!order.reservationActive || !order.reservedUntil) return null;
+    const diff = new Date(order.reservedUntil).getTime() - Date.now();
+    return diff > 0 ? diff : 0;
+  });
+
+  useEffect(() => {
+    if (!order.reservationActive || !order.reservedUntil) {
+      setMsLeft(null);
+      return;
+    }
+    const target = new Date(order.reservedUntil).getTime();
+    if (!Number.isFinite(target)) return;
+
+    const tick = () => {
+      const left = target - Date.now();
+      setMsLeft(left > 0 ? left : 0);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [order.reservationActive, order.reservedUntil]);
+
   const cancelled = isCancelled(order);
   const completed = isCompleted(order);
   const needsPaymentAttention = !cancelled && !completed && (pay === 'PENDING' || pay === 'FAILED');
@@ -194,6 +217,9 @@ function OrderCard({ order }: { order: any }) {
     orderTitle,
     fulfillText,
     payUrgentLabel,
+    order.reservationActive && msLeft != null && msLeft > 0
+      ? `${t('orders.countdownLabel')}: ${formatCountdown(msLeft)}`
+      : null,
     t('orders.totalA11y', { total: totalLabel }),
   ]
     .filter(Boolean)
@@ -257,7 +283,7 @@ function OrderCard({ order }: { order: any }) {
           {placeLine ? (
             <View style={styles.metaWithIcon}>
               <Feather
-                name={order.fulfillment === 'delivery' ? 'truck' : 'map-pin'}
+                name="map-pin"
                 size={12}
                 color={MUTED}
               />
@@ -278,6 +304,21 @@ function OrderCard({ order }: { order: any }) {
           </Text>
         </View>
       </View>
+
+      {order.reservationActive && msLeft != null && msLeft > 0 ? (
+        <View style={styles.reservationBar}>
+          <View style={styles.reservationTimerLeft}>
+            <Feather name="clock" size={12} color={PURPLE} />
+            <Text style={styles.reservationTimerText}>
+              {t('orders.countdownLabel')}: {formatCountdown(msLeft)}
+            </Text>
+          </View>
+          <View style={styles.reservationQrPill}>
+            <MaterialCommunityIcons name="qrcode-scan" size={12} color={PURPLE} />
+            <Text style={styles.reservationQrText}>{t('orders.qrScanTitle')}</Text>
+          </View>
+        </View>
+      ) : null}
 
       {payUrgentLabel ? (
         <View style={styles.axisRow}>
@@ -822,6 +863,46 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
     marginTop: 6,
+  },
+  reservationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F7F4FD',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    gap: 8,
+  },
+  reservationTimerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+  },
+  reservationTimerText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    color: PURPLE,
+  },
+  reservationQrPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+  },
+  reservationQrText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10.5,
+    color: PURPLE,
   },
   chip: {
     borderRadius: 8,
