@@ -665,17 +665,6 @@ export default function HomeScreen() {
         })}
       </View>
 
-      {/* BROWSE ALL PRODUCTS CTA BUTTON */}
-      <Pressable
-        style={({ pressed }) => [styles.browseMoreBtn, pressed && styles.pressed]}
-        onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
-        accessibilityRole="button"
-        accessibilityLabel={t('home.browseMoreCatalog')}
-      >
-        <Text style={styles.browseMoreBtnText}>{t('home.browseMoreCatalog')}</Text>
-        <Feather name="arrow-right" size={16} color={PURPLE} />
-      </Pressable>
-
       {/* Clearance above floating tab bar */}
       <View style={styles.bottomClearance} />
     </Screen>
@@ -1284,26 +1273,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderWidth: 1,
     borderColor: '#ECE7F6',
-  },
-
-  // Browse more CTA button
-  browseMoreBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8F5FC',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E4D7F5',
-    paddingVertical: 13,
-    paddingHorizontal: 18,
-    marginTop: SPACE + 2,
-    gap: 8,
-  },
-  browseMoreBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13.5,
-    color: PURPLE,
   },
 
   bottomClearance: {
