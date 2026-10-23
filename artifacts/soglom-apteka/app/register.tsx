@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import React, { useMemo, useRef, useState } from 'react';
-import { Animated, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
@@ -27,6 +27,27 @@ const NAME_MAX = 80;
 const PASSWORD_MIN = 6;
 const PHONE_MASK = '__ ___ __ __';
 
+function generateStrongPassword(): string {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghijkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const symbols = '!@#$%*';
+
+  const chars = [
+    upper[Math.floor(Math.random() * upper.length)],
+    upper[Math.floor(Math.random() * upper.length)],
+    lower[Math.floor(Math.random() * lower.length)],
+    lower[Math.floor(Math.random() * lower.length)],
+    digits[Math.floor(Math.random() * digits.length)],
+    digits[Math.floor(Math.random() * digits.length)],
+    symbols[Math.floor(Math.random() * symbols.length)],
+    symbols[Math.floor(Math.random() * symbols.length)],
+    lower[Math.floor(Math.random() * lower.length)],
+    upper[Math.floor(Math.random() * upper.length)],
+  ];
+  return chars.sort(() => Math.random() - 0.5).join('');
+}
+
 type FieldKey = 'name' | 'phone' | 'password';
 
 /** Ro‘yxat: ism + telefon + parol → SMS tasdiq (OTP). Auth shartnomasi o‘zgarmaydi. */
@@ -42,6 +63,8 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [suggestedPassword, setSuggestedPassword] = useState('');
+  const [showSuggestCard, setShowSuggestCard] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
@@ -207,6 +230,12 @@ export default function RegisterScreen() {
                 setPassword(text);
                 clearFieldError('password');
               }}
+              onFocus={() => {
+                if (!password && !suggestedPassword) {
+                  setSuggestedPassword(generateStrongPassword());
+                }
+                setShowSuggestCard(true);
+              }}
               secureTextEntry={!showPass}
               placeholder={t('auth.passwordPlaceholder')}
               autoComplete="new-password"
@@ -219,15 +248,82 @@ export default function RegisterScreen() {
               hint={t('auth.passwordHint', { min: PASSWORD_MIN })}
               onSubmitEditing={() => void submit()}
               accessory={
-                <PasswordToggle
-                  visible={showPass}
-                  onToggle={() => setShowPass((s) => !s)}
-                  showLabel={t('auth.passwordShow')}
-                  hideLabel={t('auth.passwordHide')}
-                />
+                <View style={styles.passAccessoryRow}>
+                  <Pressable
+                    onPress={() => {
+                      if (!suggestedPassword) setSuggestedPassword(generateStrongPassword());
+                      setShowSuggestCard((s) => !s);
+                    }}
+                    hitSlop={6}
+                    style={styles.keySuggestToggle}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('auth.passwordSuggestTitle')}
+                  >
+                    <Feather name="key" size={16} color={showSuggestCard ? '#7C3AED' : C.secondary} />
+                  </Pressable>
+                  <PasswordToggle
+                    visible={showPass}
+                    onToggle={() => setShowPass((s) => !s)}
+                    showLabel={t('auth.passwordShow')}
+                    hideLabel={t('auth.passwordHide')}
+                  />
+                </View>
               }
               testID="register-password"
             />
+
+            {showSuggestCard ? (
+              <View style={styles.suggestCard}>
+                <View style={styles.suggestHeader}>
+                  <View style={styles.suggestTitleRow}>
+                    <Feather name="shield" size={14} color="#7C3AED" />
+                    <Text style={styles.suggestTitle}>{t('auth.passwordSuggestTitle')}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setShowSuggestCard(false)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.cancel')}
+                  >
+                    <Feather name="x" size={16} color={C.secondary} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.suggestBody}>
+                  <View style={styles.suggestPassWrap}>
+                    <Text style={styles.suggestPassText} selectable>
+                      {suggestedPassword}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.suggestRefreshBtn, pressed && styles.pressed]}
+                    onPress={() => setSuggestedPassword(generateStrongPassword())}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('auth.passwordSuggestRegenerate')}
+                  >
+                    <Feather name="refresh-cw" size={15} color="#7C3AED" />
+                  </Pressable>
+                </View>
+
+                <Text style={styles.suggestHintText}>{t('auth.passwordSuggestHint')}</Text>
+
+                <Pressable
+                  style={({ pressed }) => [styles.suggestUseBtn, pressed && styles.pressed]}
+                  onPress={() => {
+                    setPassword(suggestedPassword);
+                    setShowPass(true);
+                    clearFieldError('password');
+                    setShowSuggestCard(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('auth.passwordSuggestUse')}
+                >
+                  <Feather name="check-circle" size={15} color="#FFFFFF" />
+                  <Text style={styles.suggestUseBtnText}>{t('auth.passwordSuggestUse')}</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
           {error ? (
@@ -327,5 +423,96 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
     color: C.secondary,
+  },
+  passAccessoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  keySuggestToggle: {
+    padding: 4,
+  },
+  suggestCard: {
+    backgroundColor: '#FBF9FE',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    borderRadius: 14,
+    padding: 12,
+    marginTop: -4,
+    ...Platform.select({
+      ios: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 },
+      android: { elevation: 2 },
+      web: { boxShadow: '0 2px 8px rgba(124, 58, 237, 0.08)' },
+    }),
+  },
+  suggestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  suggestTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  suggestTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    color: '#6D28D9',
+  },
+  suggestBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  suggestPassWrap: {
+    flex: 1,
+    backgroundColor: '#EDE9FE',
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  suggestPassText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: '#4C1D95',
+    letterSpacing: 1.5,
+  },
+  suggestRefreshBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#EDE9FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  suggestHintText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#6B7280',
+    marginBottom: 10,
+  },
+  suggestUseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#7C3AED',
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    gap: 6,
+  },
+  suggestUseBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    color: '#FFFFFF',
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });
