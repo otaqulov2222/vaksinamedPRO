@@ -222,100 +222,91 @@ export default function RegisterScreen() {
               onSubmitEditing={() => passwordRef.current?.focus()}
               testID="register-phone"
             />
-            <AuthField
-              ref={passwordRef}
-              label={t('auth.registerPasswordLabel')}
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                clearFieldError('password');
-                if (showSuggestCard) setShowSuggestCard(false);
-              }}
-              onFocus={() => {
-                if (!password) {
-                  if (!suggestedPassword) setSuggestedPassword(generateStrongPassword());
-                  setShowSuggestCard(true);
-                }
-              }}
-              secureTextEntry={!showPass}
-              placeholder={t('auth.passwordPlaceholder')}
-              autoComplete="new-password"
-              textContentType="newPassword"
-              returnKeyType="done"
-              editable={!loading}
-              // Do not trim — backend counts raw length including spaces
-              accessibilityLabel={t('auth.passwordLabel')}
-              error={fieldErrors.password}
-              hint={t('auth.passwordHint', { min: PASSWORD_MIN })}
-              onSubmitEditing={() => void submit()}
-              accessory={
-                <View style={styles.passAccessoryRow}>
-                  <Pressable
-                    onPress={() => {
-                      if (!suggestedPassword) setSuggestedPassword(generateStrongPassword());
-                      setShowSuggestCard((s) => !s);
-                    }}
-                    hitSlop={6}
-                    style={styles.keySuggestToggle}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('auth.passwordSuggestTitle')}
-                  >
-                    <Feather name="key" size={16} color={showSuggestCard ? '#7C3AED' : C.secondary} />
-                  </Pressable>
+            <View style={styles.passwordFieldWrap}>
+              <AuthField
+                ref={passwordRef}
+                label={t('auth.registerPasswordLabel')}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  clearFieldError('password');
+                  if (showSuggestCard) setShowSuggestCard(false);
+                }}
+                onFocus={() => {
+                  if (!password) {
+                    if (!suggestedPassword) setSuggestedPassword(generateStrongPassword());
+                    setShowSuggestCard(true);
+                  }
+                }}
+                secureTextEntry={!showPass}
+                placeholder={t('auth.passwordPlaceholder')}
+                autoComplete="new-password"
+                textContentType="newPassword"
+                returnKeyType="done"
+                editable={!loading}
+                // Do not trim — backend counts raw length including spaces
+                accessibilityLabel={t('auth.passwordLabel')}
+                error={fieldErrors.password}
+                hint={t('auth.passwordHint', { min: PASSWORD_MIN })}
+                onSubmitEditing={() => void submit()}
+                accessory={
                   <PasswordToggle
                     visible={showPass}
                     onToggle={() => setShowPass((s) => !s)}
                     showLabel={t('auth.passwordShow')}
                     hideLabel={t('auth.passwordHide')}
                   />
-                </View>
-              }
-              testID="register-password"
-            />
+                }
+                testID="register-password"
+              />
 
-            {showSuggestCard ? (
-              <View style={styles.autofillPill}>
-                <Pressable
-                  style={({ pressed }) => [styles.autofillMain, pressed && styles.pressed]}
-                  onPress={() => {
-                    setPassword(suggestedPassword);
-                    setShowPass(true);
-                    clearFieldError('password');
-                    setShowSuggestCard(false);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('auth.passwordSuggestUse')}
-                >
-                  <View style={styles.autofillKeyBubble}>
-                    <Feather name="key" size={14} color="#7C3AED" />
+              {showSuggestCard && !password && suggestedPassword ? (
+                <View style={styles.autofillPopover}>
+                  <Pressable
+                    style={({ pressed }) => [styles.autofillMain, pressed && styles.pressed]}
+                    onPress={() => {
+                      setPassword(suggestedPassword);
+                      setShowPass(true);
+                      clearFieldError('password');
+                      setShowSuggestCard(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('auth.passwordSuggestUse')}
+                  >
+                    <View style={styles.autofillKeyBubble}>
+                      <Feather name="key" size={14} color="#7C3AED" />
+                    </View>
+                    <View style={styles.autofillTextCol}>
+                      <Text style={styles.autofillCaption}>{t('auth.passwordSuggestTitle')}</Text>
+                      <Text style={styles.autofillPassText} numberOfLines={1}>
+                        {suggestedPassword}
+                      </Text>
+                    </View>
+                  </Pressable>
+
+                  <View style={styles.autofillActions}>
+                    <Pressable
+                      style={({ pressed }) => [styles.autofillIconBtn, pressed && styles.pressed]}
+                      onPress={() => setSuggestedPassword(generateStrongPassword())}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('auth.passwordSuggestRegenerate')}
+                    >
+                      <Feather name="refresh-cw" size={13} color="#7C3AED" />
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [styles.autofillIconBtn, pressed && styles.pressed]}
+                      onPress={() => setShowSuggestCard(false)}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('common.cancel')}
+                    >
+                      <Feather name="x" size={14} color="#9CA3AF" />
+                    </Pressable>
                   </View>
-                  <Text style={styles.autofillPassText} numberOfLines={1}>
-                    {suggestedPassword}
-                  </Text>
-                </Pressable>
-
-                <View style={styles.autofillActions}>
-                  <Pressable
-                    style={({ pressed }) => [styles.autofillIconBtn, pressed && styles.pressed]}
-                    onPress={() => setSuggestedPassword(generateStrongPassword())}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('auth.passwordSuggestRegenerate')}
-                  >
-                    <Feather name="refresh-cw" size={13} color="#7C3AED" />
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [styles.autofillIconBtn, pressed && styles.pressed]}
-                    onPress={() => setShowSuggestCard(false)}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('common.cancel')}
-                  >
-                    <Feather name="x" size={14} color="#9CA3AF" />
-                  </Pressable>
                 </View>
-              </View>
-            ) : null}
+              ) : null}
+            </View>
           </View>
 
           {error ? (
@@ -404,7 +395,7 @@ const styles = StyleSheet.create({
   form: { marginTop: 18, gap: 16 },
   error: { marginTop: 16 },
   altCta: { marginTop: 12 },
-  cta: { marginTop: 24 },
+  cta: { marginTop: 32, position: 'relative', zIndex: 1 },
   footer: { marginTop: 12 },
   legal: {
     marginTop: 4,
@@ -416,15 +407,16 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: C.secondary,
   },
-  passAccessoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  passwordFieldWrap: {
+    position: 'relative',
+    zIndex: 100,
   },
-  keySuggestToggle: {
-    padding: 4,
-  },
-  autofillPill: {
+  autofillPopover: {
+    position: 'absolute',
+    top: 76,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -432,37 +424,45 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#C4B5FD',
     borderRadius: 14,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    marginTop: -8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     gap: 8,
     ...Platform.select({
-      ios: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8 },
-      android: { elevation: 3 },
-      web: { boxShadow: '0 4px 14px rgba(124, 58, 237, 0.12)' },
+      ios: { shadowColor: '#4C1D95', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 16 },
+      android: { elevation: 8 },
+      web: { boxShadow: '0 10px 28px rgba(76, 29, 149, 0.22)' },
     }),
   },
   autofillMain: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     minWidth: 0,
     paddingVertical: 2,
   },
   autofillKeyBubble: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     backgroundColor: '#EDE9FE',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  autofillPassText: {
+  autofillTextCol: {
     flex: 1,
+    minWidth: 0,
+  },
+  autofillCaption: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: '#7C3AED',
+    marginBottom: 2,
+  },
+  autofillPassText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 14.5,
-    color: '#5B21B6',
+    fontSize: 15,
+    color: '#4C1D95',
     letterSpacing: 1.2,
   },
   autofillActions: {
@@ -471,8 +471,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   autofillIconBtn: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
