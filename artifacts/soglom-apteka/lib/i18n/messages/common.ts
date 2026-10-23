@@ -55,6 +55,7 @@ export default defineMessages({
     navNotFound: 'Sahifa topilmadi',
     navCashback: 'Cashback',
     navSettings: 'Sozlamalar',
+    navAddresses: 'Manzillarim',
 
     currency: 'so‘m',
     unitPiece: 'dona',
@@ -146,6 +147,7 @@ export default defineMessages({
     navNotFound: 'Страница не найдена',
     navCashback: 'Кэшбэк',
     navSettings: 'Настройки',
+    navAddresses: 'Мои адреса',
 
     currency: 'сум',
     unitPiece: 'шт.',
@@ -237,6 +239,7 @@ export default defineMessages({
     navNotFound: 'Page not found',
     navCashback: 'Cashback',
     navSettings: 'Settings',
+    navAddresses: 'My addresses',
 
     currency: 'UZS',
     unitPiece: 'pcs',

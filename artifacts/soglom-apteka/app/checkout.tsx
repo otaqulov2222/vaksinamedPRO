@@ -17,7 +17,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { localizedName } from '@/lib/i18n/data';
-import { api, API_URL, newIdempotencyKey, type ApiError } from '@/lib/api';
+import { api, API_URL, newIdempotencyKey, type ApiError, type CustomerSavedAddress } from '@/lib/api';
+import DeliveryMapPickerModal from '@/components/DeliveryMapPickerModal';
+import type { DeliveryAddressSelection } from '@/lib/maps';
 import { confirmAction, notify } from '@/lib/dialogs';
 import type { TranslationKey } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
@@ -107,11 +109,15 @@ export default function CheckoutScreen() {
   const narrow = width < 380;
   const contentWidth = Math.min(width, 480);
 
+  const [fulfillment, setFulfillment] = useState<'pickup' | 'delivery'>('pickup');
   const [branchId, setBranchId] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('pay_at_branch');
   const [useCashback, setUseCashback] = useState(false);
   const [cart, setCart] = useState<any>(null);
   const [rules, setRules] = useState<any>(null);
+  const [savedAddresses, setSavedAddresses] = useState<CustomerSavedAddress[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<CustomerSavedAddress | null>(null);
+  const [deliveryMapModalVisible, setDeliveryMapModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -123,6 +129,8 @@ export default function CheckoutScreen() {
   const lastFetchAt = useRef(0);
   const cartRef = useRef<any>(null);
   cartRef.current = cart;
+  const selectedAddressRef = useRef<CustomerSavedAddress | null>(null);
+  selectedAddressRef.current = selectedAddress;
 
   const applyCart = useCallback(
     (c: any) => {
@@ -149,14 +157,21 @@ export default function CheckoutScreen() {
       setLoadError(null);
 
       try {
-        const [, c, r] = await Promise.all([
+        const [, c, r, addrRes] = await Promise.all([
           refresh(),
           api.cart(),
           api.cashbackRules().catch(() => null),
+          api.getAddresses().catch(() => null),
         ]);
         if (gen !== loadGen.current) return;
         applyCart(c);
         setRules(r);
+        if (Array.isArray(addrRes?.addresses)) {
+          setSavedAddresses(addrRes?.addresses);
+          if (!selectedAddressRef.current && addrRes.addresses.length > 0) {
+            setSelectedAddress(addrRes.addresses[0]);
+          }
+        }
         lastFetchAt.current = Date.now();
       } catch (error) {
         if (gen !== loadGen.current) return;
@@ -190,6 +205,58 @@ export default function CheckoutScreen() {
     router.replace('/cart');
   };
 
+  const DELIVERY_FEE = 15000;
+  const deliveryFee = fulfillment === 'delivery' ? DELIVERY_FEE : 0;
+
+  const handleSelectFulfillment = (type: 'pickup' | 'delivery') => {
+    setFulfillment(type);
+    if (type === 'delivery' && paymentMethod === 'pay_at_branch') {
+      setPaymentMethod('payme');
+    }
+  };
+
+  const handleMapConfirm = async (sel: DeliveryAddressSelection) => {
+    setDeliveryMapModalVisible(false);
+    try {
+      const res = await api.createAddress({
+        label: 'home',
+        formattedAddress: sel.formattedAddress,
+        latitude: sel.latitude,
+        longitude: sel.longitude,
+        district: sel.district,
+        street: sel.street,
+        house: sel.house,
+        apartment: sel.apartment,
+        entrance: sel.entrance,
+        floor: sel.floor,
+        landmark: sel.landmark,
+        courierNote: sel.courierNote,
+        isDefault: savedAddresses.length === 0,
+      });
+      if (res?.address) {
+        setSelectedAddress(res.address);
+        setSavedAddresses((prev) => [res.address, ...prev]);
+      } else {
+        await loadCheckout({ force: true });
+      }
+    } catch (err) {
+      notify(t('common.errorTitle'), localizeError(err, t));
+    }
+  };
+
+  const getAddressLabelText = (addr: CustomerSavedAddress) => {
+    if (addr.title && addr.title.trim().length > 0) return addr.title;
+    if (addr.label === 'work') return t('profile.addressLabelWork');
+    if (addr.label === 'other') return t('profile.addressLabelOther');
+    return t('profile.addressLabelHome');
+  };
+
+  const getAddressIcon = (label: string) => {
+    if (label === 'work') return 'briefcase';
+    if (label === 'other') return 'map-pin';
+    return 'home';
+  };
+
   const items = Array.isArray(cart?.items) ? cart.items : [];
   const hasItems = items.length > 0;
   const selectedBranch = cart?.branch || null;
@@ -213,7 +280,7 @@ export default function CheckoutScreen() {
       ? Math.min(balanceNum, Math.floor(goods * spendCap))
       : null;
   const cashbackUsed = cashbackPreview != null && cashbackPreview > 0 ? cashbackPreview : 0;
-  const totalPreview = Math.max(0, goods - cashbackUsed);
+  const totalPreview = Math.max(0, goods + deliveryFee - cashbackUsed);
 
   const stockIssues = items.filter((item: any) => Boolean(item.stockInsufficient));
 
@@ -224,6 +291,7 @@ export default function CheckoutScreen() {
     icon: string;
     iconColor: string;
     iconBg: string;
+    available: boolean;
   }> = [
     {
       value: 'pay_at_branch',
@@ -232,6 +300,7 @@ export default function CheckoutScreen() {
       icon: 'storefront-outline',
       iconColor: PURPLE,
       iconBg: '#F3EEFF',
+      available: fulfillment === 'pickup',
     },
     {
       value: 'payme',
@@ -240,6 +309,7 @@ export default function CheckoutScreen() {
       icon: 'credit-card-outline',
       iconColor: PAYME_COLOR,
       iconBg: '#E0F7F6',
+      available: true,
     },
     {
       value: 'click',
@@ -248,10 +318,15 @@ export default function CheckoutScreen() {
       icon: 'cellphone-check',
       iconColor: CLICK_COLOR,
       iconBg: '#EBF3FF',
+      available: true,
     },
-  ];
+  ].filter((opt) => opt.available);
 
-  const canSubmit = hasItems && branchId != null && !submitting;
+  const canSubmit =
+    hasItems &&
+    branchId != null &&
+    !submitting &&
+    (fulfillment === 'pickup' || selectedAddress != null);
 
   const explainBlocked = () => {
     if (!hasItems) {
@@ -260,6 +335,10 @@ export default function CheckoutScreen() {
     }
     if (!branchId) {
       notify(t('cart.branchLabel'), t('cart.checkoutBranchRequired'));
+      return;
+    }
+    if (fulfillment === 'delivery' && !selectedAddress) {
+      notify(t('cart.checkoutAddressTitle'), t('cart.checkoutAddressRequired'));
       return;
     }
   };
@@ -277,6 +356,10 @@ export default function CheckoutScreen() {
     }
     if (!branchId) {
       notify(t('cart.branchLabel'), t('cart.checkoutBranchRequired'));
+      return;
+    }
+    if (fulfillment === 'delivery' && !selectedAddress) {
+      notify(t('cart.checkoutAddressTitle'), t('cart.checkoutAddressRequired'));
       return;
     }
     if (stockIssues.length) {
@@ -307,12 +390,26 @@ export default function CheckoutScreen() {
     setSubmitting(true);
     try {
       await api.setCartBranch(branchId);
+      const deliveryAddressText =
+        fulfillment === 'delivery' && selectedAddress
+          ? [
+              selectedAddress.formattedAddress,
+              selectedAddress.house ? `${t('profile.addressHouse')} ${selectedAddress.house}` : null,
+              selectedAddress.apartment ? `${t('profile.addressApartment')} ${selectedAddress.apartment}` : null,
+              selectedAddress.entrance ? `${t('profile.addressEntrance')} ${selectedAddress.entrance}` : null,
+              selectedAddress.floor ? `${t('profile.addressFloor')} ${selectedAddress.floor}` : null,
+              selectedAddress.courierNote || null,
+            ]
+              .filter(Boolean)
+              .join(', ')
+          : '';
+
       const result = await api.checkout(
         {
           branchId,
-          fulfillment: 'pickup',
+          fulfillment,
           paymentMethod,
-          address: '',
+          address: deliveryAddressText,
           useCashback: Boolean(useCashback && showCashback),
         },
         { idempotencyKey: idempotencyRef.current },
@@ -468,78 +565,332 @@ export default function CheckoutScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* SECTION 1: Fulfillment & Pharmacy (Unified Card) */}
+        {/* SECTION 1: Fulfillment & Branch / Delivery Address */}
         <View style={styles.sectionWrap}>
-          <View style={styles.fulfillmentCard}>
-            {/* Top Fulfillment Method Row */}
-            <View style={styles.fulfillmentHeader}>
-              <View style={styles.fulfillmentIconWrap}>
-                <Feather name="shopping-bag" size={18} color={PURPLE} />
-              </View>
-              <View style={styles.fulfillmentHeaderTextWrap}>
-                <Text style={styles.fulfillmentTitle}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
-                <Text style={styles.fulfillmentSub}>{t('cart.checkoutPickupReady')}</Text>
-              </View>
-              <View style={styles.freeBadge}>
-                <Text style={styles.freeBadgeText}>{t('cart.checkoutPickupFree')}</Text>
-              </View>
-            </View>
-
-            <View style={styles.branchBoxDivider} />
-
-            {/* Selected Branch Content */}
-            {selectedBranch?.name ? (
-              <View style={styles.branchDetails}>
-                <View style={styles.branchHeaderRow}>
-                  <View style={styles.branchPinWrap}>
-                    <Feather name="map-pin" size={15} color={PURPLE} />
-                  </View>
-                  <View style={styles.branchTitleWrap}>
-                    <Text style={styles.branchName} numberOfLines={2}>
-                      {String(selectedBranch.name)}
-                    </Text>
-                    {selectedBranch.address ? (
-                      <Text style={styles.branchAddress} numberOfLines={2}>
-                        {String(selectedBranch.address)}
-                      </Text>
-                    ) : null}
-                    {selectedBranch.hours ? (
-                      <View style={styles.branchHoursRow}>
-                        <Feather name="clock" size={12} color={MUTED} />
-                        <Text style={styles.branchHoursText} numberOfLines={1}>
-                          {String(selectedBranch.hours)}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-
-                <Pressable
-                  style={styles.changeBranchBtn}
-                  onPress={openBranches}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('cart.changeBranchA11y')}
+          {/* Fulfillment Toggle Tabs */}
+          <View style={styles.fulfillmentTabs}>
+            <Pressable
+              style={[
+                styles.fulfillmentTab,
+                fulfillment === 'pickup' && styles.fulfillmentTabActive,
+              ]}
+              onPress={() => handleSelectFulfillment('pickup')}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: fulfillment === 'pickup' }}
+              accessibilityLabel={fulfillmentTypeLabel(t, 'pickup')}
+            >
+              <Feather
+                name="shopping-bag"
+                size={16}
+                color={fulfillment === 'pickup' ? '#FFFFFF' : PURPLE}
+              />
+              <Text
+                style={[
+                  styles.fulfillmentTabText,
+                  fulfillment === 'pickup' && styles.fulfillmentTabTextActive,
+                ]}
+              >
+                {fulfillmentTypeLabel(t, 'pickup')}
+              </Text>
+              <View
+                style={[
+                  styles.tabFeeBadge,
+                  fulfillment === 'pickup' ? styles.tabFeeBadgeActive : styles.tabFeeBadgeInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabFeeBadgeText,
+                    fulfillment === 'pickup' && styles.tabFeeBadgeTextActive,
+                  ]}
                 >
-                  <Feather name="map" size={14} color={PURPLE} />
-                  <Text style={styles.changeBranchBtnText}>{t('cart.change')}</Text>
-                  <Feather name="chevron-right" size={14} color={PURPLE} />
-                </Pressable>
+                  {t('cart.checkoutPickupFree')}
+                </Text>
               </View>
-            ) : (
-              <View style={styles.branchEmptyBox}>
-                <Text style={styles.warnText}>{t('cart.branchNotSelected')}</Text>
-                <Pressable
-                  style={styles.selectBranchCta}
-                  onPress={openBranches}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('cart.chooseBranch')}
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.fulfillmentTab,
+                fulfillment === 'delivery' && styles.fulfillmentTabActive,
+              ]}
+              onPress={() => handleSelectFulfillment('delivery')}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: fulfillment === 'delivery' }}
+              accessibilityLabel={fulfillmentTypeLabel(t, 'delivery')}
+            >
+              <Feather
+                name="truck"
+                size={16}
+                color={fulfillment === 'delivery' ? '#FFFFFF' : PURPLE}
+              />
+              <Text
+                style={[
+                  styles.fulfillmentTabText,
+                  fulfillment === 'delivery' && styles.fulfillmentTabTextActive,
+                ]}
+              >
+                {fulfillmentTypeLabel(t, 'delivery')}
+              </Text>
+              <View
+                style={[
+                  styles.tabFeeBadge,
+                  fulfillment === 'delivery' ? styles.tabFeeBadgeActive : styles.tabFeeBadgeInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabFeeBadgeText,
+                    fulfillment === 'delivery' && styles.tabFeeBadgeTextActive,
+                  ]}
                 >
-                  <Feather name="plus-circle" size={16} color="#FFFFFF" />
-                  <Text style={styles.selectBranchCtaText}>{t('cart.chooseBranch')}</Text>
-                </Pressable>
+                  {fmt.money(DELIVERY_FEE)}
+                </Text>
               </View>
-            )}
+            </Pressable>
           </View>
+
+          {/* Fulfillment Content Card */}
+          {fulfillment === 'pickup' ? (
+            <View style={styles.fulfillmentCard}>
+              <View style={styles.fulfillmentHeader}>
+                <View style={styles.fulfillmentIconWrap}>
+                  <Feather name="shopping-bag" size={18} color={PURPLE} />
+                </View>
+                <View style={styles.fulfillmentHeaderTextWrap}>
+                  <Text style={styles.fulfillmentTitle}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
+                  <Text style={styles.fulfillmentSub}>{t('cart.checkoutPickupReady')}</Text>
+                </View>
+                <View style={styles.freeBadge}>
+                  <Text style={styles.freeBadgeText}>{t('cart.checkoutPickupFree')}</Text>
+                </View>
+              </View>
+
+              <View style={styles.branchBoxDivider} />
+
+              {selectedBranch?.name ? (
+                <View style={styles.branchDetails}>
+                  <View style={styles.branchHeaderRow}>
+                    <View style={styles.branchPinWrap}>
+                      <Feather name="map-pin" size={15} color={PURPLE} />
+                    </View>
+                    <View style={styles.branchTitleWrap}>
+                      <Text style={styles.branchName} numberOfLines={2}>
+                        {String(selectedBranch.name)}
+                      </Text>
+                      {selectedBranch.address ? (
+                        <Text style={styles.branchAddress} numberOfLines={2}>
+                          {String(selectedBranch.address)}
+                        </Text>
+                      ) : null}
+                      {selectedBranch.hours ? (
+                        <View style={styles.branchHoursRow}>
+                          <Feather name="clock" size={12} color={MUTED} />
+                          <Text style={styles.branchHoursText} numberOfLines={1}>
+                            {String(selectedBranch.hours)}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <Pressable
+                    style={styles.changeBranchBtn}
+                    onPress={openBranches}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('cart.changeBranchA11y')}
+                  >
+                    <Feather name="map" size={14} color={PURPLE} />
+                    <Text style={styles.changeBranchBtnText}>{t('cart.change')}</Text>
+                    <Feather name="chevron-right" size={14} color={PURPLE} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.branchEmptyBox}>
+                  <Text style={styles.warnText}>{t('cart.branchNotSelected')}</Text>
+                  <Pressable
+                    style={styles.selectBranchCta}
+                    onPress={openBranches}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('cart.chooseBranch')}
+                  >
+                    <Feather name="plus-circle" size={16} color="#FFFFFF" />
+                    <Text style={styles.selectBranchCtaText}>{t('cart.chooseBranch')}</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.fulfillmentCard}>
+              <View style={styles.fulfillmentHeader}>
+                <View style={styles.fulfillmentIconWrap}>
+                  <Feather name="truck" size={18} color={PURPLE} />
+                </View>
+                <View style={styles.fulfillmentHeaderTextWrap}>
+                  <Text style={styles.fulfillmentTitle}>{t('cart.checkoutAddressLabel')}</Text>
+                  <Text style={styles.fulfillmentSub}>{t('cart.checkoutDeliveryInfo')}</Text>
+                </View>
+                <Pressable
+                  onPress={() => router.push('/addresses')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.addressesTitle')}
+                  style={styles.manageAddressLink}
+                >
+                  <Text style={styles.manageAddressLinkText}>{t('profile.addressesTitle')}</Text>
+                  <Feather name="chevron-right" size={13} color={PURPLE} />
+                </Pressable>
+              </View>
+
+              {/* Saved Addresses Chip Row */}
+              {savedAddresses.length > 0 ? (
+                <View style={styles.savedAddressesWrap}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.addressChipsScroll}
+                  >
+                    {savedAddresses.map((addr) => {
+                      const isSel = selectedAddress?.id === addr.id;
+                      return (
+                        <Pressable
+                          key={addr.id}
+                          style={[styles.addrChip, isSel && styles.addrChipActive]}
+                          onPress={() => setSelectedAddress(addr)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSel }}
+                          accessibilityLabel={getAddressLabelText(addr)}
+                        >
+                          <Feather
+                            name={getAddressIcon(addr.label) as any}
+                            size={13}
+                            color={isSel ? '#FFFFFF' : PURPLE}
+                          />
+                          <Text style={[styles.addrChipText, isSel && styles.addrChipTextActive]}>
+                            {getAddressLabelText(addr)}
+                          </Text>
+                          {addr.isDefault ? (
+                            <View style={[styles.defDot, isSel && styles.defDotActive]} />
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                    <Pressable
+                      style={styles.addrChipAdd}
+                      onPress={() => setDeliveryMapModalVisible(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('profile.addAddress')}
+                    >
+                      <Feather name="plus" size={14} color={PURPLE} />
+                      <Text style={styles.addrChipAddText}>{t('profile.addAddress')}</Text>
+                    </Pressable>
+                  </ScrollView>
+                </View>
+              ) : null}
+
+              <View style={styles.branchBoxDivider} />
+
+              {/* Selected Address Details Box */}
+              {selectedAddress ? (
+                <View style={styles.branchDetails}>
+                  <View style={styles.branchHeaderRow}>
+                    <View style={styles.branchPinWrap}>
+                      <Feather
+                        name={getAddressIcon(selectedAddress.label) as any}
+                        size={15}
+                        color={PURPLE}
+                      />
+                    </View>
+                    <View style={styles.branchTitleWrap}>
+                      <View style={styles.selectedAddrHeaderRow}>
+                        <Text style={styles.branchName} numberOfLines={1}>
+                          {getAddressLabelText(selectedAddress)}
+                        </Text>
+                        {selectedAddress.isDefault ? (
+                          <View style={styles.selectedAddrDefBadge}>
+                            <Text style={styles.selectedAddrDefBadgeText}>
+                              {t('profile.addressDefaultBadge')}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.branchAddress} numberOfLines={3}>
+                        {selectedAddress.formattedAddress}
+                      </Text>
+                      {selectedAddress.house ||
+                      selectedAddress.apartment ||
+                      selectedAddress.entrance ||
+                      selectedAddress.floor ? (
+                        <View style={styles.addrDetailsMetaRow}>
+                          {selectedAddress.house ? (
+                            <Text style={styles.addrMetaPill}>
+                              {`${t('profile.addressHouse')} ${selectedAddress.house}`}
+                            </Text>
+                          ) : null}
+                          {selectedAddress.apartment ? (
+                            <Text style={styles.addrMetaPill}>
+                              {`${t('profile.addressApartment')} ${selectedAddress.apartment}`}
+                            </Text>
+                          ) : null}
+                          {selectedAddress.entrance ? (
+                            <Text style={styles.addrMetaPill}>
+                              {`${t('profile.addressEntrance')} ${selectedAddress.entrance}`}
+                            </Text>
+                          ) : null}
+                          {selectedAddress.floor ? (
+                            <Text style={styles.addrMetaPill}>
+                              {`${t('profile.addressFloor')} ${selectedAddress.floor}`}
+                            </Text>
+                          ) : null}
+                        </View>
+                      ) : null}
+                      {selectedAddress.courierNote ? (
+                        <View style={styles.courierNoteRow}>
+                          <Feather name="message-square" size={12} color={MUTED} />
+                          <Text style={styles.courierNoteText} numberOfLines={2}>
+                            {selectedAddress.courierNote}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <Pressable
+                    style={styles.changeBranchBtn}
+                    onPress={() => setDeliveryMapModalVisible(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('cart.checkoutChangeAddress')}
+                  >
+                    <Feather name="map-pin" size={14} color={PURPLE} />
+                    <Text style={styles.changeBranchBtnText}>{t('cart.checkoutChangeAddress')}</Text>
+                    <Feather name="chevron-right" size={14} color={PURPLE} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.branchEmptyBox}>
+                  <Text style={styles.warnText}>{t('cart.checkoutAddressRequired')}</Text>
+                  <Pressable
+                    style={styles.selectBranchCta}
+                    onPress={() => setDeliveryMapModalVisible(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('profile.addAddress')}
+                  >
+                    <Feather name="plus-circle" size={16} color="#FFFFFF" />
+                    <Text style={styles.selectBranchCtaText}>{t('profile.addAddress')}</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {/* Nearest branch dispatch reassurance */}
+              {selectedBranch?.name ? (
+                <View style={styles.dispatchNoteRow}>
+                  <Feather name="package" size={13} color={MUTED} />
+                  <Text style={styles.dispatchNoteText} numberOfLines={1}>
+                    {selectedBranch.name}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          )}
         </View>
 
         {/* Stock Alert (if any issues) */}
@@ -719,7 +1070,9 @@ export default function CheckoutScreen() {
         <View style={styles.reassuranceBanner}>
           <Feather name="shield" size={18} color={PURPLE} />
           <Text style={styles.reassuranceText}>
-            {t('cart.checkoutPickupGuarantee')}
+            {fulfillment === 'delivery'
+              ? t('cart.checkoutDeliveryTiming')
+              : t('cart.checkoutPickupGuarantee')}
           </Text>
         </View>
 
@@ -727,16 +1080,23 @@ export default function CheckoutScreen() {
         <View style={styles.sectionWrap}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>{t('cart.summaryTitle')}</Text>
-            
+
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>{t('cart.summaryItems')}</Text>
               <Text style={styles.summaryValue}>{fmt.money(goods)}</Text>
             </View>
 
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
-              <Text style={styles.summaryValueFree}>{t('cart.checkoutPickupFree')}</Text>
-            </View>
+            {fulfillment === 'delivery' ? (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{fulfillmentTypeLabel(t, 'delivery')}</Text>
+                <Text style={styles.summaryValue}>{fmt.money(DELIVERY_FEE)}</Text>
+              </View>
+            ) : (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{fulfillmentTypeLabel(t, 'pickup')}</Text>
+                <Text style={styles.summaryValueFree}>{t('cart.checkoutPickupFree')}</Text>
+              </View>
+            )}
 
             {useCashback && cashbackUsed > 0 ? (
               <View style={styles.summaryRow}>
@@ -810,6 +1170,12 @@ export default function CheckoutScreen() {
           </View>
         </View>
       ) : null}
+
+      <DeliveryMapPickerModal
+        visible={deliveryMapModalVisible}
+        onClose={() => setDeliveryMapModalVisible(false)}
+        onConfirm={handleMapConfirm}
+      />
     </View>
   );
 }
@@ -907,6 +1273,190 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
     color: PURPLE,
+  },
+
+  /* Fulfillment Tabs */
+  fulfillmentTabs: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  fulfillmentTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: CARD,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: BORDER,
+  },
+  fulfillmentTabActive: {
+    backgroundColor: PURPLE,
+    borderColor: PURPLE,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 10px rgba(106, 34, 214, 0.2)' } as any,
+    }),
+  },
+  fulfillmentTabText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13.5,
+    color: PURPLE_DEEP,
+  },
+  fulfillmentTabTextActive: {
+    color: '#FFFFFF',
+  },
+  tabFeeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  tabFeeBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  tabFeeBadgeInactive: {
+    backgroundColor: LAVENDER,
+  },
+  tabFeeBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: PURPLE,
+  },
+  tabFeeBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+
+  manageAddressLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  manageAddressLinkText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: PURPLE,
+  },
+
+  savedAddressesWrap: {
+    marginTop: 12,
+  },
+  addressChipsScroll: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  addrChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: LAVENDER,
+    borderWidth: 1,
+    borderColor: '#E2D9F5',
+  },
+  addrChipActive: {
+    backgroundColor: PURPLE,
+    borderColor: PURPLE,
+  },
+  addrChipText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: PURPLE,
+  },
+  addrChipTextActive: {
+    color: '#FFFFFF',
+  },
+  defDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: PURPLE,
+  },
+  defDotActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  addrChipAdd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: PURPLE,
+    backgroundColor: '#FAF7FF',
+  },
+  addrChipAddText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: PURPLE,
+  },
+
+  selectedAddrHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedAddrDefBadge: {
+    backgroundColor: '#E8F8F0',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  selectedAddrDefBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10.5,
+    color: OK,
+  },
+  addrDetailsMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  addrMetaPill: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: PURPLE_DEEP,
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  courierNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+  },
+  courierNoteText: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11.5,
+    color: MUTED,
+    fontStyle: 'italic',
+  },
+  dispatchNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F0EEF5',
+  },
+  dispatchNoteText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    color: MUTED,
   },
 
   /* Fulfillment & Branch Card */

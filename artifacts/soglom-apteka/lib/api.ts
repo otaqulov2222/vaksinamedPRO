@@ -402,6 +402,74 @@ export const api = {
       lowStockAlerts: any[];
       needsCaregiverAttention: boolean;
     }>(`/api/family/${id}/summary`),
+  getAddresses: () =>
+    request<{ addresses: CustomerSavedAddress[]; count: number }>('/api/customer/addresses'),
+  createAddress: (body: {
+    label?: 'home' | 'work' | 'other';
+    title?: string;
+    formattedAddress: string;
+    latitude: number;
+    longitude: number;
+    district?: string | null;
+    street?: string | null;
+    house?: string | null;
+    apartment?: string | null;
+    entrance?: string | null;
+    floor?: string | null;
+    landmark?: string | null;
+    courierNote?: string | null;
+    isDefault?: boolean;
+  }) =>
+    request<{ address: CustomerSavedAddress }>('/api/customer/addresses', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateAddress: (
+    id: number,
+    body: Partial<{
+      label: 'home' | 'work' | 'other';
+      title: string;
+      formattedAddress: string;
+      latitude: number;
+      longitude: number;
+      district: string | null;
+      street: string | null;
+      house: string | null;
+      apartment: string | null;
+      entrance: string | null;
+      floor: string | null;
+      landmark: string | null;
+      courierNote: string | null;
+      isDefault: boolean;
+    }>,
+  ) =>
+    request<{ address: CustomerSavedAddress }>(`/api/customer/addresses/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteAddress: (id: number) =>
+    request<{ success: boolean }>(`/api/customer/addresses/${id}`, { method: 'DELETE' }),
+};
+
+export type CustomerSavedAddress = {
+  id: number;
+  customerId: number;
+  label: 'home' | 'work' | 'other';
+  title: string;
+  formattedAddress: string;
+  latitude: number;
+  longitude: number;
+  district?: string | null;
+  street?: string | null;
+  house?: string | null;
+  apartment?: string | null;
+  entrance?: string | null;
+  floor?: string | null;
+  landmark?: string | null;
+  courierNote?: string | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export { API_URL, newIdempotencyKey };

@@ -190,6 +190,10 @@ function RootLayoutNav() {
           options={{ title: t('common.navEditProfile'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
         />
         <Stack.Screen
+          name="addresses"
+          options={{ title: t('common.navAddresses'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
+        />
+        <Stack.Screen
           name="notifications"
           options={{ title: t('common.navNotifications'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
         />

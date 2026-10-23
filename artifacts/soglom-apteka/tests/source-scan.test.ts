@@ -268,6 +268,7 @@ describe('profile screen entry points', () => {
     const order = [
       'profile-cashback',
       'profile-orders',
+      'profile-addresses',
       'profile-branches',
       'profile-notifications',
       'profile-help',
