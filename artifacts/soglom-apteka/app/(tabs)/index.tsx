@@ -519,30 +519,194 @@ export default function HomeScreen() {
         </ScrollView>
       )}
 
-      {/* AI Prescription Banner */}
+      {/* AI PRESCRIPTION SCANNER HERO CARD */}
       <Pressable
-        style={({ pressed }) => [styles.rxBanner, pressed && styles.pressed, { marginTop: SPACE }]}
+        style={({ pressed }) => [styles.aiScanCard, pressed && styles.pressed, { marginTop: SPACE + 4 }]}
         onPress={() => router.push('/prescription')}
         accessibilityRole="button"
-        accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
+        accessibilityLabel={t('home.aiScanTitle')}
       >
-        <View style={styles.rxBannerLeft}>
-          <Text style={styles.rxBannerTitle} numberOfLines={1}>
-            {t('catalog.prescriptionScanBannerTitle')}
-          </Text>
-          <Text style={styles.rxBannerSub} numberOfLines={2}>
-            {t('catalog.prescriptionScanBannerSub')}
-          </Text>
-        </View>
-        <View style={styles.rxBannerRight}>
-          <View style={styles.rxCameraBubble}>
-            <MaterialCommunityIcons name="line-scan" size={22} color="#FFFFFF" />
+        <View style={styles.aiScanTopRow}>
+          <View style={styles.aiBadge}>
+            <Feather name="zap" size={12} color="#FFD233" />
+            <Text style={styles.aiBadgeText}>{t('home.aiScanBadge')}</Text>
           </View>
-          <Text style={styles.rxActionText} numberOfLines={1}>
-            {t('catalog.prescriptionScanAction')}
-          </Text>
+        </View>
+
+        <View style={styles.aiScanContentRow}>
+          <View style={styles.aiScanLeft}>
+            <Text style={styles.aiScanTitle} numberOfLines={1}>
+              {t('home.aiScanTitle')}
+            </Text>
+            <Text style={styles.aiScanSubtitle} numberOfLines={2}>
+              {t('home.aiScanSubtitle')}
+            </Text>
+          </View>
+          <View style={styles.aiScanRight}>
+            <View style={styles.aiScanIconBubble}>
+              <MaterialCommunityIcons name="line-scan" size={24} color="#FFFFFF" />
+            </View>
+            <Text style={styles.aiScanActionText} numberOfLines={1}>
+              {t('home.aiScanButton')}
+            </Text>
+          </View>
         </View>
       </Pressable>
+
+      {/* PROMOTIONS & SPECIAL OFFERS SECTION */}
+      <View style={[styles.sectionRow, { marginTop: SPACE + 10 }]}>
+        <Text style={styles.section} numberOfLines={1}>
+          {t('home.promotionsSectionTitle')}
+        </Text>
+        <Pressable
+          onPress={() => router.push('/promos')}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('home.promotionsAll')}
+        >
+          <Text style={styles.link}>{t('home.promotionsAll')} →</Text>
+        </Pressable>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.promoCardsScroll}
+      >
+        {/* Promo 1: Welcome bonus */}
+        <Pressable
+          onPress={() => router.push('/promos')}
+          style={({ pressed }) => [styles.promoTile, styles.promoTilePurple, pressed && styles.pressed]}
+        >
+          <View style={[styles.promoTileIconWrap, { backgroundColor: '#EDE9FE' }]}>
+            <Feather name="gift" size={18} color="#7C3AED" />
+          </View>
+          <Text style={styles.promoTileTitle} numberOfLines={1}>
+            {t('home.promoWelcomeTitle')}
+          </Text>
+          <Text style={styles.promoTileSubtitle} numberOfLines={2}>
+            {t('home.promoWelcomeSubtitle')}
+          </Text>
+        </Pressable>
+
+        {/* Promo 2: Seasonal vitamins */}
+        <Pressable
+          onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: 'vitamin' } } as any)}
+          style={({ pressed }) => [styles.promoTile, styles.promoTileAmber, pressed && styles.pressed]}
+        >
+          <View style={[styles.promoTileIconWrap, { backgroundColor: '#FEF3C7' }]}>
+            <MaterialCommunityIcons name="pill" size={18} color="#D97706" />
+          </View>
+          <Text style={styles.promoTileTitle} numberOfLines={1}>
+            {t('home.promoVitaminsTitle')}
+          </Text>
+          <Text style={styles.promoTileSubtitle} numberOfLines={2}>
+            {t('home.promoVitaminsSubtitle')}
+          </Text>
+        </Pressable>
+
+        {/* Promo 3: 24h pickup reservation */}
+        <Pressable
+          onPress={() => router.push('/branches')}
+          style={({ pressed }) => [styles.promoTile, styles.promoTileEmerald, pressed && styles.pressed]}
+        >
+          <View style={[styles.promoTileIconWrap, { backgroundColor: '#D1FAE5' }]}>
+            <MaterialCommunityIcons name="clock-check-outline" size={18} color="#059669" />
+          </View>
+          <Text style={styles.promoTileTitle} numberOfLines={1}>
+            {t('home.promoReservationTitle')}
+          </Text>
+          <Text style={styles.promoTileSubtitle} numberOfLines={2}>
+            {t('home.promoReservationSubtitle')}
+          </Text>
+        </Pressable>
+      </ScrollView>
+
+      {/* WHY VAKSINA MED? TRUST & QUALITY GRID */}
+      <View style={[styles.sectionRow, { marginTop: SPACE + 12 }]}>
+        <Text style={styles.section} numberOfLines={1}>
+          {t('home.whyUsTitle')}
+        </Text>
+      </View>
+
+      <View style={styles.trustGrid}>
+        <View style={styles.trustCard}>
+          <View style={[styles.trustIconWrap, { backgroundColor: '#F3E8FF' }]}>
+            <Feather name="shield" size={18} color={PURPLE} />
+          </View>
+          <Text style={styles.trustCardTitle}>{t('home.whyUsCertifiedTitle')}</Text>
+          <Text style={styles.trustCardDesc}>{t('home.whyUsCertifiedDesc')}</Text>
+        </View>
+
+        <View style={styles.trustCard}>
+          <View style={[styles.trustIconWrap, { backgroundColor: '#D1FAE5' }]}>
+            <Feather name="clock" size={18} color="#059669" />
+          </View>
+          <Text style={styles.trustCardTitle}>{t('home.whyUsReserveTitle')}</Text>
+          <Text style={styles.trustCardDesc}>{t('home.whyUsReserveDesc')}</Text>
+        </View>
+
+        <View style={styles.trustCard}>
+          <View style={[styles.trustIconWrap, { backgroundColor: '#FEF3C7' }]}>
+            <MaterialCommunityIcons name="wallet-giftcard" size={18} color="#D97706" />
+          </View>
+          <Text style={styles.trustCardTitle}>{t('home.whyUsCashbackTitle')}</Text>
+          <Text style={styles.trustCardDesc}>{t('home.whyUsCashbackDesc')}</Text>
+        </View>
+
+        <View style={styles.trustCard}>
+          <View style={[styles.trustIconWrap, { backgroundColor: '#DBEAFE' }]}>
+            <MaterialCommunityIcons name="doctor" size={18} color="#2563EB" />
+          </View>
+          <Text style={styles.trustCardTitle}>{t('home.whyUsPharmacistsTitle')}</Text>
+          <Text style={styles.trustCardDesc}>{t('home.whyUsPharmacistsDesc')}</Text>
+        </View>
+      </View>
+
+      {/* PHARMACIST SUPPORT & HELP CARD */}
+      <View style={[styles.supportCard, { marginTop: SPACE + 10 }]}>
+        <View style={styles.supportHeader}>
+          <View style={styles.supportIconWrap}>
+            <Feather name="headphones" size={20} color={PURPLE} />
+          </View>
+          <View style={styles.supportHeaderText}>
+            <Text style={styles.supportTitle}>{t('home.supportCardTitle')}</Text>
+            <Text style={styles.supportSubtitle}>{t('home.supportCardDesc')}</Text>
+          </View>
+        </View>
+
+        <View style={styles.supportActionsRow}>
+          <Pressable
+            style={({ pressed }) => [styles.supportCallBtn, pressed && styles.pressed]}
+            onPress={() => router.push('/branches')}
+            accessibilityRole="button"
+            accessibilityLabel={t('home.supportCallBtn')}
+          >
+            <Feather name="phone-call" size={15} color="#FFFFFF" />
+            <Text style={styles.supportCallBtnText}>{t('home.supportCallBtn')}</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.supportHelpBtn, pressed && styles.pressed]}
+            onPress={() => router.push('/help')}
+            accessibilityRole="button"
+            accessibilityLabel={t('home.supportHelpBtn')}
+          >
+            <Feather name="help-circle" size={15} color={PURPLE} />
+            <Text style={styles.supportHelpBtnText}>{t('home.supportHelpBtn')}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* BRAND FOOTER */}
+      <View style={[styles.brandFooter, { marginTop: SPACE + 16 }]}>
+        <View style={styles.brandTitleRow}>
+          <Text style={styles.brandTitleVaksina}>VAKSINA</Text>
+          <Text style={styles.brandTitleMed}>MED</Text>
+        </View>
+        <Text style={styles.brandTaglineText}>{t('auth.brandTagline')}</Text>
+        <Text style={styles.brandLicenseText}>{t('home.footerLicense')}</Text>
+      </View>
 
       {/* Clearance above floating tab bar */}
       <View style={styles.bottomClearance} />
@@ -1040,7 +1204,283 @@ const styles = StyleSheet.create({
   addBtnSuccess: {
     backgroundColor: '#10B981',
   },
+
+  // AI Prescription Hero Card
+  aiScanCard: {
+    backgroundColor: '#1C1236',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#38226B',
+    ...Platform.select({
+      ios: { shadowColor: '#6A22D6', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12 },
+      android: { elevation: 4 },
+      web: { boxShadow: '0 6px 20px rgba(106, 34, 214, 0.2)' },
+    }),
+  },
+  aiScanTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    gap: 5,
+  },
+  aiBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9.5,
+    color: '#FFD233',
+    letterSpacing: 0.6,
+  },
+  aiScanContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  aiScanLeft: {
+    flex: 1,
+  },
+  aiScanTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    lineHeight: 21,
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  aiScanSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16.5,
+    color: '#C4B5FD',
+  },
+  aiScanRight: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  aiScanIconBubble: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: '#6A22D6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#9055FD',
+  },
+  aiScanActionText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10.5,
+    color: '#E9D5FF',
+  },
+
+  // Promo cards scroll
+  promoCardsScroll: {
+    paddingRight: SCREEN_PAD,
+    gap: 12,
+    paddingVertical: 4,
+  },
+  promoTile: {
+    width: 170,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+  },
+  promoTilePurple: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
+  },
+  promoTileAmber: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  promoTileEmerald: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  promoTileIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  promoTileTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    lineHeight: 17,
+    color: PURPLE_DEEP,
+    marginBottom: 3,
+  },
+  promoTileSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#4B5563',
+  },
+
+  // Trust & quality grid
+  trustGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  trustCard: {
+    width: '48.5%',
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  trustIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  trustCardTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    lineHeight: 16,
+    color: PURPLE_DEEP,
+    marginBottom: 2,
+  },
+  trustCardDesc: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10.5,
+    lineHeight: 14,
+    color: MUTED,
+  },
+
+  // Support card
+  supportCard: {
+    backgroundColor: '#FAF7FF',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#EDE5F8',
+  },
+  supportHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
+  },
+  supportIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#EDE5F8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  supportHeaderText: {
+    flex: 1,
+  },
+  supportTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
+    marginBottom: 3,
+  },
+  supportSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: '#6B7280',
+  },
+  supportActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  supportCallBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: PURPLE,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  supportCallBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    color: '#FFFFFF',
+  },
+  supportHelpBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    gap: 6,
+  },
+  supportHelpBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    color: PURPLE,
+  },
+
+  // Brand Footer
+  brandFooter: {
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  brandTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  brandTitleVaksina: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    letterSpacing: 0.8,
+    color: '#6A22D6',
+  },
+  brandTitleMed: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    letterSpacing: 0.8,
+    color: '#EAB308',
+  },
+  brandTaglineText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 9.5,
+    letterSpacing: 0.4,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  brandLicenseText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    lineHeight: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+
   bottomClearance: {
-    height: Platform.OS === 'web' ? 48 : 68,
+    height: Platform.OS === 'web' ? 84 : 100,
   },
 });

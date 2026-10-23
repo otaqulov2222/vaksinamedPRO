@@ -89,6 +89,38 @@ export default defineMessages({
     rewardRedeemed: 'Almashtirildi',
     rewardRedeemFailed: 'Almashtirib bo‘lmadi',
     rewardMinRequired: 'Kamida {amount} kerak',
+
+    aiScanBadge: 'AI VISION · TEZKOR SKANER',
+    aiScanTitle: 'Retseptingiz bormi?',
+    aiScanSubtitle: 'Rasmga oling — sun’iy intellekt dorilarni soniyalarda aniqlaydi va kerakli preparatlarni topadi',
+    aiScanButton: 'Skanerlash',
+
+    promotionsSectionTitle: 'Aksiyalar va chegirmalar',
+    promotionsAll: 'Barchasi',
+
+    promoWelcomeTitle: '5 000 so‘m bonus',
+    promoWelcomeSubtitle: 'Yangi foydalanuvchilar uchun birinchi xaridda',
+    promoVitaminsTitle: 'Kuzgi immunitet',
+    promoVitaminsSubtitle: 'Vitaminlar va minerallarga 20% gacha keshbek',
+    promoReservationTitle: '24 soatlik bepul bron',
+    promoReservationSubtitle: 'Filialda navbatsiz kafolatlangan narxda olib ketish',
+
+    whyUsTitle: 'Nega aynan Vaksina Med?',
+    whyUsCertifiedTitle: '100% Sertifikatlangan',
+    whyUsCertifiedDesc: 'Faqat rasmiy va tekshirilgan original dorilar',
+    whyUsReserveTitle: 'Kafolatlangan bron',
+    whyUsReserveDesc: '24 soat davomida dorixonada navbatsiz olib ketish',
+    whyUsCashbackTitle: 'Har xaridda keshbek',
+    whyUsCashbackDesc: 'Bonuslarni to‘plang va dorilarga tejang',
+    whyUsPharmacistsTitle: 'Malakali farmatsevtlar',
+    whyUsPharmacistsDesc: 'Har bir dorixonada professional bepul maslahat',
+
+    supportCardTitle: 'Savollaringiz bormi yoki dori topilmadi?',
+    supportCardDesc: 'Farmatsevtlarimiz sizga to‘g‘ri preparatni tanlashda yordam berishadi',
+    supportCallBtn: 'Qo‘ng‘iroq qilish',
+    supportHelpBtn: 'Yordam markazi',
+
+    footerLicense: 'O‘zbekiston Respublikasi Sog‘liqni Saqlash Vazirligi litsenziyasi asosida',
   },
   ru: {
     greeting: 'Здравствуйте, {name} 👋',
@@ -178,6 +210,38 @@ export default defineMessages({
     rewardRedeemed: 'Обменено',
     rewardRedeemFailed: 'Не удалось обменять',
     rewardMinRequired: 'Нужно не менее {amount}',
+
+    aiScanBadge: 'AI VISION · БЫСТРЫЙ СКАНЕР',
+    aiScanTitle: 'Есть рецепт от врача?',
+    aiScanSubtitle: 'Сфотографируйте — искусственный интеллект определит лекарства за секунды',
+    aiScanButton: 'Сканировать',
+
+    promotionsSectionTitle: 'Акции и скидки',
+    promotionsAll: 'Все акции',
+
+    promoWelcomeTitle: '5 000 сум бонус',
+    promoWelcomeSubtitle: 'Для новых пользователей на первую покупку',
+    promoVitaminsTitle: 'Осенний иммунитет',
+    promoVitaminsSubtitle: 'Кэшбэк до 20% на витамины и минералы',
+    promoReservationTitle: 'Бесплатная бронь 24ч',
+    promoReservationSubtitle: 'Самовывоз без очереди по фиксированной цене',
+
+    whyUsTitle: 'Почему именно Vaksina Med?',
+    whyUsCertifiedTitle: '100% Сертифицировано',
+    whyUsCertifiedDesc: 'Только оригинальные проверенные препараты',
+    whyUsReserveTitle: 'Гарантия брони',
+    whyUsReserveDesc: 'Самовывоз без очереди в течение 24 часов',
+    whyUsCashbackTitle: 'Кэшбэк с покупки',
+    whyUsCashbackDesc: 'Копите бонусы и экономьте на лекарствах',
+    whyUsPharmacistsTitle: 'Опытные фармацевты',
+    whyUsPharmacistsDesc: 'Бесплатная консультация в каждой аптеке',
+
+    supportCardTitle: 'Остались вопросы или не нашли препарат?',
+    supportCardDesc: 'Наши фармацевты помогут подобрать нужный препарат',
+    supportCallBtn: 'Позвонить',
+    supportHelpBtn: 'Центр помощи',
+
+    footerLicense: 'Действует на основании лицензии Министерства здравоохранения Республики Узбекистан',
   },
   en: {
     greeting: 'Hello, {name} 👋',
@@ -267,5 +331,37 @@ export default defineMessages({
     rewardRedeemed: 'Redeemed',
     rewardRedeemFailed: 'Could not redeem',
     rewardMinRequired: 'At least {amount} required',
+
+    aiScanBadge: 'AI VISION · FAST SCANNER',
+    aiScanTitle: 'Have a prescription?',
+    aiScanSubtitle: 'Take a photo — artificial intelligence recognizes medications in seconds',
+    aiScanButton: 'Scan now',
+
+    promotionsSectionTitle: 'Promotions & Discounts',
+    promotionsAll: 'View all',
+
+    promoWelcomeTitle: '5,000 UZS bonus',
+    promoWelcomeSubtitle: 'For new users on their first order',
+    promoVitaminsTitle: 'Autumn immunity',
+    promoVitaminsSubtitle: 'Up to 20% cashback on vitamins & minerals',
+    promoReservationTitle: 'Free 24h reservation',
+    promoReservationSubtitle: 'Pickup without queues at a locked price',
+
+    whyUsTitle: 'Why Vaksina Med?',
+    whyUsCertifiedTitle: '100% Certified',
+    whyUsCertifiedDesc: 'Only verified and original medications',
+    whyUsReserveTitle: 'Guaranteed reservation',
+    whyUsReserveDesc: 'Pickup without queues within 24 hours',
+    whyUsCashbackTitle: 'Cashback on purchases',
+    whyUsCashbackDesc: 'Collect bonus points and save on medicines',
+    whyUsPharmacistsTitle: 'Expert pharmacists',
+    whyUsPharmacistsDesc: 'Professional free advice at every branch',
+
+    supportCardTitle: 'Questions or medication not found?',
+    supportCardDesc: 'Our pharmacists will assist you in finding the right medicine',
+    supportCallBtn: 'Call now',
+    supportHelpBtn: 'Help center',
+
+    footerLicense: 'Operating under license from the Ministry of Health of the Republic of Uzbekistan',
   },
 });
