@@ -97,6 +97,8 @@ export default defineMessages({
 
     promotionsSectionTitle: 'Aksiyalar va chegirmalar',
     promotionsAll: 'Barchasi',
+    recommendedSectionTitle: 'Siz uchun tavsiyalar',
+    browseMoreCatalog: 'Barcha mahsulotlarni ko‘rish',
 
     promoWelcomeTitle: '5 000 so‘m bonus',
     promoWelcomeSubtitle: 'Yangi foydalanuvchilar uchun birinchi xaridda',
@@ -218,6 +220,8 @@ export default defineMessages({
 
     promotionsSectionTitle: 'Акции и скидки',
     promotionsAll: 'Все акции',
+    recommendedSectionTitle: 'Рекомендации для вас',
+    browseMoreCatalog: 'Смотреть все товары',
 
     promoWelcomeTitle: '5 000 сум бонус',
     promoWelcomeSubtitle: 'Для новых пользователей на первую покупку',
@@ -339,6 +343,8 @@ export default defineMessages({
 
     promotionsSectionTitle: 'Promotions & Discounts',
     promotionsAll: 'View all',
+    recommendedSectionTitle: 'Recommended for you',
+    browseMoreCatalog: 'Browse all products',
 
     promoWelcomeTitle: '5,000 UZS bonus',
     promoWelcomeSubtitle: 'For new users on their first order',

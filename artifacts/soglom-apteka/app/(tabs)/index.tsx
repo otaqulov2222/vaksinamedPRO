@@ -103,6 +103,7 @@ export default function HomeScreen() {
   const contentW = Math.max(280, Math.round(windowW - SCREEN_PAD * 2));
   const productCardW = Math.min(180, Math.max(168, Math.round((contentW - 12) / 2.05)));
   const colGap = contentW < 340 ? 8 : 12;
+  const gridCardW = Math.floor((contentW - colGap) / 2);
 
   const [products, setProducts] = useState<any[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
@@ -117,7 +118,7 @@ export default function HomeScreen() {
     setProductsLoading(true);
     setProductsError(false);
     void api
-      .products('?limit=16&offset=0')
+      .products('?limit=24&offset=0')
       .then((data) => {
         setProducts(data.products || []);
         setProductsError(false);
@@ -219,6 +220,28 @@ export default function HomeScreen() {
         };
       });
   }, [products, selectedCategory, language]);
+
+  const allCleanProducts = useMemo(() => {
+    return products.map((p) => {
+      const rawName = localizedName(language, p);
+      const cleanName = rawName.replace(/\s*\(Demo\)/gi, '').trim();
+      const rawMan = String(p.manufacturer || '').trim();
+      const cleanMan = rawMan.replace(/\s*\(Demo\)/gi, '').trim() || String(p.category || '').trim();
+      return {
+        id: p.id,
+        name: cleanName,
+        price: Number(p.price || 0),
+        icon: String(p.icon || 'pill'),
+        manufacturer: cleanMan,
+        analogGroup: String(p.analogGroup || ''),
+        image: getProductImage(p),
+      };
+    });
+  }, [products, language]);
+
+  const recommendedProducts = useMemo(() => {
+    return allCleanProducts.slice(0, 8);
+  }, [allCleanProducts]);
 
   return (
     <Screen>
@@ -519,194 +542,139 @@ export default function HomeScreen() {
         </ScrollView>
       )}
 
-      {/* AI PRESCRIPTION SCANNER HERO CARD */}
+      {/* NATIVE SLEEK PRESCRIPTION SCANNER BANNER */}
       <Pressable
-        style={({ pressed }) => [styles.aiScanCard, pressed && styles.pressed, { marginTop: SPACE + 4 }]}
+        style={({ pressed }) => [styles.rxScannerBanner, pressed && styles.pressed]}
         onPress={() => router.push('/prescription')}
         accessibilityRole="button"
         accessibilityLabel={t('home.aiScanTitle')}
       >
-        <View style={styles.aiScanTopRow}>
-          <View style={styles.aiBadge}>
-            <Feather name="zap" size={12} color="#FFD233" />
-            <Text style={styles.aiBadgeText}>{t('home.aiScanBadge')}</Text>
-          </View>
+        <View style={styles.rxScannerIconCircle}>
+          <MaterialCommunityIcons name="line-scan" size={22} color="#FFFFFF" />
         </View>
-
-        <View style={styles.aiScanContentRow}>
-          <View style={styles.aiScanLeft}>
-            <Text style={styles.aiScanTitle} numberOfLines={1}>
+        <View style={styles.rxScannerTextCol}>
+          <View style={styles.rxScannerHeaderRow}>
+            <Text style={styles.rxScannerTitle} numberOfLines={1}>
               {t('home.aiScanTitle')}
             </Text>
-            <Text style={styles.aiScanSubtitle} numberOfLines={2}>
-              {t('home.aiScanSubtitle')}
-            </Text>
-          </View>
-          <View style={styles.aiScanRight}>
-            <View style={styles.aiScanIconBubble}>
-              <MaterialCommunityIcons name="line-scan" size={24} color="#FFFFFF" />
+            <View style={styles.rxAiMiniBadge}>
+              <Feather name="zap" size={10} color="#D97706" />
+              {/* i18n-ignore */}
+              <Text style={styles.rxAiMiniBadgeText}>AI</Text>
             </View>
-            <Text style={styles.aiScanActionText} numberOfLines={1}>
-              {t('home.aiScanButton')}
-            </Text>
           </View>
+          <Text style={styles.rxScannerSubtitle} numberOfLines={1}>
+            {t('home.aiScanSubtitle')}
+          </Text>
+        </View>
+        <View style={styles.rxScannerCtaPill}>
+          <Feather name="camera" size={14} color={PURPLE} />
+          <Text style={styles.rxScannerCtaText}>{t('home.aiScanButton')}</Text>
         </View>
       </Pressable>
 
-      {/* PROMOTIONS & SPECIAL OFFERS SECTION */}
-      <View style={[styles.sectionRow, { marginTop: SPACE + 10 }]}>
+      {/* RECOMMENDED PRODUCTS — 2-COLUMN E-COMMERCE GRID */}
+      <View style={[styles.sectionRow, { marginTop: SPACE + 8 }]}>
         <Text style={styles.section} numberOfLines={1}>
-          {t('home.promotionsSectionTitle')}
+          {t('home.recommendedSectionTitle')}
         </Text>
         <Pressable
-          onPress={() => router.push('/promos')}
+          onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel={t('home.promotionsAll')}
+          accessibilityLabel={t('common.showAll')}
         >
-          <Text style={styles.link}>{t('home.promotionsAll')} →</Text>
+          <Text style={styles.link}>{t('common.showAll')} →</Text>
         </Pressable>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.promoCardsScroll}
+      <View style={styles.productsGrid}>
+        {recommendedProducts.map((p) => {
+          const isAdded = Boolean(addedIds[String(p.id)]);
+          return (
+            <View key={`rec-${p.id}`} style={[styles.gridCard, { width: gridCardW }]}>
+              <Pressable
+                style={({ pressed }) => [styles.productCardMain, pressed && styles.pressed]}
+                onPress={() => router.push(`/product/${p.id}` as any)}
+                accessibilityRole="button"
+                accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
+              >
+                <View style={styles.gridImgWrap}>
+                  <View style={styles.cashbackBadge}>
+                    <Text style={styles.cashbackBadgeText}>{t('home.cashbackBadge')}</Text>
+                  </View>
+                  <View style={styles.ratingBadge}>
+                    <MaterialCommunityIcons name="star" size={11} color="#F59E0B" />
+                    {/* i18n-ignore */}
+                    <Text style={styles.ratingBadgeText}>4.9</Text>
+                  </View>
+                  {p.image ? (
+                    <Image
+                      source={p.image}
+                      style={styles.productImg}
+                      resizeMode="contain"
+                      fadeDuration={0}
+                    />
+                  ) : (
+                    <MaterialCommunityIcons name={productIconName(p.icon)} size={40} color={PURPLE} />
+                  )}
+                </View>
+                <Text style={styles.productMeta} numberOfLines={1}>
+                  {p.manufacturer}
+                </Text>
+                <Text style={styles.productName} numberOfLines={2}>
+                  {p.name}
+                </Text>
+              </Pressable>
+
+              <View style={styles.productBottom}>
+                <Pressable
+                  style={styles.productPriceHit}
+                  onPress={() => router.push(`/product/${p.id}` as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
+                >
+                  <Text style={styles.productPrice} numberOfLines={1}>
+                    {fmt.money(p.price)}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.addBtn,
+                    isAdded && styles.addBtnSuccess,
+                    addingId === String(p.id) ? { opacity: 0.55 } : null,
+                    pressed && styles.pressed,
+                  ]}
+                  disabled={addingId != null}
+                  onPress={() => void addToCart(Number(p.id), p.name)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('home.addToCartA11y', { name: p.name })}
+                >
+                  {addingId === String(p.id) ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : isAdded ? (
+                    <Feather name="check" size={16} color="#fff" />
+                  ) : (
+                    <Feather name="plus" size={16} color="#fff" />
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* BROWSE ALL PRODUCTS CTA BUTTON */}
+      <Pressable
+        style={({ pressed }) => [styles.browseMoreBtn, pressed && styles.pressed]}
+        onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
+        accessibilityRole="button"
+        accessibilityLabel={t('home.browseMoreCatalog')}
       >
-        {/* Promo 1: Welcome bonus */}
-        <Pressable
-          onPress={() => router.push('/promos')}
-          style={({ pressed }) => [styles.promoTile, styles.promoTilePurple, pressed && styles.pressed]}
-        >
-          <View style={[styles.promoTileIconWrap, { backgroundColor: '#EDE9FE' }]}>
-            <Feather name="gift" size={18} color="#7C3AED" />
-          </View>
-          <Text style={styles.promoTileTitle} numberOfLines={1}>
-            {t('home.promoWelcomeTitle')}
-          </Text>
-          <Text style={styles.promoTileSubtitle} numberOfLines={2}>
-            {t('home.promoWelcomeSubtitle')}
-          </Text>
-        </Pressable>
-
-        {/* Promo 2: Seasonal vitamins */}
-        <Pressable
-          onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: 'vitamin' } } as any)}
-          style={({ pressed }) => [styles.promoTile, styles.promoTileAmber, pressed && styles.pressed]}
-        >
-          <View style={[styles.promoTileIconWrap, { backgroundColor: '#FEF3C7' }]}>
-            <MaterialCommunityIcons name="pill" size={18} color="#D97706" />
-          </View>
-          <Text style={styles.promoTileTitle} numberOfLines={1}>
-            {t('home.promoVitaminsTitle')}
-          </Text>
-          <Text style={styles.promoTileSubtitle} numberOfLines={2}>
-            {t('home.promoVitaminsSubtitle')}
-          </Text>
-        </Pressable>
-
-        {/* Promo 3: 24h pickup reservation */}
-        <Pressable
-          onPress={() => router.push('/branches')}
-          style={({ pressed }) => [styles.promoTile, styles.promoTileEmerald, pressed && styles.pressed]}
-        >
-          <View style={[styles.promoTileIconWrap, { backgroundColor: '#D1FAE5' }]}>
-            <MaterialCommunityIcons name="clock-check-outline" size={18} color="#059669" />
-          </View>
-          <Text style={styles.promoTileTitle} numberOfLines={1}>
-            {t('home.promoReservationTitle')}
-          </Text>
-          <Text style={styles.promoTileSubtitle} numberOfLines={2}>
-            {t('home.promoReservationSubtitle')}
-          </Text>
-        </Pressable>
-      </ScrollView>
-
-      {/* WHY VAKSINA MED? TRUST & QUALITY GRID */}
-      <View style={[styles.sectionRow, { marginTop: SPACE + 12 }]}>
-        <Text style={styles.section} numberOfLines={1}>
-          {t('home.whyUsTitle')}
-        </Text>
-      </View>
-
-      <View style={styles.trustGrid}>
-        <View style={styles.trustCard}>
-          <View style={[styles.trustIconWrap, { backgroundColor: '#F3E8FF' }]}>
-            <Feather name="shield" size={18} color={PURPLE} />
-          </View>
-          <Text style={styles.trustCardTitle}>{t('home.whyUsCertifiedTitle')}</Text>
-          <Text style={styles.trustCardDesc}>{t('home.whyUsCertifiedDesc')}</Text>
-        </View>
-
-        <View style={styles.trustCard}>
-          <View style={[styles.trustIconWrap, { backgroundColor: '#D1FAE5' }]}>
-            <Feather name="clock" size={18} color="#059669" />
-          </View>
-          <Text style={styles.trustCardTitle}>{t('home.whyUsReserveTitle')}</Text>
-          <Text style={styles.trustCardDesc}>{t('home.whyUsReserveDesc')}</Text>
-        </View>
-
-        <View style={styles.trustCard}>
-          <View style={[styles.trustIconWrap, { backgroundColor: '#FEF3C7' }]}>
-            <MaterialCommunityIcons name="wallet-giftcard" size={18} color="#D97706" />
-          </View>
-          <Text style={styles.trustCardTitle}>{t('home.whyUsCashbackTitle')}</Text>
-          <Text style={styles.trustCardDesc}>{t('home.whyUsCashbackDesc')}</Text>
-        </View>
-
-        <View style={styles.trustCard}>
-          <View style={[styles.trustIconWrap, { backgroundColor: '#DBEAFE' }]}>
-            <MaterialCommunityIcons name="doctor" size={18} color="#2563EB" />
-          </View>
-          <Text style={styles.trustCardTitle}>{t('home.whyUsPharmacistsTitle')}</Text>
-          <Text style={styles.trustCardDesc}>{t('home.whyUsPharmacistsDesc')}</Text>
-        </View>
-      </View>
-
-      {/* PHARMACIST SUPPORT & HELP CARD */}
-      <View style={[styles.supportCard, { marginTop: SPACE + 10 }]}>
-        <View style={styles.supportHeader}>
-          <View style={styles.supportIconWrap}>
-            <Feather name="headphones" size={20} color={PURPLE} />
-          </View>
-          <View style={styles.supportHeaderText}>
-            <Text style={styles.supportTitle}>{t('home.supportCardTitle')}</Text>
-            <Text style={styles.supportSubtitle}>{t('home.supportCardDesc')}</Text>
-          </View>
-        </View>
-
-        <View style={styles.supportActionsRow}>
-          <Pressable
-            style={({ pressed }) => [styles.supportCallBtn, pressed && styles.pressed]}
-            onPress={() => router.push('/branches')}
-            accessibilityRole="button"
-            accessibilityLabel={t('home.supportCallBtn')}
-          >
-            <Feather name="phone-call" size={15} color="#FFFFFF" />
-            <Text style={styles.supportCallBtnText}>{t('home.supportCallBtn')}</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.supportHelpBtn, pressed && styles.pressed]}
-            onPress={() => router.push('/help')}
-            accessibilityRole="button"
-            accessibilityLabel={t('home.supportHelpBtn')}
-          >
-            <Feather name="help-circle" size={15} color={PURPLE} />
-            <Text style={styles.supportHelpBtnText}>{t('home.supportHelpBtn')}</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* BRAND FOOTER */}
-      <View style={[styles.brandFooter, { marginTop: SPACE + 16 }]}>
-        <View style={styles.brandTitleRow}>
-          <Text style={styles.brandTitleVaksina}>VAKSINA</Text>
-          <Text style={styles.brandTitleMed}>MED</Text>
-        </View>
-        <Text style={styles.brandTaglineText}>{t('auth.brandTagline')}</Text>
-        <Text style={styles.brandLicenseText}>{t('home.footerLicense')}</Text>
-      </View>
+        <Text style={styles.browseMoreBtnText}>{t('home.browseMoreCatalog')}</Text>
+        <Feather name="arrow-right" size={16} color={PURPLE} />
+      </Pressable>
 
       {/* Clearance above floating tab bar */}
       <View style={styles.bottomClearance} />
@@ -1205,279 +1173,137 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
 
-  // AI Prescription Hero Card
-  aiScanCard: {
-    backgroundColor: '#1C1236',
-    borderRadius: 20,
-    padding: 16,
+  // Native sleek prescription scanner banner
+  rxScannerBanner: {
+    backgroundColor: '#F5F0FF',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#38226B',
+    borderColor: '#E4D7F5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: SPACE + 4,
     ...Platform.select({
-      ios: { shadowColor: '#6A22D6', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12 },
-      android: { elevation: 4 },
-      web: { boxShadow: '0 6px 20px rgba(106, 34, 214, 0.2)' },
+      ios: { shadowColor: PURPLE, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
+      android: { elevation: 2 },
+      web: { boxShadow: '0 2px 10px rgba(106, 34, 214, 0.06)' },
     }),
   },
-  aiScanTopRow: {
-    flexDirection: 'row',
+  rxScannerIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: PURPLE,
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
   },
-  aiBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    gap: 5,
-  },
-  aiBadgeText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 9.5,
-    color: '#FFD233',
-    letterSpacing: 0.6,
-  },
-  aiScanContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  aiScanLeft: {
+  rxScannerTextCol: {
     flex: 1,
+    minWidth: 0,
   },
-  aiScanTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    lineHeight: 21,
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  aiScanSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16.5,
-    color: '#C4B5FD',
-  },
-  aiScanRight: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  aiScanIconBubble: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    backgroundColor: '#6A22D6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#9055FD',
-  },
-  aiScanActionText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10.5,
-    color: '#E9D5FF',
-  },
-
-  // Promo cards scroll
-  promoCardsScroll: {
-    paddingRight: SCREEN_PAD,
-    gap: 12,
-    paddingVertical: 4,
-  },
-  promoTile: {
-    width: 170,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-  },
-  promoTilePurple: {
-    backgroundColor: '#F5F3FF',
-    borderColor: '#DDD6FE',
-  },
-  promoTileAmber: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-  },
-  promoTileEmerald: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  promoTileIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  promoTileTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13,
-    lineHeight: 17,
-    color: PURPLE_DEEP,
-    marginBottom: 3,
-  },
-  promoTileSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 15,
-    color: '#4B5563',
-  },
-
-  // Trust & quality grid
-  trustGrid: {
+  rxScannerHeaderRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  trustCard: {
-    width: '48.5%',
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  trustIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  trustCardTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12.5,
-    lineHeight: 16,
-    color: PURPLE_DEEP,
+    gap: 6,
     marginBottom: 2,
   },
-  trustCardDesc: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10.5,
-    lineHeight: 14,
-    color: MUTED,
-  },
-
-  // Support card
-  supportCard: {
-    backgroundColor: '#FAF7FF',
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#EDE5F8',
-  },
-  supportHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 14,
-  },
-  supportIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#EDE5F8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  supportHeaderText: {
-    flex: 1,
-  },
-  supportTitle: {
+  rxScannerTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
     lineHeight: 18,
     color: PURPLE_DEEP,
-    marginBottom: 3,
   },
-  supportSubtitle: {
+  rxAiMiniBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    gap: 2,
+  },
+  rxAiMiniBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9.5,
+    lineHeight: 12,
+    color: '#D97706',
+  },
+  rxScannerSubtitle: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 11.5,
+    fontSize: 12,
     lineHeight: 16,
     color: '#6B7280',
   },
-  supportActionsRow: {
+  rxScannerCtaPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  supportCallBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: PURPLE,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 6,
-  },
-  supportCallBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12.5,
-    color: '#FFFFFF',
-  },
-  supportHelpBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#DDD6FE',
-    gap: 6,
+    gap: 5,
   },
-  supportHelpBtnText: {
+  rxScannerCtaText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 12.5,
+    fontSize: 11.5,
     color: PURPLE,
   },
 
-  // Brand Footer
-  brandFooter: {
-    alignItems: 'center',
-    paddingVertical: 14,
+  // 2-Column Product Grid
+  productsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  brandTitleRow: {
+  gridCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 18,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
+    ...Platform.select({
+      ios: { shadowColor: '#1A1040', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8 },
+      android: { elevation: 2 },
+      web: { boxShadow: '0 3px 10px rgba(26, 16, 64, 0.04)' },
+    }),
+    marginBottom: 2,
+  },
+  gridImgWrap: {
+    height: 126,
+    borderRadius: 14,
+    backgroundColor: '#F8F7FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+  },
+
+  // Browse more CTA button
+  browseMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
+    justifyContent: 'center',
+    backgroundColor: '#F8F5FC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E4D7F5',
+    paddingVertical: 13,
+    paddingHorizontal: 18,
+    marginTop: SPACE + 2,
+    gap: 8,
   },
-  brandTitleVaksina: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    letterSpacing: 0.8,
-    color: '#6A22D6',
-  },
-  brandTitleMed: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    letterSpacing: 0.8,
-    color: '#EAB308',
-  },
-  brandTaglineText: {
+  browseMoreBtnText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 9.5,
-    letterSpacing: 0.4,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  brandLicenseText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 10,
-    lineHeight: 14,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    maxWidth: 280,
+    fontSize: 13.5,
+    color: PURPLE,
   },
 
   bottomClearance: {
