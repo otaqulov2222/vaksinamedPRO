@@ -335,22 +335,26 @@ export default function BranchesScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         <Pressable onPress={() => setRegion('')} style={[styles.chip, !region && styles.chipOn]}>
           <Text style={[styles.chipText, !region && styles.chipTextOn]}>
-            {t('branches.allRegions', { count: networkTotal })}
+            {t('branches.allRegions', { count: displayedBranches.length })}
           </Text>
         </Pressable>
 
         <Pressable
           onPress={() => setOnly24h((v) => !v)}
           style={[styles.chip, only24h && styles.chip24hOn]}
+          accessibilityRole="button"
+          accessibilityState={{ selected: only24h }}
         >
-          <MaterialCommunityIcons
-            name="clock-time-four-outline"
-            size={14}
-            color={only24h ? '#FFFFFF' : '#059669'}
-          />
-          <Text style={[styles.chipText, only24h && styles.chipTextOn]}>
-            {t('branches.filter24h')}
-          </Text>
+          <View style={styles.chipInner}>
+            <MaterialCommunityIcons
+              name="clock-time-four-outline"
+              size={14}
+              color={only24h ? '#FFFFFF' : '#059669'}
+            />
+            <Text style={[styles.chipText, only24h && styles.chipTextOn]}>
+              {t('branches.filter24h')}
+            </Text>
+          </View>
         </Pressable>
 
         {regions.map((item) => {
@@ -385,13 +389,13 @@ export default function BranchesScreen() {
         </View>
       ) : null}
 
-      {!selected && branches.length > 0 ? (
+      {!selected && displayedBranches.length > 0 ? (
         <View style={styles.hintCard}>
           <View style={styles.hintIcon}>
             <Feather name="map-pin" size={18} color="#5C328E" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.hintTitle}>{t('branches.networkSummary', { count: networkTotal || branches.length })}</Text>
+            <Text style={styles.hintTitle}>{t('branches.networkSummary', { count: displayedBranches.length })}</Text>
             <Text style={styles.hintText}>{t('branches.tapBranchHint')}</Text>
           </View>
         </View>
@@ -824,5 +828,10 @@ const styles = StyleSheet.create({
   chip24hOn: {
     backgroundColor: '#059669',
     borderColor: '#059669',
+  },
+  chipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });
