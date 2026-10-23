@@ -1,7 +1,7 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -58,6 +58,7 @@ export default function BranchesScreen() {
   const [networkTotal, setNetworkTotal] = useState(0);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [locStatus, setLocStatus] = useState<LocStatus>('pending');
+  const [only24h, setOnly24h] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [route, setRoute] = useState<RouteInfo | null>(null);
   const [routing, setRouting] = useState(false);
@@ -82,6 +83,11 @@ export default function BranchesScreen() {
     () => branches.filter((b) => hasValidCoords(b)).length,
     [branches],
   );
+
+  const displayedBranches = useMemo(() => {
+    if (!only24h) return branches;
+    return branches.filter((b) => b.is24h || String(b.hours || '').includes('24'));
+  }, [branches, only24h]);
 
   useEffect(() => {
     let alive = true;
@@ -237,6 +243,32 @@ export default function BranchesScreen() {
 
   return (
     <View style={styles.pageRoot}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Top Header Bar */}
+      <View style={[styles.headerBar, { paddingTop: Math.max(insets.top, 12) }]}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace('/');
+          }}
+          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+        >
+          <Feather name="arrow-left" size={22} color="#1C025D" />
+        </Pressable>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {t('branches.navBranchesTitle')}
+          </Text>
+          <Text style={styles.headerSub} numberOfLines={1}>
+            {t('branches.navBranchesSub')}
+          </Text>
+        </View>
+      </View>
+
       <ScrollView
         style={styles.page}
         contentContainerStyle={[styles.pageContent, { paddingBottom: Math.max(insets.bottom, 24) }]}
@@ -268,7 +300,7 @@ export default function BranchesScreen() {
 
         <View style={styles.mapFrame}>
           <BranchMap
-            branches={branches}
+            branches={displayedBranches}
             selectedId={selected?.id ?? null}
             userLocation={userLocation}
             route={route}
@@ -279,7 +311,7 @@ export default function BranchesScreen() {
             countryView={!selected}
           />
         </View>
-        {branches.length > 0 && mappableCount === 0 ? (
+        {displayedBranches.length > 0 && mappableCount === 0 ? (
           <Text style={styles.locBanner}>{t('branches.mapNoCoords')}</Text>
         ) : null}
       </LinearGradient>
@@ -306,6 +338,21 @@ export default function BranchesScreen() {
             {t('branches.allRegions', { count: networkTotal })}
           </Text>
         </Pressable>
+
+        <Pressable
+          onPress={() => setOnly24h((v) => !v)}
+          style={[styles.chip, only24h && styles.chip24hOn]}
+        >
+          <MaterialCommunityIcons
+            name="clock-time-four-outline"
+            size={14}
+            color={only24h ? '#FFFFFF' : '#059669'}
+          />
+          <Text style={[styles.chipText, only24h && styles.chipTextOn]}>
+            {t('branches.filter24h')}
+          </Text>
+        </Pressable>
+
         {regions.map((item) => {
           const on = region === item;
           return (
@@ -425,7 +472,7 @@ export default function BranchesScreen() {
 
       <Text style={styles.listHeading}>{t('branches.listHeading')}</Text>
 
-      {branches.map((branch, index) => {
+      {displayedBranches.map((branch, index) => {
         const active = Number(branch.id) === Number(selected?.id);
         const open24 = branch.is24h || String(branch.hours || '').includes('24');
         const dist = formatDistance(t, branch.distanceKm);
@@ -738,5 +785,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: '0 2px 6px rgba(201,160,0,0.25)',
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ECE7F6',
+    gap: 12,
+  },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#F3EEFF',
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: { flex: 1 },
+  headerTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    lineHeight: 22,
+    color: '#1C025D',
+  },
+  headerSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  pressed: { opacity: 0.8 },
+  chip24hOn: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
   },
 });
