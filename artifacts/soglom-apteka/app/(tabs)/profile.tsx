@@ -277,15 +277,6 @@ export default function ProfileScreen() {
             iconColor="#6D28D9"
           />
           <MenuRow
-            icon="map"
-            title={t('common.navAddresses')}
-            a11y={t('profile.addressesTitle')}
-            onPress={() => router.push('/addresses')}
-            testID="profile-addresses"
-            iconBg="#FEF3C7"
-            iconColor="#B45309"
-          />
-          <MenuRow
             icon="map-pin"
             title={t('common.navBranches')}
             a11y={t('profile.branchesA11y')}
