@@ -44,7 +44,7 @@ function productIconName(icon?: string): React.ComponentProps<typeof MaterialCom
 }
 
 const QUICK: {
-  icon: 'pill' | 'camera-outline' | 'alarm' | 'map-marker-outline';
+  icon: 'pill' | 'percent-outline' | 'alarm' | 'map-marker-outline';
   labelKey: TranslationKey;
   to: string;
   clearQ?: boolean;
@@ -52,7 +52,7 @@ const QUICK: {
   iconColor: string;
 }[] = [
   { icon: 'pill', labelKey: 'home.quickSearch', to: '/(tabs)/catalog', clearQ: true, bg: '#EDE9FE', iconColor: '#7C3AED' },
-  { icon: 'camera-outline', labelKey: 'catalog.prescriptionScanAction', to: '/prescription', bg: '#DBEAFE', iconColor: '#2563EB' },
+  { icon: 'percent-outline', labelKey: 'common.navPromos', to: '/promos', bg: '#FEF3C7', iconColor: '#D97706' },
   { icon: 'alarm', labelKey: 'reminders.quickActionReminders', to: '/reminders', bg: '#FFE4E6', iconColor: '#E11D48' },
   { icon: 'map-marker-outline', labelKey: 'common.navBranches', to: '/branches', bg: '#D1FAE5', iconColor: '#059669' },
 ];
