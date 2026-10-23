@@ -229,12 +229,13 @@ export default function RegisterScreen() {
               onChangeText={(text) => {
                 setPassword(text);
                 clearFieldError('password');
+                if (showSuggestCard) setShowSuggestCard(false);
               }}
               onFocus={() => {
-                if (!password && !suggestedPassword) {
-                  setSuggestedPassword(generateStrongPassword());
+                if (!password) {
+                  if (!suggestedPassword) setSuggestedPassword(generateStrongPassword());
+                  setShowSuggestCard(true);
                 }
-                setShowSuggestCard(true);
               }}
               secureTextEntry={!showPass}
               placeholder={t('auth.passwordPlaceholder')}
@@ -273,43 +274,9 @@ export default function RegisterScreen() {
             />
 
             {showSuggestCard ? (
-              <View style={styles.suggestCard}>
-                <View style={styles.suggestHeader}>
-                  <View style={styles.suggestTitleRow}>
-                    <Feather name="shield" size={14} color="#7C3AED" />
-                    <Text style={styles.suggestTitle}>{t('auth.passwordSuggestTitle')}</Text>
-                  </View>
-                  <Pressable
-                    onPress={() => setShowSuggestCard(false)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('common.cancel')}
-                  >
-                    <Feather name="x" size={16} color={C.secondary} />
-                  </Pressable>
-                </View>
-
-                <View style={styles.suggestBody}>
-                  <View style={styles.suggestPassWrap}>
-                    <Text style={styles.suggestPassText} selectable>
-                      {suggestedPassword}
-                    </Text>
-                  </View>
-                  <Pressable
-                    style={({ pressed }) => [styles.suggestRefreshBtn, pressed && styles.pressed]}
-                    onPress={() => setSuggestedPassword(generateStrongPassword())}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('auth.passwordSuggestRegenerate')}
-                  >
-                    <Feather name="refresh-cw" size={15} color="#7C3AED" />
-                  </Pressable>
-                </View>
-
-                <Text style={styles.suggestHintText}>{t('auth.passwordSuggestHint')}</Text>
-
+              <View style={styles.autofillPill}>
                 <Pressable
-                  style={({ pressed }) => [styles.suggestUseBtn, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.autofillMain, pressed && styles.pressed]}
                   onPress={() => {
                     setPassword(suggestedPassword);
                     setShowPass(true);
@@ -319,9 +286,34 @@ export default function RegisterScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={t('auth.passwordSuggestUse')}
                 >
-                  <Feather name="check-circle" size={15} color="#FFFFFF" />
-                  <Text style={styles.suggestUseBtnText}>{t('auth.passwordSuggestUse')}</Text>
+                  <View style={styles.autofillKeyBubble}>
+                    <Feather name="key" size={14} color="#7C3AED" />
+                  </View>
+                  <Text style={styles.autofillPassText} numberOfLines={1}>
+                    {suggestedPassword}
+                  </Text>
                 </Pressable>
+
+                <View style={styles.autofillActions}>
+                  <Pressable
+                    style={({ pressed }) => [styles.autofillIconBtn, pressed && styles.pressed]}
+                    onPress={() => setSuggestedPassword(generateStrongPassword())}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('auth.passwordSuggestRegenerate')}
+                  >
+                    <Feather name="refresh-cw" size={13} color="#7C3AED" />
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.autofillIconBtn, pressed && styles.pressed]}
+                    onPress={() => setShowSuggestCard(false)}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.cancel')}
+                  >
+                    <Feather name="x" size={14} color="#9CA3AF" />
+                  </Pressable>
+                </View>
               </View>
             ) : null}
           </View>
@@ -432,85 +424,59 @@ const styles = StyleSheet.create({
   keySuggestToggle: {
     padding: 4,
   },
-  suggestCard: {
-    backgroundColor: '#FBF9FE',
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-    borderRadius: 14,
-    padding: 12,
-    marginTop: -4,
-    ...Platform.select({
-      ios: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 },
-      android: { elevation: 2 },
-      web: { boxShadow: '0 2px 8px rgba(124, 58, 237, 0.08)' },
-    }),
-  },
-  suggestHeader: {
+  autofillPill: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#C4B5FD',
+    borderRadius: 14,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    marginTop: -8,
+    gap: 8,
+    ...Platform.select({
+      ios: { shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8 },
+      android: { elevation: 3 },
+      web: { boxShadow: '0 4px 14px rgba(124, 58, 237, 0.12)' },
+    }),
   },
-  suggestTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  suggestTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12.5,
-    color: '#6D28D9',
-  },
-  suggestBody: {
+  autofillMain: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 6,
+    minWidth: 0,
+    paddingVertical: 2,
   },
-  suggestPassWrap: {
-    flex: 1,
-    backgroundColor: '#EDE9FE',
-    borderRadius: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-  },
-  suggestPassText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    color: '#4C1D95',
-    letterSpacing: 1.5,
-  },
-  suggestRefreshBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+  autofillKeyBubble: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
     backgroundColor: '#EDE9FE',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  suggestHintText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 15,
-    color: '#6B7280',
-    marginBottom: 10,
+  autofillPassText: {
+    flex: 1,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14.5,
+    color: '#5B21B6',
+    letterSpacing: 1.2,
   },
-  suggestUseBtn: {
+  autofillActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#7C3AED',
-    borderRadius: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    gap: 6,
+    gap: 4,
   },
-  suggestUseBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12.5,
-    color: '#FFFFFF',
+  autofillIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5F3FF',
   },
   pressed: {
     opacity: 0.8,
