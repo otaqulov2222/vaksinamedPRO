@@ -96,6 +96,7 @@ router.get(["/reminders", "/api/reminders"], async (req: Request, res: Response)
       dosage: string;
       mealRelation: string;
       time: string;
+      familyMemberId: number | null;
       memberTag: string;
       customMemberName: string | null;
       currentStock: number;
@@ -137,6 +138,7 @@ router.get(["/reminders", "/api/reminders"], async (req: Request, res: Response)
           dosage: reminder.dosage,
           mealRelation: reminder.mealRelation,
           time,
+          familyMemberId: reminder.familyMemberId,
           memberTag: reminder.memberTag,
           customMemberName: reminder.customMemberName,
           currentStock: reminder.currentStock,
@@ -202,6 +204,7 @@ router.post(["/reminders", "/api/reminders"], async (req: Request, res: Response
       memberTag,
       customMemberName,
       instructions,
+      familyMemberId,
     } = req.body;
 
     const trimmedName = String(medicineName || "").trim();
@@ -242,6 +245,7 @@ router.post(["/reminders", "/api/reminders"], async (req: Request, res: Response
       .insert(medicationReminders)
       .values({
         customerId: customer.id,
+        familyMemberId: familyMemberId && Number.isFinite(Number(familyMemberId)) ? Number(familyMemberId) : null,
         medicineName: trimmedName,
         productId: validProductId,
         dosage: String(dosage || "1 tabletka").trim() || "1 tabletka",
@@ -335,6 +339,12 @@ router.put(["/reminders/:id", "/api/reminders/:id"], async (req: Request, res: R
     }
     if (req.body.instructions != null) {
       updates.instructions = String(req.body.instructions).trim();
+    }
+    if (req.body.familyMemberId !== undefined) {
+      updates.familyMemberId =
+        req.body.familyMemberId && Number.isFinite(Number(req.body.familyMemberId))
+          ? Number(req.body.familyMemberId)
+          : null;
     }
     if (req.body.isActive != null) {
       updates.isActive = Boolean(req.body.isActive);

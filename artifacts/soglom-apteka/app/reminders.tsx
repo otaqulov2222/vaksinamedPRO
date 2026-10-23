@@ -16,7 +16,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
-import { notify } from '@/lib/dialogs';
+import { confirmAction, notify } from '@/lib/dialogs';
 
 const PURPLE = '#6C38CC';
 const PURPLE_DEEP = '#1C025D';
@@ -39,6 +39,7 @@ function cleanText(text: string | null | undefined): string {
 interface ScheduledDose {
   doseId: string;
   reminderId: number;
+  familyMemberId?: number | null;
   medicineName: string;
   dosage: string;
   mealRelation: string;
@@ -121,7 +122,7 @@ export default function RemindersScreen() {
   }>();
 
   const [selectedDate, setSelectedDate] = useState<string>(() => formatDateYMD(new Date()));
-  const [activeTab, setActiveTab] = useState<'today' | 'all'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'all' | 'family'>('today');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -136,6 +137,7 @@ export default function RemindersScreen() {
   const [familyMembers, setFamilyMembers] = useState<FamilyMemberItem[]>([]);
   const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('all');
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
   const [memberFormName, setMemberFormName] = useState('');
   const [memberFormRelation, setMemberFormRelation] = useState('father');
   const [memberFormPhone, setMemberFormPhone] = useState('');
@@ -218,28 +220,74 @@ export default function RemindersScreen() {
   const filteredSchedule = useMemo(() => {
     if (selectedMemberFilter === 'all') return schedule;
     if (selectedMemberFilter === 'myself') {
-      return schedule.filter((s) => s.memberTag === 'myself');
+      return schedule.filter((s) => s.memberTag === 'myself' && !s.familyMemberId);
     }
     const memberId = Number(selectedMemberFilter);
     const member = familyMembers.find((m) => m.id === memberId);
     if (!member) return schedule;
     return schedule.filter(
-      (s) => s.customMemberName === member.fullName || s.memberTag === member.relationship
+      (s) =>
+        s.familyMemberId === memberId ||
+        s.customMemberName === member.fullName ||
+        s.memberTag === member.relationship
     );
   }, [schedule, selectedMemberFilter, familyMembers]);
 
   const filteredReminders = useMemo(() => {
     if (selectedMemberFilter === 'all') return reminders;
     if (selectedMemberFilter === 'myself') {
-      return reminders.filter((r) => r.memberTag === 'myself');
+      return reminders.filter((r) => r.memberTag === 'myself' && !r.familyMemberId);
     }
     const memberId = Number(selectedMemberFilter);
     const member = familyMembers.find((m) => m.id === memberId);
     if (!member) return reminders;
     return reminders.filter(
-      (r) => r.customMemberName === member.fullName || r.memberTag === member.relationship
+      (r) =>
+        r.familyMemberId === memberId ||
+        r.customMemberName === member.fullName ||
+        r.memberTag === member.relationship
     );
   }, [reminders, selectedMemberFilter, familyMembers]);
+
+  const handleOpenAddMember = () => {
+    setEditingMemberId(null);
+    setMemberFormName('');
+    setMemberFormRelation('father');
+    setMemberFormPhone('');
+    setMemberFormChronic('');
+    setMemberFormNotify(true);
+    setIsAddMemberModalOpen(true);
+  };
+
+  const handleOpenEditMember = (member: FamilyMemberItem) => {
+    setEditingMemberId(member.id);
+    setMemberFormName(member.fullName);
+    setMemberFormRelation(member.relationship || 'father');
+    setMemberFormPhone(member.phone || '');
+    setMemberFormChronic(member.chronicConditions || '');
+    setMemberFormNotify(member.notifyCaregiver);
+    setIsAddMemberModalOpen(true);
+  };
+
+  const handleDeleteFamilyMember = async (id: number) => {
+    const confirmed = await confirmAction({
+      title: t('reminders.deleteMember'),
+      message: t('reminders.confirmDeleteMember'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.deleteFamilyMember(id);
+      notify(t('reminders.memberDeletedSuccess'), 'success');
+      if (selectedMemberFilter === String(id)) {
+        setSelectedMemberFilter('all');
+      }
+      loadData();
+    } catch (err: any) {
+      notify(err.message || t('common.errorGeneric'), 'error');
+    }
+  };
 
   const handleSaveFamilyMember = async () => {
     if (!memberFormName.trim()) {
@@ -248,15 +296,26 @@ export default function RemindersScreen() {
     }
     setMemberSaving(true);
     try {
-      await api.createFamilyMember({
-        fullName: memberFormName.trim(),
-        relationship: memberFormRelation,
-        phone: memberFormPhone.trim() || undefined,
-        chronicConditions: memberFormChronic.trim() || undefined,
-        notifyCaregiver: memberFormNotify,
-      });
+      if (editingMemberId) {
+        await api.updateFamilyMember(editingMemberId, {
+          fullName: memberFormName.trim(),
+          relationship: memberFormRelation,
+          phone: memberFormPhone.trim() || undefined,
+          chronicConditions: memberFormChronic.trim() || undefined,
+          notifyCaregiver: memberFormNotify,
+        });
+      } else {
+        await api.createFamilyMember({
+          fullName: memberFormName.trim(),
+          relationship: memberFormRelation,
+          phone: memberFormPhone.trim() || undefined,
+          chronicConditions: memberFormChronic.trim() || undefined,
+          notifyCaregiver: memberFormNotify,
+        });
+      }
       notify(t('reminders.memberAddedSuccess'), 'success');
       setIsAddMemberModalOpen(false);
+      setEditingMemberId(null);
       setMemberFormName('');
       setMemberFormPhone('');
       setMemberFormChronic('');
@@ -341,6 +400,7 @@ export default function RemindersScreen() {
         customMemberName: formCustomMember.trim() || null,
         instructions: formInstructions.trim() || undefined,
         refillReminderEnabled: true,
+        familyMemberId: formFamilyMemberId,
       });
       notify(t('reminders.addedSuccess'), 'success');
       setIsModalOpen(false);
@@ -365,6 +425,7 @@ export default function RemindersScreen() {
     setFormPkg('30');
     setFormThreshold('5');
     setFormMember('myself');
+    setFormFamilyMemberId(null);
     setFormCustomMember('');
     setFormInstructions('');
   };
@@ -510,11 +571,17 @@ export default function RemindersScreen() {
         </View>
 
         <Pressable
-          onPress={() => setIsModalOpen(true)}
+          onPress={() => {
+            if (activeTab === 'family') {
+              handleOpenAddMember();
+            } else {
+              setIsModalOpen(true);
+            }
+          }}
           style={({ pressed }) => [styles.addHeaderBtn, pressed && styles.pressed]}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel={t('reminders.addNew')}
+          accessibilityLabel={activeTab === 'family' ? t('reminders.familyAddMember') : t('reminders.addNew')}
         >
           <Feather name="plus" size={20} color="#FFFFFF" />
         </Pressable>
@@ -527,102 +594,106 @@ export default function RemindersScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor={PURPLE} />}
       >
         {/* Family Health Profile Selector Strip */}
-        <View style={styles.familyStripWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.familyStrip}>
-            <Pressable
-              onPress={() => setSelectedMemberFilter('all')}
-              style={[styles.familyChip, selectedMemberFilter === 'all' && styles.familyChipSelected]}
-            >
-              <MaterialCommunityIcons
-                name="account-group-outline"
-                size={16}
-                color={selectedMemberFilter === 'all' ? '#FFFFFF' : PURPLE_DEEP}
-              />
-              <Text style={[styles.familyChipText, selectedMemberFilter === 'all' && styles.familyChipTextSelected]}>
-                {t('reminders.familyFilterAll')}
-              </Text>
-            </Pressable>
+        {activeTab !== 'family' ? (
+          <View style={styles.familyStripWrap}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.familyStrip}>
+              <Pressable
+                onPress={() => setSelectedMemberFilter('all')}
+                style={[styles.familyChip, selectedMemberFilter === 'all' && styles.familyChipSelected]}
+              >
+                <MaterialCommunityIcons
+                  name="account-group-outline"
+                  size={16}
+                  color={selectedMemberFilter === 'all' ? '#FFFFFF' : PURPLE_DEEP}
+                />
+                <Text style={[styles.familyChipText, selectedMemberFilter === 'all' && styles.familyChipTextSelected]}>
+                  {t('reminders.familyFilterAll')}
+                </Text>
+              </Pressable>
 
-            <Pressable
-              onPress={() => setSelectedMemberFilter('myself')}
-              style={[styles.familyChip, selectedMemberFilter === 'myself' && styles.familyChipSelected]}
-            >
-              <MaterialCommunityIcons
-                name="account-outline"
-                size={16}
-                color={selectedMemberFilter === 'myself' ? '#FFFFFF' : PURPLE_DEEP}
-              />
-              <Text style={[styles.familyChipText, selectedMemberFilter === 'myself' && styles.familyChipTextSelected]}>
-                {t('reminders.familyMyOwn')}
-              </Text>
-            </Pressable>
+              <Pressable
+                onPress={() => setSelectedMemberFilter('myself')}
+                style={[styles.familyChip, selectedMemberFilter === 'myself' && styles.familyChipSelected]}
+              >
+                <MaterialCommunityIcons
+                  name="account-outline"
+                  size={16}
+                  color={selectedMemberFilter === 'myself' ? '#FFFFFF' : PURPLE_DEEP}
+                />
+                <Text style={[styles.familyChipText, selectedMemberFilter === 'myself' && styles.familyChipTextSelected]}>
+                  {t('reminders.familyMyOwn')}
+                </Text>
+              </Pressable>
 
-            {familyMembers.map((member) => {
-              const isSelected = selectedMemberFilter === String(member.id);
-              const iconName =
-                member.relationship === 'father'
-                  ? 'face-man'
-                  : member.relationship === 'mother'
-                  ? 'face-woman'
-                  : member.relationship === 'child'
-                  ? 'baby-face-outline'
-                  : 'account-heart-outline';
+              {familyMembers.map((member) => {
+                const isSelected = selectedMemberFilter === String(member.id);
+                const iconName =
+                  member.relationship === 'father'
+                    ? 'face-man'
+                    : member.relationship === 'mother'
+                    ? 'face-woman'
+                    : member.relationship === 'child'
+                    ? 'baby-face-outline'
+                    : 'account-heart-outline';
 
-              return (
-                <Pressable
-                  key={member.id}
-                  onPress={() => setSelectedMemberFilter(String(member.id))}
-                  style={[styles.familyChip, isSelected && styles.familyChipSelected]}
-                >
-                  <MaterialCommunityIcons
-                    name={iconName as any}
-                    size={16}
-                    color={isSelected ? '#FFFFFF' : PURPLE_DEEP}
-                  />
-                  <Text style={[styles.familyChipText, isSelected && styles.familyChipTextSelected]}>
-                    {member.fullName}
-                  </Text>
-                  {member.hasLowStockAlert ? <View style={styles.familyAlertDot} /> : null}
-                </Pressable>
-              );
-            })}
+                return (
+                  <Pressable
+                    key={member.id}
+                    onPress={() => setSelectedMemberFilter(String(member.id))}
+                    style={[styles.familyChip, isSelected && styles.familyChipSelected]}
+                  >
+                    <MaterialCommunityIcons
+                      name={iconName as any}
+                      size={16}
+                      color={isSelected ? '#FFFFFF' : PURPLE_DEEP}
+                    />
+                    <Text style={[styles.familyChipText, isSelected && styles.familyChipTextSelected]}>
+                      {member.fullName}
+                    </Text>
+                    {member.hasLowStockAlert ? <View style={styles.familyAlertDot} /> : null}
+                  </Pressable>
+                );
+              })}
 
-            <Pressable
-              onPress={() => setIsAddMemberModalOpen(true)}
-              style={[styles.familyChip, styles.familyChipAdd]}
-            >
-              <Feather name="plus" size={14} color={PURPLE} />
-              <Text style={styles.familyChipAddText}>{t('reminders.familyAddMember')}</Text>
-            </Pressable>
-          </ScrollView>
-        </View>
+              <Pressable
+                onPress={handleOpenAddMember}
+                style={[styles.familyChip, styles.familyChipAdd]}
+              >
+                <Feather name="plus" size={14} color={PURPLE} />
+                <Text style={styles.familyChipAddText}>{t('reminders.familyAddMember')}</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        ) : null}
 
         {/* Date Selector Strip */}
-        <View style={styles.dateStripWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
-            {dateStrip.map((item) => {
-              const selected = item.ymd === selectedDate;
-              return (
-                <Pressable
-                  key={item.ymd}
-                  onPress={() => setSelectedDate(item.ymd)}
-                  style={[styles.dateCell, selected && styles.dateCellSelected]}
-                >
-                  <Text style={[styles.dateCellLabel, selected && styles.dateCellLabelSelected]}>
-                    {item.label}
-                  </Text>
-                  <Text style={[styles.dateCellNumber, selected && styles.dateCellNumberSelected]}>
-                    {item.dayNumber}
-                  </Text>
-                  {item.isToday ? <View style={[styles.todayDot, selected && styles.todayDotSelected]} /> : null}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+        {activeTab !== 'family' ? (
+          <View style={styles.dateStripWrap}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
+              {dateStrip.map((item) => {
+                const selected = item.ymd === selectedDate;
+                return (
+                  <Pressable
+                    key={item.ymd}
+                    onPress={() => setSelectedDate(item.ymd)}
+                    style={[styles.dateCell, selected && styles.dateCellSelected]}
+                  >
+                    <Text style={[styles.dateCellLabel, selected && styles.dateCellLabelSelected]}>
+                      {item.label}
+                    </Text>
+                    <Text style={[styles.dateCellNumber, selected && styles.dateCellNumberSelected]}>
+                      {item.dayNumber}
+                    </Text>
+                    {item.isToday ? <View style={[styles.todayDot, selected && styles.todayDotSelected]} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
 
         {/* Refill Alerts Banner (Auto-Refill trigger) */}
-        {refillAlerts.length > 0 ? (
+        {activeTab !== 'family' && refillAlerts.length > 0 ? (
           <View style={styles.alertsContainer}>
             {refillAlerts.map((alert) => (
               <View key={`alert-${alert.reminderId}`} style={styles.alertCard}>
@@ -661,47 +732,49 @@ export default function RemindersScreen() {
         ) : null}
 
         {/* Compliance & Adherence Card */}
-        <View style={styles.complianceCard}>
-          <View style={styles.complianceTop}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.complianceTitle}>
-                {t('reminders.adherenceToday', {
-                  taken: compliance.takenDoses,
-                  total: compliance.totalDoses,
-                })}
-              </Text>
-              <Text style={styles.complianceSub}>
-                {compliance.totalDoses === 0
-                  ? t('reminders.emptyScheduleSub')
-                  : compliance.percent === 100
-                    ? t('reminders.allTaken')
-                    : t('reminders.pendingDoses', { count: compliance.pendingDoses })}
-              </Text>
+        {activeTab !== 'family' ? (
+          <View style={styles.complianceCard}>
+            <View style={styles.complianceTop}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.complianceTitle}>
+                  {t('reminders.adherenceToday', {
+                    taken: compliance.takenDoses,
+                    total: compliance.totalDoses,
+                  })}
+                </Text>
+                <Text style={styles.complianceSub}>
+                  {compliance.totalDoses === 0
+                    ? t('reminders.emptyScheduleSub')
+                    : compliance.percent === 100
+                      ? t('reminders.allTaken')
+                      : t('reminders.pendingDoses', { count: compliance.pendingDoses })}
+                </Text>
+              </View>
+              <View style={[styles.complianceBadge, compliance.totalDoses === 0 && styles.complianceBadgeInactive]}>
+                <Text
+                  style={[
+                    styles.complianceBadgeText,
+                    compliance.totalDoses === 0 && styles.complianceBadgeTextInactive,
+                  ]}
+                >
+                  {compliance.totalDoses === 0 ? '—' : `${compliance.percent}%`}
+                </Text>
+              </View>
             </View>
-            <View style={[styles.complianceBadge, compliance.totalDoses === 0 && styles.complianceBadgeInactive]}>
-              <Text
+
+            <View style={styles.progressBarTrack}>
+              <View
                 style={[
-                  styles.complianceBadgeText,
-                  compliance.totalDoses === 0 && styles.complianceBadgeTextInactive,
+                  styles.progressBarFill,
+                  { width: `${compliance.percent}%` },
+                  compliance.totalDoses === 0 && { backgroundColor: '#E2E8F0' },
                 ]}
-              >
-                {compliance.totalDoses === 0 ? '—' : `${compliance.percent}%`}
-              </Text>
+              />
             </View>
           </View>
+        ) : null}
 
-          <View style={styles.progressBarTrack}>
-            <View
-              style={[
-                styles.progressBarFill,
-                { width: `${compliance.percent}%` },
-                compliance.totalDoses === 0 && { backgroundColor: '#E2E8F0' },
-              ]}
-            />
-          </View>
-        </View>
-
-        {/* Tabs: Today vs My Medicines */}
+        {/* Tabs: Today vs My Medicines vs Family */}
         <View style={styles.tabsRow}>
           <Pressable
             onPress={() => setActiveTab('today')}
@@ -717,6 +790,14 @@ export default function RemindersScreen() {
           >
             <Text style={[styles.tabBtnText, activeTab === 'all' && styles.tabBtnTextActive]}>
               {t('reminders.tabMyMedicines')} ({filteredReminders.length})
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setActiveTab('family')}
+            style={[styles.tabBtn, activeTab === 'family' && styles.tabBtnActive]}
+          >
+            <Text style={[styles.tabBtnText, activeTab === 'family' && styles.tabBtnTextActive]}>
+              {t('reminders.tabFamily')} ({familyMembers.length})
             </Text>
           </Pressable>
         </View>
@@ -822,7 +903,7 @@ export default function RemindersScreen() {
               })}
             </View>
           )
-        ) : (
+        ) : activeTab === 'all' ? (
           /* All Medications List */
           filteredReminders.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -892,6 +973,160 @@ export default function RemindersScreen() {
               ))}
             </View>
           )
+        ) : (
+          /* Family Health Profiles List */
+          <View style={styles.familyTabContainer}>
+            {/* Family Hero Card */}
+            <View style={styles.familyHeroCard}>
+              <View style={styles.familyHeroIconWrap}>
+                <MaterialCommunityIcons name="account-group" size={24} color={PURPLE} />
+              </View>
+              <View style={styles.familyHeroTextCol}>
+                <Text style={styles.familyHeroTitle}>{t('reminders.familyManageTitle')}</Text>
+                <Text style={styles.familyHeroSubtitle}>{t('reminders.familyManageSubtitle')}</Text>
+              </View>
+              <Pressable
+                onPress={handleOpenAddMember}
+                style={({ pressed }) => [styles.familyHeroAddBtn, pressed && styles.pressed]}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t('reminders.familyAddMember')}
+              >
+                <Feather name="plus" size={18} color="#FFFFFF" />
+              </Pressable>
+            </View>
+
+            {familyMembers.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <View style={styles.emptyIconCircle}>
+                  <MaterialCommunityIcons name="account-group-outline" size={32} color={PURPLE} />
+                </View>
+                <Text style={styles.emptyTitle}>{t('reminders.emptyFamilyTitle')}</Text>
+                <Text style={styles.emptySub}>{t('reminders.emptyFamilySub')}</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.emptyAddBtn, pressed && styles.pressed]}
+                  onPress={handleOpenAddMember}
+                >
+                  <Feather name="plus" size={16} color="#FFFFFF" />
+                  <Text style={styles.emptyAddBtnText}>{t('reminders.familyAddMember')}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.familyCardsList}>
+                {familyMembers.map((member) => {
+                  const iconName =
+                    member.relationship === 'father'
+                      ? 'face-man'
+                      : member.relationship === 'mother'
+                      ? 'face-woman'
+                      : member.relationship === 'child'
+                      ? 'baby-face-outline'
+                      : 'account-heart-outline';
+
+                  return (
+                    <View key={`fam-${member.id}`} style={styles.familyMemberCard}>
+                      <View style={styles.famCardHeader}>
+                        <View style={styles.famAvatar}>
+                          <MaterialCommunityIcons name={iconName as any} size={22} color={PURPLE} />
+                        </View>
+                        <View style={styles.famHeaderInfo}>
+                          <Text style={styles.famMemberName} numberOfLines={1}>
+                            {member.fullName}
+                          </Text>
+                          <View style={styles.famRelBadge}>
+                            <Text style={styles.famRelText}>
+                              {memberTagLabel(member.relationship)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.famHeaderActions}>
+                          <Pressable
+                            onPress={() => handleOpenEditMember(member)}
+                            style={({ pressed }) => [styles.famActionBtn, pressed && styles.pressed]}
+                            hitSlop={8}
+                            accessibilityLabel={t('reminders.editMember')}
+                          >
+                            <Feather name="edit-2" size={15} color={PURPLE} />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleDeleteFamilyMember(member.id)}
+                            style={({ pressed }) => [styles.famActionBtn, styles.famDeleteActionBtn, pressed && styles.pressed]}
+                            hitSlop={8}
+                            accessibilityLabel={t('reminders.deleteMember')}
+                          >
+                            <Feather name="trash-2" size={15} color="#EF4444" />
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {member.phone ? (
+                        <View style={styles.famPhoneRow}>
+                          <Feather name="phone" size={12} color={MUTED} />
+                          <Text style={styles.famPhoneText}>{member.phone}</Text>
+                        </View>
+                      ) : null}
+
+                      {member.chronicConditions ? (
+                        <View style={styles.famChronicRow}>
+                          <MaterialCommunityIcons name="heart-pulse" size={14} color="#EF4444" />
+                          <Text style={styles.famChronicText}>{member.chronicConditions}</Text>
+                        </View>
+                      ) : null}
+
+                      <View style={styles.famDivider} />
+
+                      {/* Stats & Health Status Row */}
+                      <View style={styles.famStatsRow}>
+                        <View style={styles.famStatBadge}>
+                          <MaterialCommunityIcons name="pill" size={14} color={PURPLE} />
+                          <Text style={styles.famStatText}>
+                            {t('reminders.memberMedicinesCount', { count: member.activeRemindersCount || 0 })}
+                          </Text>
+                        </View>
+
+                        {member.hasLowStockAlert ? (
+                          <View style={styles.famAlertBadgeWarning}>
+                            <MaterialCommunityIcons name="alert-circle-outline" size={14} color="#B45309" />
+                            <Text style={styles.famAlertTextWarning}>
+                              {t('reminders.hasLowStockWarning')}
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.famAlertBadgeOk}>
+                            <MaterialCommunityIcons name="check-circle-outline" size={14} color="#059669" />
+                            <Text style={styles.famAlertTextOk}>
+                              {t('reminders.allCoursesHealthy')}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* View Medicines CTA */}
+                      <Pressable
+                        style={({ pressed }) => [styles.famViewMedBtn, pressed && styles.pressed]}
+                        onPress={() => {
+                          setSelectedMemberFilter(String(member.id));
+                          setActiveTab('all');
+                        }}
+                      >
+                        <Text style={styles.famViewMedBtnText}>{t('reminders.viewMemberMedicines')}</Text>
+                        <Feather name="chevron-right" size={16} color={PURPLE} />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+
+                <Pressable
+                  style={({ pressed }) => [styles.famAddDashedBtn, pressed && styles.pressed]}
+                  onPress={handleOpenAddMember}
+                >
+                  <Feather name="plus-circle" size={18} color={PURPLE} />
+                  <Text style={styles.famAddDashedText}>{t('reminders.familyAddMember')}</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
         )}
       </ScrollView>
 
@@ -1088,29 +1323,76 @@ export default function RemindersScreen() {
               {/* For Whom (Member Tag) */}
               <Text style={styles.fieldLabel}>{t('reminders.memberLabel')}</Text>
               <View style={styles.presetsRow}>
-                {[
-                  { key: 'myself', label: t('reminders.myself') },
-                  { key: 'child', label: t('reminders.child') },
-                  { key: 'father', label: t('reminders.father') },
-                  { key: 'mother', label: t('reminders.mother') },
-                  { key: 'spouse', label: t('reminders.spouse') },
-                ].map((mem) => {
-                  const active = formMember === mem.key;
+                <Pressable
+                  onPress={() => {
+                    setFormMember('myself');
+                    setFormFamilyMemberId(null);
+                    setFormCustomMember('');
+                  }}
+                  style={[
+                    styles.presetChip,
+                    formMember === 'myself' && !formFamilyMemberId && styles.presetChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.presetChipText,
+                      formMember === 'myself' && !formFamilyMemberId && styles.presetChipTextActive,
+                    ]}
+                  >
+                    {t('reminders.myself')}
+                  </Text>
+                </Pressable>
+
+                {familyMembers.map((mem) => {
+                  const isSelected = formFamilyMemberId === mem.id;
                   return (
                     <Pressable
-                      key={mem.key}
-                      onPress={() => setFormMember(mem.key)}
-                      style={[styles.presetChip, active && styles.presetChipActive]}
+                      key={`modal-fam-${mem.id}`}
+                      onPress={() => {
+                        setFormFamilyMemberId(mem.id);
+                        setFormMember(mem.relationship);
+                        setFormCustomMember(mem.fullName);
+                      }}
+                      style={[styles.presetChip, isSelected && styles.presetChipActive]}
                     >
-                      <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>
-                        {mem.label}
+                      <Text
+                        style={[styles.presetChipText, isSelected && styles.presetChipTextActive]}
+                      >
+                        {mem.fullName}
                       </Text>
                     </Pressable>
                   );
                 })}
+
+                {[
+                  { key: 'child', label: t('reminders.child') },
+                  { key: 'father', label: t('reminders.father') },
+                  { key: 'mother', label: t('reminders.mother') },
+                  { key: 'spouse', label: t('reminders.spouse') },
+                  { key: 'other', label: t('reminders.other') },
+                ]
+                  .filter((item) => !familyMembers.some((fm) => fm.relationship === item.key))
+                  .map((mem) => {
+                    const active = formMember === mem.key && !formFamilyMemberId;
+                    return (
+                      <Pressable
+                        key={mem.key}
+                        onPress={() => {
+                          setFormMember(mem.key);
+                          setFormFamilyMemberId(null);
+                        }}
+                        style={[styles.presetChip, active && styles.presetChipActive]}
+                      >
+                        <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>
+                          {mem.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
               </View>
 
-              {formMember !== 'myself' ? (
+              {formMember !== 'myself' && !formFamilyMemberId ? (
                 <TextInput
                   style={[styles.textInput, { marginTop: 6 }]}
                   value={formCustomMember}
@@ -1147,22 +1429,30 @@ export default function RemindersScreen() {
         </View>
       </Modal>
 
-      {/* Add Family Member Modal */}
+      {/* Add / Edit Family Member Modal */}
       <Modal
         visible={isAddMemberModalOpen}
         animationType="slide"
         transparent
-        onRequestClose={() => setIsAddMemberModalOpen(false)}
+        onRequestClose={() => {
+          setIsAddMemberModalOpen(false);
+          setEditingMemberId(null);
+        }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: Math.max(20, insets.bottom + 10) }]}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>{t('reminders.familyManageTitle')}</Text>
+                <Text style={styles.modalTitle}>
+                  {editingMemberId ? t('reminders.editMemberTitle') : t('reminders.addMemberTitle')}
+                </Text>
                 <Text style={styles.modalSub}>{t('reminders.familyManageSubtitle')}</Text>
               </View>
               <Pressable
-                onPress={() => setIsAddMemberModalOpen(false)}
+                onPress={() => {
+                  setIsAddMemberModalOpen(false);
+                  setEditingMemberId(null);
+                }}
                 style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
               >
                 <Feather name="x" size={20} color={MUTED} />
@@ -1202,6 +1492,16 @@ export default function RemindersScreen() {
                   );
                 })}
               </View>
+
+              <Text style={styles.fieldLabel}>{t('reminders.memberPhoneLabel')}</Text>
+              <TextInput
+                style={styles.textInput}
+                value={memberFormPhone}
+                onChangeText={setMemberFormPhone}
+                placeholder={t('reminders.memberPhonePlaceholder')}
+                placeholderTextColor="#9CA3AF"
+                keyboardType="phone-pad"
+              />
 
               <Text style={styles.fieldLabel}>{t('reminders.chronicLabel')}</Text>
               <TextInput
@@ -2041,5 +2341,224 @@ const styles = StyleSheet.create({
   },
   toggleThumbActive: {
     alignSelf: 'flex-end',
+  },
+  familyTabContainer: {
+    gap: 14,
+  },
+  familyHeroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAF5FF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    gap: 12,
+  },
+  familyHeroIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#EDE9FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  familyHeroTextCol: {
+    flex: 1,
+  },
+  familyHeroTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+    marginBottom: 2,
+  },
+  familyHeroSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: MUTED,
+  },
+  familyHeroAddBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  familyCardsList: {
+    gap: 12,
+  },
+  familyMemberCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    boxShadow: '0 2px 8px rgba(26, 16, 64, 0.04)',
+    gap: 10,
+  },
+  famCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  famAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: '#F3EEFF',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  famHeaderInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  famMemberName: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+  },
+  famRelBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F3EEFF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  famRelText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: PURPLE,
+  },
+  famHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  famActionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#F3EEFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  famDeleteActionBtn: {
+    backgroundColor: '#FEE2E2',
+  },
+  famPhoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  famPhoneText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: MUTED,
+  },
+  famChronicRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  famChronicText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    color: '#DC2626',
+  },
+  famDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+  },
+  famStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  famStatBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F3FF',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 5,
+  },
+  famStatText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    color: PURPLE,
+  },
+  famAlertBadgeWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 5,
+  },
+  famAlertTextWarning: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: '#B45309',
+  },
+  famAlertBadgeOk: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 5,
+  },
+  famAlertTextOk: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: '#059669',
+  },
+  famViewMedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3EEFF',
+    borderRadius: 10,
+    paddingVertical: 9,
+    gap: 6,
+    marginTop: 2,
+  },
+  famViewMedBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    color: PURPLE,
+  },
+  famAddDashedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#D8B4FE',
+    backgroundColor: '#FAF5FF',
+    borderRadius: 14,
+    paddingVertical: 14,
+    gap: 8,
+    marginTop: 4,
+  },
+  famAddDashedText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: PURPLE,
   },
 });

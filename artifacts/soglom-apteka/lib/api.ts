@@ -330,6 +330,7 @@ export const api = {
     memberTag?: string;
     customMemberName?: string | null;
     instructions?: string;
+    familyMemberId?: number | null;
   }) => request<{ ok: boolean; reminder: any }>('/api/reminders', { method: 'POST', body: JSON.stringify(body) }),
   updateReminder: (id: number, body: Record<string, unknown>) =>
     request<{ ok: boolean; reminder: any }>(`/api/reminders/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
