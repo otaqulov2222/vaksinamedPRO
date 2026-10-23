@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import React, { useMemo, useRef, useState } from 'react';
 import { Animated, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -150,6 +151,13 @@ export default function RegisterScreen() {
           <BrandMark size={56} style={styles.brand} />
           <Text style={styles.lead}>{t('auth.registerLead')}</Text>
 
+          <View style={styles.bonusBanner}>
+            <View style={styles.bonusIconWrap}>
+              <Feather name="gift" size={17} color={C.primary} />
+            </View>
+            <Text style={styles.bonusText}>{t('auth.registerWelcomeBonus')}</Text>
+          </View>
+
           <View style={styles.form}>
             <AuthField
               label={t('auth.registerNameLabel')}
@@ -278,7 +286,34 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: C.secondary,
   },
-  form: { marginTop: 24, gap: 16 },
+  bonusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginTop: 18,
+    gap: 10,
+  },
+  bonusIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EDE9FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bonusText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: '#5B21B6',
+  },
+  form: { marginTop: 18, gap: 16 },
   error: { marginTop: 16 },
   altCta: { marginTop: 12 },
   cta: { marginTop: 24 },

@@ -7,6 +7,9 @@ import {
   verifyOtpAndAuth,
   verifyAndConsumeOtp,
   requireCustomer,
+  findCustomerByPhone,
+  normalizePhone,
+  issueCustomerSession,
 } from "../lib/auth";
 import { customers, db, hashPassword, verifyPassword } from "@workspace/db";
 import { rateLimit } from "../lib/rateLimit";
@@ -156,6 +159,40 @@ router.post("/auth/reset-password-with-otp", authLimiter, async (req, res, next)
       success: true,
     });
     return res.json({ ok: true, message: "Parol muvaffaqiyatli tiklandi" });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/auth/reset-password", authLimiter, async (req, res, next) => {
+  try {
+    const { phone: rawPhone, code, newPassword } = req.body || {};
+    const phone = normalizePhone(rawPhone);
+    const user = await findCustomerByPhone(phone);
+    if (!user) {
+      return res.status(404).json({ message: "Bu telefon raqam ro‘yxatdan o‘tmagan" });
+    }
+    if (!newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ message: "Yangi parol kamida 6 ta belgidan iborat bo‘lishi kerak" });
+    }
+    const ok = await verifyAndConsumeOtp(phone, code);
+    if (!ok) {
+      return res.status(400).json({ message: "SMS kod noto‘g‘ri yoki muddati tugagan" });
+    }
+    const newHash = hashPassword(String(newPassword));
+    await db.update(customers).set({ passwordHash: newHash }).where(eq(customers.id, user.id));
+    await recordAuthEvent({
+      actorType: "customer",
+      actorId: user.id,
+      eventType: "password.reset_forgot",
+      success: true,
+    });
+    return res.json({
+      ok: true,
+      token: await issueCustomerSession(user.id, req),
+      customer: await publicCustomer(user),
+      message: "Parol muvaffaqiyatli tiklandi",
+    });
   } catch (error) {
     return next(error);
   }

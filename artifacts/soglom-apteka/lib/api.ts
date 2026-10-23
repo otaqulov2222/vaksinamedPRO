@@ -151,6 +151,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  forgotPasswordReset: async (body: { phone: string; code: string; newPassword: string }) => {
+    const data = await request<{ ok: boolean; token: string; customer: any; message: string }>('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }, false);
+    if (data?.token) {
+      await setAuthToken(data.token);
+    }
+    return data;
+  },
   posCard: () => request<any>('/api/pos/card'),
   /** SoT cashback history (source-aware). Auth = session customer only. */
   cashbackHistory: (opts?: { limit?: number; offset?: number }) => {
