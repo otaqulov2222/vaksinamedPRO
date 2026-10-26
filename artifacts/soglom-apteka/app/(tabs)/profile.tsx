@@ -159,8 +159,8 @@ export default function ProfileScreen() {
     router.replace('/welcome');
   };
 
-  const bottomPad = Platform.OS === 'web' ? 12 : Math.max(insets.bottom, 12);
-  const topPad = Platform.OS === 'web' ? 8 : Math.max(insets.top, 8);
+  const bottomPad = 20;
+  const topPad = Platform.OS === 'web' ? 12 : Math.max(insets.top, 8) + 4;
 
   return (
     <View style={styles.root}>
@@ -171,8 +171,7 @@ export default function ProfileScreen() {
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
         alwaysBounceHorizontal={false}
-        bounces={false}
-        directionalLockEnabled
+        bounces={true}
         keyboardShouldPersistTaps="handled"
       >
         <LinearGradient colors={[SOFT, BG]} locations={[0, 1]} style={styles.atmosphere} pointerEvents="none" />
@@ -339,12 +338,6 @@ export default function ProfileScreen() {
             {loggingOut ? t('common.loggingOut') : t('common.logout')}
           </Text>
         </Pressable>
-
-        <View style={styles.footerWrap} pointerEvents="none">
-          <Text style={styles.footerText}>
-            {t('profile.profileVersionFooter', { version: '1.0.4' })}
-          </Text>
-        </View>
       </ScrollView>
     </View>
   );
@@ -384,40 +377,40 @@ const styles = StyleSheet.create({
   },
 
   identityCard: {
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 20,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 22,
     backgroundColor: SURFACE,
     borderWidth: 1.5,
     borderColor: '#EFEBF6',
     boxShadow: SHADOW_VIP,
   },
-  identity: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 2.5,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 3,
     borderColor: SURFACE,
     backgroundColor: PRIMARY,
     overflow: 'hidden',
     boxShadow: '0px 0px 0px 2px rgba(75,36,138,0.18), 0px 6px 14px rgba(53,23,101,0.22)',
   },
   avatarFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { fontFamily: 'Inter_700Bold', fontSize: 21, lineHeight: 25, color: SURFACE, textAlign: 'center' },
+  avatarLetter: { fontFamily: 'Inter_700Bold', fontSize: 22, lineHeight: 26, color: SURFACE, textAlign: 'center' },
   identityText: { flex: 1, minWidth: 0 },
-  name: { fontFamily: 'Inter_700Bold', fontSize: 19, lineHeight: 24, color: INK, letterSpacing: -0.5 },
-  phone: { marginTop: 1, fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, color: SECONDARY, letterSpacing: 0.2 },
+  name: { fontFamily: 'Inter_700Bold', fontSize: 21, lineHeight: 26, color: INK, letterSpacing: -0.5 },
+  phone: { marginTop: 2, fontFamily: 'Inter_500Medium', fontSize: 13.5, lineHeight: 18, color: SECONDARY, letterSpacing: 0.2 },
 
-  memberRow: { marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 4 },
+  memberRow: { marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 4 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    minHeight: 30,
+    minHeight: 32,
     paddingLeft: 6,
     paddingRight: 8,
-    borderRadius: 15,
+    borderRadius: 16,
     backgroundColor: '#FFFDF5',
     borderWidth: 1.2,
     borderColor: 'rgba(245,158,11,0.45)',
@@ -425,53 +418,53 @@ const styles = StyleSheet.create({
   chipNone: { borderColor: HAIRLINE, backgroundColor: SURFACE },
   chipMedal: { width: 20, height: 20, borderRadius: 10, backgroundColor: DEEP, alignItems: 'center', justifyContent: 'center' },
   chipMedalNone: { backgroundColor: PURPLE_LIGHT },
-  chipText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 12, lineHeight: 16, color: DEEP, letterSpacing: -0.1 },
+  chipText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 12.5, lineHeight: 16, color: DEEP, letterSpacing: -0.1 },
   chipTextNone: { color: SECONDARY },
   rate: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 28 },
   rateDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: YELLOW },
-  rateText: { fontFamily: 'Inter_600SemiBold', fontSize: 12.5, lineHeight: 16, color: PRIMARY },
+  rateText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 16, color: PRIMARY },
 
   edit: {
-    marginTop: 10,
-    minHeight: 38,
+    marginTop: 12,
+    minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     backgroundColor: EDIT_BG,
     borderWidth: 1,
     borderColor: EDIT_EDGE,
   },
   editPressed: { backgroundColor: PURPLE_LIGHT },
-  editText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 17, color: DEEP },
+  editText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13.5, lineHeight: 17, color: DEEP },
 
   menu: {
-    marginTop: 12,
-    borderRadius: 20,
+    marginTop: 14,
+    borderRadius: 22,
     backgroundColor: SURFACE,
     borderWidth: 1.5,
     borderColor: '#EFEBF6',
     overflow: 'hidden',
     boxShadow: SHADOW_GROUP,
   },
-  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14, gap: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, gap: 12 },
   rowPressed: { backgroundColor: SOFT },
-  rowIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  rowIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   rowIconAccent: { backgroundColor: '#FEF3C7' },
   rowBody: {
     flex: 1,
     minWidth: 0,
-    minHeight: 48,
-    marginRight: 14,
+    minHeight: 52,
+    marginRight: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   divider: { borderBottomWidth: 1, borderBottomColor: DIVIDER },
-  rowTitle: { flex: 1, minWidth: 0, fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 19, color: INK, letterSpacing: -0.1 },
-  rowValue: { flexShrink: 0, fontFamily: 'Inter_600SemiBold', fontSize: 13, lineHeight: 17, color: SECONDARY },
+  rowTitle: { flex: 1, minWidth: 0, fontFamily: 'Inter_500Medium', fontSize: 14.5, lineHeight: 19, color: INK, letterSpacing: -0.1 },
+  rowValue: { flexShrink: 0, fontFamily: 'Inter_600SemiBold', fontSize: 13.5, lineHeight: 17, color: SECONDARY },
   rowPillBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -488,32 +481,20 @@ const styles = StyleSheet.create({
   },
 
   logout: {
-    marginTop: 12,
-    minHeight: 46,
+    marginTop: 14,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     backgroundColor: SURFACE,
     borderWidth: 1.2,
     borderColor: DANGER_EDGE,
     boxShadow: SHADOW_CONTROL,
   },
   logoutPressed: { backgroundColor: '#FEF2F2' },
-  logoutIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: DANGER_TINT, alignItems: 'center', justifyContent: 'center' },
-  logoutText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14, lineHeight: 19, color: DANGER },
-  footerWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 8,
-    paddingBottom: 2,
-  },
-  footerText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11.5,
-    color: '#9CA3AF',
-    letterSpacing: 0.2,
-  },
+  logoutIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: DANGER_TINT, alignItems: 'center', justifyContent: 'center' },
+  logoutText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14.5, lineHeight: 19, color: DANGER },
 });
