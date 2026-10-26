@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 import { branches, db, products, productStocks, promos, rewards } from "@workspace/db";
 import { scanAndMatchPrescriptionText, type CatalogProductCandidate } from "../lib/prescriptionEngine";
+import { handleAiMedicalChat } from "../lib/aiPrescriptionChat";
 
 const router = Router();
 
@@ -417,6 +418,60 @@ router.post("/catalog/prescription/scan", async (req, res, next) => {
     const result = scanAndMatchPrescriptionText(extractedText, candidates);
 
     return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/catalog/prescription/chat", async (req, res, next) => {
+  try {
+    const { message, image, language, branchId } = req.body || {};
+
+    // Load active products from catalog
+    const allProducts = await db
+      .select({
+        id: products.id,
+        sku: products.sku,
+        nameUz: products.nameUz,
+        nameRu: products.nameRu,
+        category: products.category,
+        manufacturer: products.manufacturer,
+        price: products.price,
+        unit: products.unit,
+        requiresPrescription: products.requiresPrescription,
+        analogGroup: products.analogGroup,
+      })
+      .from(products);
+
+    const branchStocksMap = new Map<number, number>();
+    const bId = Number(branchId);
+    if (Number.isFinite(bId) && bId > 0) {
+      const stockRows = await db
+        .select({
+          productId: productStocks.productId,
+          availableQuantity: availableExpr(),
+        })
+        .from(productStocks)
+        .where(eq(productStocks.branchId, bId));
+      for (const row of stockRows) {
+        branchStocksMap.set(row.productId, row.availableQuantity ?? 0);
+      }
+    }
+
+    const candidates: CatalogProductCandidate[] = allProducts.map((p) => ({
+      ...p,
+      analogGroup: p.analogGroup || undefined,
+      availableQuantity: branchStocksMap.has(p.id) ? branchStocksMap.get(p.id) : 10,
+    }));
+
+    const response = handleAiMedicalChat({
+      message,
+      image,
+      language: language === "ru" || language === "en" ? language : "uz",
+      candidates,
+    });
+
+    return res.json(response);
   } catch (error) {
     return next(error);
   }

@@ -239,6 +239,43 @@ export const api = {
         en: string;
       };
     }>('/api/catalog/prescription/scan', { method: 'POST', body: JSON.stringify(body) }, false),
+  aiPrescriptionChat: (body: {
+    message?: string;
+    image?: string;
+    language?: string;
+    branchId?: number;
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  }) =>
+    request<{
+      success: boolean;
+      reply: string;
+      isMedical: boolean;
+      matchedProducts: Array<{
+        id: number;
+        sku: string;
+        nameUz: string;
+        nameRu: string;
+        category: string;
+        manufacturer: string;
+        price: number;
+        unit: string;
+        requiresPrescription: boolean;
+        analogGroup?: string;
+        inStock: boolean;
+        dosage?: string;
+        instructions?: string;
+        confidence?: number;
+        cheaperAlternative?: {
+          id: number;
+          nameUz: string;
+          nameRu: string;
+          price: number;
+          manufacturer: string;
+          difference: number;
+        };
+      }>;
+      quickSuggestions?: string[];
+    }>('/api/catalog/prescription/chat', { method: 'POST', body: JSON.stringify(body) }, false),
   branches: (lat?: number, lng?: number, q = '', region = '') => {
     const params = new URLSearchParams();
     if (lat != null && Number.isFinite(lat)) params.set('lat', String(lat));

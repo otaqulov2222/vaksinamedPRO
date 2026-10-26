@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -25,88 +28,110 @@ const BORDER = '#E5E7EB';
 const CARD_BG = '#FFFFFF';
 const BG = '#F8F9FD';
 
-interface MatchedItemState {
-  id: string;
-  rawLine: string;
-  cleanedQuery: string;
-  extractedDosage?: string;
-  confidence: number;
-  confidenceLevel: 'high' | 'medium' | 'low';
-  selected: boolean;
-  quantity: number;
-  matchedProduct?: {
+export interface ChatProductItem {
+  id: number;
+  sku: string;
+  nameUz: string;
+  nameRu: string;
+  category: string;
+  manufacturer: string;
+  price: number;
+  unit: string;
+  requiresPrescription: boolean;
+  analogGroup?: string;
+  inStock: boolean;
+  dosage?: string;
+  instructions?: string;
+  confidence?: number;
+  cheaperAlternative?: {
     id: number;
-    sku: string;
     nameUz: string;
     nameRu: string;
-    category: string;
-    manufacturer: string;
     price: number;
-    unit: string;
-    requiresPrescription: boolean;
-    analogGroup?: string;
-    inStock: boolean;
-    availableQuantity?: number;
+    manufacturer: string;
+    difference: number;
   };
-  alternatives?: Array<{
-    id: number;
-    sku: string;
-    nameUz: string;
-    nameRu: string;
-    price: number;
-    manufacturer: string;
-    isCheaper: boolean;
-    priceDiff: number;
-  }>;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  text: string;
+  imageUri?: string;
+  timestamp: string;
+  matchedProducts?: ChatProductItem[];
+  quickSuggestions?: string[];
 }
 
 export default function PrescriptionScreen() {
   const insets = useSafeAreaInsets();
   const { t, fmt, language, refresh } = useApp();
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  const [scanning, setScanning] = useState(false);
-  const [items, setItems] = useState<MatchedItemState[]>([]);
-  const [hasScanned, setHasScanned] = useState(false);
-  const [textInputVisible, setTextInputVisible] = useState(false);
-  const [customText, setCustomText] = useState('');
-  const [addingToCart, setAddingToCart] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [attachedImage, setAttachedImage] = useState<{ uri: string; base64?: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [attachSheetVisible, setAttachSheetVisible] = useState(false);
+  const [addedIds, setAddedIds] = useState<Record<string, boolean>>({});
+  const [addingAll, setAddingAll] = useState(false);
+
+  // Initialize with AI Welcome Message
+  useEffect(() => {
+    if (messages.length === 0) {
+      setMessages([
+        {
+          id: 'welcome-msg',
+          sender: 'assistant',
+          text: t('catalog.aiChatWelcome'),
+          timestamp: fmt.time(new Date()),
+          quickSuggestions: [
+            t('catalog.aiChatQuickPrompt1'),
+            t('catalog.aiChatQuickPrompt2'),
+            t('catalog.aiChatQuickPrompt3'),
+            t('catalog.aiChatQuickPrompt4'),
+          ],
+        },
+      ]);
+    }
+  }, [t]);
+
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 150);
+  }, []);
 
   const goBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)/catalog');
   };
 
-  const processScan = async (payload: { text?: string; image?: string }) => {
-    setScanning(true);
-    setHasScanned(false);
-    try {
-      const res = await api.scanPrescription(payload);
-      if (res && Array.isArray(res.items)) {
-        const mapped: MatchedItemState[] = res.items.map((i) => ({
-          ...i,
-          selected: i.matchedProduct != null && i.confidence >= 60,
-          quantity: 1,
-        }));
-        setItems(mapped);
-        setHasScanned(true);
-      } else {
-        setItems([]);
-        setHasScanned(true);
-      }
-    } catch {
-      notify(t('catalog.prescriptionTitle'), t('catalog.prescriptionEmpty'));
-      setItems([]);
-      setHasScanned(true);
-    } finally {
-      setScanning(false);
-    }
+  const handleResetChat = () => {
+    setMessages([
+      {
+        id: `welcome-${Date.now()}`,
+        sender: 'assistant',
+        text: t('catalog.aiChatWelcome'),
+        timestamp: fmt.time(new Date()),
+        quickSuggestions: [
+          t('catalog.aiChatQuickPrompt1'),
+          t('catalog.aiChatQuickPrompt2'),
+          t('catalog.aiChatQuickPrompt3'),
+          t('catalog.aiChatQuickPrompt4'),
+        ],
+      },
+    ]);
+    setAttachedImage(null);
+    setInputText('');
   };
 
   const handleCamera = async () => {
+    setAttachSheetVisible(false);
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        notify(t('catalog.prescriptionTitle'), t('catalog.prescriptionCamera'));
+        notify(t('catalog.aiChatTitle'), t('catalog.prescriptionCamera'));
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -115,22 +140,22 @@ export default function PrescriptionScreen() {
         base64: true,
       });
       if (!result.canceled && result.assets && result.assets[0]) {
-        const base64Data = result.assets[0].base64
-          ? `data:image/jpeg;base64,${result.assets[0].base64}`
-          : 'demo_camera_scan';
-        await processScan({ image: base64Data });
+        setAttachedImage({
+          uri: result.assets[0].uri,
+          base64: result.assets[0].base64 ? `data:image/jpeg;base64,${result.assets[0].base64}` : undefined,
+        });
       }
     } catch {
-      // Fallback to sample on simulator / unsupported web camera
-      await handleDemoSample();
+      handleDemoSample();
     }
   };
 
   const handleGallery = async () => {
+    setAttachSheetVisible(false);
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        notify(t('catalog.prescriptionTitle'), t('catalog.prescriptionGallery'));
+        notify(t('catalog.aiChatTitle'), t('catalog.prescriptionGallery'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -139,66 +164,102 @@ export default function PrescriptionScreen() {
         base64: true,
       });
       if (!result.canceled && result.assets && result.assets[0]) {
-        const base64Data = result.assets[0].base64
-          ? `data:image/jpeg;base64,${result.assets[0].base64}`
-          : 'demo_gallery_scan';
-        await processScan({ image: base64Data });
+        setAttachedImage({
+          uri: result.assets[0].uri,
+          base64: result.assets[0].base64 ? `data:image/jpeg;base64,${result.assets[0].base64}` : undefined,
+        });
       }
     } catch {
-      await handleDemoSample();
+      handleDemoSample();
     }
   };
 
-  const handleDemoSample = async () => {
-    const demoRx =
-      'Rp: Tab. Paratsetamol 500 mg #10\nRp: Tab. Amoksitsillin 500 mg #20\nRp: Vitamin D3 2000 IU';
-    setCustomText(demoRx);
-    await processScan({ text: demoRx });
+  const handleDemoSample = () => {
+    setAttachSheetVisible(false);
+    setInputText('Rp: Tab. Paratsetamol 500 mg #10\nRp: Tab. Amoksitsillin 500 mg #20\nRp: Vitamin D3 2000 IU');
   };
 
-  const toggleSelect = (id: string) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, selected: !i.selected } : i)),
-    );
-  };
+  const handleSendMessage = async (textToSend?: string) => {
+    const rawText = textToSend != null ? textToSend : inputText;
+    const trimmed = rawText.trim();
+    if (!trimmed && !attachedImage) return;
 
-  const updateQty = (id: string, delta: number) => {
-    setItems((prev) =>
-      prev.map((i) => {
-        if (i.id !== id) return i;
-        const nextQ = Math.max(1, Math.min(20, i.quantity + delta));
-        return { ...i, quantity: nextQ };
-      }),
-    );
-  };
+    const userMsgId = `user-${Date.now()}`;
+    const newMsg: ChatMessage = {
+      id: userMsgId,
+      sender: 'user',
+      text: trimmed,
+      imageUri: attachedImage?.uri,
+      timestamp: fmt.time(new Date()),
+    };
 
-  const selectAll = () => {
-    const allSelected = items.every((i) => i.selected);
-    setItems((prev) => prev.map((i) => ({ ...i, selected: !allSelected })));
-  };
+    const imagePayload = attachedImage?.base64 || (attachedImage ? 'demo_scan_image' : undefined);
 
-  const selectedItems = items.filter((i) => i.selected && i.matchedProduct != null);
-  const totalPrice = selectedItems.reduce(
-    (sum, i) => sum + (i.matchedProduct?.price || 0) * i.quantity,
-    0,
-  );
+    setMessages((prev) => [...prev, newMsg]);
+    setInputText('');
+    setAttachedImage(null);
+    setSending(true);
+    scrollToBottom();
 
-  const handleAddAllToCart = async () => {
-    if (selectedItems.length === 0 || addingToCart) return;
-    setAddingToCart(true);
     try {
-      for (const item of selectedItems) {
-        if (item.matchedProduct) {
-          await api.addToCart(item.matchedProduct.id, item.quantity);
-        }
+      const res = await api.aiPrescriptionChat({
+        message: trimmed,
+        image: imagePayload,
+        language,
+      });
+
+      const assistantMsg: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        sender: 'assistant',
+        text: res.reply || t('catalog.prescriptionEmpty'),
+        timestamp: fmt.time(new Date()),
+        matchedProducts: res.matchedProducts || [],
+        quickSuggestions: res.quickSuggestions || [],
+      };
+
+      setMessages((prev) => [...prev, assistantMsg]);
+    } catch {
+      const fallbackMsg: ChatMessage = {
+        id: `assistant-err-${Date.now()}`,
+        sender: 'assistant',
+        text: t('catalog.prescriptionEmpty'),
+        timestamp: fmt.time(new Date()),
+      };
+      setMessages((prev) => [...prev, fallbackMsg]);
+    } finally {
+      setSending(false);
+      scrollToBottom();
+    }
+  };
+
+  const handleAddToCart = async (prod: ChatProductItem) => {
+    const key = String(prod.id);
+    if (addedIds[key]) return;
+    try {
+      await api.addToCart(prod.id, 1);
+      await refresh();
+      setAddedIds((prev) => ({ ...prev, [key]: true }));
+      notify(t('common.navCart'), t('catalog.addedToCartShort'));
+    } catch {
+      notify(t('common.navCart'), t('catalog.addToCartFailed'));
+    }
+  };
+
+  const handleAddAllToCart = async (productsToAdd: ChatProductItem[]) => {
+    if (addingAll || productsToAdd.length === 0) return;
+    setAddingAll(true);
+    try {
+      for (const prod of productsToAdd) {
+        await api.addToCart(prod.id, 1);
+        setAddedIds((prev) => ({ ...prev, [String(prod.id)]: true }));
       }
       await refresh();
-      notify(t('common.navCart'), t('catalog.addedToCartShort'));
+      notify(t('common.navCart'), t('catalog.aiChatAddedToast'));
       router.push('/cart');
     } catch {
       notify(t('common.navCart'), t('catalog.addToCartFailed'));
     } finally {
-      setAddingToCart(false);
+      setAddingAll(false);
     }
   };
 
@@ -208,281 +269,351 @@ export default function PrescriptionScreen() {
       <View style={styles.header}>
         <Pressable
           onPress={goBack}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel={t('catalog.backToCatalog')}
         >
           <Feather name="arrow-left" size={22} color={PURPLE_DEEP} />
         </Pressable>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {t('catalog.prescriptionTitle')}
-          </Text>
-          <Text style={styles.headerSub} numberOfLines={1}>
-            {t('catalog.prescriptionSubtitle')}
-          </Text>
+
+        <View style={styles.headerIdentity}>
+          <View style={styles.avatarWrap}>
+            <MaterialCommunityIcons name="robot-happy-outline" size={24} color="#FFFFFF" />
+            <View style={styles.onlineDot} />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <View style={styles.titleRow}>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {t('catalog.aiChatTitle')}
+              </Text>
+              <View style={styles.aiBadge}>
+                {/* i18n-ignore */}
+                <Text style={styles.aiBadgeText}>AI</Text>
+              </View>
+            </View>
+            <Text style={styles.headerSub} numberOfLines={1}>
+              {t('catalog.aiChatSubtitle')} • {t('catalog.aiChatOnline')}
+            </Text>
+          </View>
         </View>
+
+        <Pressable
+          onPress={handleResetChat}
+          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={t('catalog.aiChatResetBtn')}
+        >
+          <Feather name="rotate-ccw" size={19} color={TEXT_MUTED} />
+        </Pressable>
       </View>
 
+      {/* CHAT MESSAGES STREAM */}
       <ScrollView
-        contentContainerStyle={[styles.scrollBody, { paddingBottom: insets.bottom + 100 }]}
+        ref={scrollViewRef}
+        contentContainerStyle={[styles.chatStream, { paddingBottom: 24 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* BANNER / ACTION CARDS */}
-        <View style={styles.cardSection}>
-          <View style={styles.bannerCard}>
-            <View style={styles.bannerIconBox}>
-              <MaterialCommunityIcons name="file-document-edit-outline" size={30} color={PURPLE} />
-            </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.bannerTitle}>{t('catalog.prescriptionScanBannerTitle')}</Text>
-              <Text style={styles.bannerSub}>{t('catalog.prescriptionScanBannerSub')}</Text>
-            </View>
-          </View>
-
-          <View style={styles.actionsRow}>
-            <Pressable
-              onPress={handleCamera}
-              style={({ pressed }) => [styles.actionButton, styles.cameraButton, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={t('catalog.prescriptionCamera')}
+        {messages.map((msg) => {
+          const isUser = msg.sender === 'user';
+          return (
+            <View
+              key={msg.id}
+              style={[
+                styles.messageRow,
+                isUser ? styles.messageRowUser : styles.messageRowAssistant,
+              ]}
             >
-              <MaterialCommunityIcons name="camera-outline" size={22} color="#FFFFFF" />
-              <Text style={styles.cameraBtnText}>{t('catalog.prescriptionCamera')}</Text>
-            </Pressable>
+              {!isUser && (
+                <View style={styles.assistantBubbleAvatar}>
+                  <MaterialCommunityIcons name="pill" size={16} color="#FFFFFF" />
+                </View>
+              )}
 
-            <Pressable
-              onPress={handleGallery}
-              style={({ pressed }) => [styles.actionButton, styles.galleryButton, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={t('catalog.prescriptionGallery')}
-            >
-              <MaterialCommunityIcons name="image-outline" size={22} color={PURPLE_DEEP} />
-              <Text style={styles.galleryBtnText}>{t('catalog.prescriptionGallery')}</Text>
-            </Pressable>
-          </View>
-
-          <Pressable
-            onPress={() => setTextInputVisible(!textInputVisible)}
-            style={({ pressed }) => [styles.textToggleBtn, pressed && styles.pressed]}
-          >
-            <MaterialCommunityIcons name="keyboard-outline" size={18} color={PURPLE} />
-            <Text style={styles.textToggleText}>{t('catalog.prescriptionPasteText')}</Text>
-            <Feather
-              name={textInputVisible ? 'chevron-up' : 'chevron-down'}
-              size={18}
-              color={PURPLE}
-            />
-          </Pressable>
-
-          {textInputVisible ? (
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.textArea}
-                multiline
-                numberOfLines={4}
-                value={customText}
-                onChangeText={setCustomText}
-                placeholder={t('catalog.prescriptionInputPlaceholder')}
-                placeholderTextColor={TEXT_MUTED}
-              />
-              <View style={styles.inputBtnRow}>
-                <Pressable
-                  onPress={handleDemoSample}
-                  style={({ pressed }) => [styles.demoBtn, pressed && styles.pressed]}
-                >
-                  <Text style={styles.demoBtnText}>{t('catalog.prescriptionSamplePrompt')}</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => processScan({ text: customText })}
-                  style={({ pressed }) => [styles.scanSubmitBtn, pressed && styles.pressed]}
-                >
-                  <Text style={styles.scanSubmitBtnText}>{t('catalog.prescriptionScanAction')}</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-        </View>
-
-        {/* LOADING INDICATOR */}
-        {scanning ? (
-          <View style={styles.scanningWrap}>
-            <ActivityIndicator size="large" color={PURPLE} />
-            <Text style={styles.scanningText}>{t('catalog.prescriptionScanning')}</Text>
-          </View>
-        ) : null}
-
-        {/* RESULTS SECTION */}
-        {hasScanned && !scanning ? (
-          <View style={styles.resultsWrap}>
-            <View style={styles.resultsHeader}>
-              <Text style={styles.resultsCount}>
-                {t('catalog.prescriptionResultsCount', { count: items.length })}
-              </Text>
-              <View style={styles.headerRightActions}>
-                <Pressable
-                  onPress={() => router.push('/reminders')}
-                  hitSlop={8}
-                  style={({ pressed }) => [styles.remindersLink, pressed && styles.pressed]}
-                >
-                  <Feather name="clock" size={13} color={PURPLE} />
-                  <Text style={styles.remindersLinkText}>{t('reminders.quickActionReminders')}</Text>
-                </Pressable>
-                {items.length > 0 ? (
-                  <Pressable onPress={selectAll} hitSlop={10}>
-                    <Text style={styles.selectAllText}>{t('catalog.prescriptionSelectAll')}</Text>
-                  </Pressable>
+              <View
+                style={[
+                  styles.bubble,
+                  isUser ? styles.bubbleUser : styles.bubbleAssistant,
+                ]}
+              >
+                {/* User Attached Image Preview inside bubble */}
+                {msg.imageUri ? (
+                  <View style={styles.msgImageWrap}>
+                    <Image
+                      source={{ uri: msg.imageUri }}
+                      style={styles.msgImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.rxAttachedTag}>
+                      <MaterialCommunityIcons name="file-document-outline" size={13} color="#FFFFFF" />
+                      <Text style={styles.rxAttachedTagText}>{t('catalog.prescriptionTitle')}</Text>
+                    </View>
+                  </View>
                 ) : null}
-              </View>
-            </View>
 
-            {/* DISCLAIMER */}
-            <View style={styles.disclaimerBox}>
-              <MaterialCommunityIcons name="shield-alert-outline" size={20} color="#D97706" />
-              <Text style={styles.disclaimerText}>{t('catalog.prescriptionDisclaimer')}</Text>
-            </View>
+                {/* Message Text */}
+                {Boolean(msg.text) && (
+                  <Text style={[styles.msgText, isUser ? styles.msgTextUser : styles.msgTextAssistant]}>
+                    {msg.text}
+                  </Text>
+                )}
 
-            {items.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <MaterialCommunityIcons name="text-box-search-outline" size={48} color={TEXT_MUTED} />
-                <Text style={styles.emptyText}>{t('catalog.prescriptionEmpty')}</Text>
-              </View>
-            ) : (
-              items.map((item) => {
-                const prod = item.matchedProduct;
-                const name = prod ? localizedName(language, prod) : item.rawLine;
-                const confColor =
-                  item.confidenceLevel === 'high'
-                    ? '#059669'
-                    : item.confidenceLevel === 'medium'
-                      ? '#D97706'
-                      : '#DC2626';
-
-                return (
-                  <View key={item.id} style={styles.itemCard}>
-                    {/* TOP: Checkbox + Drug Info */}
-                    <View style={styles.itemTopRow}>
-                      <Pressable
-                        onPress={() => prod && toggleSelect(item.id)}
-                        disabled={!prod}
-                        style={styles.checkboxTouch}
-                      >
-                        <MaterialCommunityIcons
-                          name={
-                            item.selected
-                              ? 'checkbox-marked-circle'
-                              : 'checkbox-blank-circle-outline'
-                          }
-                          size={24}
-                          color={item.selected ? PURPLE : BORDER}
-                        />
-                      </Pressable>
-
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <View style={styles.badgeRow}>
-                          <View
-                            style={[
-                              styles.confBadge,
-                              { backgroundColor: `${confColor}18`, borderColor: `${confColor}40` },
-                            ]}
-                          >
-                            <Text style={[styles.confText, { color: confColor }]}>
-                              {t('catalog.prescriptionConfidence', { score: item.confidence })}
-                            </Text>
+                {/* Matched Products Cards (AI Medical Vision Results) */}
+                {msg.matchedProducts && msg.matchedProducts.length > 0 ? (
+                  <View style={styles.productsList}>
+                    {msg.matchedProducts.map((prod) => {
+                      const name = localizedName(language, prod);
+                      const isAdded = Boolean(addedIds[String(prod.id)]);
+                      return (
+                        <View key={`match-${prod.id}`} style={styles.productCard}>
+                          <View style={styles.productTopRow}>
+                            <View style={styles.productIconBox}>
+                              <MaterialCommunityIcons name="pill" size={22} color={PURPLE} />
+                            </View>
+                            <View style={styles.productInfoCol}>
+                              <View style={styles.productBadgeRow}>
+                                <View style={styles.confidenceBadge}>
+                                  <Feather name="check" size={10} color="#059669" />
+                                  <Text style={styles.confidenceText}>
+                                    {prod.confidence
+                                      ? t('catalog.prescriptionConfidence', { score: prod.confidence })
+                                      : t('catalog.inStockBranch')}
+                                  </Text>
+                                </View>
+                                {prod.requiresPrescription && (
+                                  <View style={styles.rxBadge}>
+                                    <Text style={styles.rxBadgeText}>{t('catalog.rxShort')}</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={styles.productName} numberOfLines={2}>
+                                {name}
+                              </Text>
+                              {Boolean(prod.dosage) && (
+                                <Text style={styles.dosageNote} numberOfLines={1}>
+                                  {prod.dosage}
+                                </Text>
+                              )}
+                              <Text style={styles.manufacturerNote} numberOfLines={1}>
+                                {prod.manufacturer}
+                              </Text>
+                            </View>
                           </View>
-                          {prod?.requiresPrescription ? (
-                            <View style={styles.rxBadge}>
-                              <Text style={styles.rxBadgeText}>{t('catalog.rxShort')}</Text>
+
+                          {/* Cheaper Alternative Suggestion */}
+                          {prod.cheaperAlternative ? (
+                            <View style={styles.alternativeBox}>
+                              <MaterialCommunityIcons name="swap-horizontal" size={15} color="#059669" />
+                              <Text style={styles.alternativeText} numberOfLines={1}>
+                                {t('catalog.prescriptionCheaperAnalog', {
+                                  name: localizedName(language, prod.cheaperAlternative),
+                                  price: fmt.money(prod.cheaperAlternative.price),
+                                })}
+                              </Text>
                             </View>
                           ) : null}
+
+                          <View style={styles.productActionRow}>
+                            <Text style={styles.productPrice}>{fmt.money(prod.price)}</Text>
+                            <Pressable
+                              style={({ pressed }) => [
+                                styles.addCartBtn,
+                                isAdded && styles.addCartBtnSuccess,
+                                pressed && styles.pressed,
+                              ]}
+                              onPress={() => handleAddToCart(prod)}
+                            >
+                              <Feather name={isAdded ? 'check' : 'plus'} size={15} color="#FFFFFF" />
+                              <Text style={styles.addCartBtnText}>
+                                {isAdded ? t('catalog.itemAdded') : t('common.navCart')}
+                              </Text>
+                            </Pressable>
+                          </View>
                         </View>
+                      );
+                    })}
 
-                        <Text style={styles.productName} numberOfLines={2}>
-                          {name}
-                        </Text>
-                        <Text style={styles.rawLineNote} numberOfLines={1}>
-                          «{item.rawLine}»
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* BOTTOM: Price + Qty / Unavailable */}
-                    {prod ? (
-                      <View style={styles.itemBottomRow}>
-                        <View>
-                          <Text style={styles.priceText}>{fmt.money(prod.price)}</Text>
-                          {prod.manufacturer ? (
-                            <Text style={styles.manufacturerText}>{prod.manufacturer}</Text>
-                          ) : null}
-                        </View>
-
-                        <View style={styles.qtyRow}>
-                          <Pressable
-                            onPress={() => updateQty(item.id, -1)}
-                            style={({ pressed }) => [styles.qtyBtn, pressed && styles.pressed]}
-                            accessibilityRole="button"
-                            accessibilityLabel={t('catalog.qtyDecreaseA11y')}
-                          >
-                            <Feather name="minus" size={16} color={PURPLE_DEEP} />
-                          </Pressable>
-                          <Text style={styles.qtyText}>{item.quantity}</Text>
-                          <Pressable
-                            onPress={() => updateQty(item.id, 1)}
-                            style={({ pressed }) => [styles.qtyBtn, pressed && styles.pressed]}
-                            accessibilityRole="button"
-                            accessibilityLabel={t('catalog.qtyIncreaseA11y')}
-                          >
-                            <Feather name="plus" size={16} color={PURPLE_DEEP} />
-                          </Pressable>
-                        </View>
-                      </View>
-                    ) : null}
-
-                    {/* ALTERNATIVE SUGGESTION */}
-                    {item.alternatives && item.alternatives.length > 0 ? (
-                      <View style={styles.analogChip}>
-                        <MaterialCommunityIcons name="swap-horizontal" size={16} color={PURPLE} />
-                        <Text style={styles.analogChipText} numberOfLines={1}>
-                          {t('catalog.prescriptionCheaperAnalog', {
-                            name: localizedName(language, item.alternatives[0]),
-                            price: fmt.money(item.alternatives[0].price),
-                          })}
-                        </Text>
-                      </View>
-                    ) : null}
+                    {/* Bulk Add All To Cart */}
+                    <Pressable
+                      style={({ pressed }) => [styles.addAllBtn, pressed && styles.pressed]}
+                      onPress={() => handleAddAllToCart(msg.matchedProducts!)}
+                      disabled={addingAll}
+                    >
+                      {addingAll ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Feather name="shopping-bag" size={16} color="#FFFFFF" />
+                          <Text style={styles.addAllBtnText}>{t('catalog.aiChatAddAll')}</Text>
+                        </>
+                      )}
+                    </Pressable>
                   </View>
-                );
-              })
-            )}
+                ) : null}
+
+                {/* Quick Suggestions Chips */}
+                {msg.quickSuggestions && msg.quickSuggestions.length > 0 ? (
+                  <View style={styles.suggestionsContainer}>
+                    {msg.quickSuggestions.map((suggestion, sIdx) => (
+                      <Pressable
+                        key={`sug-${sIdx}`}
+                        style={({ pressed }) => [styles.suggestionChip, pressed && styles.pressed]}
+                        onPress={() => {
+                          if (sIdx === 0 && suggestion.toLowerCase().includes('retsept')) {
+                            setAttachSheetVisible(true);
+                          } else {
+                            handleSendMessage(suggestion);
+                          }
+                        }}
+                      >
+                        <Text style={styles.suggestionChipText}>{suggestion}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+
+                <Text style={[styles.timestamp, isUser ? styles.timestampUser : styles.timestampAssistant]}>
+                  {msg.timestamp}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Typing indicator */}
+        {sending && (
+          <View style={[styles.messageRow, styles.messageRowAssistant]}>
+            <View style={styles.assistantBubbleAvatar}>
+              <MaterialCommunityIcons name="pill" size={16} color="#FFFFFF" />
+            </View>
+            <View style={[styles.bubble, styles.bubbleAssistant, styles.typingBubble]}>
+              <ActivityIndicator size="small" color={PURPLE} />
+              <Text style={styles.typingText}>{t('catalog.aiChatTyping')}</Text>
+            </View>
           </View>
-        ) : null}
+        )}
       </ScrollView>
 
-      {/* STICKY BOTTOM BAR */}
-      {selectedItems.length > 0 ? (
-        <View style={[styles.bottomBar, { paddingBottom: Math.max(14, insets.bottom) }]}>
-          <View style={styles.bottomBarLeft}>
-            <Text style={styles.bottomBarCount}>
-              {t('catalog.prescriptionResultsCount', { count: selectedItems.length })}
-            </Text>
-            <Text style={styles.bottomBarTotal}>{fmt.money(totalPrice)}</Text>
-          </View>
+      {/* BOTTOM INPUT BAR */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      >
+        <View style={[styles.inputBar, { paddingBottom: Math.max(12, insets.bottom) }]}>
+          {/* Attached image preview banner */}
+          {attachedImage ? (
+            <View style={styles.attachedPreviewBar}>
+              <Image source={{ uri: attachedImage.uri }} style={styles.attachedThumb} resizeMode="cover" />
+              <View style={styles.attachedMeta}>
+                <Text style={styles.attachedTitle} numberOfLines={1}>
+                  {t('catalog.aiChatAttachPrompt')}
+                </Text>
+                <Text style={styles.attachedSub}>{t('catalog.prescriptionScanAction')}</Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.removeAttachBtn, pressed && styles.pressed]}
+                onPress={() => setAttachedImage(null)}
+                hitSlop={8}
+              >
+                <Feather name="x" size={16} color="#EF4444" />
+              </Pressable>
+            </View>
+          ) : null}
 
-          <Pressable
-            onPress={handleAddAllToCart}
-            disabled={addingToCart}
-            style={({ pressed }) => [styles.addAllBtn, pressed && styles.pressed]}
-          >
-            {addingToCart ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={styles.addAllBtnText}>
-                {t('catalog.prescriptionAddAllToCart', { total: fmt.money(totalPrice) })}
-              </Text>
-            )}
-          </Pressable>
+          <View style={styles.inputControlsRow}>
+            {/* Attachment Button */}
+            <Pressable
+              style={({ pressed }) => [styles.attachBtn, pressed && styles.pressed]}
+              onPress={() => setAttachSheetVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('catalog.aiChatAttachPrompt')}
+            >
+              <Feather name="plus-circle" size={24} color={PURPLE} />
+            </Pressable>
+
+            {/* Text Input */}
+            <TextInput
+              style={styles.chatInput}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder={t('catalog.aiChatPlaceholder')}
+              placeholderTextColor={TEXT_MUTED}
+              multiline
+              maxLength={400}
+            />
+
+            {/* Send Button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.sendBtn,
+                (!inputText.trim() && !attachedImage) ? styles.sendBtnDisabled : null,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => handleSendMessage()}
+              disabled={(!inputText.trim() && !attachedImage) || sending}
+            >
+              <Feather name="arrow-up" size={20} color="#FFFFFF" />
+            </Pressable>
+          </View>
         </View>
-      ) : null}
+      </KeyboardAvoidingView>
+
+      {/* ATTACHMENT MODAL SHEET */}
+      <Modal
+        visible={attachSheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAttachSheetVisible(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setAttachSheetVisible(false)}>
+          <View style={[styles.modalSheet, { paddingBottom: Math.max(24, insets.bottom + 12) }]}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>{t('catalog.aiChatAttachPrompt')}</Text>
+
+            <Pressable
+              style={({ pressed }) => [styles.sheetActionItem, pressed && styles.pressed]}
+              onPress={handleCamera}
+            >
+              <View style={[styles.sheetActionIcon, { backgroundColor: '#EDE9FE' }]}>
+                <MaterialCommunityIcons name="camera-outline" size={24} color={PURPLE} />
+              </View>
+              <View style={styles.sheetActionMeta}>
+                <Text style={styles.sheetActionTitle}>{t('catalog.aiChatCameraOption')}</Text>
+                <Text style={styles.sheetActionSub}>{t('catalog.prescriptionSubtitle')}</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color="#9CA3AF" />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.sheetActionItem, pressed && styles.pressed]}
+              onPress={handleGallery}
+            >
+              <View style={[styles.sheetActionIcon, { backgroundColor: '#FEF3C7' }]}>
+                <MaterialCommunityIcons name="image-outline" size={24} color="#D97706" />
+              </View>
+              <View style={styles.sheetActionMeta}>
+                <Text style={styles.sheetActionTitle}>{t('catalog.aiChatGalleryOption')}</Text>
+                <Text style={styles.sheetActionSub}>{t('catalog.prescriptionSubtitle')}</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color="#9CA3AF" />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.sheetActionItem, pressed && styles.pressed]}
+              onPress={handleDemoSample}
+            >
+              <View style={[styles.sheetActionIcon, { backgroundColor: '#D1FAE5' }]}>
+                <MaterialCommunityIcons name="file-document-edit-outline" size={24} color="#059669" />
+              </View>
+              <View style={styles.sheetActionMeta}>
+                <Text style={styles.sheetActionTitle}>{t('catalog.aiChatDemoOption')}</Text>
+                <Text style={styles.sheetActionSub}>{t('catalog.prescriptionSamplePrompt')}</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color="#9CA3AF" />
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -492,386 +623,507 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
+  pressed: {
+    opacity: 0.82,
+  },
+
+  // HEADER
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: CARD_BG,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ECEAF2',
   },
-  backBtn: {
-    padding: 8,
-    marginRight: 8,
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8F7FC',
+  },
+  headerIdentity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
+    gap: 10,
+  },
+  avatarWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   headerTextWrap: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    lineHeight: 20,
     color: PURPLE_DEEP,
+  },
+  aiBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  aiBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9,
+    color: '#D97706',
   },
   headerSub: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-    marginTop: 2,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    lineHeight: 15,
+    color: '#059669',
+    marginTop: 1,
   },
-  scrollBody: {
+
+  // CHAT STREAM
+  chatStream: {
     padding: 16,
+    gap: 16,
   },
-  cardSection: {
-    backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginBottom: 16,
-  },
-  bannerCard: {
+  messageRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3E8FF',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 14,
-  },
-  bannerIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bannerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: PURPLE_DEEP,
-  },
-  bannerSub: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    marginTop: 2,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    gap: 6,
-  },
-  cameraButton: {
-    backgroundColor: PURPLE,
-  },
-  cameraBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  galleryButton: {
-    backgroundColor: '#EDE9FE',
-  },
-  galleryBtnText: {
-    color: PURPLE_DEEP,
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  textToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    gap: 6,
-  },
-  textToggleText: {
-    fontSize: 13,
-    color: PURPLE,
-    fontWeight: '600',
-  },
-  inputContainer: {
-    marginTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
-    paddingTop: 10,
-  },
-  textArea: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 10,
-    fontSize: 14,
-    color: PURPLE_DEEP,
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  inputBtnRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
+    alignItems: 'flex-end',
     gap: 8,
   },
-  demoBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+  messageRowUser: {
+    justifyContent: 'flex-end',
   },
-  demoBtnText: {
-    fontSize: 12,
-    color: PURPLE,
-    fontWeight: '600',
+  messageRowAssistant: {
+    justifyContent: 'flex-start',
   },
-  scanSubmitBtn: {
+  assistantBubbleAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
     backgroundColor: PURPLE,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  scanSubmitBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  scanningWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 32,
-    gap: 12,
+    marginBottom: 4,
   },
-  scanningText: {
+  bubble: {
+    maxWidth: '86%',
+    borderRadius: 18,
+    padding: 14,
+    ...Platform.select({
+      ios: { shadowColor: '#1A1040', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6 },
+      android: { elevation: 2 },
+      web: { boxShadow: '0 2px 8px rgba(26, 16, 64, 0.05)' },
+    }),
+  },
+  bubbleUser: {
+    backgroundColor: PURPLE,
+    borderBottomRightRadius: 4,
+  },
+  bubbleAssistant: {
+    backgroundColor: CARD_BG,
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
+  },
+  msgText: {
     fontSize: 14,
-    color: PURPLE,
-    fontWeight: '600',
+    lineHeight: 20,
   },
-  resultsWrap: {
-    gap: 12,
+  msgTextUser: {
+    fontFamily: 'Inter_500Medium',
+    color: '#FFFFFF',
   },
-  resultsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
+  msgTextAssistant: {
+    fontFamily: 'Inter_400Regular',
+    color: '#1E1B4B',
   },
-  resultsCount: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: PURPLE_DEEP,
+  timestamp: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10,
+    marginTop: 6,
   },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  timestampUser: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'right',
   },
-  remindersLink: {
+  timestampAssistant: {
+    color: '#9CA3AF',
+  },
+
+  // USER ATTACHED IMAGE IN BUBBLE
+  msgImageWrap: {
+    width: 220,
+    height: 150,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 8,
+    position: 'relative',
+  },
+  msgImage: {
+    width: '100%',
+    height: '100%',
+  },
+  rxAttachedTag: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F3E8FF',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  remindersLinkText: {
-    fontSize: 12,
-    color: PURPLE,
-    fontWeight: '600',
+  rxAttachedTagText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    color: '#FFFFFF',
   },
-  selectAllText: {
-    fontSize: 13,
-    color: PURPLE,
-    fontWeight: '600',
-  },
-  disclaimerBox: {
+
+  // TYPING
+  typingBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    padding: 10,
-    borderRadius: 10,
     gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
-  disclaimerText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#92400E',
-    lineHeight: 16,
-  },
-  emptyWrap: {
-    alignItems: 'center',
-    paddingVertical: 30,
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 14,
+  typingText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12.5,
     color: TEXT_MUTED,
-    textAlign: 'center',
   },
-  itemCard: {
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
+
+  // MATCHED PRODUCTS LIST (AI CARDS)
+  productsList: {
+    marginTop: 12,
     gap: 10,
   },
-  itemTopRow: {
+  productCard: {
+    backgroundColor: '#F8F7FC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
+  },
+  productTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    gap: 10,
   },
-  checkboxTouch: {
-    paddingTop: 2,
+  productIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#EDE9FE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  badgeRow: {
+  productInfoCol: {
+    flex: 1,
+  },
+  productBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 4,
   },
-  confBadge: {
-    paddingHorizontal: 8,
+  confidenceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 6,
   },
-  confText: {
-    fontSize: 11,
-    fontWeight: '700',
+  confidenceText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9.5,
+    color: '#059669',
   },
   rxBadge: {
     backgroundColor: '#FEE2E2',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   rxBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9.5,
     color: '#DC2626',
   },
   productName: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13.5,
+    lineHeight: 18,
     color: PURPLE_DEEP,
-    lineHeight: 20,
   },
-  rawLineNote: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-    fontStyle: 'italic',
+  dosageNote: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    color: PURPLE,
     marginTop: 2,
   },
-  itemBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: BORDER,
-    paddingTop: 8,
-  },
-  priceText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: PURPLE_DEEP,
-  },
-  manufacturerText: {
-    fontSize: 12,
+  manufacturerNote: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
     color: TEXT_MUTED,
+    marginTop: 1,
   },
-  qtyRow: {
+  alternativeBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    padding: 2,
-  },
-  qtyBtn: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyText: {
-    minWidth: 24,
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '700',
-    color: PURPLE_DEEP,
-  },
-  analogChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F3FF',
+    gap: 5,
+    backgroundColor: '#F0FDF4',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
   },
-  analogChipText: {
-    fontSize: 12,
-    color: PURPLE,
-    fontWeight: '600',
+  alternativeText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: '#047857',
+    flex: 1,
   },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: CARD_BG,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
-    paddingHorizontal: 16,
-    paddingTop: 12,
+  productActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    ...Platform.select({
-      web: { boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.05)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 5,
-      },
-    }),
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#ECEAF2',
   },
-  bottomBarLeft: {
-    flex: 1,
-  },
-  bottomBarCount: {
-    fontSize: 12,
-    color: TEXT_MUTED,
-  },
-  bottomBarTotal: {
-    fontSize: 18,
-    fontWeight: '800',
+  productPrice: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14.5,
     color: PURPLE_DEEP,
   },
-  addAllBtn: {
+  addCartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: PURPLE,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  addCartBtnSuccess: {
+    backgroundColor: '#059669',
+  },
+  addCartBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  addAllBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 46,
+    gap: 8,
+    backgroundColor: PURPLE_DEEP,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 4,
   },
   addAllBtnText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
   },
-  pressed: {
-    opacity: 0.7,
+
+  // QUICK SUGGESTIONS
+  suggestionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  suggestionChip: {
+    backgroundColor: '#F5F3FF',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  suggestionChipText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    color: PURPLE,
+  },
+
+  // BOTTOM INPUT BAR
+  inputBar: {
+    backgroundColor: CARD_BG,
+    borderTopWidth: 1,
+    borderTopColor: '#ECEAF2',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  attachedPreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8F7FC',
+    borderRadius: 12,
+    padding: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
+  },
+  attachedThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+  attachedMeta: {
+    flex: 1,
+  },
+  attachedTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    color: PURPLE_DEEP,
+  },
+  attachedSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: TEXT_MUTED,
+  },
+  removeAttachBtn: {
+    padding: 6,
+  },
+  inputControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  attachBtn: {
+    padding: 4,
+  },
+  chatInput: {
+    flex: 1,
+    backgroundColor: '#F8F7FC',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: PURPLE_DEEP,
+    maxHeight: 100,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
+  },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sendBtnDisabled: {
+    backgroundColor: '#C4B5FD',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+
+  // MODAL SHEET
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: CARD_BG,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    gap: 12,
+  },
+  sheetHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
+  sheetTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    color: PURPLE_DEEP,
+    marginBottom: 4,
+  },
+  sheetActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: '#F8F7FC',
+    gap: 12,
+  },
+  sheetActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetActionMeta: {
+    flex: 1,
+  },
+  sheetActionTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+  },
+  sheetActionSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginTop: 2,
   },
 });
