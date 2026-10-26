@@ -159,8 +159,7 @@ export default function ProfileScreen() {
     router.replace('/welcome');
   };
 
-  const tabClearance = Platform.OS === 'web' ? 96 : 80;
-  const bottomPad = 16 + Math.max(insets.bottom, 8) + tabClearance;
+  const bottomPad = Platform.OS === 'web' ? 24 : Math.max(insets.bottom, 16);
   const topPad = Platform.OS === 'web' ? 12 : Math.max(insets.top, 8) + 4;
 
   return (
@@ -340,6 +339,12 @@ export default function ProfileScreen() {
             {loggingOut ? t('common.loggingOut') : t('common.logout')}
           </Text>
         </Pressable>
+
+        <View style={styles.footerWrap} pointerEvents="none">
+          <Text style={styles.footerText}>
+            {t('profile.profileVersionFooter', { version: '1.0.4' })}
+          </Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -499,4 +504,16 @@ const styles = StyleSheet.create({
   logoutPressed: { backgroundColor: '#FEF2F2' },
   logoutIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: DANGER_TINT, alignItems: 'center', justifyContent: 'center' },
   logoutText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 15, lineHeight: 20, color: DANGER },
+  footerWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  footerText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#9CA3AF',
+    letterSpacing: 0.2,
+  },
 });

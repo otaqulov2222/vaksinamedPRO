@@ -134,6 +134,7 @@ export default defineMessages({
     aboutBuild: 'Yig‘ma',
     aboutApp: 'Ilova',
     aboutLegalNote: 'Maxfiylik siyosati va foydalanish shartlari havolalari hozircha ilovada joylashtirilmagan.',
+    profileVersionFooter: 'VaksinaMed PRO • v{version}',
 
     notFoundMessage: 'Bu sahifa topilmadi',
     notFoundHome: 'Bosh sahifaga qaytish',
@@ -292,6 +293,7 @@ export default defineMessages({
     aboutBuild: 'Сборка',
     aboutApp: 'Приложение',
     aboutLegalNote: 'Ссылки на политику конфиденциальности и условия использования пока не добавлены в приложение.',
+    profileVersionFooter: 'VaksinaMed PRO • v{version}',
 
     notFoundMessage: 'Эта страница не найдена',
     notFoundHome: 'Вернуться на главную',
@@ -450,6 +452,7 @@ export default defineMessages({
     aboutBuild: 'Build',
     aboutApp: 'App',
     aboutLegalNote: 'Links to the privacy policy and terms of use are not yet available in the app.',
+    profileVersionFooter: 'VaksinaMed PRO • v{version}',
 
     notFoundMessage: 'This page could not be found',
     notFoundHome: 'Back to Home',

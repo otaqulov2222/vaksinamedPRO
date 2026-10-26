@@ -437,8 +437,7 @@ export default function PurchasesScreen() {
   };
 
   const topPad = Platform.OS === 'web' ? 16 : Math.max(insets.top, 16) + 4;
-  const tabClearance = Platform.OS === 'web' ? 96 : 80;
-  const bottomPad = 28 + Math.max(insets.bottom, 8) + tabClearance;
+  const bottomPad = Platform.OS === 'web' ? 28 : Math.max(insets.bottom, 16);
 
   const showInitialLoad = loading && orders.length === 0 && !loadError;
   const showError = Boolean(loadError) && orders.length === 0 && !loading;

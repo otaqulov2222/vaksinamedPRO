@@ -763,7 +763,12 @@ export default function CatalogScreen() {
             width: '100%',
             maxWidth: 480,
             paddingHorizontal: sidePad,
-            paddingBottom: (cartCount > 0 ? 140 : 90) + (Platform.OS === 'web' ? 24 : 16),
+            paddingBottom:
+              cartCount > 0
+                ? 76 + (Platform.OS === 'web' ? 8 : 4)
+                : Platform.OS === 'web'
+                  ? 24
+                  : Math.max(insets.bottom, 16),
           },
         ]}
         horizontal={false}
