@@ -288,7 +288,7 @@ export function handleAiMedicalChat(params: {
         unit: p.unit,
         requiresPrescription: p.requiresPrescription,
         analogGroup: p.analogGroup,
-        inStock: p.inStock,
+        inStock: (p.availableQuantity ?? 1) > 0,
       });
     }
 
@@ -327,7 +327,7 @@ export function handleAiMedicalChat(params: {
       unit: p.unit,
       requiresPrescription: p.requiresPrescription,
       analogGroup: p.analogGroup,
-      inStock: p.inStock,
+      inStock: (p.availableQuantity ?? 1) > 0,
     });
   }
 
