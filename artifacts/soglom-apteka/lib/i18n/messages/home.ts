@@ -13,6 +13,7 @@ export default defineMessages({
     heroBannerType: 'baked',
 
     quickSearch: 'Dori qidirish',
+    quickPrescription: 'Retseptni aniqlash',
     quickDelivery: 'Yetkazib berish',
     quickDeliveryA11y: 'Yetkazib berish — avval savatni ochish',
 
@@ -136,6 +137,7 @@ export default defineMessages({
     heroBannerType: 'overlay',
 
     quickSearch: 'Поиск лекарств',
+    quickPrescription: 'Скан рецепта',
     quickDelivery: 'Доставка',
     quickDeliveryA11y: 'Доставка — сначала откройте корзину',
 
@@ -259,6 +261,7 @@ export default defineMessages({
     heroBannerType: 'overlay',
 
     quickSearch: 'Find medicine',
+    quickPrescription: 'Scan prescription',
     quickDelivery: 'Delivery',
     quickDeliveryA11y: 'Delivery — open the cart first',
 

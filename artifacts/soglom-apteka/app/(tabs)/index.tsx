@@ -44,15 +44,16 @@ function productIconName(icon?: string): React.ComponentProps<typeof MaterialCom
 }
 
 const QUICK: {
-  icon: 'pill' | 'percent-outline' | 'alarm' | 'map-marker-outline';
+  icon: 'pill' | 'line-scan' | 'alarm' | 'map-marker-outline';
   labelKey: TranslationKey;
   to: string;
   clearQ?: boolean;
   bg: string;
   iconColor: string;
+  badge?: string;
 }[] = [
   { icon: 'pill', labelKey: 'home.quickSearch', to: '/(tabs)/catalog', clearQ: true, bg: '#EDE9FE', iconColor: '#7C3AED' },
-  { icon: 'percent-outline', labelKey: 'common.navPromos', to: '/promos', bg: '#FEF3C7', iconColor: '#D97706' },
+  { icon: 'line-scan', labelKey: 'home.quickPrescription', to: '/prescription', bg: '#EEF2FF', iconColor: '#4F46E5', badge: 'AI' },
   { icon: 'alarm', labelKey: 'reminders.quickActionReminders', to: '/reminders', bg: '#FFE4E6', iconColor: '#E11D48' },
   { icon: 'map-marker-outline', labelKey: 'common.navBranches', to: '/branches', bg: '#D1FAE5', iconColor: '#059669' },
 ];
@@ -363,6 +364,12 @@ export default function HomeScreen() {
           >
             <View style={[styles.quickIcon, { backgroundColor: item.bg }]}>
               <MaterialCommunityIcons name={item.icon} size={24} color={item.iconColor} />
+              {item.badge ? (
+                <View style={styles.quickBadge}>
+                  {/* i18n-ignore */}
+                  <Text style={styles.quickBadgeText}>{item.badge}</Text>
+                </View>
+              ) : null}
             </View>
             <Text style={styles.quickLabel} numberOfLines={2}>
               {t(item.labelKey)}
@@ -542,39 +549,8 @@ export default function HomeScreen() {
         </ScrollView>
       )}
 
-      {/* NATIVE SLEEK PRESCRIPTION SCANNER BANNER */}
-      <Pressable
-        style={({ pressed }) => [styles.rxScannerBanner, pressed && styles.pressed]}
-        onPress={() => router.push('/prescription')}
-        accessibilityRole="button"
-        accessibilityLabel={t('home.aiScanTitle')}
-      >
-        <View style={styles.rxScannerIconCircle}>
-          <MaterialCommunityIcons name="line-scan" size={22} color="#FFFFFF" />
-        </View>
-        <View style={styles.rxScannerTextCol}>
-          <View style={styles.rxScannerHeaderRow}>
-            <Text style={styles.rxScannerTitle} numberOfLines={1}>
-              {t('home.aiScanTitle')}
-            </Text>
-            <View style={styles.rxAiMiniBadge}>
-              <Feather name="zap" size={10} color="#D97706" />
-              {/* i18n-ignore */}
-              <Text style={styles.rxAiMiniBadgeText}>AI</Text>
-            </View>
-          </View>
-          <Text style={styles.rxScannerSubtitle} numberOfLines={1}>
-            {t('home.aiScanSubtitle')}
-          </Text>
-        </View>
-        <View style={styles.rxScannerCtaPill}>
-          <Feather name="camera" size={14} color={PURPLE} />
-          <Text style={styles.rxScannerCtaText}>{t('home.aiScanButton')}</Text>
-        </View>
-      </Pressable>
-
       {/* RECOMMENDED PRODUCTS — 2-COLUMN E-COMMERCE GRID */}
-      <View style={[styles.sectionRow, { marginTop: SPACE + 8 }]}>
+      <View style={[styles.sectionRow, { marginTop: SPACE + 4 }]}>
         <Text style={styles.section} numberOfLines={1}>
           {t('home.recommendedSectionTitle')}
         </Text>
@@ -825,6 +801,30 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     color: PURPLE_DEEP,
     textAlign: 'center',
+  },
+  quickBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  quickBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 8.5,
+    lineHeight: 10,
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+    includeFontPadding: false,
   },
 
 
