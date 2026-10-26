@@ -43,6 +43,32 @@ const mockCatalog: CatalogProductCandidate[] = [
     analogGroup: "vitamin-d3",
     availableQuantity: 20,
   },
+  {
+    id: 4,
+    sku: "MED-004",
+    nameUz: "Ibuprofen 400 mg",
+    nameRu: "Ибупрофен 400 мг",
+    category: "Yallig'lanishga qarshi",
+    manufacturer: "Bosnalijek",
+    price: 14000,
+    unit: "quti",
+    requiresPrescription: false,
+    analogGroup: "nsaid-ibu",
+    availableQuantity: 10,
+  },
+  {
+    id: 5,
+    sku: "MED-005",
+    nameUz: "Nurofen 200 mg",
+    nameRu: "Нурофен 200 мг",
+    category: "Yallig'lanishga qarshi",
+    manufacturer: "Reckitt",
+    price: 28000,
+    unit: "quti",
+    requiresPrescription: false,
+    analogGroup: "nsaid-ibu",
+    availableQuantity: 5,
+  },
 ];
 
 describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
@@ -101,25 +127,53 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.equal(res.isMedical, true);
     assert.equal(res.matchedProducts.length, 0); // Strictly no drugs during emergency!
     assert.ok(res.reply.includes("103"));
-    assert.ok(res.reply.includes("SHOSHILINCH"));
+    assert.ok(res.reply.includes("DIQQAT"));
   });
 
-  it("5. Allows and processes medical / symptom queries with clinical advice", () => {
-    assert.equal(isMedicalDomain("Boshim qattiq og'riyapti nima ichsam bo'ladi?"), true);
+  it("5. Specifically handles toothache as clinical dental advice with ZERO unsolicited products", () => {
+    const res = handleAiMedicalChat({
+      message: "salom,tishim ogriyabdi",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.isPrescription, false);
+    assert.ok(res.reply.includes("Tish og‘rig‘ida"));
+    assert.ok(res.reply.includes("stomatolog"));
+    // Does NOT confuse with headache / blood pressure!
+    assert.ok(!res.reply.includes("qon bosimi"));
+    // Strictly NO unsolicited products attached for advice queries!
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.quickSuggestions.includes("Ibuprofen sotib olish"));
+  });
 
+  it("6. Allows and processes headache queries with clinical advice (NO unwanted product attachments)", () => {
     const res = handleAiMedicalChat({
       message: "Boshim qattiq og'riyapti nima ichsam bo'ladi?",
       language: "uz",
       candidates: mockCatalog,
     });
     assert.equal(res.isMedical, true);
-    assert.ok(res.matchedProducts.length > 0);
-    assert.equal(res.matchedProducts[0].nameUz, "Paratsetamol 500 mg");
-    assert.ok(res.reply.includes("og‘riq"));
-    assert.ok(res.reply.includes("Shifokor"));
+    assert.equal(res.isPrescription, false);
+    // Pure consultation does not dump product cards
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("Bosh og‘rig‘ida"));
+    assert.ok(res.quickSuggestions.includes("Paratsetamol sotib olish"));
   });
 
-  it("6. Processes prescription image / text and matches catalog medications", () => {
+  it("7. Explicit product purchase request attaches the single requested item", () => {
+    const res = handleAiMedicalChat({
+      message: "Ibuprofen sotib olish",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.isPrescription, false);
+    assert.equal(res.matchedProducts.length, 1);
+    assert.equal(res.matchedProducts[0].nameUz, "Ibuprofen 400 mg");
+  });
+
+  it("8. Processes prescription image / text and matches catalog medications with isPrescription flag", () => {
     const rxText = "Rp: Tab. Paratsetamol 500 mg #10\nRp: Tab. Amoksitsillin 500 mg #20";
     const res = handleAiMedicalChat({
       message: rxText,
@@ -127,20 +181,23 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
       candidates: mockCatalog,
     });
     assert.equal(res.isMedical, true);
+    assert.equal(res.isPrescription, true); // Multiple prescribed drugs
     assert.equal(res.matchedProducts.length, 2);
     assert.equal(res.matchedProducts[0].nameUz, "Paratsetamol 500 mg");
     assert.equal(res.matchedProducts[1].nameUz, "Amoksitsillin 500 mg");
     assert.equal(res.matchedProducts[1].requiresPrescription, true);
   });
 
-  it("7. Supports Russian language responses for symptom queries", () => {
+  it("9. Supports Russian language responses for toothache with zero unsolicited products", () => {
     const res = handleAiMedicalChat({
-      message: "Какое лекарство принять от головной боли?",
+      message: "Здравствуйте, сильно болит зуб",
       language: "ru",
       candidates: mockCatalog,
     });
     assert.equal(res.isMedical, true);
-    assert.ok(res.matchedProducts.length > 0);
-    assert.ok(res.reply.includes("голов"));
+    assert.equal(res.isPrescription, false);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("Зубная боль") || res.reply.includes("зубной боли"));
+    assert.ok(res.reply.includes("стоматолог"));
   });
 });

@@ -250,6 +250,7 @@ export const api = {
       success: boolean;
       reply: string;
       isMedical: boolean;
+      isPrescription?: boolean;
       matchedProducts: Array<{
         id: number;
         sku: string;

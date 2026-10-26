@@ -59,8 +59,30 @@ export interface ChatMessage {
   text: string;
   imageUri?: string;
   timestamp: string;
+  isPrescription?: boolean;
   matchedProducts?: ChatProductItem[];
   quickSuggestions?: string[];
+}
+
+function renderFormattedMessageText(text: string, isUser: boolean) {
+  if (!text.includes('**')) {
+    return text;
+  }
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      const clean = part.slice(2, -2);
+      return (
+        <Text
+          key={`bold-${index}`}
+          style={[styles.msgTextBold, isUser ? styles.msgTextBoldUser : styles.msgTextBoldAssistant]}
+        >
+          {clean}
+        </Text>
+      );
+    }
+    return part;
+  });
 }
 
 export default function PrescriptionScreen() {
@@ -213,6 +235,7 @@ export default function PrescriptionScreen() {
         sender: 'assistant',
         text: res.reply || t('catalog.prescriptionEmpty'),
         timestamp: fmt.time(new Date()),
+        isPrescription: Boolean(res.isPrescription),
         matchedProducts: res.matchedProducts || [],
         quickSuggestions: res.quickSuggestions || [],
       };
@@ -362,7 +385,7 @@ export default function PrescriptionScreen() {
                 {/* Message Text */}
                 {Boolean(msg.text) && (
                   <Text style={[styles.msgText, isUser ? styles.msgTextUser : styles.msgTextAssistant]}>
-                    {msg.text}
+                    {renderFormattedMessageText(msg.text, isUser)}
                   </Text>
                 )}
 
@@ -441,21 +464,23 @@ export default function PrescriptionScreen() {
                       );
                     })}
 
-                    {/* Bulk Add All To Cart */}
-                    <Pressable
-                      style={({ pressed }) => [styles.addAllBtn, pressed && styles.pressed]}
-                      onPress={() => handleAddAllToCart(msg.matchedProducts!)}
-                      disabled={addingAll}
-                    >
-                      {addingAll ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <>
-                          <Feather name="shopping-bag" size={16} color="#FFFFFF" />
-                          <Text style={styles.addAllBtnText}>{t('catalog.aiChatAddAll')}</Text>
-                        </>
-                      )}
-                    </Pressable>
+                    {/* Bulk Add All To Cart (ONLY for prescriptions with 2+ items) */}
+                    {Boolean(msg.isPrescription && (msg.matchedProducts?.length ?? 0) > 1) && (
+                      <Pressable
+                        style={({ pressed }) => [styles.addAllBtn, pressed && styles.pressed]}
+                        onPress={() => handleAddAllToCart(msg.matchedProducts!)}
+                        disabled={addingAll}
+                      >
+                        {addingAll ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <>
+                            <Feather name="shopping-bag" size={16} color="#FFFFFF" />
+                            <Text style={styles.addAllBtnText}>{t('catalog.aiChatAddAll')}</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    )}
                   </View>
                 ) : null}
 
@@ -788,6 +813,16 @@ const styles = StyleSheet.create({
   msgText: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  msgTextBold: {
+    fontFamily: 'Inter_700Bold',
+    fontWeight: '700',
+  },
+  msgTextBoldUser: {
+    color: '#FFFFFF',
+  },
+  msgTextBoldAssistant: {
+    color: '#1C025D',
   },
   msgTextUser: {
     fontFamily: 'Inter_500Medium',

@@ -37,6 +37,7 @@ export interface AiChatResponse {
   success: boolean;
   reply: string;
   isMedical: boolean;
+  isPrescription?: boolean;
   matchedProducts: MatchedProductCard[];
   quickSuggestions?: string[];
 }
@@ -67,13 +68,14 @@ const MEDICAL_KEYWORDS = [
   "retsept", "recept", "рецепт", "dori", "preparat", "лекарство", "препарат", "tabletka", "kapsula", "sirop",
   "таблетк", "капсул", "сироп", "мазь", "ukol", "ampula", "укол", "eritma", "tomchi", "sprey", "doza", "дозировк",
   "ichish", "ichiladi", "прием", "qabul", "narx", "цена", "aptek", "аптек", "dorixona", "savat", "корзин",
-  "buyurtma", "analog", "аналог", "shifokor", "vrach", "врач", "доктор", "doctor",
+  "buyurtma", "analog", "аналог", "shifokor", "vrach", "врач", "доктор", "doctor", "stomatolog", "стоматолог",
   // Symptoms
   "og'riq", "ogriq", "боль", "bosh", "голов", "tish", "зуб", "bel", "спин", "oyoq", "qorin", "живот",
   "yurak", "сердц", "isitma", "температур", "жар", "shamollash", "простуд", "gripp", "грипп", "yo'tal", "yotal",
-  "кашель", "balg'am", "мокрот", "burun", "насморк", "tomoq", "горл", "angina", "infeksiya", "инфекци", "virus", "вирус",
+  "кашель", "balg'am", "мокрот", "burun", "насморк", "tomoq", "горл", "angina", "ангина", "infeksiya", "инфекци", "virus", "вирус",
   "allergiya", "аллерги", "toshma", "сыпь", "qichish", "зуд", "ich ket", "diareya", "диаре", "ko'ngil", "тошнот", "рвот",
   "qon bosimi", "bosim", "давлен", "гипертон", "holsizlik", "слабость", "charchoq", "усталость", "asab", "стресс",
+  "milk", "flyus", "karies", "pulpit", "десна", "флюс", "кариес", "пульпит",
   // Vitamins & supplements
   "vitamin", "витамин", "d3", "д3", "askorbin", "аскорбин", "magniy", "магний", "omega", "омега", "sink", "цинк",
   "kalsiy", "кальций", "temir", "железо", "gemoglobin", "гемоглобин", "anemiya", "анемия", "immunitet", "иммунитет",
@@ -93,6 +95,38 @@ export function isMedicalDomain(query: string): boolean {
   }
 
   return MEDICAL_KEYWORDS.some((kw) => q.includes(kw));
+}
+
+export function isExplicitMedicinePurchaseRequest(query: string): boolean {
+  const q = normalizeQuery(query);
+  return (
+    q.includes("sotib ol") ||
+    q.includes("buyurtma") ||
+    q.includes("savatga") ||
+    q.includes("narxi") ||
+    q.includes("qancha turadi") ||
+    q.includes("bormi") ||
+    q.includes("qayerdan olsam") ||
+    q.includes("dori bering") ||
+    q.includes("dori kerak") ||
+    q.includes("preparat kerak") ||
+    q.includes("topib ber") ||
+    q.includes("dokonda bormi") ||
+    q.includes("dorixonada bormi") ||
+    q.includes("купить") ||
+    q.includes("заказать") ||
+    q.includes("в корзину") ||
+    q.includes("сколько стоит") ||
+    q.includes("есть в наличии") ||
+    q.includes("наличие") ||
+    q.includes("дай лекарство") ||
+    q.includes("нужно лекарство") ||
+    q.includes("найди препарат") ||
+    q.includes("buy") ||
+    q.includes("order") ||
+    q.includes("price") ||
+    q.includes("in stock")
+  );
 }
 
 export function handleAiMedicalChat(params: {
@@ -121,6 +155,7 @@ export function handleAiMedicalChat(params: {
       success: true,
       reply,
       isMedical: false,
+      isPrescription: false,
       matchedProducts: [],
       quickSuggestions: [
         lang === "ru" ? "Что принять от простуды?" : lang === "en" ? "Remedies for cold" : "Shamollashga nima ichiladi?",
@@ -142,30 +177,31 @@ export function handleAiMedicalChat(params: {
     qNorm === "tinchmisiz";
 
   const hasSpecificSymptomOrDrug =
-    /(og'riq|ogriq|bosh|tish|isitma|temperatura|жар|бол|голов|зуб|shamollash|gripp|dori|retsept|рецепт|preparat|vitamin|витамин|davleniye|давлен|qon bosimi|ich ket|diareya|диаре|oshqozon|живот)/i.test(
+    /(og'riq|ogriq|ogriyab|ogriyap|bosh|tish|milk|karies|pulpit|isitma|temperatura|жар|бол|голов|зуб|shamollash|gripp|dori|retsept|рецепт|preparat|vitamin|витамин|davleniye|давлен|qon bosimi|ich ket|diareya|диаре|oshqozon|живот)/i.test(
       qNorm
     );
 
   if (isGreetingWord && !hasSpecificSymptomOrDrug && !hasImage) {
     let reply = "";
     if (lang === "ru") {
-      reply = `Здравствуйте! Я медицинский ИИ-консультант аптечной сети VaksinaMed 🩺.\n\nКак ваше самочувствие? Опишите, пожалуйста, что именно вас беспокоит (например: головная боль, простуда, слабость) или укажите конкретное лекарство, о котором хотите узнать.\n\nТакже вы можете сфотографировать рецепт от врача — я мгновенно найду назначенные препараты в нашем каталоге.\n\n⚠️ *Медицинское напоминание: Все рекомендации носят информационный характер. Перед приемом препаратов обязательно проконсультируйтесь с лечащим врачом.*`;
+      reply = `Здравствуйте! Я медицинский ИИ-консультант аптечной сети VaksinaMed 🩺.\n\nКак ваше самочувствие? Опишите, пожалуйста, что именно вас беспокоит (например: головная боль, зубная боль, простуда, слабость) или укажите конкретное лекарство, о котором хотите узнать.\n\nТакже вы можете сфотографировать рецепт от врача — я мгновенно найду назначенные препараты в нашем каталоге.\n\n⚠️ Медицинское напоминание: Все рекомендации носят информационный характер. Перед приемом препаратов обязательно проконсультируйтесь с лечащим врачом.`;
     } else if (lang === "en") {
-      reply = `Hello! I am your VaksinaMed Medical AI Consultant 🩺.\n\nHow are you feeling today? Please let me know what symptoms you are experiencing (e.g. headache, cold, fever, fatigue), or ask about any medication, dosage, or interactions.\n\nYou can also upload or take a photo of a doctor's prescription for instant catalog matching.\n\n⚠️ *Medical note: All advice is advisory. Please consult your physician before taking medications.*`;
+      reply = `Hello! I am your VaksinaMed Medical AI Consultant 🩺.\n\nHow are you feeling today? Please let me know what symptoms you are experiencing (e.g. toothache, headache, cold, fever, fatigue), or ask about any medication, dosage, or interactions.\n\nYou can also upload or take a photo of a doctor's prescription for instant catalog matching.\n\n⚠️ Medical note: All advice is advisory. Please consult your physician before taking medications.`;
     } else {
-      reply = `Assalomu alaykum! Men VaksinaMed sun'iy intellekt tibbiy maslahatchisiman 🩺.\n\nBugun o‘zingizni qanday his qilyapsiz? Agar sizda biror bezovtalik (masalan: bosh og‘rig‘i, shamollash, isitma, oshqozon noqulayligi) bo‘lsa, batafsil yozib qoldiring yoki qaysi dori vositasi haqida ma'lumot olmoqchi ekanligingizni ayting.\n\nShuningdek, shifokor retsepti suratini yuborsangiz, barcha belgilangan dorilarni aniqlab, filiallarimizdagi mavjudligini ko‘rsatib beraman.\n\n⚠️ *Muhim eslatma: Men bergan barcha ma'lumotlar tavsiyaviy xarakterga ega. Aniq tashxis qo‘yish va davolash uchun davolovchi shifokoringiz bilan maslahatlashing.*`;
+      reply = `Assalomu alaykum! Men VaksinaMed sun'iy intellekt tibbiy maslahatchisiman 🩺.\n\nBugun o‘zingizni qanday his qilyapsiz? Agar sizda biror bezovtalik (masalan: tish og‘rig‘i, bosh og‘rig‘i, shamollash, isitma, oshqozon noqulayligi) bo‘lsa, batafsil yozib qoldiring yoki qaysi dori vositasi haqida ma'lumot olmoqchi ekanligingizni ayting.\n\nShuningdek, shifokor retsepti suratini yuborsangiz, barcha belgilangan dorilarni aniqlab, filiallarimizdagi mavjudligini ko‘rsatib beraman.\n\n⚠️ Muhim eslatma: Men bergan barcha ma'lumotlar tavsiyaviy xarakterga ega. Aniq tashxis qo‘yish va davolash uchun davolovchi shifokoringiz bilan maslahatlashing.`;
     }
 
     return {
       success: true,
       reply,
       isMedical: true,
+      isPrescription: false,
       matchedProducts: [], // Strictly NO products on greetings
       quickSuggestions: [
         lang === "ru" ? "Сфотографировать рецепт" : lang === "en" ? "Scan prescription photo" : "Retseptni rasmga olish",
+        lang === "ru" ? "Болит зуб, что делать?" : lang === "en" ? "Toothache advice" : "Tishim og‘riyapti, nima ichiladi?",
         lang === "ru" ? "Беспокоит головная боль" : lang === "en" ? "Headache relief" : "Bosh og‘rig‘i bezovta qilyapti",
         lang === "ru" ? "Симптомы простуды и жар" : lang === "en" ? "Cold and fever symptoms" : "Shamollash va isitma belgilari",
-        lang === "ru" ? "Как принимать витамин D3?" : lang === "en" ? "How to take Vitamin D3?" : "Vitamin D3 qanday ichiladi?",
       ],
     };
   }
@@ -190,6 +226,7 @@ export function handleAiMedicalChat(params: {
       success: true,
       reply,
       isMedical: true,
+      isPrescription: false,
       matchedProducts: [],
       quickSuggestions: [
         lang === "ru" ? "Сфотографировать рецепт" : lang === "en" ? "Scan prescription" : "Retseptni rasmga olish",
@@ -224,17 +261,18 @@ export function handleAiMedicalChat(params: {
   if (isEmergency) {
     let reply = "";
     if (lang === "ru") {
-      reply = `🚨 **ВНИМАНИЕ: ТРЕБУЕТСЯ СРОЧНАЯ МЕДИЦИНСКАЯ ПОМОЩЬ!**\n\nОписанные вами симптомы (давление в области сердца, одышка, подозрение на инфаркт или инсульт) представляют прямую угрозу здоровью и жизни. Не занимайтесь самолечением!\n\n1. **Немедленно позвоните по номеру 103 (Скорая медицинская помощь)**;\n2. Сядьте или прилягте с приподнятым изголовьем, расстегните тесную одежду и откройте окно для свежего воздуха;\n3. Не принимайте незнакомые сильнодействующие препараты до осмотра врачей;\n4. Обязательно предупредите людей, находящихся рядом с вами.`;
+      reply = `🚨 ВНИМАНИЕ: ТРЕБУЕТСЯ СРОЧНАЯ МЕДИЦИНСКАЯ ПОМОЩЬ!\n\nОписанные вами симптомы (давление в области сердца, одышка, подозрение на инфаркт или инсульт) представляют прямую угрозу здоровью и жизни. Не занимайтесь самолечением!\n\n1. Немедленно позвоните по номеру 103 (Скорая медицинская помощь);\n2. Сядьте или прилягте с приподнятым изголовьем, расстегните тесную одежду и откройте окно для свежего воздуха;\n3. Не принимайте незнакомые сильнодействующие препараты до осмотра врачей;\n4. Обязательно предупредите людей, находящихся рядом с вами.`;
     } else if (lang === "en") {
-      reply = `🚨 **EMERGENCY: IMMEDIATE MEDICAL ATTENTION REQUIRED!**\n\nYour described symptoms (chest pain/pressure, severe shortness of breath, possible cardiac or neurological event) are red-flag indicators that require emergency care. Do not attempt self-medication!\n\n1. **Call 103 (Emergency Ambulance) immediately**;\n2. Sit or semi-recline comfortably, loosen tight clothing, and ensure access to fresh air;\n3. Do not take unprescribed potent medications before paramedics arrive;\n4. Alert family members or people nearby immediately.`;
+      reply = `🚨 EMERGENCY: IMMEDIATE MEDICAL ATTENTION REQUIRED!\n\nYour described symptoms (chest pain/pressure, severe shortness of breath, possible cardiac or neurological event) are red-flag indicators that require emergency care. Do not attempt self-medication!\n\n1. Call 103 (Emergency Ambulance) immediately;\n2. Sit or semi-recline comfortably, loosen tight clothing, and ensure access to fresh air;\n3. Do not take unprescribed potent medications before paramedics arrive;\n4. Alert family members or people nearby immediately.`;
     } else {
-      reply = `🚨 **DIQQAT: ZUDLIK BILAN SHOSHILINCH TIBBIY YORDAM CHAQIRING!**\n\nSiz ta'riflagan holat (yurak sohasidagi og‘riq/siqilish, nafas qisishi, insult yoki infarkt xavfi) jiddiy xavf belgisi hisoblanadi. Vaqtni boy bermang va o‘zboshimchalik bilan dori ichmang!\n\n1. **Zudlik bilan 103 (Tez tibbiy yordam)** raqamiga qo‘ng‘iroq qiling;\n2. Tinch holatda o‘tiring yoki boshni biroz baland qilib yoting, tor yoqalarni yechib, xonaga toza havo kiring;\n3. Shifokorlar kelgunga qadar begona yoki kuchli ta'sir qiluvchi dorilarni ichmang;\n4. Yon-atrofdagi yaqinlaringizga holatingiz haqida darhol xabar bering.`;
+      reply = `🚨 DIQQAT: ZUDLIK BILAN SHOSHILINCH TIBBIY YORDAM CHAQIRING!\n\nSiz ta'riflagan holat (yurak sohasidagi og‘riq/siqilish, nafas qisishi, insult yoki infarkt xavfi) jiddiy xavf belgisi hisoblanadi. Vaqtni boy bermang va o‘zboshimchalik bilan dori ichmang!\n\n1. Zudlik bilan 103 (Tez tibbiy yordam) raqamiga qo‘ng‘iroq qiling;\n2. Tinch holatda o‘tiring yoki boshni biroz baland qilib yoting, tor yoqalarni yechib, xonaga toza havo kiring;\n3. Shifokorlar kelgunga qadar begona yoki kuchli ta'sir qiluvchi dorilarni ichmang;\n4. Yon-atrofdagi yaqinlaringizga holatingiz haqida darhol xabar bering.`;
     }
 
     return {
       success: true,
       reply,
       isMedical: true,
+      isPrescription: false,
       matchedProducts: [],
       quickSuggestions: [
         lang === "ru" ? "Вызвать скорую 103" : lang === "en" ? "Call 103 Ambulance" : "103 Tez yordam chaqirish",
@@ -251,17 +289,18 @@ export function handleAiMedicalChat(params: {
   if (isPregnancyOrInfant && !hasImage) {
     let reply = "";
     if (lang === "ru") {
-      reply = `🩺 **Медицинское предупреждение: Прием препаратов при беременности и лактации**\n\nВо время беременности и грудного вскармливания большинство лекарственных средств проникает через плацентарный барьер или в грудное молоко, что может повлиять на ребенка.\n\nЛюбые лекарственные средства (даже витамины или жаропонижающие) должны подбираться **строго вашим врачом акушером-гинекологом или педиатром** с учетом триместра и анамнеза.\n\nСамолечение категорически не рекомендуется. Пожалуйста, обратитесь к вашему врачу для безопасного назначения.`;
+      reply = `🩺 Медицинское предупреждение: Прием препаратов при беременности и лактации\n\nВо время беременности и грудного вскармливания большинство лекарственных средств проникает через плацентарный барьер или в грудное молоко, что может повлиять на ребенка.\n\nЛюбые лекарственные средства (даже витамины или жаропонижающие) должны подбираться строго вашим врачом акушером-гинекологом или педиатром с учетом триместра и анамнеза.\n\nСамолечение категорически не рекомендуется. Пожалуйста, обратитесь к вашему врачу для безопасного назначения.`;
     } else if (lang === "en") {
-      reply = `🩺 **Medical Caution: Medication in Pregnancy & Breastfeeding**\n\nDuring pregnancy and lactation, most pharmaceutical substances can cross into fetal circulation or breast milk. Self-medication is unsafe.\n\nAny therapy, even mild pain relievers or vitamins, must be authorized directly by your obstetrician-gynecologist or pediatrician based on your gestational age.\n\nPlease consult your doctor before taking any medication.`;
+      reply = `🩺 Medical Caution: Medication in Pregnancy & Breastfeeding\n\nDuring pregnancy and lactation, most pharmaceutical substances can cross into fetal circulation or breast milk. Self-medication is unsafe.\n\nAny therapy, even mild pain relievers or vitamins, must be authorized directly by your obstetrician-gynecologist or pediatrician based on your gestational age.\n\nPlease consult your doctor before taking any medication.`;
     } else {
-      reply = `🩺 **Tibbiy ogohlantirish: Homiladorlik va emizish davrida dorilar qabuli**\n\nHomiladorlik va laktatsiya davrida dori vositalarining ko‘p qismi yo‘ldosh (platsenta) to‘sig‘i yoki ona suti orqali bolaga o‘tishi mumkin. Shu sababli bu davrda o‘zboshimchalik bilan dori ichish qat'iyan man etiladi.\n\nHatto eng oddiy og‘riq qoldiruvchi yoki vitaminlar ham **faqat davolovchi akusher-ginekolog yoki pediatr** nazorati ostida, homiladorlik haftasiga mos ravishda tanlanishi shart.\n\nIltimos, bolangiz va o‘zingizning xavfsizligingiz uchun shifokoringiz bilan maslahatlashing.`;
+      reply = `🩺 Tibbiy ogohlantirish: Homiladorlik va emizish davrida dorilar qabuli\n\nHomiladorlik va laktatsiya davrida dori vositalarining ko‘p qismi yo‘ldosh (platsenta) to‘sig‘i yoki ona suti orqali bolaga o‘tishi mumkin. Shu sababli bu davrda o‘zboshimchalik bilan dori ichish qat'iyan man etiladi.\n\nHatto eng oddiy og‘riq qoldiruvchi yoki vitaminlar ham faqat davolovchi akusher-ginekolog yoki pediatr nazorati ostida, homiladorlik haftasiga mos ravishda tanlanishi shart.\n\nIltimos, bolangiz va o‘zingizning xavfsizligingiz uchun shifokoringiz bilan maslahatlashing.`;
     }
 
     return {
       success: true,
       reply,
       isMedical: true,
+      isPrescription: false,
       matchedProducts: [],
       quickSuggestions: [
         lang === "ru" ? "Спросить о витаминах для кормящих" : lang === "en" ? "Pregnancy vitamins" : "Homiladorlik vitaminlari",
@@ -278,17 +317,18 @@ export function handleAiMedicalChat(params: {
   if (isBloodPressure && !hasImage) {
     let reply = "";
     if (lang === "ru") {
-      reply = `🩺 **Консультация врача: Артериальное давление**\n\nАртериальное давление требует строгого индивидуального подхода. Препараты для снижения или повышения давления (гипотензивные) подбираются терапевтом или кардиологом на основании регулярного мониторинга и ЭКГ. Пить чужие лекарства от давления опасно!\n\n**Что делать сейчас:**\n1. Измерьте давление тонометром в состоянии полного покоя (сидя, опершись на спинку стула);\n2. Проветрите комнату, расслабьтесь, не употребляйте кофе, крепкий чай и соленые продукты;\n3. Если давление выше 160/100 мм рт. ст. и сопровождается сильной головной болью, тошнотой или болью в груди — немедленно вызовите врача по номеру 103.`;
+      reply = `🩺 Консультация врача: Артериальное давление\n\nАртериальное давление требует строгого индивидуального подхода. Препараты для снижения или повышения давления (гипотензивные) подбираются терапевтом или кардиологом на основании регулярного мониторинга и ЭКГ. Пить чужие лекарства от давления опасно!\n\nЧто делать сейчас:\n1. Измерьте давление тонометром в состоянии полного покоя (сидя, опершись на спинку стула);\n2. Проветрите комнату, расслабьтесь, не употребляйте кофе, крепкий чай и соленые продукты;\n3. Если давление выше 160/100 мм рт. ст. и сопровождается сильной головной болью, тошнотой или болью в груди — немедленно вызовите врача по номеру 103.`;
     } else if (lang === "en") {
-      reply = `🩺 **Clinical Advice: Blood Pressure Management**\n\nBlood pressure medications must be tailored exclusively by a licensed therapist or cardiologist based on personal readings and cardiovascular history. Never take someone else's antihypertensive pills!\n\n**Immediate steps:**\n1. Measure your blood pressure with a reliable tonometer while seated comfortably and quietly for 5 minutes;\n2. Ensure adequate ventilation and avoid caffeine, alcohol, or excess sodium;\n3. If blood pressure exceeds 160/100 mmHg accompanied by chest tightness, dizziness, or visual disturbance, seek immediate medical care via 103.`;
+      reply = `🩺 Clinical Advice: Blood Pressure Management\n\nBlood pressure medications must be tailored exclusively by a licensed therapist or cardiologist based on personal readings and cardiovascular history. Never take someone else's antihypertensive pills!\n\nImmediate steps:\n1. Measure your blood pressure with a reliable tonometer while seated comfortably and quietly for 5 minutes;\n2. Ensure adequate ventilation and avoid caffeine, alcohol, or excess sodium;\n3. If blood pressure exceeds 160/100 mmHg accompanied by chest tightness, dizziness, or visual disturbance, seek immediate medical care via 103.`;
     } else {
-      reply = `🩺 **Shifokor tavsiyasi: Qon bosimi (Davleniye)**\n\nQon bosimini nazorat qilish va davolash qat'iy individual yondashuvni talab qiladi. Bosim tushiruvchi (gipotenziv) preparatlarni faqat kardiolog yoki terapevt ko‘rigidan so‘ng, tonometr ko‘rsatkichlariga qarab ichish lozim. Birovning bosim dorisini o‘zboshimchalik bilan ichish hayot uchun xavflidir!\n\n**Hozirgi holatda nima qilish kerak:**\n1. 5 daqiqa tinch o‘tirib, tonometr yordamida qon bosimingizni aniq o‘lchang;\n2. Xonani shamollating, kiyimlarni bo‘shating, qahva yoki achchiq choy ichmang;\n3. Agar bosim 160/100 mm simob ustunidan yuqori bo‘lsa va bosh og‘rig‘i, ko‘ngil aynishi yoki ko‘krakda siqilish kuzatilsa — darhol 103 raqami orqali shifokor chaqiring.`;
+      reply = `🩺 Shifokor tavsiyasi: Qon bosimi (Davleniye)\n\nQon bosimini nazorat qilish va davolash qat'iy individual yondashuvni talab qiladi. Bosim tushiruvchi (gipotenziv) preparatlarni faqat kardiolog yoki terapevt ko‘rigidan so‘ng, tonometr ko‘rsatkichlariga qarab ichish lozim. Birovning bosim dorisini o‘zboshimchalik bilan ichish hayot uchun xavflidir!\n\nHozirgi holatda nima qilish kerak:\n1. 5 daqiqa tinch o‘tirib, tonometr yordamida qon bosimingizni aniq o‘lchang;\n2. Xonani shamollating, kiyimlarni bo‘shating, qahva yoki achchiq choy ichmang;\n3. Agar bosim 160/100 mm simob ustunidan yuqori bo‘lsa va bosh og‘rig‘i, ko‘ngil aynishi yoki ko‘krakda siqilish kuzatilsa — darhol 103 raqami orqali shifokor chaqiring.`;
     }
 
     return {
       success: true,
       reply,
       isMedical: true,
+      isPrescription: false,
       matchedProducts: [],
       quickSuggestions: [
         lang === "ru" ? "Правила измерения давления" : lang === "en" ? "How to measure BP" : "Bosimni to‘g‘ri o‘lchash",
@@ -351,19 +391,19 @@ export function handleAiMedicalChat(params: {
     let reply = "";
     if (matchedCards.length > 0) {
       if (lang === "ru") {
-        reply = `🩺 **Результат клинического анализа рецепта:**\n\nЯ распознал назначенные препараты и сверил их с наличием в аптечной сети VaksinaMed. Найдено совпадений: ${matchedCards.length}.\n\n*Правила безопасности: Принимайте препараты строго по схеме вашего врача. Не прерывайте курс антибиотиков раньше времени.* Вы можете добавить нужные лекарства прямо в корзину:`;
+        reply = `🩺 Результат клинического анализа рецепта:\n\nЯ распознал назначенные препараты и сверил их с наличием в аптечной сети VaksinaMed. Найдено совпадений: ${matchedCards.length}.\n\nПравила безопасности: Принимайте препараты строго по схеме вашего врача. Не прерывайте курс антибиотиков раньше времени. Вы можете добавить нужные лекарства прямо в корзину:`;
       } else if (lang === "en") {
-        reply = `🩺 **Prescription Clinical Match Result:**\n\nI have parsed your prescription and verified availability across VaksinaMed branches. Matched items: ${matchedCards.length}.\n\n*Safety advisory: Follow the exact regimen prescribed by your doctor. Complete any antibiotic course entirely.* You can add the verified medicines directly to your cart:`;
+        reply = `🩺 Prescription Clinical Match Result:\n\nI have parsed your prescription and verified availability across VaksinaMed branches. Matched items: ${matchedCards.length}.\n\nSafety advisory: Follow the exact regimen prescribed by your doctor. Complete any antibiotic course entirely. You can add the verified medicines directly to your cart:`;
       } else {
-        reply = `🩺 **Retseptning klinik tahlil natijasi:**\n\nShifokor retseptidagi dori vositalari o‘qildi va VaksinaMed dorixonasi bazasidan muvaffaqiyatli aniqlandi. Topilgan preparatlar: ${matchedCards.length} ta.\n\n*Xavfsizlik eslatmasi: Dorilarni shifokor belgilagan dozada va qat'iy jadval asosida qabul qiling. Agar antibiotik yozilgan bo‘lsa, kursni oxirigacha yetkazing.* Kerakli dorilarni to‘g‘ridan-to‘g‘ri savatga qo‘shishingiz mumkin:`;
+        reply = `🩺 Retseptning klinik tahlil natijasi:\n\nShifokor retseptidagi dori vositalari o‘qildi va VaksinaMed dorixonasi bazasidan muvaffaqiyatli aniqlandi. Topilgan preparatlar: ${matchedCards.length} ta.\n\nXavfsizlik eslatmasi: Dorilarni shifokor belgilagan dozada va qat'iy jadval asosida qabul qiling. Agar antibiotik yozilgan bo‘lsa, kursni oxirigacha yetkazing. Kerakli dorilarni to‘g‘ridan-to‘g‘ri savatga qo‘shishingiz mumkin:`;
       }
     } else {
       if (lang === "ru") {
-        reply = `Я внимательно изучил присланный текст или изображение рецепта, но точных совпадений с препаратами в каталоге не обнаружено.\n\nПожалуйста, убедитесь, что фото четкое, при хорошем освещении, или напишите названия лекарств вручную (например: *Парацетамол 500 мг*).`;
+        reply = `Я внимательно изучил присланный текст или изображение рецепта, но точных совпадений с препаратами в каталоге не обнаружено.\n\nПожалуйста, убедитесь, что фото четкое, при хорошем освещении, или напишите названия лекарств вручную (например: Парацетамол 500 мг).`;
       } else if (lang === "en") {
-        reply = `I examined the prescription text or image, but could not detect matching medications in our database.\n\nPlease provide a clear, well-lit photo or enter the medicine names manually (e.g. *Paracetamol 500 mg*).`;
+        reply = `I examined the prescription text or image, but could not detect matching medications in our database.\n\nPlease provide a clear, well-lit photo or enter the medicine names manually (e.g. Paracetamol 500 mg).`;
       } else {
-        reply = `Yuborilgan retsept matni yoki suratini sinchiklab tekshirdim, ammo dorilar nomini aniq o‘qib bo‘lmadi.\n\nIltimos, retsept suratini yorug‘ joyda, aniqroq qilib qayta yuboring yoki dorilar nomini qo‘lda yozib qoldiring (masalan: *Paratsetamol 500 mg*).`;
+        reply = `Yuborilgan retsept matni yoki suratini sinchiklab tekshirdim, ammo dorilar nomini aniq o‘qib bo‘lmadi.\n\nIltimos, retsept suratini yorug‘ joyda, aniqroq qilib qayta yuboring yoki dorilar nomini qo‘lda yozib qoldiring (masalan: Paratsetamol 500 mg).`;
       }
     }
 
@@ -371,6 +411,7 @@ export function handleAiMedicalChat(params: {
       success: true,
       reply,
       isMedical: true,
+      isPrescription: true, // Only prescription scan allows bulk add to cart
       matchedProducts: matchedCards,
       quickSuggestions: [
         lang === "ru" ? "Правила приема этих лекарств" : lang === "en" ? "Dosage directions" : "Dori qabul qilish qoidalari",
@@ -380,49 +421,128 @@ export function handleAiMedicalChat(params: {
     };
   }
 
-  // 8. CLINICAL SYMPTOMS & SPECIFIC MEDICINE TRIAGE
-  type ClinicalCategory = "pain" | "cold" | "stomach" | "vitamins" | "allergy" | "antibiotic" | "none";
+  // 8. SPECIFIC CLINICAL CATEGORIES
+  type ClinicalCategory =
+    | "dental"
+    | "headache"
+    | "throat_cough"
+    | "cold_fever"
+    | "stomach"
+    | "diarrhea"
+    | "joint_back"
+    | "allergy"
+    | "vitamins"
+    | "antibiotic"
+    | "general_pain"
+    | "none";
+
   let categoryIntent: ClinicalCategory = "none";
 
+  // Check Dental Pain FIRST so "tishim og'riyapti" never falls into headache!
   if (
-    qNorm.includes("bosh") ||
     qNorm.includes("tish") ||
-    qNorm.includes("og'ri") ||
-    qNorm.includes("ogri") ||
-    qNorm.includes("paratsetamol") ||
-    qNorm.includes("paracetamol") ||
-    qNorm.includes("ibuprofen") ||
-    qNorm.includes("analgin") ||
-    qNorm.includes("tsitramon") ||
-    qNorm.includes("голов") ||
-    qNorm.includes("бол") ||
+    qNorm.includes("milk") ||
+    qNorm.includes("karies") ||
+    qNorm.includes("pulpit") ||
+    qNorm.includes("flyus") ||
+    qNorm.includes("stomatolog") ||
     qNorm.includes("зуб") ||
-    qNorm.includes("парацетамол") ||
-    qNorm.includes("ибупрофен") ||
-    qNorm.includes("анальгин") ||
-    qNorm.includes("headache") ||
-    qNorm.includes("pain")
+    qNorm.includes("десн") ||
+    qNorm.includes("флюс") ||
+    qNorm.includes("кариес") ||
+    qNorm.includes("пульпит") ||
+    qNorm.includes("стоматолог") ||
+    qNorm.includes("tooth") ||
+    qNorm.includes("teeth") ||
+    qNorm.includes("dental")
   ) {
-    categoryIntent = "pain";
+    categoryIntent = "dental";
+  } else if (
+    qNorm.includes("bosh") ||
+    qNorm.includes("chakka") ||
+    qNorm.includes("migren") ||
+    qNorm.includes("голов") ||
+    qNorm.includes("мигрень") ||
+    qNorm.includes("headache")
+  ) {
+    categoryIntent = "headache";
+  } else if (
+    qNorm.includes("tomoq") ||
+    qNorm.includes("yo'tal") ||
+    qNorm.includes("yotal") ||
+    qNorm.includes("balg'am") ||
+    qNorm.includes("angina") ||
+    qNorm.includes("горл") ||
+    qNorm.includes("кашель") ||
+    qNorm.includes("ангина") ||
+    qNorm.includes("sore throat") ||
+    qNorm.includes("cough")
+  ) {
+    categoryIntent = "throat_cough";
   } else if (
     qNorm.includes("shamollash") ||
     qNorm.includes("isitma") ||
     qNorm.includes("temperatura") ||
     qNorm.includes("gripp") ||
-    qNorm.includes("yo'tal") ||
-    qNorm.includes("yotal") ||
-    qNorm.includes("tomoq") ||
     qNorm.includes("burun") ||
     qNorm.includes("простуд") ||
     qNorm.includes("жар") ||
     qNorm.includes("температур") ||
-    qNorm.includes("кашель") ||
-    qNorm.includes("горл") ||
     qNorm.includes("насморк") ||
     qNorm.includes("fever") ||
     qNorm.includes("cold")
   ) {
-    categoryIntent = "cold";
+    categoryIntent = "cold_fever";
+  } else if (
+    qNorm.includes("ich ket") ||
+    qNorm.includes("diareya") ||
+    qNorm.includes("zaharlan") ||
+    qNorm.includes("диаре") ||
+    qNorm.includes("понос") ||
+    qNorm.includes("отравлен") ||
+    qNorm.includes("diarrhea")
+  ) {
+    categoryIntent = "diarrhea";
+  } else if (
+    qNorm.includes("oshqozon") ||
+    qNorm.includes("jig'ildon") ||
+    qNorm.includes("jigildon") ||
+    qNorm.includes("hazm") ||
+    qNorm.includes("gastrit") ||
+    qNorm.includes("yazva") ||
+    qNorm.includes("omeprazol") ||
+    qNorm.includes("mezim") ||
+    qNorm.includes("живот") ||
+    qNorm.includes("изжог") ||
+    qNorm.includes("пищеварен") ||
+    qNorm.includes("омепразол") ||
+    qNorm.includes("stomach") ||
+    qNorm.includes("heartburn")
+  ) {
+    categoryIntent = "stomach";
+  } else if (
+    qNorm.includes("bel") ||
+    qNorm.includes("bo'g'im") ||
+    qNorm.includes("bog'im") ||
+    qNorm.includes("umurtqa") ||
+    qNorm.includes("radikulit") ||
+    qNorm.includes("спин") ||
+    qNorm.includes("сустав") ||
+    qNorm.includes("поясниц") ||
+    qNorm.includes("back pain") ||
+    qNorm.includes("joint")
+  ) {
+    categoryIntent = "joint_back";
+  } else if (
+    qNorm.includes("allergi") ||
+    qNorm.includes("toshma") ||
+    qNorm.includes("qichish") ||
+    qNorm.includes("loratadin") ||
+    qNorm.includes("аллерги") ||
+    qNorm.includes("сыпь") ||
+    qNorm.includes("зуд")
+  ) {
+    categoryIntent = "allergy";
   } else if (
     qNorm.includes("vitamin") ||
     qNorm.includes("d3") ||
@@ -437,181 +557,262 @@ export function handleAiMedicalChat(params: {
   ) {
     categoryIntent = "vitamins";
   } else if (
-    qNorm.includes("oshqozon") ||
-    qNorm.includes("jig'ildon") ||
-    qNorm.includes("jigildon") ||
-    qNorm.includes("hazm") ||
-    qNorm.includes("ich ket") ||
-    qNorm.includes("diareya") ||
-    qNorm.includes("omeprazol") ||
-    qNorm.includes("mezim") ||
-    qNorm.includes("живот") ||
-    qNorm.includes("изжог") ||
-    qNorm.includes("пищеварен") ||
-    qNorm.includes("диаре") ||
-    qNorm.includes("омепразол") ||
-    qNorm.includes("stomach") ||
-    qNorm.includes("heartburn")
-  ) {
-    categoryIntent = "stomach";
-  } else if (
-    qNorm.includes("allergi") ||
-    qNorm.includes("toshma") ||
-    qNorm.includes("qichish") ||
-    qNorm.includes("loratadin") ||
-    qNorm.includes("аллерги") ||
-    qNorm.includes("сыпь") ||
-    qNorm.includes("зуд")
-  ) {
-    categoryIntent = "allergy";
-  } else if (
     qNorm.includes("antibiotik") ||
     qNorm.includes("amoksitsillin") ||
     qNorm.includes("amoxicillin") ||
     qNorm.includes("антибиотик")
   ) {
     categoryIntent = "antibiotic";
+  } else if (
+    qNorm.includes("og'ri") ||
+    qNorm.includes("ogri") ||
+    qNorm.includes("paratsetamol") ||
+    qNorm.includes("paracetamol") ||
+    qNorm.includes("ibuprofen") ||
+    qNorm.includes("analgin") ||
+    qNorm.includes("tsitramon") ||
+    qNorm.includes("бол") ||
+    qNorm.includes("парацетамол") ||
+    qNorm.includes("ибупрофен") ||
+    qNorm.includes("анальгин") ||
+    qNorm.includes("pain")
+  ) {
+    categoryIntent = "general_pain";
   }
 
-  // Filter candidates matching intent
-  const relevantCandidates = params.candidates.filter((p) => {
-    const name = normalizeQuery(p.nameUz + " " + p.nameRu + " " + (p.category || ""));
-    if (categoryIntent === "pain") {
-      return (
-        name.includes("paratsetamol") ||
-        name.includes("ibuprofen") ||
-        name.includes("paracetamol") ||
-        name.includes("og'riq") ||
-        name.includes("ogriq") ||
-        name.includes("боль")
-      );
-    }
-    if (categoryIntent === "cold") {
-      return (
-        name.includes("paratsetamol") ||
-        name.includes("paracetamol") ||
-        name.includes("askorbin") ||
-        name.includes("vitamin c") ||
-        name.includes("acc") ||
-        name.includes("shamollash")
-      );
-    }
-    if (categoryIntent === "vitamins") {
-      return (
-        name.includes("vitamin") ||
-        name.includes("d3") ||
-        name.includes("magniy") ||
-        name.includes("omega") ||
-        name.includes("sink")
-      );
-    }
-    if (categoryIntent === "stomach") {
-      return (
-        name.includes("omeprazol") ||
-        name.includes("mezim") ||
-        name.includes("oshqozon") ||
-        name.includes("желудок")
-      );
-    }
-    if (categoryIntent === "allergy") {
-      return name.includes("loratadin") || name.includes("allergi") || name.includes("аллерг");
-    }
-    if (categoryIntent === "antibiotic") {
-      return name.includes("amoksitsillin") || name.includes("amoxicillin") || name.includes("antibiotik");
-    }
-    return false;
-  }).slice(0, 3);
+  // Check if user explicitly asked to BUY / FIND / ORDER medication
+  const isExplicitPurchase = isExplicitMedicinePurchaseRequest(userText);
+  const relevantCandidates: CatalogProductCandidate[] = [];
 
-  // If no clear medical category was detected and no medicines matched
-  if (categoryIntent === "none" || relevantCandidates.length === 0) {
-    let reply = "";
-    if (lang === "ru") {
-      reply = `🩺 **Медицинская консультация VaksinaMed:**\n\nЯ внимательно изучил ваш запрос. Для того чтобы дать вам точную и безопасную рекомендацию, мне требуется немного больше деталей:\n\n1. Какие конкретно симптомы вы ощущаете и как долго они длятся?\n2. Измеряли ли вы температуру или артериальное давление?\n3. Есть ли у вас хронические заболевания (язва, аллергия, почечная недостаточность)?\n\nВы также можете прикрепить фото рецепта от врача или ввести точное торговое название нужного лекарства.`;
-    } else if (lang === "en") {
-      reply = `🩺 **VaksinaMed Clinical Guidance:**\n\nI have reviewed your inquiry. In order to provide you with safe, medically grounded advice, please provide a few more details:\n\n1. What specific symptoms are you experiencing and when did they start?\n2. Have you checked your temperature or blood pressure?\n3. Do you have any known drug allergies or chronic conditions?\n\nYou can also attach a prescription photo or enter the specific medicine name you are looking for.`;
-    } else {
-      reply = `🩺 **VaksinaMed shifokorlik maslahati:**\n\nSo‘rovingizni ko‘rib chiqdim. Sizga aniq, xavfsiz va to‘g‘ri tibbiy yo‘nalish bera olishim uchun quyidagi ma'lumotlarni aniqlashtirib bersangiz:\n\n1. Aynan qanday alomatlar (og‘riq qayerda, qachondan boshlandi) bezovta qilyapti?\n2. Tana haroratingiz yoki qon bosimingizni o‘lchadingizmi?\n3. Biror surunkali kasalligingiz (oshqozon yarasi, jigar/buyrak yetishmovchiligi, allergiya) bormi?\n\nShuningdek, shifokor retsepti bo‘lsa, suratini yuborishingiz yoki aniq dori nomini yozishingiz mumkin.`;
-    }
-
-    return {
-      success: true,
-      reply,
-      isMedical: true,
-      matchedProducts: [], // Strictly NO products when uncertain!
-      quickSuggestions: [
-        lang === "ru" ? "Сфотографировать рецепт" : lang === "en" ? "Scan prescription" : "Retseptni rasmga olish",
-        lang === "ru" ? "Головная боль" : lang === "en" ? "Headache inquiry" : "Bosh og‘rig‘i bo‘yicha savol",
-        lang === "ru" ? "Простуда и температура" : lang === "en" ? "Cold & fever" : "Shamollash va isitma",
-      ],
-    };
-  }
-
-  // Build product cards for verified candidates
-  const matchedCards: MatchedProductCard[] = [];
-  for (const p of relevantCandidates) {
-    matchedCards.push({
-      id: p.id,
-      sku: p.sku,
-      nameUz: p.nameUz,
-      nameRu: p.nameRu,
-      category: p.category,
-      manufacturer: p.manufacturer,
-      price: p.price,
-      unit: p.unit,
-      requiresPrescription: p.requiresPrescription,
-      analogGroup: p.analogGroup,
-      inStock: (p.availableQuantity ?? 1) > 0,
+  // If user explicitly asks for a medicine, find exact name match first
+  if (isExplicitPurchase) {
+    const directMatch = params.candidates.find((p) => {
+      const pName = normalizeQuery(p.nameUz + " " + p.nameRu);
+      const parts = pName.split(/\s+/).filter((w) => w.length >= 4);
+      return parts.some((w) => qNorm.includes(w));
     });
+    if (directMatch) {
+      relevantCandidates.push(directMatch);
+    }
   }
 
+  // Filter candidates matching intent and strictly DEDUPLICATE (never recommend 2 duplicate NSAIDs!)
+  if (relevantCandidates.length === 0) {
+    const seenGroups = new Set<string>();
+
+    for (const p of params.candidates) {
+      const name = normalizeQuery(p.nameUz + " " + p.nameRu + " " + (p.category || ""));
+      const group = p.analogGroup || p.sku;
+
+      if (categoryIntent === "dental") {
+        // For toothache, recommend ONLY ONE safe anti-inflammatory analgesic (Ibuprofen)
+        if (name.includes("ibuprofen") || name.includes("nurofen")) {
+          if (!seenGroups.has("nsaid-ibu")) {
+            seenGroups.add("nsaid-ibu");
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "headache") {
+        // For headache, recommend ONLY ONE Paracetamol (safe first-line)
+        if (name.includes("paratsetamol") || name.includes("paracetamol")) {
+          if (!seenGroups.has("analgesic-para")) {
+            seenGroups.add("analgesic-para");
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "cold_fever") {
+        // For fever and cold: Paracetamol (1 item)
+        if (name.includes("paratsetamol") || name.includes("paracetamol")) {
+          if (!seenGroups.has("para")) {
+            seenGroups.add("para");
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "throat_cough") {
+        if (name.includes("acc") || name.includes("septolete") || name.includes("strepsils")) {
+          if (!seenGroups.has(group)) {
+            seenGroups.add(group);
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "stomach") {
+        if (name.includes("omeprazol") || name.includes("mezim")) {
+          if (!seenGroups.has(group)) {
+            seenGroups.add(group);
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "diarrhea") {
+        if (name.includes("rehidron") || name.includes("smecta") || name.includes("ugol")) {
+          if (!seenGroups.has(group)) {
+            seenGroups.add(group);
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "joint_back") {
+        if (name.includes("ibuprofen") || name.includes("diklofenak")) {
+          if (!seenGroups.has("nsaid-joint")) {
+            seenGroups.add("nsaid-joint");
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "allergy") {
+        if (name.includes("loratadin") || name.includes("setirizin") || name.includes("cetirizine")) {
+          if (!seenGroups.has("antihistamine")) {
+            seenGroups.add("antihistamine");
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "vitamins") {
+        if (name.includes("d3") || name.includes("vitamin")) {
+          if (!seenGroups.has(group)) {
+            seenGroups.add(group);
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "antibiotic") {
+        if (name.includes("amoksitsillin") || name.includes("amoxicillin")) {
+          if (!seenGroups.has("amox")) {
+            seenGroups.add("amox");
+            relevantCandidates.push(p);
+          }
+        }
+      } else if (categoryIntent === "general_pain") {
+        if (name.includes("paratsetamol") || name.includes("paracetamol")) {
+          if (!seenGroups.has("para-gen")) {
+            seenGroups.add("para-gen");
+            relevantCandidates.push(p);
+          }
+        }
+      }
+
+      if (relevantCandidates.length >= 1) break;
+    }
+  }
+
+  // Fallback for dental if ibuprofen not found: pick 1 general analgesic
+  if (categoryIntent === "dental" && relevantCandidates.length === 0) {
+    const fallback = params.candidates.find((p) => {
+      const n = normalizeQuery(p.nameUz + " " + p.nameRu);
+      return n.includes("paratsetamol") || n.includes("paracetamol") || n.includes("analgin");
+    });
+    if (fallback) relevantCandidates.push(fallback);
+  }
+
+  // Build product cards ONLY if user explicitly asked to purchase/check medication!
+  // For clinical symptom inquiries (e.g. "salom,tishim ogriyabdi"), strictly NO products are attached!
+  const matchedCards: MatchedProductCard[] = [];
+  if (isExplicitPurchase) {
+    for (const p of relevantCandidates) {
+      matchedCards.push({
+        id: p.id,
+        sku: p.sku,
+        nameUz: p.nameUz,
+        nameRu: p.nameRu,
+        category: p.category,
+        manufacturer: p.manufacturer,
+        price: p.price,
+        unit: p.unit,
+        requiresPrescription: p.requiresPrescription,
+        analogGroup: p.analogGroup,
+        inStock: (p.availableQuantity ?? 1) > 0,
+      });
+      break; // Single product max for direct search
+    }
+  }
+
+  // Construct clinical responses
   let reply = "";
-  if (categoryIntent === "pain") {
+  let quickSuggestions: string[] = [];
+
+  if (isExplicitPurchase && matchedCards.length > 0) {
     if (lang === "ru") {
-      reply = `🩺 **Врачебная рекомендация: Головная и мышечная боль**\n\nПри головной, зубной или мышечной боли организм сигнализирует об усталости, спазме сосудов или воспалении. \n\n**Рекомендации врача:**\n1. Измерьте давление (часто головная боль вызвана спазмом сосудов). Проветрите комнату, выпейте чистой воды и отдохните в полумраке;\n2. При умеренной боли допустим прием безрецептурных анальгетиков (Парацетамол или Ибупрофен) **строго после еды**, запивая стаканом воды;\n3. Не превышайте суточную дозу (максимум 1000 мг парацетамола за один прием, не более 4 г в сутки). Не принимайте натощак при гастрите или язве;\n4. *Внимание: если боль возникла внезапно, очень резкая («как удар»), сопровождается рвотой или онемением — немедленно вызовите скорую 103!*\n\nНиже представлены проверенные препараты из нашего каталога:`;
+      reply = `В нашей аптечной сети есть сертифицированный препарат. Перед применением обязательно ознакомьтесь с инструкцией и проконсультируйтесь с лечащим врачом:`;
+      quickSuggestions = ["Как правильно принимать?", "Есть ли противопоказания?", "Перейти в корзину"];
     } else if (lang === "en") {
-      reply = `🩺 **Clinical Advisory: Headache & Pain Management**\n\nPain often stems from fatigue, vascular tension, or localized inflammation.\n\n**Doctor's guidance:**\n1. Check your blood pressure first. Ensure proper hydration and rest in a calm, ventilated room;\n2. For mild-to-moderate pain, OTC analgesics like Paracetamol or Ibuprofen may be taken **strictly after food** with water;\n3. Observe dosing intervals (max 1000 mg paracetamol per dose; do not exceed 4000 mg daily). Avoid NSAIDs if you suffer from gastric ulcers;\n4. *Emergency note: if the headache is severe and sudden ("thunderclap"), accompanied by numbness or vomiting, call 103 immediately.*\n\nRecommended medications from our verified pharmacy catalog:`;
+      reply = `Verified medication available in our catalog. Please review the instructions and consult your doctor before use:`;
+      quickSuggestions = ["How to use properly?", "Any contraindications?", "Go to cart"];
     } else {
-      reply = `🩺 **Shifokor tavsiyasi: Bosh va tana og‘riqlarida nima qilish kerak?**\n\nOg‘riq ko‘pincha charchoq, qon tomirlar spazmi, qon bosimi o‘zgarishi yoki yallig‘lanish oqibatida yuzaga keladi.\n\n**Shifokor ko‘rsatmalari:**\n1. Birinchi navbatda qon bosimingizni o‘lchang. Xonani shamollatib, yetarli miqdorda toza suv iching va tinch holatda dam oling;\n2. Og‘riqni yengillashtirish uchun shifokorlar retseptsiz beriladigan Paratsetamol yoki Ibuprofen qabul qilishni tavsiya etadilar. Dorilarni **faqat ovqatdan keyin**, bir stakan suv bilan iching;\n3. Ruxsat etilgan me'yordan oshirmang (Paratsetamol bir martada 500–1000 mg dan, sutkada 4000 mg dan oshmasin). Oshqozon yarasi yoki gastrit bo‘lsa, og‘riq qoldiruvchilarni ehtiyotkorlik bilan qabul qiling;\n4. *Ogohlantirish: Agar og‘riq to‘satdan juda qattiq boshlansa, hushdan ketish, ko‘rish xiralashishi yoki qusish bilan kechsa — darhol 103 Tez yordam chaqiring!*\n\nDorixonamizdagi sertifikatlangan mos preparatlar:`;
+      reply = `Dorixonamizda sertifikatlangan mos preparat mavjud. Qo‘llashdan oldin yo‘riqnoma bilan tanishib chiqing va shifokor bilan maslahatlashing:`;
+      quickSuggestions = ["Qo‘llash qoidalari qanday?", "Qarshi ko‘rsatmalar bormi?", "Savatga o‘tish"];
     }
-  } else if (categoryIntent === "cold") {
+  } else if (categoryIntent === "dental") {
     if (lang === "ru") {
-      reply = `🩺 **Врачебная рекомендация: Простуда и повышенная температура**\n\nПри ОРВИ повышенная температура до 38.5°C — это естественная защитная реакция иммунитета, поэтому сбивать её сразу не рекомендуется (если нет судорог).\n\n**Тактика лечения:**\n1. Соблюдайте постельный режим и пейте много теплой жидкости (чай с лимоном, настой шиповника);\n2. При температуре выше 38.5°C или выраженной ломоте примите жаропонижающее (Парацетамол);\n3. Витамин C поддерживает сосудистую стенку и сопротивляемость инфекциям;\n4. **Важное правило: Антибиотики не действуют на вирусы!** Прием антибиотиков без назначения врача вредит микрофлоре и вызывает устойчивость бактерий.\n\nДоступные препараты из нашей аптеки:`;
+      reply = `🩺 Врачебная консультация: Первая помощь при зубной боли\n\nЗубная боль (кариес, пульпит, воспаление десны) всегда указывает на поражение глубоких тканей зуба или зубного нерва. Главное правило: таблетки не лечат больной зуб — причину боли может устранить только врач-стоматолог!\n\nРекомендации врача и первая помощь:\n1. Строгий запрет: Ни в коем случае не прикладывайте грелку или горячий компресс к больной щеке! Тепло резко ускоряет развитие гнойного процесса и может вызвать опасные осложнения;\n2. Полощите рот теплым раствором (на 1 стакан теплой воды — 1 ч. л. соли и 0.5 ч. л. соды) каждые 1–2 часа. Это снимает отек и воспаление;\n3. До приема врача для временного облегчения сильной боли допустим разовый прием одного противовоспалительного средства (например, Ибупрофен) строго после еды с водой;\n4. Правило безопасности: Не смешивайте несколько разных обезболивающих препаратов одновременно!\n\n⚠️ Важное напоминание: Данные рекомендации носят информационный характер. При первой возможности обратитесь к врачу-стоматологу.`;
+      quickSuggestions = ["Записаться к стоматологу", "Опасные симптомы флюса", "Купить Ибупрофен"];
     } else if (lang === "en") {
-      reply = `🩺 **Clinical Advisory: Colds, Flu & Fever**\n\nDuring viral infections, a fever up to 38.5°C (101.3°F) is an active immune defense mechanism. Do not rush to suppress mild fever unless advised.\n\n**Recommended approach:**\n1. Rest adequately and drink generous amounts of warm fluids (lemon tea, herbal infusions);\n2. If temperature exceeds 38.5°C or causes severe discomfort, an antipyretic such as Paracetamol can be taken after meals;\n3. Vitamin C aids cellular antioxidant defense;\n4. **Crucial warning: Antibiotics are completely ineffective against viruses!** Never take antibiotics without a physician's prescription.\n\nVerified options from our catalog:`;
+      reply = `🩺 Clinical Guidance: First Aid for Toothache\n\nTooth pain (deep cavities, pulpitis, gum inflammation) always indicates damage to the internal tooth structure or nerve. Crucial medical rule: medications do not cure the underlying problem — only a licensed dentist can safely resolve it!\n\nDoctor's instructions & immediate care:\n1. Strict prohibition: NEVER apply warm compresses or heating pads to the affected cheek or tooth! Heat stimulates bacterial growth and purulent spread;\n2. Rinse your mouth every 1–2 hours with warm salt and soda solution (1 cup warm water + 1 tsp salt + 0.5 tsp baking soda) to reduce swelling;\n3. For temporary pain control until your appointment, a single OTC NSAID (such as Ibuprofen) may be taken after meals with water;\n4. Safety advisory: Never combine multiple different analgesics simultaneously!\n\n⚠️ Medical reminder: This guidance is advisory. Schedule an appointment with a dentist as soon as possible.`;
+      quickSuggestions = ["Schedule dentist appointment", "Warning signs", "Buy Ibuprofen"];
     } else {
-      reply = `🩺 **Shifokor tavsiyasi: Shamollash va tana harorati ko‘tarilganda**\n\nO‘tkir virusli infeksiyalarda tana harorati 38–38.5°C gacha bo‘lishi organizmning infeksiyaga qarshi tabiiy kurashidir. Uni darhol dori bilan tushirishga shoshilmang.\n\n**Shifokor ko‘rsatmalari:**\n1. Ko‘p miqdorda iliq suyuqlik (limonli choy, na'matak damlamasi) iching va to‘liq dam oling;\n2. Harorat 38.5°C dan oshganda yoki kuchli tana qaqshashi bo‘lsa, isitma tushiruvchi (Paratsetamol) qabul qilish mumkin;\n3. Vitamin C immunitet hujayralarini faollashtirishda yordam beradi;\n4. **Muhim eslatma: Antibiotiklar viruslarga mutlaqo ta'sir qilmaydi!** Ularni faqat shifokor laborator qon tahlillariga qarab yozgandagina ichish shart.\n\nDorixonamizdagi mos dori vositalari:`;
+      reply = `🩺 Shifokor tavsiyasi: Tish og‘rig‘ida birinchi yordam\n\nTish og‘rig‘i (karies, pulpit, milk yallig‘lanishi) har doim tishning qattiq to‘qimalari yoki nerv tolasi shikastlanganidan dalolat beradi. Asosiy tibbiy qoida: hech qanday dori vositasi kasallangan tishni davolay olmaydi — uning asl sababini faqat stomatolog-shifokor bartaraf eta oladi!\n\nShifokor ko‘rsatmalari va birinchi yordam:\n1. Qat'iy taqiq: Og‘riyotgan tish yoki lunj sohasiga aslo issiq grelka yoki issiq kompress qo‘ymang! Issiqlik yiringlash jarayonini tezlashtirib, jiddiy asoratlarga olib kelishi mumkin;\n2. Og‘iz bo‘shlig‘ini 1 stakan iliq suvga 1 choy qoshiq osh tuzi va 0.5 choy qoshiq iste'mol sodasi solingan eritma bilan tez-tez chayib turing (bu shishni qaytaradi va og‘riqni yengillashtiradi);\n3. Shifokor qabuligacha bo‘lgan vaqtda og‘riqni vaqtincha bosish uchun bitta nosteroid vosita (masalan, Ibuprofen) ovqatdan keyin, bir stakan suv bilan ichilishi mumkin;\n4. Xavfsizlik qoidasi: Bir vaqtning o‘zida bir nechta har xil og‘riq qoldiruvchi dorilarni (masalan Paratsetamol va Ibuprofenni) aralashtirib ichmang!\n\n⚠️ Muhim eslatma: Ushbu tavsiyalar axborot xarakteriga ega. Iloji boricha tezroq stomatolog ko‘rigiga boring.`;
+      quickSuggestions = ["Stomatolog ko‘rigiga yozilish", "Xavfli asoratlar bormi?", "Ibuprofen sotib olish"];
     }
-  } else if (categoryIntent === "vitamins") {
+  } else if (categoryIntent === "headache") {
     if (lang === "ru") {
-      reply = `🩺 **Врачебная рекомендация: Витамины и поддержание тонуса**\n\nХроническая усталость и частые простуды могут указывать на дефицит витамина D3, железа или цинка.\n\n**Правила приема:**\n1. Витамин D3 — жирорастворимый витамин. Его лучше принимать в первой половине дня во время еды (содержащей полезные жиры);\n2. Для точного подбора лечебной дозы рекомендуется сдать анализ крови на 25-OH витамин D;\n3. Не совмещайте некоторые микроэлементы (например, кальций и железо) в один прием, делайте интервал 2-3 часа.\n\nСертифицированные витамины в каталоге VaksinaMed:`;
+      reply = `🩺 Врачебная рекомендация: Головная боль\n\nГоловная боль чаще всего вызвана переутомлением, изменением артериального давления или спазмом сосудов.\n\nСоветы врача:\n1. Первым делом измерьте давление тонометром. Проветрите комнату, выпейте чистой воды и отдохните в полумраке;\n2. При умеренной боли напряжения допустим прием одной таблетки Парацетамола (500 мг) строго после еды с водой;\n3. Не превышайте дозировку. Если боль резкая, внезапная, сопровождается рвотой или онемением — срочно вызовите скорую 103!\n\n⚠️ Важное напоминание: Данная консультация носит информационный характер. При постоянных болях обратитесь к врачу-терапевту.`;
+      quickSuggestions = ["Как измерить давление?", "Когда вызывать 103?", "Купить Парацетамол"];
     } else if (lang === "en") {
-      reply = `🩺 **Clinical Advisory: Vitamins & Energy Support**\n\nFatigue and weakened immunity are frequently linked to vitamin D3, iron, or zinc deficiency.\n\n**Doctor's tips:**\n1. Vitamin D3 is fat-soluble: take it in the morning alongside a meal containing healthy fats;\n2. A blood test (25-hydroxy vitamin D) is the best standard to pinpoint treatment vs preventive dosage;\n3. Separate incompatible minerals (such as iron and calcium) by at least 2–3 hours for optimal absorption.\n\nAvailable certified supplements:`;
+      reply = `🩺 Clinical Advisory: Headache Management\n\nHeadaches typically stem from fatigue, blood pressure fluctuations, dehydration, or vascular tension.\n\nDoctor's guidance:\n1. Check your blood pressure with a reliable tonometer. Hydrate well, ventilate the room, and rest in a dim environment;\n2. For mild-to-moderate tension headache, Paracetamol (500 mg) may be taken after food with water;\n3. Emergency note: If the headache is sudden and exceptionally severe ("thunderclap"), accompanied by vomiting or numbness, call 103 immediately!\n\n⚠️ Medical reminder: Consult a physician if headaches recur regularly.`;
+      quickSuggestions = ["How to measure blood pressure", "When to call 103", "Buy Paracetamol"];
     } else {
-      reply = `🩺 **Shifokor tavsiyasi: Vitaminlar va quvvatni tiklash**\n\nDoimiy charchoq, holsizlik va tez-tez shamollash ko‘pincha organizmda D3 vitamini, temir yoki sink yetishmovchiligidan darak beradi.\n\n**To‘g‘ri qabul qilish qoidalari:**\n1. Vitamin D3 yog‘da eruvchi vitamin bo‘lgani uchun uni ertalab, yog‘li nonushta bilan birga ichish eng yaxshi samara beradi;\n2. Dori dozasini aniq belgilash uchun qondagi 25-OH D vitamini darajasini tekshirtirish tavsiya etiladi;\n3. Minerallarni (masalan temir va kalsiyni) bir vaqtda ichmang, oralarida 2–3 soat vaqt qoldiring.\n\nVaksinaMed dorixonasidagi original vitaminlar:`;
+      reply = `🩺 Shifokor tavsiyasi: Bosh og‘rig‘ida nima qilish kerak?\n\nBosh og‘rig‘i ko‘pincha charchoq, qon bosimining o‘zgarishi (gipertoniya/gipotoniya), uzoq vaqt ekranga qarash yoki tomirlar spazmi oqibatida yuzaga keladi.\n\nShifokor ko‘rsatmalari:\n1. Birinchi navbatda tonometr bilan qon bosimingizni o‘lchang. Xonani shamollatib, toza suv iching va qorong‘uroq xonada tinch dam oling;\n2. Og‘riqni yengillashtirish uchun bitta Paratsetamol (500 mg) ovqatdan keyin, suv bilan ichilishi mumkin;\n3. Ogohlantirish: Agar og‘riq to‘satdan favqulodda kuchli boshlansa, hushdan ketish, ko‘rish xiralashishi yoki qusish bilan kechsa — darhol 103 Tez yordam chaqiring!\n\n⚠️ Muhim eslatma: Ushbu tavsiyalar axborot xarakteriga ega. Doimiy bosh og‘rig‘ida shifokor ko‘rigiga boring.`;
+      quickSuggestions = ["Bosimni to‘g‘ri o‘lchash", "Qachon 103 chaqiriladi?", "Paratsetamol sotib olish"];
+    }
+  } else if (categoryIntent === "cold_fever") {
+    if (lang === "ru") {
+      reply = `🩺 Врачебная рекомендация: Простуда и повышенная температура\n\nПри ОРВИ температура до 38.5°C — это естественная защита иммунитета. Сбивать её сразу не нужно.\n\nТактика лечения:\n1. Пейте много теплой жидкости (чай с лимоном, настой шиповника) и соблюдайте постельный режим;\n2. При температуре выше 38.5°C допустим прием жаропонижающего (Парацетамол) после еды;\n3. Важное правило: Антибиотики не действуют на вирусы! Не принимайте антибиотики без назначения врача.\n\n⚠️ Важное напоминание: Если высокая температура держится более 3 дней, вызовите врача на дом.`;
+      quickSuggestions = ["Обильное теплое питье", "Когда опасен жар?", "Купить Парацетамол"];
+    } else if (lang === "en") {
+      reply = `🩺 Clinical Advisory: Colds & Fever\n\nA fever up to 38.5°C (101.3°F) during viral colds represents natural immune response. Do not suppress mild fever prematurely.\n\nDoctor's tips:\n1. Drink plenty of warm fluids and maintain bed rest;\n2. If temperature exceeds 38.5°C, take Paracetamol after food;\n3. Crucial rule: Antibiotics are completely ineffective against viral colds! Never take antibiotics without prescription.\n\n⚠️ Medical reminder: Seek medical evaluation if fever persists over 3 days.`;
+      quickSuggestions = ["Fluid hydration rules", "Fever red flags", "Buy Paracetamol"];
+    } else {
+      reply = `🩺 Shifokor tavsiyasi: Shamollash va tana harorati ko‘tarilganda\n\nO‘tkir virusli infeksiyalarda tana harorati 38–38.5°C gacha bo‘lishi organizmning kurashidir. Uni darhol dori bilan tushirishga shoshilmang.\n\nShifokor ko‘rsatmalari:\n1. Ko‘p miqdorda iliq suyuqlik (limonli choy, na'matak damlamasi) iching va to‘liq dam oling;\n2. Harorat 38.5°C dan oshganda isitma tushiruvchi (Paratsetamol) qabul qilish mumkin;\n3. Qat'iy eslatma: Antibiotiklar viruslarga mutlaqo ta'sir qilmaydi! O‘zboshimchalik bilan antibiotik ichmang.\n\n⚠️ Muhim eslatma: Agar yuqori isitma 3 kundan ortiq davom etsa, oilaviy shifokoringizga murojaat qiling.`;
+      quickSuggestions = ["Ko‘p suyuqlik ichish qoidalari", "Isitma qachon xavfli?", "Paratsetamol sotib olish"];
     }
   } else if (categoryIntent === "stomach") {
     if (lang === "ru") {
-      reply = `🩺 **Врачебная рекомендация: Пищеварение и желудок**\n\nДискомфорт, изжога или тяжесть в желудке требуют бережного отношения к пищеварительному тракту.\n\n**Советы врача:**\n1. Исключите острое, жареное, газированные напитки и фастфуд. Питайтесь небольшими порциями 4-5 раз в день;\n2. При изжоге и повышенной кислотности применяются ингибиторы протонной помпы (Омепразол за 30 минут до еды) или антациды;\n3. При тяжести после еды помогают ферментные препараты (Мезим, Панкреатин);\n4. *Опасный симптом: при острой, «кинжальной» боли в животе категорически запрещено греть живот или пить обезболивающие — немедленно обратитесь к хирургу!*\n\nПрепараты из нашего каталога:`;
+      reply = `🩺 Врачебная рекомендация: Изжога и дискомфорт в желудке\n\nПри изжоге и повышенной кислотности важно скорректировать диету и защитить слизистую.\n\nСоветы врача:\n1. Исключите жареное, острое, кофе и газировку. Питайтесь дробно, небольшими порциями;\n2. При изжоге принимают ингибиторы протонной помпы (Омепразол за 30 минут до завтрака);\n3. Предупреждение: При острой «кинжальной» боли в животе категорически запрещено пить обезболивающие — срочно обратитесь к хирургу!\n\n⚠️ Важное напоминание: При регулярном дискомфорте пройдите гастроскопию у врача.`;
+      quickSuggestions = ["Диета при изжоге", "Когда нужен хирург?", "Купить Омепразол"];
     } else if (lang === "en") {
-      reply = `🩺 **Clinical Advisory: Digestive & Stomach Health**\n\nHeartburn, heaviness, or gastric irritation require dietary moderation and careful care.\n\n**Doctor's tips:**\n1. Avoid fried, spicy foods, carbonated drinks, and alcohol. Eat frequent, smaller portions;\n2. For acid reflux, PPIs (Omeprazole taken 30 minutes before breakfast) or antacids are commonly used;\n3. Digestive enzymes (Pancreatin) assist with post-meal fullness;\n4. *Alert: acute, piercing abdominal pain should never be masked with painkillers — seek emergency surgical evaluation!*\n\nRecommended medications from our catalog:`;
+      reply = `🩺 Clinical Advisory: Heartburn & Gastric Comfort\n\nAcid reflux and gastric discomfort require dietary restraint and mucosal protection.\n\nDoctor's tips:\n1. Avoid fried, spicy foods and carbonated drinks. Eat frequent small meals;\n2. For heartburn, Omeprazole is taken 30 minutes before breakfast;\n3. Alert: Never take painkillers for acute unexplained abdominal pain — seek surgical evaluation immediately!\n\n⚠️ Medical reminder: Consult a gastroenterologist for chronic symptoms.`;
+      quickSuggestions = ["Dietary guidelines", "Surgical red flags", "Buy Omeprazole"];
     } else {
-      reply = `🩺 **Shifokor tavsiyasi: Oshqozon noqulayligi va hazm qilish**\n\nJig‘ildon qaynashi (izjoga), og‘irlik yoki oshqozondagi og‘riqlar ko‘pincha noto‘g‘ri ovqatlanish yoki oshqozon shirasining kislotaliligi oshishidan kelib chiqadi.\n\n**Shifokor ko‘rsatmalari:**\n1. Qovurilgan, achchiq, nordon taomlar va gazli ichimliklardan cheklaning. Kam-kamdan, kuniga 4–5 mahal yengil ovqatlaning;\n2. Jig‘ildon qaynashida kislotani kamaytiruvchi vositalar (Omeprazol nonushtadan 30 daqiqa oldin) tavsiya etiladi;\n3. Ovqatdan keyingi og‘irlikda hazm fermentlari (Mezim, Pankreatin) yordam beradi;\n4. *Xavfli belgi: Qorinda keskin, o‘tkir sanchiq bo‘lsa, og‘riq qoldiruvchi dori ichmang va issiq grelka qo‘ymang — zudlik bilan shifokor-jarroh ko‘rigiga boring!*\n\nDorixonamizdagi mavjud preparatlar:`;
+      reply = `🩺 Shifokor tavsiyasi: Oshqozon noqulayligi va jig‘ildon qaynashi\n\nJig‘ildon qaynashi (izjoga) ko‘pincha noto‘g‘ri ovqatlanish yoki me'da shirasining kislotaliligi oshishidan kelib chiqadi.\n\nShifokor ko‘rsatmalari:\n1. Qovurilgan, sho‘r, achchiq taomlar, kofe va gazli ichimliklardan tiyiling;\n2. Jig‘ildon qaynashida kislotani kamaytiruvchi vosita (Omeprazol nonushtadan 30 daqiqa oldin) qabul qilinadi;\n3. Xavfli belgi: Qorinda keskin sanchuvchi og‘riq bo‘lsa, og‘riq qoldiruvchi ichmang — zudlik bilan shifokor-jarrohga boring!\n\n⚠️ Muhim eslatma: Muntazam bezovtalik kuzatilsa, shifokor-gastroenterolog ko‘rigidan o‘ting.`;
+      quickSuggestions = ["Oshqozon parhezi qoidalari", "Qachon jarrohga borish kerak?", "Omeprazol sotib olish"];
     }
   } else if (categoryIntent === "allergy") {
     if (lang === "ru") {
-      reply = `🩺 **Врачебная рекомендация: Аллергические реакции**\n\nЗуд, сыпь, чихание и заложенность носа — частые признаки аллергической реакции на пыльцу, пыль или продукты.\n\n**Советы врача:**\n1. Максимально устраните контакт с предполагаемым аллергеном;\n2. Антигистаминные препараты 2-го поколения (Лоратадин, Цетиризин) эффективно снимают симптомы и практически не вызывают сонливости;\n3. Принимать рекомендуется 1 раз в сутки, запивая водой;\n4. *Внимание: если возник отек губ, языка или затруднение дыхания (отек Квинке) — срочно вызывайте скорую 103!*\n\nДоступные антигистаминные препараты:`;
+      reply = `🩺 Врачебная рекомендация: Аллергические проявления\n\nПри сыпи, зуде и чихании необходимо прекратить контакт с аллергеном.\n\nСоветы врача:\n1. Антигистаминные препараты 2-го поколения (Лоратадин, Цетиризин) принимают по 1 таблетке в сутки;\n2. Они снимают отек и зуд, не вызывая выраженной сонливости;\n3. Внимание: При отеке губ, языка или затруднении дыхания (отек Квинке) — срочно вызывайте 103!\n\n⚠️ Важное напоминание: Для выявления причины аллергии обратитесь к врачу-аллергологу.`;
+      quickSuggestions = ["Исключение аллергена", "Опасные симптомы отека", "Купить Лоратадин"];
     } else if (lang === "en") {
-      reply = `🩺 **Clinical Advisory: Allergy & Rash Management**\n\nItching, hives, sneezing, or nasal congestion are typical symptoms of an allergic reaction.\n\n**Doctor's tips:**\n1. Immediately discontinue contact with the suspected allergen;\n2. Second-generation antihistamines (Loratadine, Cetirizine) relieve symptoms without causing significant drowsiness;\n3. Take 1 tablet once daily with water;\n4. *Alert: if facial swelling, lip swelling, or breathing difficulty develops (angioedema), call 103 emergency services immediately!*\n\nVerified antihistamines in our catalog:`;
+      reply = `🩺 Clinical Advisory: Allergy Symptoms\n\nFor itching, hives, or sneezing, discontinue contact with the allergen immediately.\n\nDoctor's guidance:\n1. Second-generation antihistamines (Loratadine, Cetirizine) are taken 1 tablet once daily;\n2. Alert: If swelling of lips, throat, or shortness of breath occurs, call 103 emergency immediately!\n\n⚠️ Medical reminder: Consult an allergist for allergy testing.`;
+      quickSuggestions = ["Allergen avoidance", "Anaphylaxis warning signs", "Buy Loratadine"];
     } else {
-      reply = `🩺 **Shifokor tavsiyasi: Allergiya va toshmalarda nima qilish kerak?**\n\nQichishish, toshmalar, ko‘z yoshlanishi va aksirish organizmning allergenlarga (chang, oziq-ovqat, dori yoki gul changi) ta'sirchanligidir.\n\n**Shifokor ko‘rsatmalari:**\n1. Shubhali allergen bilan aloqani zudlik bilan to‘xtating;\n2. Zamonaviy 2-avlod antigistamin dori vositalari (Loratadin, Setirizin) allergik reaksiyani tez bartaraf qiladi va uyquchanlik chaqirmaydi;\n3. Odatda kuniga 1 mahal, yetarli suv bilan ichiladi;\n4. *Ogohlantirish: Agar lab, til, tomoq sohasida shish paydo bo‘lsa va nafas olish qiyinlashsa (Kvinke shishi) — bir lahza ham kutmasdan 103 Tez yordam chaqiring!*\n\nDorixonamizdagi tavsiya etilgan allergiyaga qarshi dorilar:`;
+      reply = `🩺 Shifokor tavsiyasi: Allergik holatlarda birinchi yordam\n\nQichishish, toshma va aksirishda allergen bilan aloqani darhol to‘xtating.\n\nShifokor ko‘rsatmalari:\n1. Zamonaviy 2-avlod antigistamin (masalan, Loratadin) kuniga 1 tabletka ichiladi va kuchli uyqu keltirmaydi;\n2. Ogohlantirish: Agar lab, til shishsa yoki nafas qisilsa — darhol 103 Tez yordam chaqiring!\n\n⚠️ Muhim eslatma: Allergiya sababini aniqlash uchun shifokor-allergologga murojaat qiling.`;
+      quickSuggestions = ["Allergen bilan aloqani to‘xtatish", "Xavfli belgilar bormi?", "Loratadin sotib olish"];
     }
-  } else if (categoryIntent === "antibiotic") {
+  } else if (categoryIntent === "vitamins") {
     if (lang === "ru") {
-      reply = `🩺 **Клиническое уведомление: Прием антибиотиков**\n\nАнтибактериальные препараты (например, Амоксициллин) борются исключительно с бактериальными инфекциями и бессильны против вирусов (гриппа, простуды).\n\n**Строгие правила безопасности:**\n1. Антибиотики отпускаются и принимаются **только по прямому назначению врача** с подтвержденным бактериальным диагнозом;\n2. Курс лечения необходимо завершить полностью (обычно 5–7 дней), даже если самочувствие улучшилось на 2-й день, чтобы бактерии не выработали устойчивость;\n3. Для защиты желудочно-кишечного тракта врач может назначить пробиотики с интервалом 2-3 часа после антибиотика.\n\nПрепараты из каталога:`;
+      reply = `🩺 Врачебная рекомендация: Витамины и упадок сил\n\nХроническая усталость часто связана с дефицитом витамина D3 или железа.\n\nСоветы врача:\n1. Витамин D3 принимают в первой половине дня во время еды, содержащей полезные жиры;\n2. Перед приемом лечебных доз рекомендуется сдать анализ крови на 25-OH витамин D.\n\n⚠️ Важное напоминание: Подбирайте дозировку витаминов совместно с терапевтом.`;
+      quickSuggestions = ["Анализ крови на 25-OH", "Правила приема витаминов", "Купить Витамин D3"];
     } else if (lang === "en") {
-      reply = `🩺 **Clinical Notice: Antibiotic Use & Stewardship**\n\nAntibacterial agents (such as Amoxicillin) eradicate bacterial pathogens only and do not work against viruses (flu, common cold).\n\n**Crucial safety rules:**\n1. Antibiotics must strictly be taken **under verified medical prescription**;\n2. Always finish the entire prescribed treatment duration (typically 5–7 days) to prevent bacterial resistance;\n3. Take pro-biotics with a 2–3 hour interval if recommended by your physician.\n\nPrescription options in catalog:`;
+      reply = `🩺 Clinical Advisory: Vitamins & Vitality\n\nFatigue and weakened immunity frequently correlate with vitamin D3 deficiency.\n\nDoctor's tips:\n1. Take Vitamin D3 in the morning with a breakfast containing healthy fats;\n2. A blood test for 25-OH Vitamin D is recommended to determine proper dosage.\n\n⚠️ Medical reminder: Consult your physician to establish proper therapeutic dosage.`;
+      quickSuggestions = ["25-OH blood test", "Optimal intake time", "Buy Vitamin D3"];
     } else {
-      reply = `🩺 **Shifokorlik ogohlantirishi: Antibiotiklar qabuli bo‘yicha muhim qoidalar**\n\nAntibiotiklar (masalan, Amoksitsillin) faqat bakterial infeksiyalarni davolash uchun mo‘ljallangan va virusli kasalliklarda (gripp, O‘RVI) mutlaqo yordam bermaydi.\n\n**Qat'iy xavfsizlik qoidalari:**\n1. Antibiotiklarni faqat va faqat **shifokor retsepti va ko‘rigidan so‘ng** qabul qilish shart;\n2. Davolash kursini to‘liq yakunlang (odatda 5–7 kun). Ahvolingiz 2-kuni yaxshilansa ham to‘xtatmang, aks holda bakteriyalarda doriga chidamlilik (rezistentlik) paydo bo‘ladi;\n3. Ichak mikroflorasini asrash uchun shifokor bilan birga probiotiklar qabul qilish tavsiya qilinadi (antibiotikdan 2–3 soat keyin).\n\nDorixonamizdagi preparatlar:`;
+      reply = `🩺 Shifokor tavsiyasi: Charchoq va vitaminlar yetishmovchiligi\n\nDoimiy holsizlik va immunitet pasayishi ko‘pincha organizmda D3 vitamini yetishmovchiligidan kelib chiqadi.\n\nShifokor ko‘rsatmalari:\n1. Vitamin D3 yog‘da eruvchi vitamin bo‘lgani uchun uni ertalab, nonushta bilan birga ichish eng yaxshi samara beradi;\n2. Aniq davolash dozasini belgilash uchun qondagi 25-OH D vitamini tahlilini topshirish tavsiya etiladi.\n\n⚠️ Muhim eslatma: Vitaminlar dozasini oilaviy shifokoringiz bilan kelishib oling.`;
+      quickSuggestions = ["25-OH tahlili haqida", "Qaysi vaqtda ichiladi?", "Vitamin D3 sotib olish"];
+    }
+  } else {
+    // General pain fallback
+    if (lang === "ru") {
+      reply = `🩺 Врачебная рекомендация: Обезболивание\n\nБоль — это защитный сигнал организма. Важно не просто заглушить боль, а выяснить её причину у врача.\n\nСоветы врача:\n1. Для разового снятия умеренной боли допустим прием Парацетамола (500 мг) строго после еды;\n2. Не превышайте максимальную суточную дозу и не пейте несколько обезболивающих одновременно;\n3. При сохранении боли дольше 2 дней обязательно обратитесь к врачу.\n\n⚠️ Важное напоминание: Не занимайтесь самолечением при неизвестной причине боли.`;
+      quickSuggestions = ["Первая помощь", "Осмотр врача", "Купить Парацетамол"];
+    } else if (lang === "en") {
+      reply = `🩺 Clinical Advisory: Pain Relief\n\nPain is a protective signal from your body. Finding its root cause with a doctor is essential.\n\nDoctor's tips:\n1. For mild pain relief, Paracetamol (500 mg) may be taken after meals with water;\n2. Do not exceed recommended daily limits or combine multiple analgesics;\n3. If pain persists beyond 2 days, seek physician consultation.\n\n⚠️ Medical reminder: Seek medical advice if symptoms persist.`;
+      quickSuggestions = ["First aid rules", "Physician visit", "Buy Paracetamol"];
+    } else {
+      reply = `🩺 Shifokor tavsiyasi: Og‘riqni qoldirish\n\nOg‘riq organizmning himoya signali hisoblanadi. Og‘riq qoldiruvchi dori sababni davolamaydi, faqat vaqtincha yengillashtiradi.\n\nShifokor ko‘rsatmalari:\n1. Vaqtinchalik og‘riqni qoldirish uchun bitta Paratsetamol (500 mg) ovqatdan keyin, bir stakan suv bilan ichilishi mumkin;\n2. Sutkalik me'yordan oshirmang va bir vaqtda bir nechta dori aralashtirmang;\n3. Og‘riq 2 kundan ortiq davom etsa, albatta shifokor ko‘rigiga boring.\n\n⚠️ Muhim eslatma: Ushbu tavsiyalar axborot xarakteriga ega. Doimiy og‘riqda shifokor ko‘rigidan o‘ting.`;
+      quickSuggestions = ["Birinchi yordam qoidalari", "Shifokor ko‘rigiga borish", "Paratsetamol sotib olish"];
     }
   }
 
@@ -619,11 +820,8 @@ export function handleAiMedicalChat(params: {
     success: true,
     reply,
     isMedical: true,
+    isPrescription: false,
     matchedProducts: matchedCards,
-    quickSuggestions: [
-      lang === "ru" ? "Как правильно принимать?" : lang === "en" ? "How to use properly?" : "Qo‘llash qoidalari qanday?",
-      lang === "ru" ? "Есть ли противопоказания?" : lang === "en" ? "Any contraindications?" : "Qarshi ko‘rsatmalar bormi?",
-      lang === "ru" ? "Добавить в корзину" : lang === "en" ? "Add to cart" : "Savatga qo‘shish",
-    ],
+    quickSuggestions,
   };
 }
