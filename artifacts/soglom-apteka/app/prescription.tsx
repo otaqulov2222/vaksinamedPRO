@@ -340,7 +340,7 @@ export default function PrescriptionScreen() {
       >
         {/* CLINICAL SAFETY DISCLAIMER BANNER */}
         <View style={styles.medicalNoticeBanner}>
-          <MaterialCommunityIcons name="shield-check" size={17} color="#92400E" style={styles.medicalNoticeIcon} />
+          <MaterialCommunityIcons name="shield-alert" size={18} color="#B45309" style={styles.medicalNoticeIcon} />
           <Text style={styles.medicalNoticeText}>
             {(() => {
               const full = t('catalog.aiChatDisclaimer');
