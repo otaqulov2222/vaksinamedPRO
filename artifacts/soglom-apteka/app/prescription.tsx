@@ -340,9 +340,23 @@ export default function PrescriptionScreen() {
       >
         {/* CLINICAL SAFETY DISCLAIMER BANNER */}
         <View style={styles.medicalNoticeBanner}>
-          <MaterialCommunityIcons name="shield-alert-outline" size={16} color="#B45309" style={styles.medicalNoticeIcon} />
+          <MaterialCommunityIcons name="shield-check" size={17} color="#92400E" style={styles.medicalNoticeIcon} />
           <Text style={styles.medicalNoticeText}>
-            {t('catalog.aiChatDisclaimer')}
+            {(() => {
+              const full = t('catalog.aiChatDisclaimer');
+              const colonIdx = full.indexOf(':');
+              if (colonIdx !== -1) {
+                const title = full.slice(0, colonIdx + 1);
+                const rest = full.slice(colonIdx + 1);
+                return (
+                  <>
+                    <Text style={styles.medicalNoticeTitle}>{title}</Text>
+                    {rest}
+                  </>
+                );
+              }
+              return full;
+            })()}
           </Text>
         </View>
 
@@ -770,24 +784,30 @@ const styles = StyleSheet.create({
   },
   medicalNoticeBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFBEB',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF3C7',
     borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    gap: 8,
+    borderColor: '#FCD34D',
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    gap: 9,
   },
   medicalNoticeIcon: {
+    marginTop: 1,
     flexShrink: 0,
   },
   medicalNoticeText: {
     flex: 1,
     fontFamily: 'Inter_500Medium',
-    fontSize: 11.5,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 17,
     color: '#92400E',
+  },
+  medicalNoticeTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontWeight: '700',
+    color: '#78350F',
   },
   messageRow: {
     flexDirection: 'row',
