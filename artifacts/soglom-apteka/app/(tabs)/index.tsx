@@ -102,7 +102,6 @@ export default function HomeScreen() {
   const { t, fmt, language, user, cartCount, refresh } = useApp();
   const { width: windowW } = useWindowDimensions();
   const contentW = Math.max(280, Math.round(windowW - SCREEN_PAD * 2));
-  const productCardW = Math.min(180, Math.max(168, Math.round((contentW - 12) / 2.05)));
   const colGap = contentW < 340 ? 8 : 12;
   const gridCardW = Math.floor((contentW - colGap) / 2);
 
@@ -221,28 +220,6 @@ export default function HomeScreen() {
         };
       });
   }, [products, selectedCategory, language]);
-
-  const allCleanProducts = useMemo(() => {
-    return products.map((p) => {
-      const rawName = localizedName(language, p);
-      const cleanName = rawName.replace(/\s*\(Demo\)/gi, '').trim();
-      const rawMan = String(p.manufacturer || '').trim();
-      const cleanMan = rawMan.replace(/\s*\(Demo\)/gi, '').trim() || String(p.category || '').trim();
-      return {
-        id: p.id,
-        name: cleanName,
-        price: Number(p.price || 0),
-        icon: String(p.icon || 'pill'),
-        manufacturer: cleanMan,
-        analogGroup: String(p.analogGroup || ''),
-        image: getProductImage(p),
-      };
-    });
-  }, [products, language]);
-
-  const recommendedProducts = useMemo(() => {
-    return allCleanProducts.slice(0, 8);
-  }, [allCleanProducts]);
 
   return (
     <Screen>
@@ -424,15 +401,10 @@ export default function HomeScreen() {
       </ScrollView>
 
       {productsLoading ? (
-        <ScrollView
-          horizontal
-          scrollEnabled={false}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.productsRow}
-        >
-          {[0, 1, 2].map((i) => (
-            <View key={`skel-${i}`} style={[styles.productCard, styles.productSkeleton, { width: productCardW }]}>
-              <View style={styles.productImgWrap}>
+        <View style={styles.productsGrid}>
+          {[0, 1, 2, 3].map((i) => (
+            <View key={`skel-${i}`} style={[styles.gridCard, styles.productSkeleton, { width: gridCardW }]}>
+              <View style={styles.gridImgWrap}>
                 <ActivityIndicator size="small" color={PURPLE} />
               </View>
               <View style={styles.skelLineNarrow} />
@@ -443,7 +415,7 @@ export default function HomeScreen() {
               </View>
             </View>
           ))}
-        </ScrollView>
+        </View>
       ) : productsError ? (
         <View style={styles.productsState}>
           <MaterialCommunityIcons name="cloud-off-outline" size={32} color="#94A3B8" />
@@ -464,26 +436,18 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToInterval={productCardW + 12}
-          snapToAlignment="start"
-          contentContainerStyle={styles.productsRow}
-        >
+        <View style={styles.productsGrid}>
           {displayProducts.map((p) => {
             const isAdded = Boolean(addedIds[String(p.id)]);
             return (
-              <View key={String(p.id)} style={[styles.productCard, { width: productCardW }]}>
+              <View key={`prod-${p.id}`} style={[styles.gridCard, { width: gridCardW }]}>
                 <Pressable
                   style={({ pressed }) => [styles.productCardMain, pressed && styles.pressed]}
                   onPress={() => router.push(`/product/${p.id}` as any)}
                   accessibilityRole="button"
                   accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
                 >
-                  <View style={styles.productImgWrap}>
-                    <View style={styles.ambientGlow} />
+                  <View style={styles.gridImgWrap}>
                     <View style={styles.cashbackBadge}>
                       <Text style={styles.cashbackBadgeText}>{t('home.cashbackBadge')}</Text>
                     </View>
@@ -500,7 +464,7 @@ export default function HomeScreen() {
                         fadeDuration={0}
                       />
                     ) : (
-                      <MaterialCommunityIcons name={productIconName(p.icon)} size={44} color={PURPLE} />
+                      <MaterialCommunityIcons name={productIconName(p.icon)} size={40} color={PURPLE} />
                     )}
                   </View>
                   <Text style={styles.productMeta} numberOfLines={1}>
@@ -510,6 +474,7 @@ export default function HomeScreen() {
                     {p.name}
                   </Text>
                 </Pressable>
+
                 <View style={styles.productBottom}>
                   <Pressable
                     style={styles.productPriceHit}
@@ -546,100 +511,8 @@ export default function HomeScreen() {
               </View>
             );
           })}
-        </ScrollView>
+        </View>
       )}
-
-      {/* RECOMMENDED PRODUCTS — 2-COLUMN E-COMMERCE GRID */}
-      <View style={[styles.sectionRow, { marginTop: SPACE + 4 }]}>
-        <Text style={styles.section} numberOfLines={1}>
-          {t('home.recommendedSectionTitle')}
-        </Text>
-        <Pressable
-          onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.showAll')}
-        >
-          <Text style={styles.link}>{t('common.showAll')} →</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.productsGrid}>
-        {recommendedProducts.map((p) => {
-          const isAdded = Boolean(addedIds[String(p.id)]);
-          return (
-            <View key={`rec-${p.id}`} style={[styles.gridCard, { width: gridCardW }]}>
-              <Pressable
-                style={({ pressed }) => [styles.productCardMain, pressed && styles.pressed]}
-                onPress={() => router.push(`/product/${p.id}` as any)}
-                accessibilityRole="button"
-                accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
-              >
-                <View style={styles.gridImgWrap}>
-                  <View style={styles.cashbackBadge}>
-                    <Text style={styles.cashbackBadgeText}>{t('home.cashbackBadge')}</Text>
-                  </View>
-                  <View style={styles.ratingBadge}>
-                    <MaterialCommunityIcons name="star" size={11} color="#F59E0B" />
-                    {/* i18n-ignore */}
-                    <Text style={styles.ratingBadgeText}>4.9</Text>
-                  </View>
-                  {p.image ? (
-                    <Image
-                      source={p.image}
-                      style={styles.productImg}
-                      resizeMode="contain"
-                      fadeDuration={0}
-                    />
-                  ) : (
-                    <MaterialCommunityIcons name={productIconName(p.icon)} size={40} color={PURPLE} />
-                  )}
-                </View>
-                <Text style={styles.productMeta} numberOfLines={1}>
-                  {p.manufacturer}
-                </Text>
-                <Text style={styles.productName} numberOfLines={2}>
-                  {p.name}
-                </Text>
-              </Pressable>
-
-              <View style={styles.productBottom}>
-                <Pressable
-                  style={styles.productPriceHit}
-                  onPress={() => router.push(`/product/${p.id}` as any)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('home.productA11y', { name: p.name, price: fmt.money(p.price) })}
-                >
-                  <Text style={styles.productPrice} numberOfLines={1}>
-                    {fmt.money(p.price)}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.addBtn,
-                    isAdded && styles.addBtnSuccess,
-                    addingId === String(p.id) ? { opacity: 0.55 } : null,
-                    pressed && styles.pressed,
-                  ]}
-                  disabled={addingId != null}
-                  onPress={() => void addToCart(Number(p.id), p.name)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('home.addToCartA11y', { name: p.name })}
-                >
-                  {addingId === String(p.id) ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : isAdded ? (
-                    <Feather name="check" size={16} color="#fff" />
-                  ) : (
-                    <Feather name="plus" size={16} color="#fff" />
-                  )}
-                </Pressable>
-              </View>
-            </View>
-          );
-        })}
-      </View>
     </Screen>
   );
 }
