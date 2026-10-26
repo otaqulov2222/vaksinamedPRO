@@ -4,6 +4,7 @@ import { Stack, router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -27,6 +28,7 @@ const BLUE = '#2563EB';
 const ROSE = '#E11D48';
 
 const READ_STORAGE_KEY = 'vaksinamed_read_notifs';
+const CLEARED_STORAGE_KEY = 'vaksinamed_cleared_notifs';
 
 type NotifCategory = 'all' | 'orders' | 'reminders' | 'cashback' | 'promos';
 
@@ -53,13 +55,25 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<NotifCategory>('all');
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [clearedIds, setClearedIds] = useState<Set<string>>(new Set());
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = React.useRef<any>(null);
 
   const [orders, setOrders] = useState<any[]>([]);
   const [reminderDoses, setReminderDoses] = useState<any[]>([]);
   const [refillAlerts, setRefillAlerts] = useState<any[]>([]);
   const [cashbackRows, setCashbackRows] = useState<any[]>([]);
 
-  // Load read status from local storage
+  const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(msg);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 2600);
+  }, []);
+
+  // Load read status & cleared status from local storage
   useEffect(() => {
     AsyncStorage.getItem(READ_STORAGE_KEY).then((data) => {
       if (data) {
@@ -71,6 +85,21 @@ export default function NotificationsScreen() {
         } catch {}
       }
     });
+
+    AsyncStorage.getItem(CLEARED_STORAGE_KEY).then((data) => {
+      if (data) {
+        try {
+          const parsed = JSON.parse(data);
+          if (Array.isArray(parsed)) {
+            setClearedIds(new Set(parsed));
+          }
+        } catch {}
+      }
+    });
+
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
   }, []);
 
   const loadData = useCallback(async (isPull = false) => {
@@ -158,6 +187,11 @@ export default function NotificationsScreen() {
   // Assemble dynamic notifications from real entities
   const notifications: NotificationItem[] = useMemo(() => {
     const list: NotificationItem[] = [];
+    const pushIfNotCleared = (item: NotificationItem) => {
+      if (!clearedIds.has(item.id)) {
+        list.push(item);
+      }
+    };
 
     // 1. Orders
     for (const ord of orders) {
@@ -173,7 +207,7 @@ export default function NotificationsScreen() {
 
       if (isCompleted) {
         const id = `order-completed-${ord.id}`;
-        list.push({
+        pushIfNotCleared({
           id,
           category: 'orders',
           title: t('profile.notifOrderCompletedTitle'),
@@ -191,7 +225,7 @@ export default function NotificationsScreen() {
         });
       } else if (isCancelled) {
         const id = `order-cancelled-${ord.id}`;
-        list.push({
+        pushIfNotCleared({
           id,
           category: 'orders',
           title: t('profile.notifOrderCancelledTitle'),
@@ -206,7 +240,7 @@ export default function NotificationsScreen() {
         });
       } else if (isReady) {
         const id = `order-ready-${ord.id}`;
-        list.push({
+        pushIfNotCleared({
           id,
           category: 'orders',
           title: t('profile.notifOrderReadyTitle'),
@@ -225,7 +259,7 @@ export default function NotificationsScreen() {
     // 2. Refill alerts
     for (const ref of refillAlerts) {
       const id = `refill-${ref.reminderId || ref.medicineName}`;
-      list.push({
+      pushIfNotCleared({
         id,
         category: 'reminders',
         title: t('profile.notifReminderStockTitle'),
@@ -251,7 +285,7 @@ export default function NotificationsScreen() {
         .filter(Boolean)
         .join(' · ');
 
-      list.push({
+      pushIfNotCleared({
         id,
         category: 'reminders',
         title: t('profile.notifReminderDoseTitle'),
@@ -276,7 +310,7 @@ export default function NotificationsScreen() {
       const id = `cashback-${cb.id || cb.createdAt}`;
       const amount = Number(cb.cashback || cb.amount || 0);
       if (amount > 0) {
-        list.push({
+        pushIfNotCleared({
           id,
           category: 'cashback',
           title: t('profile.notifCashbackEarnedTitle'),
@@ -294,7 +328,7 @@ export default function NotificationsScreen() {
 
     // 5. System Welcome / 24h Promo notification
     const welcomeId = 'promo-welcome-2026';
-    list.push({
+    pushIfNotCleared({
       id: welcomeId,
       category: 'promos',
       title: t('profile.notifPromoWelcomeTitle'),
@@ -309,7 +343,7 @@ export default function NotificationsScreen() {
     });
 
     return list;
-  }, [orders, refillAlerts, reminderDoses, cashbackRows, readIds, t, fmt, mealRelationLabel]);
+  }, [orders, refillAlerts, reminderDoses, cashbackRows, readIds, clearedIds, t, fmt, mealRelationLabel]);
 
   const filteredNotifications = useMemo(() => {
     if (activeTab === 'all') return notifications;
@@ -328,10 +362,27 @@ export default function NotificationsScreen() {
     [notifications],
   );
 
-  const markAllAsRead = async () => {
-    const allIds = new Set(notifications.map((n) => n.id));
+  const handleMarkAllRead = async () => {
+    const allIds = new Set(readIds);
+    notifications.forEach((n) => allIds.add(n.id));
     setReadIds(allIds);
     await AsyncStorage.setItem(READ_STORAGE_KEY, JSON.stringify(Array.from(allIds)));
+    setMenuVisible(false);
+    showToast(t('profile.notifToastAllRead'));
+  };
+
+  const handleClearRead = async () => {
+    const readItems = notifications.filter((n) => n.isRead).map((n) => n.id);
+    if (readItems.length === 0) {
+      setMenuVisible(false);
+      return;
+    }
+    const nextCleared = new Set(clearedIds);
+    readItems.forEach((id) => nextCleared.add(id));
+    setClearedIds(nextCleared);
+    await AsyncStorage.setItem(CLEARED_STORAGE_KEY, JSON.stringify(Array.from(nextCleared)));
+    setMenuVisible(false);
+    showToast(t('profile.notifToastCleared'));
   };
 
   const handleNotificationPress = async (item: NotificationItem) => {
@@ -386,16 +437,15 @@ export default function NotificationsScreen() {
           <Text style={styles.headerSubtitle}>{t('profile.notifSubtitle')}</Text>
         </View>
 
-        {unreadCount > 0 ? (
-          <Pressable
-            onPress={markAllAsRead}
-            style={styles.markReadBtn}
-            accessibilityRole="button"
-            accessibilityLabel={t('profile.notifMarkAllRead')}
-          >
-            <Feather name="check" size={16} color={PURPLE} />
-          </Pressable>
-        ) : null}
+        <Pressable
+          onPress={() => setMenuVisible(true)}
+          style={styles.moreBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.notifActionsA11y')}
+        >
+          <Feather name="more-vertical" size={20} color={PURPLE_DEEP} />
+          {unreadCount > 0 ? <View style={styles.moreUnreadDot} /> : null}
+        </Pressable>
       </View>
 
       {/* Horizontal Filter Tabs Strip */}
@@ -559,6 +609,109 @@ export default function NotificationsScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Action Menu Bottom Sheet */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setMenuVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.cancel')}
+          />
+          <View style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>{t('profile.notifMenuTitle')}</Text>
+              <Pressable
+                onPress={() => setMenuVisible(false)}
+                hitSlop={10}
+                style={styles.sheetCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.cancel')}
+              >
+                <Feather name="x" size={18} color={MUTED} />
+              </Pressable>
+            </View>
+
+            <View style={styles.sheetActionsList}>
+              {/* Action 1: Mark all as read */}
+              <Pressable
+                onPress={handleMarkAllRead}
+                style={({ pressed }) => [
+                  styles.sheetActionItem,
+                  pressed && styles.sheetActionItemPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.notifMarkAllRead')}
+              >
+                <View style={[styles.sheetActionIcon, { backgroundColor: '#F3E8FF' }]}>
+                  <MaterialCommunityIcons name="check-all" size={22} color={PURPLE} />
+                </View>
+                <View style={styles.sheetActionTextWrap}>
+                  <Text style={styles.sheetActionTitle}>{t('profile.notifMarkAllRead')}</Text>
+                  <Text style={styles.sheetActionDesc}>{t('profile.notifMarkAllReadDesc')}</Text>
+                </View>
+                {unreadCount === 0 ? (
+                  <Feather name="check" size={18} color={GREEN} />
+                ) : (
+                  <Feather name="chevron-right" size={18} color="#94A3B8" />
+                )}
+              </Pressable>
+
+              <View style={styles.sheetDivider} />
+
+              {/* Action 2: Clear read notifications */}
+              <Pressable
+                onPress={handleClearRead}
+                style={({ pressed }) => [
+                  styles.sheetActionItem,
+                  pressed && styles.sheetActionItemPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.notifClearRead')}
+              >
+                <View style={[styles.sheetActionIcon, { backgroundColor: '#FFE4E6' }]}>
+                  <Feather name="trash-2" size={20} color={ROSE} />
+                </View>
+                <View style={styles.sheetActionTextWrap}>
+                  <Text style={[styles.sheetActionTitle, { color: ROSE }]}>
+                    {t('profile.notifClearRead')}
+                  </Text>
+                  <Text style={styles.sheetActionDesc}>{t('profile.notifClearReadDesc')}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color="#94A3B8" />
+              </Pressable>
+            </View>
+
+            {/* Cancel button */}
+            <Pressable
+              onPress={() => setMenuVisible(false)}
+              style={styles.sheetCancelBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.cancel')}
+            >
+              <Text style={styles.sheetCancelText}>{t('common.cancel')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Floating Toast Notification */}
+      {toastMessage ? (
+        <View style={[styles.toastWrap, { bottom: Math.max(insets.bottom, 20) + 16 }]} pointerEvents="none">
+          <View style={styles.toastCard}>
+            <Feather name="check-circle" size={18} color="#10B981" />
+            <Text style={styles.toastText}>{toastMessage}</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -613,13 +766,156 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#FFFFFF',
   },
-  markReadBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F3E8FF',
+  moreBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F5FA',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  moreUnreadDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: PURPLE,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFill,
+  },
+  bottomSheetCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 10,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  sheetHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 6,
+  },
+  sheetTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    color: PURPLE_DEEP,
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F8F9FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetActionsList: {
+    paddingVertical: 4,
+  },
+  sheetActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    gap: 12,
+  },
+  sheetActionItemPressed: {
+    backgroundColor: '#F8F9FD',
+  },
+  sheetActionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetActionTextWrap: {
+    flex: 1,
+  },
+  sheetActionTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+    marginBottom: 2,
+  },
+  sheetActionDesc: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+  },
+  sheetDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 4,
+  },
+  sheetCancelBtn: {
+    marginTop: 10,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetCancelText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: '#475569',
+  },
+  toastWrap: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  toastCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E1B4B',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+    maxWidth: '100%',
+  },
+  toastText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: '#FFFFFF',
+    flexShrink: 1,
   },
   tabsStrip: {
     backgroundColor: '#FFFFFF',
