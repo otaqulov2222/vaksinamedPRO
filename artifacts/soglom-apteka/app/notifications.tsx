@@ -17,13 +17,14 @@ import { api } from '@/lib/api';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
-const MUTED = '#8B93A7';
-const BG = '#F7F8FC';
+const MUTED = '#6B7280';
+const BG = '#F8F9FD';
 const CARD = '#FFFFFF';
 const BORDER = '#EEF0F6';
-const GREEN = '#10B981';
-const AMBER = '#F59E0B';
+const GREEN = '#059669';
+const AMBER = '#D97706';
 const BLUE = '#2563EB';
+const ROSE = '#E11D48';
 
 const READ_STORAGE_KEY = 'vaksinamed_read_notifs';
 
@@ -33,8 +34,9 @@ interface NotificationItem {
   id: string;
   category: NotifCategory;
   title: string;
+  codeBadge?: string;
   body: string;
-  time: string;
+  rawTime: string;
   icon: string;
   iconColor: string;
   iconBg: string;
@@ -57,7 +59,7 @@ export default function NotificationsScreen() {
   const [refillAlerts, setRefillAlerts] = useState<any[]>([]);
   const [cashbackRows, setCashbackRows] = useState<any[]>([]);
 
-  // Load read status from storage
+  // Load read status from local storage
   useEffect(() => {
     AsyncStorage.getItem(READ_STORAGE_KEY).then((data) => {
       if (data) {
@@ -106,6 +108,53 @@ export default function NotificationsScreen() {
     void loadData();
   }, [loadData]);
 
+  const mealRelationLabel = useCallback(
+    (meal?: string) => {
+      switch (meal) {
+        case 'before_meal':
+          return t('reminders.beforeMeal');
+        case 'with_meal':
+          return t('reminders.withMeal');
+        case 'after_meal':
+          return t('reminders.afterMeal');
+        default:
+          return t('reminders.independent');
+      }
+    },
+    [t],
+  );
+
+  const formatTimeAgo = useCallback(
+    (dateStr?: string) => {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return '';
+
+      const now = new Date();
+      const isToday =
+        d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const isYesterday =
+        d.getDate() === yesterday.getDate() &&
+        d.getMonth() === yesterday.getMonth() &&
+        d.getFullYear() === yesterday.getFullYear();
+
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      const timePart = `${hh}:${mm}`;
+
+      if (isToday) return `${t('profile.notifToday')}, ${timePart}`;
+      if (isYesterday) return `${t('profile.notifYesterday')}, ${timePart}`;
+
+      return fmt.date(d, { withYear: false, withTime: true });
+    },
+    [t, fmt],
+  );
+
   // Assemble dynamic notifications from real entities
   const notifications: NotificationItem[] = useMemo(() => {
     const list: NotificationItem[] = [];
@@ -127,14 +176,15 @@ export default function NotificationsScreen() {
         list.push({
           id,
           category: 'orders',
-          title: t('profile.notifOrderCompletedTitle', { code }),
+          title: t('profile.notifOrderCompletedTitle'),
+          codeBadge: `#${code}`,
           body: ord.canRate
             ? t('profile.notifOrderCompletedBody')
             : t('orders.alreadyRatedNote'),
-          time: ord.createdAt || new Date().toISOString(),
+          rawTime: ord.createdAt || new Date().toISOString(),
           icon: 'check-circle-outline',
           iconColor: GREEN,
-          iconBg: '#DCFCE7',
+          iconBg: '#ECFDF5',
           route: ord.canRate ? '/rating' : `/order/${ord.id}`,
           params: ord.canRate ? { orderId: String(ord.id) } : undefined,
           isRead: readIds.has(id),
@@ -144,12 +194,13 @@ export default function NotificationsScreen() {
         list.push({
           id,
           category: 'orders',
-          title: t('profile.notifOrderCancelledTitle', { code }),
+          title: t('profile.notifOrderCancelledTitle'),
+          codeBadge: `#${code}`,
           body: t('profile.notifOrderCancelledBody'),
-          time: ord.createdAt || new Date().toISOString(),
+          rawTime: ord.createdAt || new Date().toISOString(),
           icon: 'close-circle-outline',
-          iconColor: '#DC2626',
-          iconBg: '#FEE2E2',
+          iconColor: ROSE,
+          iconBg: '#FFE4E6',
           route: `/order/${ord.id}`,
           isRead: readIds.has(id),
         });
@@ -158,9 +209,10 @@ export default function NotificationsScreen() {
         list.push({
           id,
           category: 'orders',
-          title: t('profile.notifOrderReadyTitle', { code }),
+          title: t('profile.notifOrderReadyTitle'),
+          codeBadge: `#${code}`,
           body: t('profile.notifOrderReadyBody'),
-          time: ord.createdAt || new Date().toISOString(),
+          rawTime: ord.createdAt || new Date().toISOString(),
           icon: 'package-variant-closed',
           iconColor: PURPLE,
           iconBg: '#F3E8FF',
@@ -178,7 +230,7 @@ export default function NotificationsScreen() {
         category: 'reminders',
         title: t('profile.notifReminderStockTitle'),
         body: t('profile.notifReminderStockBody', { name: ref.medicineName, days: ref.daysRemaining }),
-        time: new Date().toISOString(),
+        rawTime: new Date().toISOString(),
         icon: 'alert-decagram-outline',
         iconColor: AMBER,
         iconBg: '#FEF3C7',
@@ -190,13 +242,22 @@ export default function NotificationsScreen() {
     // 3. Medication doses today
     for (const dose of reminderDoses.slice(0, 3)) {
       const id = `dose-${dose.doseId || dose.reminderId}-${dose.time}`;
-      const doseDesc = [dose.medicineName, dose.dosage, dose.time, dose.mealRelation].filter(Boolean).join(' · ');
+      const doseDesc = [
+        dose.medicineName,
+        dose.dosage,
+        dose.time,
+        mealRelationLabel(dose.mealRelation),
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
       list.push({
         id,
         category: 'reminders',
         title: t('profile.notifReminderDoseTitle'),
+        codeBadge: dose.time,
         body: doseDesc,
-        time: new Date().toISOString(),
+        rawTime: new Date().toISOString(),
         icon: 'pill',
         iconColor: BLUE,
         iconBg: '#DBEAFE',
@@ -205,8 +266,13 @@ export default function NotificationsScreen() {
       });
     }
 
-    // 4. Cashback transactions
-    for (const cb of cashbackRows.slice(0, 3)) {
+    // 4. Cashback transactions (deduplicated by ID)
+    const seenCashback = new Set<string>();
+    for (const cb of cashbackRows) {
+      const key = `${cb.id || cb.createdAt}-${cb.cashback || cb.amount}`;
+      if (seenCashback.has(key)) continue;
+      seenCashback.add(key);
+
       const id = `cashback-${cb.id || cb.createdAt}`;
       const amount = Number(cb.cashback || cb.amount || 0);
       if (amount > 0) {
@@ -214,8 +280,9 @@ export default function NotificationsScreen() {
           id,
           category: 'cashback',
           title: t('profile.notifCashbackEarnedTitle'),
+          codeBadge: `+${fmt.money(amount)}`,
           body: t('profile.notifCashbackEarnedBody', { amount: fmt.money(amount) }),
-          time: cb.createdAt || new Date().toISOString(),
+          rawTime: cb.createdAt || new Date().toISOString(),
           icon: 'star-four-points-outline',
           iconColor: '#D97706',
           iconBg: '#FEF3C7',
@@ -225,14 +292,15 @@ export default function NotificationsScreen() {
       }
     }
 
-    // 5. System Welcome / Promo notification
+    // 5. System Welcome / 24h Promo notification
     const welcomeId = 'promo-welcome-2026';
     list.push({
       id: welcomeId,
       category: 'promos',
       title: t('profile.notifPromoWelcomeTitle'),
+      codeBadge: '24/7',
       body: t('profile.notifPromoWelcomeBody'),
-      time: '2026-10-23T12:00:00.000Z',
+      rawTime: '2026-10-23T12:00:00.000Z',
       icon: 'gift-outline',
       iconColor: PURPLE,
       iconBg: '#F3E8FF',
@@ -241,7 +309,7 @@ export default function NotificationsScreen() {
     });
 
     return list;
-  }, [orders, refillAlerts, reminderDoses, cashbackRows, readIds, t, fmt]);
+  }, [orders, refillAlerts, reminderDoses, cashbackRows, readIds, t, fmt, mealRelationLabel]);
 
   const filteredNotifications = useMemo(() => {
     if (activeTab === 'all') return notifications;
@@ -251,6 +319,14 @@ export default function NotificationsScreen() {
   const unreadCount = useMemo(() => {
     return notifications.filter((n) => !n.isRead).length;
   }, [notifications]);
+
+  const countFor = useCallback(
+    (cat: NotifCategory) => {
+      if (cat === 'all') return notifications.length;
+      return notifications.filter((n) => n.category === cat).length;
+    },
+    [notifications],
+  );
 
   const markAllAsRead = async () => {
     const allIds = new Set(notifications.map((n) => n.id));
@@ -322,7 +398,7 @@ export default function NotificationsScreen() {
         ) : null}
       </View>
 
-      {/* Filter Tabs Strip */}
+      {/* Horizontal Filter Tabs Strip */}
       <View style={styles.tabsStrip}>
         <ScrollView
           horizontal
@@ -331,6 +407,7 @@ export default function NotificationsScreen() {
         >
           {TABS.map((tab) => {
             const active = activeTab === tab.key;
+            const count = countFor(tab.key);
             return (
               <Pressable
                 key={tab.key}
@@ -342,6 +419,13 @@ export default function NotificationsScreen() {
                 <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>
                   {t(tab.labelKey as any)}
                 </Text>
+                {count > 0 ? (
+                  <View style={[styles.countBadge, active && styles.countBadgeActive]}>
+                    <Text style={[styles.countBadgeText, active && styles.countBadgeTextActive]}>
+                      {count}
+                    </Text>
+                  </View>
+                ) : null}
               </Pressable>
             );
           })}
@@ -386,10 +470,13 @@ export default function NotificationsScreen() {
                 style={({ pressed }) => [
                   styles.notifCard,
                   !item.isRead && styles.notifCardUnread,
-                  pressed && { opacity: 0.95, transform: [{ scale: 0.99 }] },
+                  pressed && { opacity: 0.96, transform: [{ scale: 0.992 }] },
                 ]}
                 accessibilityRole="button"
               >
+                {/* Accent strip on left for unread */}
+                {!item.isRead ? <View style={styles.unreadLeftBar} /> : null}
+
                 <View style={[styles.notifIconWrap, { backgroundColor: item.iconBg }]}>
                   <MaterialCommunityIcons
                     name={item.icon as any}
@@ -399,18 +486,32 @@ export default function NotificationsScreen() {
                 </View>
 
                 <View style={styles.notifCopy}>
+                  {/* Top row: Title + Time / Dot */}
                   <View style={styles.notifTopRow}>
-                    <Text style={styles.notifTitle} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    {!item.isRead ? <View style={styles.notifDot} /> : null}
+                    <View style={styles.titleWrap}>
+                      <Text style={styles.notifTitle}>
+                        {item.title}
+                      </Text>
+                      {item.codeBadge ? (
+                        <View style={styles.codePill}>
+                          <Text style={styles.codePillText}>{item.codeBadge}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.timeWrap}>
+                      <Text style={styles.timeText}>{formatTimeAgo(item.rawTime)}</Text>
+                      {!item.isRead ? <View style={styles.notifDot} /> : null}
+                    </View>
                   </View>
-                  <Text style={styles.notifBody} numberOfLines={2}>
+
+                  {/* Body description */}
+                  <Text style={styles.notifBody} numberOfLines={3}>
                     {item.body}
                   </Text>
                 </View>
 
-                <Feather name="chevron-right" size={16} color="#CBD5E1" />
+                <Feather name="chevron-right" size={16} color="#CBD5E1" style={{ marginLeft: 2 }} />
               </Pressable>
             ))
           )}
@@ -513,9 +614,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   markReadBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#F3E8FF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -524,33 +625,60 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F5',
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   tabsContent: {
     paddingHorizontal: 16,
+    paddingRight: 20,
     gap: 8,
   },
   tabChip: {
-    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 18,
     backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 6,
   },
   tabChipActive: {
     backgroundColor: PURPLE,
+    borderColor: PURPLE,
   },
   tabChipText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#4B5563',
   },
   tabChipTextActive: {
     fontFamily: 'Inter_600SemiBold',
     color: '#FFFFFF',
   },
+  countBadge: {
+    backgroundColor: '#E5E7EB',
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  countBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10.5,
+    color: '#4B5563',
+  },
+  countBadgeTextActive: {
+    color: '#FFFFFF',
+  },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 14,
     gap: 10,
   },
   loadingBox: {
@@ -566,53 +694,97 @@ const styles = StyleSheet.create({
   },
   notifCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: CARD,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#ECE7F6',
-    padding: 14,
+    borderColor: '#F0F0F5',
+    padding: 13,
     gap: 12,
+    position: 'relative',
+    overflow: 'hidden',
   },
   notifCardUnread: {
-    borderColor: '#D8B4FE',
-    backgroundColor: '#FAF7FE',
+    borderColor: '#E9D5FF',
+    backgroundColor: '#FFFFFF',
+  },
+  unreadLeftBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3.5,
+    backgroundColor: PURPLE,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
   },
   notifIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   notifCopy: {
     flex: 1,
     minWidth: 0,
-    gap: 3,
+    gap: 4,
   },
   notifTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 6,
+  },
+  titleWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   notifTitle: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_700Bold',
     fontSize: 13.5,
     color: PURPLE_DEEP,
-    flex: 1,
+    lineHeight: 18,
+  },
+  codePill: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  codePillText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10.5,
+    color: '#4B5563',
+  },
+  timeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingTop: 1,
+  },
+  timeText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: '#9CA3AF',
   },
   notifDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: PURPLE,
   },
   notifBody: {
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    color: MUTED,
-    lineHeight: 16,
+    color: '#4B5563',
+    lineHeight: 17,
   },
   emptyState: {
     backgroundColor: CARD,
