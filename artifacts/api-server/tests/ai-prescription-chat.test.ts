@@ -15,7 +15,7 @@ const mockCatalog: CatalogProductCandidate[] = [
     unit: "quti",
     requiresPrescription: false,
     analogGroup: "paracetamol-500",
-    inStock: true,
+    availableQuantity: 15,
   },
   {
     id: 2,
@@ -28,7 +28,7 @@ const mockCatalog: CatalogProductCandidate[] = [
     unit: "quti",
     requiresPrescription: true,
     analogGroup: "amoxicillin-500",
-    inStock: true,
+    availableQuantity: 8,
   },
   {
     id: 3,
@@ -41,7 +41,7 @@ const mockCatalog: CatalogProductCandidate[] = [
     unit: "flakon",
     requiresPrescription: false,
     analogGroup: "vitamin-d3",
-    inStock: true,
+    availableQuantity: 20,
   },
 ];
 
@@ -61,7 +61,50 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.ok(res.reply.includes("VaksinaMed"));
   });
 
-  it("2. Allows and processes medical / symptom queries in Uzbek", () => {
+  it("2. Does NOT attach products on general greetings (salom / privet)", () => {
+    const resUz = handleAiMedicalChat({
+      message: "salom",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(resUz.isMedical, true);
+    assert.equal(resUz.matchedProducts.length, 0); // No products on pure greeting!
+    assert.ok(resUz.reply.includes("Assalomu alaykum"));
+    assert.ok(resUz.reply.includes("shifokor"));
+
+    const resRu = handleAiMedicalChat({
+      message: "Здравствуйте",
+      language: "ru",
+      candidates: mockCatalog,
+    });
+    assert.equal(resRu.matchedProducts.length, 0);
+    assert.ok(resRu.reply.includes("Здравствуйте"));
+  });
+
+  it("3. Does NOT attach products on gratitude / thanks", () => {
+    const res = handleAiMedicalChat({
+      message: "Rahmat katta",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("Salomat"));
+  });
+
+  it("4. Issues emergency warning (103) on severe red flags without selling drugs", () => {
+    const res = handleAiMedicalChat({
+      message: "Yurak qattiq siqilib nafas qisyapti yordam bering",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0); // Strictly no drugs during emergency!
+    assert.ok(res.reply.includes("103"));
+    assert.ok(res.reply.includes("SHOSHILINCH"));
+  });
+
+  it("5. Allows and processes medical / symptom queries with clinical advice", () => {
     assert.equal(isMedicalDomain("Boshim qattiq og'riyapti nima ichsam bo'ladi?"), true);
 
     const res = handleAiMedicalChat({
@@ -73,9 +116,10 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.ok(res.matchedProducts.length > 0);
     assert.equal(res.matchedProducts[0].nameUz, "Paratsetamol 500 mg");
     assert.ok(res.reply.includes("og‘riq"));
+    assert.ok(res.reply.includes("Shifokor"));
   });
 
-  it("3. Processes prescription image / text and matches catalog medications", () => {
+  it("6. Processes prescription image / text and matches catalog medications", () => {
     const rxText = "Rp: Tab. Paratsetamol 500 mg #10\nRp: Tab. Amoksitsillin 500 mg #20";
     const res = handleAiMedicalChat({
       message: rxText,
@@ -89,7 +133,7 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.equal(res.matchedProducts[1].requiresPrescription, true);
   });
 
-  it("4. Supports Russian language responses for symptom queries", () => {
+  it("7. Supports Russian language responses for symptom queries", () => {
     const res = handleAiMedicalChat({
       message: "Какое лекарство принять от головной боли?",
       language: "ru",
@@ -97,6 +141,6 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     });
     assert.equal(res.isMedical, true);
     assert.ok(res.matchedProducts.length > 0);
-    assert.ok(res.reply.includes("головной"));
+    assert.ok(res.reply.includes("голов"));
   });
 });

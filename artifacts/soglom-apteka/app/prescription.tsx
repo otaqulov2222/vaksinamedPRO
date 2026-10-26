@@ -314,6 +314,14 @@ export default function PrescriptionScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* CLINICAL SAFETY DISCLAIMER BANNER */}
+        <View style={styles.medicalNoticeBanner}>
+          <MaterialCommunityIcons name="shield-alert-outline" size={16} color="#B45309" style={styles.medicalNoticeIcon} />
+          <Text style={styles.medicalNoticeText}>
+            {t('catalog.aiChatDisclaimer')}
+          </Text>
+        </View>
+
         {messages.map((msg) => {
           const isUser = msg.sender === 'user';
           return (
@@ -715,6 +723,27 @@ const styles = StyleSheet.create({
   chatStream: {
     padding: 16,
     gap: 16,
+  },
+  medicalNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 8,
+  },
+  medicalNoticeIcon: {
+    flexShrink: 0,
+  },
+  medicalNoticeText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: '#92400E',
   },
   messageRow: {
     flexDirection: 'row',
