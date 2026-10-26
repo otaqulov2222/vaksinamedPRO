@@ -325,6 +325,30 @@ function OrderCard({ order }: { order: any }) {
           <StatusChip label={payUrgentLabel} tone={paymentTone(pay)} />
         </View>
       ) : null}
+
+      {order.canRate ? (
+        <View style={styles.cardActionRow}>
+          <Pressable
+            style={styles.cardRateBtn}
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              router.push({ pathname: '/rating', params: { orderId: String(order.id) } });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={t('orders.rateCta')}
+          >
+            <Feather name="star" size={13} color="#D97706" />
+            <Text style={styles.cardRateBtnText}>{t('orders.rateCta')}</Text>
+          </Pressable>
+        </View>
+      ) : order.alreadyRated ? (
+        <View style={styles.cardActionRow}>
+          <View style={styles.cardRatedBadge}>
+            <Feather name="check" size={12} color="#16A34A" />
+            <Text style={styles.cardRatedBadgeText}>{t('orders.alreadyRatedBadge')}</Text>
+          </View>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -903,6 +927,47 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 10.5,
     color: PURPLE,
+  },
+  cardActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F3E8FF',
+  },
+  cardRateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  cardRateBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    color: '#B45309',
+  },
+  cardRatedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  cardRatedBadgeText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    color: '#15803D',
   },
   chip: {
     borderRadius: 8,

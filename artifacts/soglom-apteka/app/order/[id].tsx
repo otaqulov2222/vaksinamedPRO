@@ -746,21 +746,34 @@ export default function OrderScreen() {
         ) : null}
 
         {order.canRate ? (
-          <Pressable
-            style={styles.primaryBtn}
-            onPress={() =>
-              router.push({ pathname: '/rating', params: { orderId: String(order.id) } })
-            }
-            accessibilityRole="button"
-            accessibilityLabel={t('orders.rateCta')}
-          >
-            <Text style={styles.primaryBtnText}>{t('orders.rateCta')}</Text>
-          </Pressable>
+          <View style={styles.rateServiceCard}>
+            <View style={styles.rateServiceHeader}>
+              <View style={styles.rateServiceIconWrap}>
+                <Feather name="star" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rateServiceTitle}>{t('orders.ratingPromptTitle')}</Text>
+                <Text style={styles.rateServiceSubtitle}>{t('orders.ratingPromptSubtitle')}</Text>
+              </View>
+            </View>
+            <Pressable
+              style={styles.rateServiceBtn}
+              onPress={() =>
+                router.push({ pathname: '/rating', params: { orderId: String(order.id) } })
+              }
+              accessibilityRole="button"
+              accessibilityLabel={t('orders.rateCta')}
+            >
+              <Feather name="star" size={16} color="#FFFFFF" />
+              <Text style={styles.rateServiceBtnText}>{t('orders.rateCta')}</Text>
+            </Pressable>
+          </View>
         ) : null}
         {order.alreadyRated ? (
-          <Text style={[styles.meta, { textAlign: 'center', marginTop: 8 }]}>
-            {t('orders.alreadyRatedNote')}
-          </Text>
+          <View style={styles.alreadyRatedBox}>
+            <Feather name="check-circle" size={16} color="#15803D" />
+            <Text style={styles.alreadyRatedBoxText}>{t('orders.alreadyRatedNote')}</Text>
+          </View>
         ) : null}
 
         {/* Support link */}
@@ -1381,6 +1394,73 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
+  },
+  rateServiceCard: {
+    marginTop: 14,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: 14,
+    gap: 12,
+  },
+  rateServiceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  rateServiceIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rateServiceTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: '#92400E',
+  },
+  rateServiceSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: '#B45309',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  rateServiceBtn: {
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: PURPLE,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  rateServiceBtnText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13.5,
+  },
+  alreadyRatedBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: 12,
+  },
+  alreadyRatedBoxText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12.5,
+    color: '#15803D',
   },
   supportBtn: {
     flexDirection: 'row',

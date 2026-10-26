@@ -1,8 +1,9 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,8 +11,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { Screen } from '@/components/AppUI';
 import { api } from '@/lib/api';
 import type { TranslationKey } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
@@ -22,7 +23,7 @@ const MUTED = '#8B93A7';
 const BG = '#F7F8FC';
 const CARD = '#FFFFFF';
 const BORDER = '#EEF0F6';
-const GOLD = '#e7ad17';
+const GOLD = '#F59E0B';
 const DANGER = '#DC2626';
 
 /** `value` is sent to the API as-is (existing backend data uses these Uzbek strings); only `labelKey` is displayed. */
@@ -55,6 +56,7 @@ function mapOrder(o: any): RateableOrder {
 }
 
 export default function RatingScreen() {
+  const insets = useSafeAreaInsets();
   const { t } = useApp();
   const branchTitle = (o: RateableOrder) =>
     o.branchName || t('orders.ratingBranchFallback', { id: o.branchId });
@@ -159,7 +161,7 @@ export default function RatingScreen() {
         // Prefer prior context (Profile or Order). Purchases only as cold-open fallback.
         if (router.canGoBack()) router.back();
         else router.replace('/(tabs)/purchases');
-      }, 600);
+      }, 700);
     } catch (err: any) {
       if (err?.status === 409) {
         setAlreadyRated(true);
@@ -178,26 +180,41 @@ export default function RatingScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <Screen>
+  const handleBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/purchases');
+  };
+
+  return (
+    <View style={styles.pageRoot}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Top Header Bar */}
+      <View style={[styles.headerBar, { paddingTop: Math.max(insets.top, 12) }]}>
+        <Pressable
+          onPress={handleBack}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('orders.backToOrdersA11y')}
+        >
+          <Feather name="arrow-left" size={20} color={PURPLE_DEEP} />
+        </Pressable>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>{t('orders.ratingTitle')}</Text>
+          <Text style={styles.headerSubtitle}>{t('orders.ratingSubtitle')}</Text>
+        </View>
+      </View>
+
+      {loading ? (
         <View style={styles.state}>
           <ActivityIndicator color={PURPLE} size="large" />
           <Text style={styles.stateText}>{t('common.loading')}</Text>
         </View>
-      </Screen>
-    );
-  }
-
-  if (loadError && !selected) {
-    return (
-      <Screen>
+      ) : loadError && !selected ? (
         <View style={styles.state}>
           <MaterialCommunityIcons name="clipboard-text-off-outline" size={44} color={MUTED} />
           <Text style={styles.stateTitle}>{loadError}</Text>
-          <Text style={styles.stateText}>
-            {t('orders.ratingLoadFailedHint')}
-          </Text>
+          <Text style={styles.stateText}>{t('orders.ratingLoadFailedHint')}</Text>
           <Pressable style={styles.primaryBtn} onPress={() => void load()}>
             <Text style={styles.primaryBtnText}>{t('common.retry')}</Text>
           </Pressable>
@@ -205,174 +222,208 @@ export default function RatingScreen() {
             <Text style={styles.secondaryBtnText}>{t('orders.goToOrders')}</Text>
           </Pressable>
         </View>
-      </Screen>
-    );
-  }
-
-  if (!selected && eligible.length === 0) {
-    return (
-      <Screen>
+      ) : !selected && eligible.length === 0 ? (
         <View style={styles.state}>
           <MaterialCommunityIcons name="star-off-outline" size={44} color={MUTED} />
           <Text style={styles.stateTitle}>{t('orders.ratingNoEligible')}</Text>
-          <Text style={styles.stateText}>
-            {t('orders.ratingNoEligibleText')}
-          </Text>
+          <Text style={styles.stateText}>{t('orders.ratingNoEligibleText')}</Text>
           <Pressable style={styles.primaryBtn} onPress={() => router.push('/(tabs)/purchases')}>
             <Text style={styles.primaryBtnText}>{t('orders.goToOrders')}</Text>
           </Pressable>
         </View>
-      </Screen>
-    );
-  }
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) + 20 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.lead}>{t('orders.ratingLead')}</Text>
 
-  return (
-    <Screen>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.lead}>
-          {t('orders.ratingLead')}
-        </Text>
-
-        {eligible.length > 1 && !alreadyRated ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionLabel}>{t('orders.ratingChooseOrder')}</Text>
-            {eligible.map((o) => {
-              const active = selected?.id === o.id;
-              return (
-                <Pressable
-                  key={o.id}
-                  onPress={() => setSelected(o)}
-                  style={[styles.orderRow, active && styles.orderRowActive]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.orderCode}>{o.code}</Text>
-                    <Text style={styles.orderBranch}>{branchTitle(o)}</Text>
-                  </View>
-                  {active ? <Feather name="check-circle" size={18} color={PURPLE} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
-
-        {selected ? (
-          <View style={styles.targetCard}>
-            <View style={styles.avatar}>
-              <MaterialCommunityIcons name="storefront-outline" size={36} color={PURPLE} />
-            </View>
-            <Text style={styles.targetTitle}>{t('orders.ratingTargetTitle')}</Text>
-            <Text style={styles.targetMeta}>{branchTitle(selected)}</Text>
-            <Text style={styles.targetCode}>{t('orders.ratingOrderCode', { code: selected.code })}</Text>
-          </View>
-        ) : null}
-
-        {alreadyRated ? (
-          <View style={styles.successBox}>
-            <Feather name="check-circle" size={16} color="#15803D" />
-            <Text style={styles.successText}>{t('orders.ratingAlreadyRated')}</Text>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.question}>{t('orders.ratingQuestion')}</Text>
-            <View style={styles.stars}>
-              {[1, 2, 3, 4, 5].map((item) => (
-                <Pressable
-                  key={item}
-                  onPress={() => setRating(item)}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: item <= rating }}
-                  accessibilityLabel={t('orders.ratingStarA11y', { value: item })}
-                  style={({ pressed }) => [styles.starBtn, pressed && { transform: [{ scale: 1.15 }] }]}
-                >
-                  <Feather
-                    name="star"
-                    size={36}
-                    color={item <= rating ? GOLD : '#D1D5DB'}
-                    fill={item <= rating ? GOLD : 'transparent'}
-                  />
-                </Pressable>
-              ))}
-            </View>
-            {rating > 0 ? (
-              <View style={styles.ratingScoreBadge}>
-                <Text style={styles.ratingScoreText}>
-                  {t(`orders.ratingScore${rating}` as TranslationKey)}
-                </Text>
-              </View>
-            ) : null}
-
-            <View style={styles.tags}>
-              {TAGS.map((tag) => {
-                const active = tags.includes(tag.value);
+          {eligible.length > 1 && !alreadyRated ? (
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>{t('orders.ratingChooseOrder')}</Text>
+              {eligible.map((o) => {
+                const active = selected?.id === o.id;
                 return (
                   <Pressable
-                    key={tag.value}
-                    onPress={() => toggleTag(tag.value)}
-                    style={[styles.tag, active && styles.tagActive]}
+                    key={o.id}
+                    onPress={() => setSelected(o)}
+                    style={[styles.orderRow, active && styles.orderRowActive]}
                   >
-                    <Text style={[styles.tagText, active && styles.tagTextActive]}>{t(tag.labelKey)}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.orderCode}>{o.code}</Text>
+                      <Text style={styles.orderBranch}>{branchTitle(o)}</Text>
+                    </View>
+                    {active ? <Feather name="check-circle" size={18} color={PURPLE} /> : null}
                   </Pressable>
                 );
               })}
             </View>
+          ) : null}
 
-            <View style={styles.inputContainer}>
-              <TextInput
-                value={comment}
-                onChangeText={setComment}
-                placeholder={t('orders.ratingCommentPlaceholder')}
-                placeholderTextColor={MUTED}
-                multiline
-                numberOfLines={5}
-                style={styles.input}
-                editable={!saving}
-                maxLength={2000}
-              />
-              <Text style={styles.charCounter}>{comment.length} / 2000</Text>
+          {selected ? (
+            <View style={styles.targetCard}>
+              <View style={styles.avatar}>
+                <MaterialCommunityIcons name="storefront-outline" size={32} color={PURPLE} />
+              </View>
+              <Text style={styles.targetTitle}>{t('orders.ratingTargetTitle')}</Text>
+              <Text style={styles.targetMeta}>{branchTitle(selected)}</Text>
+              <Text style={styles.targetCode}>{t('orders.ratingOrderCode', { code: selected.code })}</Text>
             </View>
+          ) : null}
 
-            {saveError ? (
-              <View style={styles.errorBox}>
-                <Feather name="alert-circle" size={16} color={DANGER} />
-                <Text style={styles.errorText}>{saveError}</Text>
+          {alreadyRated ? (
+            <View style={styles.successBox}>
+              <Feather name="check-circle" size={18} color="#15803D" />
+              <Text style={styles.successText}>{t('orders.ratingAlreadyRated')}</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.question}>{t('orders.ratingQuestion')}</Text>
+
+              <View style={styles.stars}>
+                {[1, 2, 3, 4, 5].map((item) => (
+                  <Pressable
+                    key={item}
+                    onPress={() => setRating(item)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: item <= rating }}
+                    accessibilityLabel={t('orders.ratingStarA11y', { value: item })}
+                    style={({ pressed }) => [styles.starBtn, pressed && { transform: [{ scale: 1.15 }] }]}
+                  >
+                    <MaterialCommunityIcons
+                      name={item <= rating ? 'star' : 'star-outline'}
+                      size={36}
+                      color={item <= rating ? GOLD : '#CBD5E1'}
+                    />
+                  </Pressable>
+                ))}
               </View>
-            ) : null}
 
-            {success ? (
-              <View style={styles.successBox}>
-                <Feather name="check-circle" size={16} color="#15803D" />
-                <Text style={styles.successText}>{t('orders.ratingThankYou')}</Text>
+              {rating > 0 ? (
+                <View style={styles.ratingScoreBadge}>
+                  <Text style={styles.ratingScoreText}>
+                    {t(`orders.ratingScore${rating}` as TranslationKey)}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.tags}>
+                {TAGS.map((tag) => {
+                  const active = tags.includes(tag.value);
+                  return (
+                    <Pressable
+                      key={tag.value}
+                      onPress={() => toggleTag(tag.value)}
+                      style={[styles.tag, active && styles.tagActive]}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: active }}
+                    >
+                      {active ? (
+                        <Feather name="check" size={13} color={PURPLE} style={{ marginRight: 4 }} />
+                      ) : null}
+                      <Text style={[styles.tagText, active && styles.tagTextActive]}>{t(tag.labelKey)}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-            ) : null}
 
-            <Pressable
-              onPress={() => void onSubmit()}
-              disabled={saving || !selected || rating < 1}
-              style={[styles.submit, (saving || rating < 1) && { opacity: 0.55 }]}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.submitText}>{t('common.send')}</Text>
-                  <Feather name="arrow-right" size={17} color="#fff" />
-                </>
-              )}
-            </Pressable>
-          </>
-        )}
-      </ScrollView>
-    </Screen>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  value={comment}
+                  onChangeText={setComment}
+                  placeholder={t('orders.ratingCommentPlaceholder')}
+                  placeholderTextColor={MUTED}
+                  multiline
+                  numberOfLines={4}
+                  style={styles.input}
+                  editable={!saving}
+                  maxLength={2000}
+                />
+                <Text style={styles.charCounter}>{comment.length} / 2000</Text>
+              </View>
+
+              {saveError ? (
+                <View style={styles.errorBox}>
+                  <Feather name="alert-circle" size={16} color={DANGER} />
+                  <Text style={styles.errorText}>{saveError}</Text>
+                </View>
+              ) : null}
+
+              {success ? (
+                <View style={styles.successBox}>
+                  <Feather name="check-circle" size={18} color="#15803D" />
+                  <Text style={styles.successText}>{t('orders.ratingThankYou')}</Text>
+                </View>
+              ) : null}
+
+              <Pressable
+                onPress={() => void onSubmit()}
+                disabled={saving || !selected || rating < 1}
+                style={[styles.submit, (saving || rating < 1) && { opacity: 0.55 }]}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: saving || !selected || rating < 1 }}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.submitText}>{t('common.send')}</Text>
+                    <Feather name="arrow-right" size={17} color="#FFFFFF" />
+                  </>
+                )}
+              </Pressable>
+            </>
+          )}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: 28, gap: 12 },
+  pageRoot: {
+    flex: 1,
+    backgroundColor: BG,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F5',
+    gap: 12,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F5FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+    color: PURPLE_DEEP,
+  },
+  headerSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 1,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    gap: 12,
+  },
   lead: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
@@ -386,7 +437,6 @@ const styles = StyleSheet.create({
     borderColor: '#ECE7F6',
     padding: 14,
     gap: 8,
-    boxShadow: '0 2px 10px rgba(26, 16, 64, 0.04)',
   },
   sectionLabel: {
     fontFamily: 'Inter_700Bold',
@@ -405,68 +455,124 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: BG,
   },
-  orderRowActive: { borderColor: PURPLE, backgroundColor: '#F3E8FF' },
-  orderCode: { fontFamily: 'Inter_700Bold', fontSize: 14, color: PURPLE_DEEP },
-  orderBranch: { fontFamily: 'Inter_400Regular', fontSize: 12, color: MUTED, marginTop: 2 },
+  orderRowActive: {
+    borderColor: PURPLE,
+    backgroundColor: '#F3E8FF',
+  },
+  orderCode: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+  },
+  orderBranch: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 2,
+  },
   targetCard: {
     alignItems: 'center',
     backgroundColor: CARD,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#ECE7F6',
-    paddingVertical: 22,
+    paddingVertical: 20,
     paddingHorizontal: 16,
-    boxShadow: '0 2px 10px rgba(26, 16, 64, 0.04)',
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#F3E8FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  targetTitle: { fontFamily: 'Inter_700Bold', fontSize: 18, color: PURPLE_DEEP },
-  targetMeta: { fontFamily: 'Inter_500Medium', fontSize: 13, color: MUTED, marginTop: 6, textAlign: 'center' },
-  targetCode: { fontFamily: 'Inter_400Regular', fontSize: 12, color: MUTED, marginTop: 4 },
-  question: {
+  targetTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 17,
+    color: PURPLE_DEEP,
+  },
+  targetMeta: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: MUTED,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  targetCode: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 4,
+  },
+  question: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
     textAlign: 'center',
     color: PURPLE_DEEP,
-    marginTop: 8,
+    marginTop: 6,
   },
-  stars: { flexDirection: 'row', justifyContent: 'center', gap: 7, marginTop: 12 },
-  starBtn: { padding: 4, alignItems: 'center', justifyContent: 'center' },
+  stars: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+  starBtn: {
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   ratingScoreBadge: {
     alignSelf: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 12,
     backgroundColor: '#FEF3C7',
-    marginTop: 6,
+    marginTop: 4,
   },
   ratingScoreText: {
     fontFamily: 'Inter_700Bold',
     fontSize: 12,
     color: '#92400E',
   },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 16 },
+  tags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
   tag: {
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 15,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 8,
     backgroundColor: CARD,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  tagActive: { backgroundColor: '#F3E8FF', borderColor: PURPLE },
-  tagText: { fontFamily: 'Inter_500Medium', fontSize: 11, color: MUTED },
-  tagTextActive: { color: PURPLE },
-  inputContainer: { marginTop: 8, position: 'relative' },
+  tagActive: {
+    backgroundColor: '#F3E8FF',
+    borderColor: PURPLE,
+  },
+  tagText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: MUTED,
+  },
+  tagTextActive: {
+    color: PURPLE,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  inputContainer: {
+    marginTop: 8,
+    position: 'relative',
+  },
   input: {
-    minHeight: 120,
+    minHeight: 110,
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
@@ -477,7 +583,6 @@ const styles = StyleSheet.create({
     borderColor: '#ECE7F6',
     backgroundColor: CARD,
     color: PURPLE_DEEP,
-    boxShadow: '0 1px 4px rgba(26, 16, 64, 0.02)',
   },
   charCounter: {
     position: 'absolute',
@@ -488,17 +593,20 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
   submit: {
-    minHeight: 49,
-    borderRadius: 15,
+    minHeight: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 7,
+    gap: 8,
     marginTop: 8,
     backgroundColor: PURPLE,
-    boxShadow: '0 3px 12px rgba(106, 34, 214, 0.28)',
   },
-  submitText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 13 },
+  submitText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+  },
   state: {
     flex: 1,
     alignItems: 'center',
@@ -522,22 +630,29 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     marginTop: 8,
-    minHeight: 48,
+    minHeight: 46,
     paddingHorizontal: 20,
     borderRadius: 14,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 3px 12px rgba(106, 34, 214, 0.25)',
   },
-  primaryBtnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 14 },
+  primaryBtnText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+  },
   secondaryBtn: {
     minHeight: 44,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secondaryBtnText: { color: PURPLE, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  secondaryBtnText: {
+    color: PURPLE,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+  },
   errorBox: {
     flexDirection: 'row',
     gap: 8,
@@ -548,16 +663,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FECACA',
   },
-  errorText: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 13, color: DANGER, lineHeight: 18 },
+  errorText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: DANGER,
+    lineHeight: 18,
+  },
   successBox: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
     backgroundColor: '#F0FDF4',
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#BBF7D0',
+    justifyContent: 'center',
   },
-  successText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#15803D' },
+  successText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#15803D',
+  },
 });
