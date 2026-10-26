@@ -16,7 +16,7 @@ export function Screen({ children, scroll = true }: PropsWithChildren<{ scroll?:
       ? Math.max(insets.top, 12)
       : Math.max(insets.top, 8)
     : 12;
-  const bottomPad = Platform.OS === 'web' ? 34 : 16;
+  const bottomPad = Platform.OS === 'web' ? 20 : 16;
 
   const padStyle = {
     paddingHorizontal: 20,

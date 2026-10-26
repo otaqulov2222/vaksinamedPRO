@@ -664,9 +664,6 @@ export default function HomeScreen() {
           );
         })}
       </View>
-
-      {/* Clearance above floating tab bar */}
-      <View style={styles.bottomClearance} />
     </Screen>
   );
 }
@@ -1273,9 +1270,5 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderWidth: 1,
     borderColor: '#ECE7F6',
-  },
-
-  bottomClearance: {
-    height: Platform.OS === 'web' ? 84 : 100,
   },
 });
