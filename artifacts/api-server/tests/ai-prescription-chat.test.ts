@@ -200,4 +200,20 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.ok(res.reply.includes("Зубная боль") || res.reply.includes("зубной боли"));
     assert.ok(res.reply.includes("стоматолог"));
   });
+
+  it("10. Correctly handles 'qornim ogriyabdi' as clinical abdominal consultation (NEVER off-topic)", () => {
+    assert.equal(isMedicalDomain("qornim ogriyabdi"), true);
+
+    const res = handleAiMedicalChat({
+      message: "qornim ogriyabdi",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.isPrescription, false);
+    assert.equal(res.matchedProducts.length, 0); // No unsolicited products
+    assert.ok(res.reply.includes("Qorin va oshqozon"));
+    assert.ok(res.reply.includes("ko‘richak") || res.reply.includes("appenditsit"));
+    assert.ok(res.quickSuggestions.includes("No-shpa sotib olish"));
+  });
 });

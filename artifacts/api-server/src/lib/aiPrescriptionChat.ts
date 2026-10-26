@@ -69,21 +69,29 @@ const MEDICAL_KEYWORDS = [
   "таблетк", "капсул", "сироп", "мазь", "ukol", "ampula", "укол", "eritma", "tomchi", "sprey", "doza", "дозировк",
   "ichish", "ichiladi", "прием", "qabul", "narx", "цена", "aptek", "аптек", "dorixona", "savat", "корзин",
   "buyurtma", "analog", "аналог", "shifokor", "vrach", "врач", "доктор", "doctor", "stomatolog", "стоматолог",
-  // Symptoms
-  "og'riq", "ogriq", "боль", "bosh", "голов", "tish", "зуб", "bel", "спин", "oyoq", "qorin", "живот",
-  "yurak", "сердц", "isitma", "температур", "жар", "shamollash", "простуд", "gripp", "грипп", "yo'tal", "yotal",
-  "кашель", "balg'am", "мокрот", "burun", "насморк", "tomoq", "горл", "angina", "ангина", "infeksiya", "инфекци", "virus", "вирус",
-  "allergiya", "аллерги", "toshma", "сыпь", "qichish", "зуд", "ich ket", "diareya", "диаре", "ko'ngil", "тошнот", "рвот",
-  "qon bosimi", "bosim", "давлен", "гипертон", "holsizlik", "слабость", "charchoq", "усталость", "asab", "стресс",
-  "milk", "flyus", "karies", "pulpit", "десна", "флюс", "кариес", "пульпит",
+  // Symptoms & Body parts (Uzbek, Russian, English)
+  "og'ri", "ogri", "og‘ri", "ogriy", "og'riy", "ogridi", "og'ridi", "og'riq", "ogriq", "ogriydi",
+  "qorn", "qorin", "qornim", "qorni", "oshqozon", "oshqazon", "jigar", "buyrak", "ichak", "ichim", "hazm", "spazm",
+  "bel", "oyoq", "bosh", "tish", "milk", "tomoq", "yurak", "ko'krak", "kokrak", "o'pka", "opka",
+  "ko'z", "koz", "quloq", "burun", "bo'yin", "boyin", "yelka", "tizza", "bo'g'im", "bogim",
+  "isitma", "temperatura", "harorat", "shamollash", "gripp", "yo'tal", "yotal", "balg'am", "angina",
+  "allergiya", "toshma", "qichish", "ich ket", "diareya", "ko'ngil", "kongil", "qusish", "qusyap",
+  "qon bosimi", "bosim", "davleniye", "holsizlik", "charchoq", "asab", "flyus", "karies", "pulpit",
+  "ko'richak", "korichak", "peritonit", "gastrit", "yazva", "kasal", "bemor", "dard",
+  // Russian roots
+  "бол", "болит", "боле", "живот", "желуд", "печен", "почк", "голов", "зуб", "спин", "горл", "кашел",
+  "жар", "температур", "простуд", "грипп", "тошн", "рвот", "понос", "диаре", "сып", "зуд", "сердц", "давлен",
+  "аппендицит", "спазм", "гастрит",
+  // English roots
+  "pain", "ache", "hurt", "stomach", "belly", "abdomen", "head", "tooth", "throat", "cough", "fever", "cold",
   // Vitamins & supplements
   "vitamin", "витамин", "d3", "д3", "askorbin", "аскорбин", "magniy", "магний", "omega", "омега", "sink", "цинк",
   "kalsiy", "кальций", "temir", "железо", "gemoglobin", "гемоглобин", "anemiya", "анемия", "immunitet", "иммунитет",
   // Specific drugs
   "paratsetamol", "paracetamol", "парацетамол", "amoksitsillin", "amoxicillin", "амоксициллин",
   "ibuprofen", "ибупрофен", "nurofen", "нурофен", "tsitramon", "цитрамон", "analgin", "анальгин",
-  "aspirin", "аспирин", "no-shpa", "но-шпа", "noshpa", "spazmalgon", "спазмалгон", "mezim", "мезим",
-  "festal", "фестал", "omeprazol", "омепразол", "acc", "ацц", "loratadin", "лоратадин", "suprastin", "супрастин",
+  "aspirin", "аспирин", "no-shpa", "но-шпа", "noshpa", "drotaverin", "дротаверин", "spazmalgon", "спазмалгон",
+  "mezim", "мезим", "festal", "фестал", "omeprazol", "омепразол", "acc", "ацц", "loratadin", "лоратадин", "suprastin", "супрастин",
 ];
 
 export function isMedicalDomain(query: string): boolean {
@@ -94,7 +102,30 @@ export function isMedicalDomain(query: string): boolean {
     if (pattern.test(q)) return false;
   }
 
-  return MEDICAL_KEYWORDS.some((kw) => q.includes(kw));
+  // If query matches any medical keyword/symptom/body part
+  if (MEDICAL_KEYWORDS.some((kw) => q.includes(kw))) {
+    return true;
+  }
+
+  // If query is a general health/consultation phrase (not off-topic)
+  const isGeneralHelpOrSymptom =
+    q.includes("yordam") ||
+    q.includes("maslahat") ||
+    q.includes("nima qil") ||
+    q.includes("qanday") ||
+    q.includes("ahvol") ||
+    q.includes("yomon") ||
+    q.includes("kasal") ||
+    q.includes("bemor") ||
+    q.includes("dard") ||
+    q.includes("davol") ||
+    q.includes("shifo") ||
+    q.includes("pomoch") ||
+    q.includes("pomog") ||
+    q.includes("help") ||
+    q.includes("advice");
+
+  return isGeneralHelpOrSymptom;
 }
 
 export function isExplicitMedicinePurchaseRequest(query: string): boolean {
@@ -177,7 +208,7 @@ export function handleAiMedicalChat(params: {
     qNorm === "tinchmisiz";
 
   const hasSpecificSymptomOrDrug =
-    /(og'riq|ogriq|ogriyab|ogriyap|bosh|tish|milk|karies|pulpit|isitma|temperatura|жар|бол|голов|зуб|shamollash|gripp|dori|retsept|рецепт|preparat|vitamin|витамин|davleniye|давлен|qon bosimi|ich ket|diareya|диаре|oshqozon|живот)/i.test(
+    /(og'ri|ogri|ogriy|og'riy|bosh|tish|milk|karies|pulpit|qorn|qorin|oshqozon|jigar|buyrak|isitma|temperatura|жар|бол|голов|зуб|живот|желуд|shamollash|gripp|dori|retsept|рецепт|preparat|vitamin|витамин|davleniye|давлен|qon bosimi|ich ket|diareya|диаре)/i.test(
       qNorm
     );
 
@@ -505,18 +536,29 @@ export function handleAiMedicalChat(params: {
     categoryIntent = "diarrhea";
   } else if (
     qNorm.includes("oshqozon") ||
+    qNorm.includes("qorin") ||
+    qNorm.includes("qorn") ||
     qNorm.includes("jig'ildon") ||
     qNorm.includes("jigildon") ||
     qNorm.includes("hazm") ||
     qNorm.includes("gastrit") ||
     qNorm.includes("yazva") ||
+    qNorm.includes("spazm") ||
     qNorm.includes("omeprazol") ||
     qNorm.includes("mezim") ||
+    qNorm.includes("no-shpa") ||
+    qNorm.includes("noshpa") ||
+    qNorm.includes("drotaverin") ||
     qNorm.includes("живот") ||
+    qNorm.includes("желуд") ||
     qNorm.includes("изжог") ||
     qNorm.includes("пищеварен") ||
+    qNorm.includes("спазм") ||
+    qNorm.includes("но-шпа") ||
     qNorm.includes("омепразол") ||
     qNorm.includes("stomach") ||
+    qNorm.includes("belly") ||
+    qNorm.includes("abdomen") ||
     qNorm.includes("heartburn")
   ) {
     categoryIntent = "stomach";
@@ -636,7 +678,7 @@ export function handleAiMedicalChat(params: {
           }
         }
       } else if (categoryIntent === "stomach") {
-        if (name.includes("omeprazol") || name.includes("mezim")) {
+        if (name.includes("no-shpa") || name.includes("noshpa") || name.includes("drotaverin") || name.includes("omeprazol") || name.includes("mezim")) {
           if (!seenGroups.has(group)) {
             seenGroups.add(group);
             relevantCandidates.push(p);
@@ -770,15 +812,39 @@ export function handleAiMedicalChat(params: {
       quickSuggestions = ["Ko‘p suyuqlik ichish qoidalari", "Isitma qachon xavfli?", "Paratsetamol sotib olish"];
     }
   } else if (categoryIntent === "stomach") {
-    if (lang === "ru") {
-      reply = `🩺 Врачебная рекомендация: Изжога и дискомфорт в желудке\n\nПри изжоге и повышенной кислотности важно скорректировать диету и защитить слизистую.\n\nСоветы врача:\n1. Исключите жареное, острое, кофе и газировку. Питайтесь дробно, небольшими порциями;\n2. При изжоге принимают ингибиторы протонной помпы (Омепразол за 30 минут до завтрака);\n3. Предупреждение: При острой «кинжальной» боли в животе категорически запрещено пить обезболивающие — срочно обратитесь к хирургу!\n\n⚠️ Важное напоминание: При регулярном дискомфорте пройдите гастроскопию у врача.`;
-      quickSuggestions = ["Диета при изжоге", "Когда нужен хирург?", "Купить Омепразол"];
-    } else if (lang === "en") {
-      reply = `🩺 Clinical Advisory: Heartburn & Gastric Comfort\n\nAcid reflux and gastric discomfort require dietary restraint and mucosal protection.\n\nDoctor's tips:\n1. Avoid fried, spicy foods and carbonated drinks. Eat frequent small meals;\n2. For heartburn, Omeprazole is taken 30 minutes before breakfast;\n3. Alert: Never take painkillers for acute unexplained abdominal pain — seek surgical evaluation immediately!\n\n⚠️ Medical reminder: Consult a gastroenterologist for chronic symptoms.`;
-      quickSuggestions = ["Dietary guidelines", "Surgical red flags", "Buy Omeprazole"];
+    const isAbdominalPain =
+      qNorm.includes("qorin") ||
+      qNorm.includes("qorn") ||
+      qNorm.includes("живот") ||
+      qNorm.includes("belly") ||
+      qNorm.includes("abdomen") ||
+      qNorm.includes("spazm") ||
+      qNorm.includes("og'ri") ||
+      qNorm.includes("ogri") ||
+      qNorm.includes("бол");
+
+    if (isAbdominalPain) {
+      if (lang === "ru") {
+        reply = `🩺 Врачебная консультация: Боль в области живота и желудка\n\nБоль в животе (мышечный спазм, гастрит, пищевое расстройство или острая хирургическая патология — аппендицит) требует предельной осторожности.\n\nРекомендации врача и правила безопасности:\n1. Строгий запрет: До осмотра врача категорически запрещено прикладывать грелку к животу и принимать сильные обезболивающие (анальгетики)! Снятие боли маскирует симптомы острого аппендицита и перитонита;\n2. Прилягте в удобном положении, расстегните ремень. Воздержитесь от тяжелой и жирной пищи. Пейте теплую воду без газа небольшими глотками;\n3. При спазмах гладкой мускулатуры по согласованию с врачом допускается прием спазмолитика (Дротаверин / Но-шпа);\n4. Опасные симптомы (вызов 103): Острая боль справа внизу живота, рвота, повышение температуры, твердый живот — требуют немедленного вызова скорой помощи!\n\n⚠️ Важное напоминание: Данная консультация носит информационный характер. При острой боли в животе обязательно обратитесь к врачу.`;
+        quickSuggestions = ["Симптомы аппендицита", "Когда вызывать 103?", "Купить Но-шпа"];
+      } else if (lang === "en") {
+        reply = `🩺 Clinical Advisory: Abdominal & Stomach Pain\n\nAbdominal pain can stem from indigestion, cramps, gastritis, or serious acute conditions such as appendicitis.\n\nDoctor's instructions & critical precautions:\n1. Strict prohibition: NEVER apply warm heating pads to the abdomen or take strong analgesics! Masking pain can hide acute appendicitis or peritonitis;\n2. Rest comfortably, loosen tight belts, and avoid heavy or spicy foods. Sip small amounts of room-temperature water;\n3. For smooth muscle cramps, an antispasmodic (such as Drotaverine / No-shpa) may be taken with doctor approval;\n4. Emergency red flags: If pain shifts to the lower right abdomen, worsens continuously, or is accompanied by fever or vomiting — call 103 ambulance immediately!\n\n⚠️ Medical reminder: Consult a physician or surgeon promptly for acute abdominal pain.`;
+        quickSuggestions = ["Appendicitis warning signs", "When to call 103", "Buy No-shpa"];
+      } else {
+        reply = `🩺 Shifokor tavsiyasi: Qorin va oshqozon sohasidagi og‘riqda nima qilish kerak?\n\nQorindagi og‘riqlar turli sabablar (me'da spazmi, gastrit, noto‘g‘ri ovqatlanish yoki o‘tkir jarrohlik holatlari — masalan, ko‘richak / appenditsit) oqibatida paydo bo‘lishi mumkin.\n\nShifokor ko‘rsatmalari va xavfsizlik choralari:\n1. Qat'iy taqiq: Qorindagi og‘riq sababi aniqlanmaguncha, aslo issiq grelka qo‘ymang va kuchli og‘riq qoldiruvchi dorilarni (analgetiklarni) ichmang! Og‘riqni sun'iy bosish xavfli jarrohlik holatlarini (masalan, ko‘richak yorilishi yoki peritonitni) yashirib qo‘yishi mumkin;\n2. Tinch holatda yoting, tor kamarni bo‘shating. Qattiq, yog‘li, qovurilgan taomlar yemang. Gazsiz iliq suv yoki moychechak damlamasidan oz-ozdan iching;\n3. Qisilish va spazm bilan kechadigan og‘riqlarda shifokor bilan maslahatlashgan holda faqat spazmolitik vosita (masalan, Drotaverin / No-shpa) qabul qilinishi mumkin;\n4. Zudlik bilan shifokorga murojaat qilish belgilari: Agar og‘riq qorinning o‘ng pastki qismiga o‘tsa, to‘xtovsiz kuchaysa, ko‘ngil aynishi, qusish yoki tana harorati ko‘tarilishi bilan kechsa — darhol 103 Tez yordam chaqiring!\n\n⚠️ Muhim eslatma: Ushbu tavsiyalar axborot xarakteriga ega. Qorin og‘rig‘ida shifokor-terapevt yoki jarroh ko‘rigidan o‘tish zarur.`;
+        quickSuggestions = ["Xavfli ko‘richak belgilari", "Qachon 103 chaqiriladi?", "No-shpa sotib olish"];
+      }
     } else {
-      reply = `🩺 Shifokor tavsiyasi: Oshqozon noqulayligi va jig‘ildon qaynashi\n\nJig‘ildon qaynashi (izjoga) ko‘pincha noto‘g‘ri ovqatlanish yoki me'da shirasining kislotaliligi oshishidan kelib chiqadi.\n\nShifokor ko‘rsatmalari:\n1. Qovurilgan, sho‘r, achchiq taomlar, kofe va gazli ichimliklardan tiyiling;\n2. Jig‘ildon qaynashida kislotani kamaytiruvchi vosita (Omeprazol nonushtadan 30 daqiqa oldin) qabul qilinadi;\n3. Xavfli belgi: Qorinda keskin sanchuvchi og‘riq bo‘lsa, og‘riq qoldiruvchi ichmang — zudlik bilan shifokor-jarrohga boring!\n\n⚠️ Muhim eslatma: Muntazam bezovtalik kuzatilsa, shifokor-gastroenterolog ko‘rigidan o‘ting.`;
-      quickSuggestions = ["Oshqozon parhezi qoidalari", "Qachon jarrohga borish kerak?", "Omeprazol sotib olish"];
+      if (lang === "ru") {
+        reply = `🩺 Врачебная рекомендация: Изжога и дискомфорт в желудке\n\nПри изжоге и повышенной кислотности важно скорректировать диету и защитить слизистую.\n\nСоветы врача:\n1. Исключите жареное, острое, кофе и газировку. Питайтесь дробно, небольшими порциями;\n2. При изжоге принимают ингибиторы протонной помпы (Омепразол за 30 минут до завтрака);\n3. Предупреждение: При острой «кинжальной» боли в животе категорически запрещено пить обезболивающие — срочно обратитесь к хирургу!\n\n⚠️ Важное напоминание: При регулярном дискомфорте пройдите гастроскопию у врача.`;
+        quickSuggestions = ["Диета при изжоге", "Когда нужен хирург?", "Купить Омепразол"];
+      } else if (lang === "en") {
+        reply = `🩺 Clinical Advisory: Heartburn & Gastric Comfort\n\nAcid reflux and gastric discomfort require dietary restraint and mucosal protection.\n\nDoctor's tips:\n1. Avoid fried, spicy foods and carbonated drinks. Eat frequent small meals;\n2. For heartburn, Omeprazole is taken 30 minutes before breakfast;\n3. Alert: Never take painkillers for acute unexplained abdominal pain — seek surgical evaluation immediately!\n\n⚠️ Medical reminder: Consult a gastroenterologist for chronic symptoms.`;
+        quickSuggestions = ["Dietary guidelines", "Surgical red flags", "Buy Omeprazole"];
+      } else {
+        reply = `🩺 Shifokor tavsiyasi: Oshqozon noqulayligi va jig‘ildon qaynashi\n\nJig‘ildon qaynashi (izjoga) ko‘pincha noto‘g‘ri ovqatlanish yoki me'da shirasining kislotaliligi oshishidan kelib chiqadi.\n\nShifokor ko‘rsatmalari:\n1. Qovurilgan, sho‘r, achchiq taomlar, kofe va gazli ichimliklardan tiyiling;\n2. Jig‘ildon qaynashida kislotani kamaytiruvchi vosita (Omeprazol nonushtadan 30 daqiqa oldin) qabul qilinadi;\n3. Xavfli belgi: Qorinda keskin sanchuvchi og‘riq bo‘lsa, og‘riq qoldiruvchi ichmang — zudlik bilan shifokor-jarrohga boring!\n\n⚠️ Muhim eslatma: Muntazam bezovtalik kuzatilsa, shifokor-gastroenterolog ko‘rigidan o‘ting.`;
+        quickSuggestions = ["Oshqozon parhezi qoidalari", "Qachon jarrohga borish kerak?", "Omeprazol sotib olish"];
+      }
     }
   } else if (categoryIntent === "allergy") {
     if (lang === "ru") {

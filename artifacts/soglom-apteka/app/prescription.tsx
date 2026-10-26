@@ -27,6 +27,7 @@ const TEXT_MUTED = '#6B7280';
 const BORDER = '#E5E7EB';
 const CARD_BG = '#FFFFFF';
 const BG = '#F8F9FD';
+const KEY_ENTER = 'Enter'; // i18n-ignore
 
 export interface ChatProductItem {
   id: number;
@@ -564,7 +565,7 @@ export default function PrescriptionScreen() {
               <Feather name="plus-circle" size={24} color={PURPLE} />
             </Pressable>
 
-            {/* Text Input */}
+            {/* Text Input with Enter to send on Web */}
             <TextInput
               style={styles.chatInput}
               value={inputText}
@@ -573,6 +574,24 @@ export default function PrescriptionScreen() {
               placeholderTextColor={TEXT_MUTED}
               multiline
               maxLength={400}
+              returnKeyType="send"
+              blurOnSubmit={false}
+              onSubmitEditing={() => {
+                handleSendMessage();
+              }}
+              onKeyPress={(e: any) => {
+                if (Platform.OS === 'web' && e.nativeEvent?.key === KEY_ENTER && !e.nativeEvent?.shiftKey) {
+                  e.preventDefault?.();
+                  handleSendMessage();
+                }
+              }}
+              // @ts-ignore - React Native Web passes onKeyDown to textarea
+              onKeyDown={(e: any) => {
+                if (e.key === KEY_ENTER && !e.shiftKey) {
+                  e.preventDefault?.();
+                  handleSendMessage();
+                }
+              }}
             />
 
             {/* Send Button */}
