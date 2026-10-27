@@ -449,7 +449,7 @@ export function handleAiMedicalChat(params: {
 
   // 5. PEDIATRIC HEALTH & FEVER SAFETY (Specialized pediatric protocol)
   const isPediatric =
-    (/\b(bola|bolam|bolaga|bolaning|bolalarga|bolalar|go'dak|godak|chaqaloq|chaqaloqlar|farzand|farzandim|ребенок|ребенка|ребенку|ребенком|дети|малыш|малыша|детск\w*|груднич\w*|child|children|infant|toddler|baby|kid|kids)\b/i.test(qNorm)) &&
+    (/\b(bola|bolaning|bolaga|bolani|bolada|boladan|bolam\w*|bolang\w*|bolasi\w*|bolalar\w*|go['’`]?dak\w*|chaqaloq\w*|farzand\w*|ребенок|ребенк\w*|детск\w*|дети\w*|малыш\w*|груднич\w*|child|children|infant\w*|toddler\w*|baby|babies|kid|kids)\b/i.test(qNorm)) &&
     (qNorm.includes("isitma") || qNorm.includes("temperatura") || qNorm.includes("shamollash") || qNorm.includes("жар") || qNorm.includes("fever") || qNorm.includes("og'ri") || qNorm.includes("dori"));
 
   if (isPediatric && !hasImage) {
