@@ -587,6 +587,7 @@ export default function PrescriptionScreen() {
               placeholder={t('catalog.aiChatPlaceholder')}
               placeholderTextColor={TEXT_MUTED}
               multiline
+              numberOfLines={1}
               maxLength={400}
               returnKeyType="send"
               blurOnSubmit={false}
@@ -1137,20 +1138,27 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   attachBtn: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chatInput: {
     flex: 1,
     backgroundColor: '#F8F7FC',
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    paddingTop: Platform.OS === 'ios' ? 10 : 9,
+    paddingBottom: Platform.OS === 'ios' ? 10 : 9,
     fontSize: 14,
+    lineHeight: 20,
     fontFamily: 'Inter_400Regular',
     color: PURPLE_DEEP,
+    minHeight: 40,
     maxHeight: 100,
     borderWidth: 1,
     borderColor: '#ECEAF2',
+    textAlignVertical: 'center',
   },
   sendBtn: {
     width: 40,
