@@ -660,7 +660,6 @@ export default function CatalogScreen() {
 
   const quickFilters = useMemo(
     () => [
-      { key: 'all' as const, label: t('catalog.filterAll'), icon: 'view-grid' as const },
       { key: 'otc' as const, label: t('catalog.filterOtc'), icon: 'shield-check-outline' as const },
       { key: 'cashback' as const, label: t('catalog.filterCashback'), icon: 'wallet-giftcard' as const },
       { key: 'under50k' as const, label: t('catalog.filterUnder50k'), icon: 'tag-outline' as const },
@@ -833,12 +832,12 @@ export default function CatalogScreen() {
             </Pressable>
           ) : null}
           <Pressable
-            onPress={() => router.push('/qr')}
+            onPress={() => router.push('/prescription')}
             hitSlop={6}
-            accessibilityLabel={t('common.navMyQr')}
+            accessibilityLabel={t('catalog.prescriptionScanAction')}
             style={styles.searchQrBtn}
           >
-            <MaterialCommunityIcons name="line-scan" size={22} color={PURPLE_DEEP} />
+            <MaterialCommunityIcons name="line-scan" size={20} color={PURPLE} />
           </Pressable>
         </View>
 
@@ -851,7 +850,7 @@ export default function CatalogScreen() {
               contentContainerStyle={styles.quickSearchScroll}
             >
               <View style={styles.quickSearchLabelBadge}>
-                <Feather name="trending-up" size={12} color={PURPLE} />
+                <Feather name="trending-up" size={11} color={PURPLE} />
                 <Text style={styles.quickSearchLabelText}>{t('catalog.popularSearchTitle')}</Text>
               </View>
               {POPULAR_SEARCHES.map((term) => (
@@ -881,21 +880,27 @@ export default function CatalogScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
         >
+          <View style={styles.aiBannerIconWrap}>
+            <MaterialCommunityIcons name="line-scan" size={18} color="#FFFFFF" />
+          </View>
           <View style={styles.aiBannerLeft}>
-            <Text style={styles.aiBannerTitle} numberOfLines={1}>
-              {t('catalog.prescriptionScanBannerTitle')}
-            </Text>
-            <Text style={styles.aiBannerSub} numberOfLines={2}>
+            <View style={styles.aiBadgeRow}>
+              <Text style={styles.aiBannerTitle} numberOfLines={1}>
+                {t('catalog.prescriptionScanBannerTitle')}
+              </Text>
+              <View style={styles.aiMiniBadge}>
+                <Text style={styles.aiMiniBadgeText}>AI</Text>
+              </View>
+            </View>
+            <Text style={styles.aiBannerSub} numberOfLines={1}>
               {t('catalog.prescriptionScanBannerSub')}
             </Text>
           </View>
           <View style={styles.aiBannerRight}>
-            <View style={styles.aiCameraBubble}>
-              <MaterialCommunityIcons name="line-scan" size={22} color="#FFFFFF" />
-            </View>
             <Text style={styles.aiActionText} numberOfLines={1}>
               {t('catalog.prescriptionScanAction')}
             </Text>
+            <Feather name="chevron-right" size={13} color={PURPLE} />
           </View>
         </Pressable>
 
@@ -929,20 +934,18 @@ export default function CatalogScreen() {
               return (
                 <Pressable
                   key={c.id}
-                  style={styles.catItem}
+                  style={[styles.catPill, active && styles.catPillActive]}
                   onPress={() => setCat(c.id)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   accessibilityLabel={c.label}
                 >
-                  <View style={[styles.catIcon, active && styles.catIconActive]}>
-                    <MaterialCommunityIcons
-                      name={getCategoryIcon(c.id)}
-                      size={24}
-                      color={active ? '#fff' : PURPLE}
-                    />
-                  </View>
-                  <Text style={[styles.catLabel, active && styles.catLabelActive]} numberOfLines={2}>
+                  <MaterialCommunityIcons
+                    name={getCategoryIcon(c.id)}
+                    size={16}
+                    color={active ? '#FFFFFF' : PURPLE}
+                  />
+                  <Text style={[styles.catPillText, active && styles.catPillTextActive]} numberOfLines={1}>
                     {c.label}
                   </Text>
                 </Pressable>
@@ -964,7 +967,7 @@ export default function CatalogScreen() {
               <Pressable
                 key={qf.key}
                 style={[styles.subFilterChip, active && styles.subFilterChipActive]}
-                onPress={() => setQuickFilter(qf.key)}
+                onPress={() => setQuickFilter((cur) => (cur === qf.key ? 'all' : qf.key))}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={qf.label}
@@ -972,7 +975,7 @@ export default function CatalogScreen() {
                 <MaterialCommunityIcons
                   name={qf.icon}
                   size={14}
-                  color={active ? '#FFFFFF' : PURPLE_DEEP}
+                  color={active ? PURPLE : '#64748B'}
                 />
                 <Text
                   style={[styles.subFilterChipText, active && styles.subFilterChipTextActive]}
@@ -980,6 +983,9 @@ export default function CatalogScreen() {
                 >
                   {qf.label}
                 </Text>
+                {active ? (
+                  <Feather name="x" size={11} color={PURPLE} style={{ marginLeft: 1 }} />
+                ) : null}
               </Pressable>
             );
           })}
@@ -990,6 +996,11 @@ export default function CatalogScreen() {
             <Text style={styles.foundCountText}>
               {t('catalog.foundCount', { count: products.length })}
             </Text>
+            {hasBranch ? (
+              <Text style={styles.foundBranchNote} numberOfLines={1}>
+                {t('catalog.branchHintScoped', { total: fmt.number(total) })}
+              </Text>
+            ) : null}
           </View>
           <View style={{ flex: 1, minWidth: 4 }} />
           <Pressable
@@ -998,11 +1009,11 @@ export default function CatalogScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('catalog.sortA11y', { label: sortLabel })}
           >
-            <MaterialCommunityIcons name="swap-vertical" size={16} color={PURPLE_DEEP} />
+            <MaterialCommunityIcons name="swap-vertical" size={15} color={PURPLE_DEEP} />
             <Text style={styles.toolText} numberOfLines={1}>
               {sort === 'default' ? t('catalog.sortTitle') : sortLabel}
             </Text>
-            <Feather name="chevron-down" size={14} color={MUTED} />
+            <Feather name="chevron-down" size={13} color={MUTED} />
           </Pressable>
           <View style={styles.viewToggle}>
             <Pressable
@@ -1012,7 +1023,7 @@ export default function CatalogScreen() {
               accessibilityState={{ selected: viewMode === 'grid' }}
               accessibilityLabel={t('catalog.viewGridA11y')}
             >
-              <MaterialCommunityIcons name="view-grid" size={16} color={viewMode === 'grid' ? '#fff' : PURPLE_DEEP} />
+              <MaterialCommunityIcons name="view-grid" size={15} color={viewMode === 'grid' ? '#fff' : PURPLE_DEEP} />
             </Pressable>
             <Pressable
               style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
@@ -1023,7 +1034,7 @@ export default function CatalogScreen() {
             >
               <MaterialCommunityIcons
                 name="format-list-bulleted"
-                size={16}
+                size={15}
                 color={viewMode === 'list' ? '#fff' : PURPLE_DEEP}
               />
             </Pressable>
@@ -1073,11 +1084,6 @@ export default function CatalogScreen() {
           </View>
         ) : (
           <View style={[styles.grid, viewMode === 'list' && styles.list, { rowGap: gridGap }]}>
-            <Text style={styles.branchHint}>
-              {hasBranch
-                ? t('catalog.branchHintScoped', { total: fmt.number(total) })
-                : t('catalog.branchHintNone')}
-            </Text>
             {products.map((p) => (
               <View
                 key={String(p.id)}
@@ -1321,19 +1327,30 @@ const styles = StyleSheet.create({
   },
 
   aiBanner: {
-    backgroundColor: '#1E1346',
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 14,
+    backgroundColor: '#F5F0FF',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    shadowColor: '#1A1040',
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#E6DCFA',
+    shadowColor: '#6A22D6',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  aiBannerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   aiBannerLeft: {
     flex: 1,
@@ -1343,113 +1360,94 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
+    marginBottom: 2,
   },
-  aiBadge: {
+  aiMiniBadge: {
     backgroundColor: '#FEF08A',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
   },
-  aiBadgeText: {
+  aiMiniBadgeText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 9.5,
+    fontSize: 9,
     color: '#854D0E',
-    letterSpacing: 0.5,
-  },
-  rxBadge: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  rxBadgeText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 9.5,
-    color: '#FFFFFF',
   },
   aiBannerTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 14.5,
-    lineHeight: 18,
-    color: '#FFFFFF',
-    marginBottom: 2,
+    fontSize: 13,
+    color: PURPLE_DEEP,
   },
   aiBannerSub: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 11.5,
-    lineHeight: 15,
-    color: '#D1CBE5',
+    fontSize: 11,
+    color: '#6B5E8A',
   },
   aiBannerRight: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2D8F8',
     flexShrink: 0,
-    width: 72,
-  },
-  aiCameraBubble: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: PURPLE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-    shadowColor: '#6A22D6',
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 4,
   },
   aiActionText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    color: '#EDE9FE',
-    textAlign: 'center',
+    fontSize: 11,
+    color: PURPLE,
   },
 
   subFiltersScroll: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   subFiltersRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     paddingBottom: 2,
   },
   subFilterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: CARD,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 11,
+    paddingVertical: 5.5,
     borderWidth: 1,
     borderColor: '#ECEAF2',
   },
   subFilterChipActive: {
-    backgroundColor: PURPLE,
+    backgroundColor: '#F3EEFF',
     borderColor: PURPLE,
   },
   subFilterChipText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    color: PURPLE_DEEP,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    color: '#555A6E',
   },
   subFilterChipTextActive: {
-    color: '#FFFFFF',
+    fontFamily: 'Inter_700Bold',
+    color: PURPLE,
   },
 
   foundCountBadge: {
-    backgroundColor: '#EDE9FE',
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 8,
+    justifyContent: 'center',
   },
   foundCountText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    color: PURPLE,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: PURPLE_DEEP,
+  },
+  foundBranchNote: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 10.5,
+    color: MUTED,
+    marginTop: 1,
   },
 
   catErrorRow: {
@@ -1475,63 +1473,62 @@ const styles = StyleSheet.create({
     color: PURPLE,
   },
   catLoadingChip: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: CAT_BG,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 6,
   },
 
   catsContainer: {
-    marginBottom: 12,
+    marginBottom: 10,
     alignSelf: 'stretch',
     width: Platform.OS === 'web' ? ('auto' as any) : undefined,
     overflow: 'hidden',
   },
   catsScroll: { flexGrow: 0, width: '100%' },
-  catsRow: { gap: 10, paddingBottom: 4, alignItems: 'flex-start' },
-  catItem: { width: 76, alignItems: 'center', minHeight: 84 },
-  catIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: '#F8F6FD',
+  catsRow: { gap: 8, paddingBottom: 2, alignItems: 'center' },
+  catPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 13,
+    paddingVertical: 7.5,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#ECEAF2',
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  catIconActive: {
+  catPillActive: {
     backgroundColor: PURPLE,
     borderColor: PURPLE,
     shadowColor: PURPLE,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.25,
     shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  catLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    lineHeight: 13,
-    minHeight: 26,
-    color: '#64748B',
-    textAlign: 'center',
-    includeFontPadding: false,
+  catPillText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    color: PURPLE_DEEP,
   },
-  catLabelActive: {
-    fontFamily: 'Inter_700Bold',
-    color: PURPLE,
+  catPillTextActive: {
+    color: '#FFFFFF',
   },
 
   toolsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 10,
     flexWrap: 'nowrap',
   },
   toolChip: {
@@ -1539,9 +1536,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: CARD,
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 7,
     maxWidth: '48%',
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
