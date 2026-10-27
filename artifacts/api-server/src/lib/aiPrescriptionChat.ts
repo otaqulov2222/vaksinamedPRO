@@ -111,6 +111,18 @@ const MEDICAL_KEYWORDS = [
   "aspirin", "аспирин", "no-shpa", "но-шпа", "noshpa", "drotaverin", "дротаверин", "spazmalgon", "спазмалгон",
   "mezim", "мезим", "festal", "фестал", "omeprazol", "омепразол", "acc", "ацц", "loratadin", "лоратадин",
   "suprastin", "супрастин", "rehidron", "регидрон", "smecta", "смекта", "duphalac", "дюфалак",
+  // Extended emergency, specialty & pharmacological roots
+  "hushdan", "hushidan", "obmorok", "обморок", "faint", "fainting",
+  "issiq urish", "quyosh urish", "oftob urish", "тепловой удар", "солнечный удар", "heatstroke", "sunstroke",
+  "ari chaq", "asalar", "chayon", "hasharot chaq", "укус осы", "укус пчелы", "укус насекомого", "bee sting", "insect bite",
+  "pochka", "buyrak tosh", "почечная колика", "kidney stone", "kidney colic",
+  "xolesistit", "холецистит", "o't qopi", "ot qopi", "o't pufak", "ot pufak", "gallbladder", "cholecystitis",
+  "kamqonlik", "ferritin", "низкий гемоглобин", "дефицит железа", "iron deficiency",
+  "homilador", "homiladorlik", "emizikli", "беременност", "гв", "грудное вскармливание", "pregnancy", "breastfeeding",
+  "gribok", "zamburug", "zamburug'", "dermatit", "ekzema", "temiratki", "грибок", "дерматит", "экзема", "fungus", "eczema",
+  "gaymorit", "naftizin", "ksilometazolin", "akvamaris", "аквамарис", "sinusitis",
+  "gijja", "qurt", "gelmint", "глист", "остриц", "гельминт", "worms", "parasite",
+  "och qoringa", "to'q qoringa", "ovqatdan keyin", "dori qanday ichiladi", "как принимать лекарство", "how to take",
 ];
 
 export function parseMathQuery(text: string): { isMath: boolean; a?: number; op?: string; b?: number; result?: number } {
@@ -605,6 +617,17 @@ export function handleAiMedicalChat(params: {
 
   // 9. ADVANCED CLINICAL CATEGORY TRIAGE
   type ClinicalCategory =
+    | "fainting_collapse"
+    | "heatstroke_sunstroke"
+    | "insect_sting"
+    | "kidney_colic"
+    | "liver_gallbladder"
+    | "anemia_iron"
+    | "pregnancy_meds"
+    | "skin_fungus_rash"
+    | "nasal_sinusitis"
+    | "helminths_parasites"
+    | "medication_rules"
     | "fracture"
     | "wound_cut"
     | "choking"
@@ -635,6 +658,140 @@ export function handleAiMedicalChat(params: {
 
   let categoryIntent: ClinicalCategory = "none";
 
+  // Fainting & Collapse
+  if (
+    qNorm.includes("hushdan") ||
+    qNorm.includes("hushidan") ||
+    qNorm.includes("hushini yo'qot") ||
+    qNorm.includes("obmorok") ||
+    qNorm.includes("обморок") ||
+    qNorm.includes("потеря сознания") ||
+    qNorm.includes("faint") ||
+    qNorm.includes("passed out")
+  ) {
+    categoryIntent = "fainting_collapse";
+  } else if (
+    qNorm.includes("issiq ur") ||
+    qNorm.includes("quyosh ur") ||
+    qNorm.includes("oftob ur") ||
+    qNorm.includes("тепловой удар") ||
+    qNorm.includes("солнечный удар") ||
+    qNorm.includes("heatstroke") ||
+    qNorm.includes("sunstroke")
+  ) {
+    categoryIntent = "heatstroke_sunstroke";
+  } else if (
+    qNorm.includes("ari chaq") ||
+    qNorm.includes("asalar") ||
+    qNorm.includes("chayon") ||
+    qNorm.includes("hasharot chaq") ||
+    qNorm.includes("укус осы") ||
+    qNorm.includes("укус пчелы") ||
+    qNorm.includes("укус насекомого") ||
+    qNorm.includes("bee sting") ||
+    qNorm.includes("wasp sting") ||
+    qNorm.includes("insect bite")
+  ) {
+    categoryIntent = "insect_sting";
+  } else if (
+    (qNorm.includes("buyrak") && (qNorm.includes("og'ri") || qNorm.includes("ogri") || qNorm.includes("sanch") || qNorm.includes("tosh"))) ||
+    (qNorm.includes("pochka") && (qNorm.includes("og'ri") || qNorm.includes("ogri") || qNorm.includes("sanch"))) ||
+    qNorm.includes("почечная колика") ||
+    (qNorm.includes("почк") && qNorm.includes("бол")) ||
+    qNorm.includes("kidney colic") ||
+    qNorm.includes("kidney stone")
+  ) {
+    categoryIntent = "kidney_colic";
+  } else if (
+    (qNorm.includes("jigar") && (qNorm.includes("og'ri") || qNorm.includes("ogri") || qNorm.includes("ogir"))) ||
+    qNorm.includes("o't qopi") ||
+    qNorm.includes("ot qopi") ||
+    qNorm.includes("o't pufak") ||
+    qNorm.includes("ot pufak") ||
+    qNorm.includes("xolesistit") ||
+    qNorm.includes("холецистит") ||
+    (qNorm.includes("печен") && qNorm.includes("бол")) ||
+    qNorm.includes("желчный") ||
+    qNorm.includes("cholecystitis") ||
+    qNorm.includes("gallbladder")
+  ) {
+    categoryIntent = "liver_gallbladder";
+  } else if (
+    qNorm.includes("gemoglobin") ||
+    qNorm.includes("kamqon") ||
+    qNorm.includes("anemiya") ||
+    qNorm.includes("temir yetishmov") ||
+    qNorm.includes("гемоглобин") ||
+    qNorm.includes("анемия") ||
+    qNorm.includes("дефицит железа") ||
+    qNorm.includes("anemia") ||
+    qNorm.includes("iron deficiency")
+  ) {
+    categoryIntent = "anemia_iron";
+  } else if (
+    qNorm.includes("homilador") ||
+    qNorm.includes("homiladorlik") ||
+    qNorm.includes("emizikli") ||
+    qNorm.includes("bola emiz") ||
+    qNorm.includes("беременност") ||
+    qNorm.includes("при беременности") ||
+    qNorm.includes("грудное вскармливание") ||
+    qNorm.includes("при гв") ||
+    qNorm.includes("pregnancy") ||
+    qNorm.includes("breastfeeding")
+  ) {
+    categoryIntent = "pregnancy_meds";
+  } else if (
+    qNorm.includes("gribok") ||
+    qNorm.includes("zamburug") ||
+    qNorm.includes("dermatit") ||
+    qNorm.includes("ekzema") ||
+    qNorm.includes("temiratki") ||
+    qNorm.includes("грибок") ||
+    qNorm.includes("дерматит") ||
+    qNorm.includes("экзема") ||
+    qNorm.includes("микоз") ||
+    qNorm.includes("fungus") ||
+    qNorm.includes("eczema")
+  ) {
+    categoryIntent = "skin_fungus_rash";
+  } else if (
+    qNorm.includes("gaymorit") ||
+    qNorm.includes("rinit") ||
+    qNorm.includes("tumov") ||
+    qNorm.includes("burun biti") ||
+    qNorm.includes("насморк") ||
+    qNorm.includes("гайморит") ||
+    qNorm.includes("ринит") ||
+    qNorm.includes("заложенность носа") ||
+    qNorm.includes("sinusitis") ||
+    qNorm.includes("runny nose")
+  ) {
+    categoryIntent = "nasal_sinusitis";
+  } else if (
+    qNorm.includes("gijja") ||
+    qNorm.includes("ichak qurt") ||
+    qNorm.includes("gelmint") ||
+    qNorm.includes("глист") ||
+    qNorm.includes("остриц") ||
+    qNorm.includes("паразит") ||
+    qNorm.includes("helminth") ||
+    qNorm.includes("worms")
+  ) {
+    categoryIntent = "helminths_parasites";
+  } else if (
+    qNorm.includes("och qoringa") ||
+    qNorm.includes("to'q qoringa") ||
+    qNorm.includes("ovqatdan oldin") ||
+    qNorm.includes("ovqatdan keyin") ||
+    qNorm.includes("dori ichish qoida") ||
+    qNorm.includes("dorilarni aralashtir") ||
+    qNorm.includes("как принимать лекарств") ||
+    qNorm.includes("до или после еды") ||
+    qNorm.includes("how to take medication")
+  ) {
+    categoryIntent = "medication_rules";
+  } else
   // Fracture & Broken Bones priority (qo'l/oyoq singanda birinchi yordam)
   if (
     qNorm.includes("singan") ||
@@ -1114,6 +1271,127 @@ export function handleAiMedicalChat(params: {
     } else {
       reply = `Dorixonamizda sertifikatlangan mos preparat mavjud. Qo‘llashdan oldin yo‘riqnoma bilan tanishib chiqing va shifokor bilan maslahatlashing:`;
       quickSuggestions = ["Qo‘llash qoidalari qanday?", "Qarshi ko‘rsatmalar bormi?", "Savatga o‘tish"];
+    }
+  } else if (categoryIntent === "fainting_collapse") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Первая помощь при обмороке (потере сознания)\n\nОбморок — это кратковременная потеря сознания из-за внезапного снижения кровотока в головном мозге.\n\nАлгоритм неотложной помощи:\n1. Уложите человека на спину на ровную поверхность. Приподнимите ноги на 30 см выше уровня сердца (на подушку или сложенную одежду), чтобы усилить приток крови к голове;\n2. Расстегните тесный воротник, ремень, откройте окно для свежего воздуха;\n3. Сбрызните лицо прохладной водой или дайте понюхать ватку с нашатырным спиртом (держите на расстоянии 5 см от носа);\n4. Категорический запрет: Не давайте пить или принимать лекарства человеку, пока он без сознания;\n5. Если человек не приходит в себя дольше 1–2 минут или не дышит — немедленно вызывайте 103 (скорую помощь) и поверните пострадавшего на бок!`;
+      quickSuggestions = ["Нашатырный спирт правила", "Когда вызывать 103?"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: First Aid for Fainting (Syncope)\n\nFainting is temporary loss of consciousness caused by a momentary drop in cerebral blood flow.\n\nEmergency procedure:\n1. Lay the person flat on their back. Elevate their legs about 30 cm (12 inches) to restore blood flow to the brain;\n2. Loosen constrictive clothing (collars, belts) and ensure abundant fresh ventilation;\n3. Lightly sprinkle cool water on their face or hold smelling salts (ammonia) a few inches from the nose;\n4. Do NOT attempt to give fluids or oral pills while the person is unconscious;\n5. If recovery takes longer than 1–2 minutes, or if chest pain or abnormal breathing occurs, dial 103 emergency immediately and place them in the recovery (side) position.`;
+      quickSuggestions = ["Recovery position guide", "Emergency 103 call"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Hushdan ketishda (obmorok) birinchi yordam\n\nHushdan ketish — miyaga qon yetib borishi vaqtincha pasayishi oqibatida yuzaga keladi.\n\nBirinchi yordam ko‘rsatish ketma-ketligi:\n1. Jabrlanuvchini tekis yerga chalqancha yotqizing. Qon bosh miyaga tezroq borishi uchun oyoqlarini 30 sm balandroq ko‘tarib qo‘ying (yostiq yoki kiyim ustiga);\n2. Tor yoqa, kamar va tugmalarni bo‘shating, xonaga toza havo kiriting;\n3. Yuziga sovuq suv purkang yoki novshadil spirti (nashatir) tomizilgan paxtani burnidan 5 sm uzoqlikda tuting;\n4. Qat'iy taqiq: Jabrlanuvchi hushsiz holatda bo‘lganda unga aslo suv yoki dori ichirishga urinmang (nafas yo‘liga ketib qolishi mumkin!);\n5. Agar inson 1–2 daqiqa ichida o‘ziga kelmasa yoki nafas olmasa — darhol 103 (Tez yordam) chaqiring va nafas yo‘li berkilib qolmasligi uchun uni yonbosh holatga yotqizing.`;
+      quickSuggestions = ["Novshadil spirtini qo‘llash", "103 ga qo‘ng‘iroq qilish"];
+    }
+  } else if (categoryIntent === "heatstroke_sunstroke") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Первая помощь при тепловом и солнечном ударе\n\nТепловой удар — угрожающее жизни состояние, когда нарушается терморегуляция тела.\n\nДействия первой помощи:\n1. Немедленно переведите пострадавшего в тень или прохладное проветриваемое помещение;\n2. Снимите тесную или плотную одежду;\n3. Охлаждение: Положите влажные прохладные компрессы на лоб, шею, подмышки и паховую область, обмахивайте тело;\n4. Питье: Поите небольшими глотками прохладной минеральной водой или раствором Регидрона для восполнения электролитов;\n5. Опасные симптомы: Если температура выше 39°C, человек бредит, теряет сознание или не потеет — срочно вызывайте 103!`;
+      quickSuggestions = ["Раствор Регидрона", "Вызов скорой 103"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: First Aid for Heatstroke & Sunstroke\n\nHeatstroke is a medical emergency caused by the body overheating and failing to thermoregulate.\n\nFirst aid steps:\n1. Move the person to a cool, shaded area or air-conditioned room immediately;\n2. Remove tight or heavy clothing;\n3. Cool the body: Apply cool, wet towels to the neck, armpits, and groin, and fan vigorously;\n4. Hydration: Provide small sips of cool water or electrolyte solutions (oral rehydration salts);\n5. Emergency alert: If body temperature exceeds 39°C (102°F), or if confusion, seizures, or unconsciousness develop, call 103 emergency services immediately.`;
+      quickSuggestions = ["Electrolyte rehydration", "Emergency 103 call"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Issiq yoki quyosh urishida birinchi yordam\n\nIssiq urishi — tana haroratini boshqarish tizimi ishdan chiqib, organizm haddan tashqari qizib ketganda yuz beradi.\n\nBirinchi yordam choralari:\n1. Jabrlanuvchini darhol salqin, soyali joyga yoki ventilyatorli xonaga o‘tkazing;\n2. Ortiqcha issiq va qisuvchi kiyimlarni yeching;\n3. Sovutish: Bosh, bo‘yin, qo‘ltiq osti va chov sohalariga nam sovuq sochiq qo‘ying;\n4. Suyuqlik ichirish: Kichik qultumlar bilan iliqroq sho‘r suv, mineral suv yoki Rehidron eritmasini ichiring (suv-tuz muvozanatini tiklash uchun);\n5. Xavfli belgilar: Tana harorati 39°C dan oshsa, inson alahsirasa yoki hushini yo‘qotsa — kechiktirmasdan 103 (Tez yordam) chaqiring!`;
+      quickSuggestions = ["Rehidron tayyorlash", "103 ga qo‘ng‘iroq qilish"];
+    }
+  } else if (categoryIntent === "insect_sting") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Помощь при укусе осы, пчелы или насекомого\n\n1. Удаление жала: Если укусила пчела, аккуратно соскоблите жало ногтем или пластиковой картой. Не сжимайте его пинцетом, чтобы не выдавить остатки яда;\n2. Дезинфекция: Промойте место укуса водой с мылом, обработайте антисептиком (Хлоргексидин или спирт);\n3. Снятие отека и боли: Приложите холод через ткань на 15 минут;\n4. Противоаллергическое: Примите таблетку антигистаминного препарата (Супрастин, Лоратадин или Цетиризин) для предупреждения сильной аллергии;\n5. Срочно 103 (Анафилаксия!): Если отек распространяется на шею/лицо, тяжело дышать или падает давление — немедленно вызывайте скорую!`;
+      quickSuggestions = ["Симптомы анафилаксии", "Антигистаминные препараты"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: Bee, Wasp & Insect Stings\n\n1. Remove Stinger: Scrape gently with a fingernail or plastic card. Do not squeeze the venom sac;\n2. Cleanse: Wash thoroughly with soap and water, apply antiseptic (Chlorhexidine);\n3. Ice Pack: Apply a cloth-wrapped ice pack for 15 minutes to reduce local pain and swelling;\n4. Antihistamine: Take an oral antihistamine (Cetirizine, Loratadine) to suppress severe itching and swelling;\n5. Emergency 103 alert: If swelling affects the throat/face, breathing is difficult, or hives spread rapidly (anaphylaxis!), seek emergency medical care immediately.`;
+      quickSuggestions = ["Anaphylaxis signs", "Antihistamine guidance"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Ari, asalar yoki hasharot chaqqanda birinchi yordam\n\n1. Nishni olib tashlash: Agar asalar chaqqan bo‘lsa, nishni tirnoq yoki plastik karta qirrasi bilan ehtiyotkorlik bilan qirib oling (nish xaltachasini siqib yubormang!);\n2. Zararsizlantirish: Chaqilgan joyni sovunli suv bilan yuvib, antiseptik (spirt yoki Xlorgeksidin) bilan arting;\n3. Sovuq bosish: Shish va og‘riqni to‘xtatish uchun sochiqqa o‘ralgan muzni 15 daqiqa bosing;\n4. Allergiyaga qarshi: Kuchli shish va qichishishni oldini olish uchun bir dona antigistamin dori (Suprastin, Loratadin yoki Setirizin) iching;\n5. Zudlik bilan 103 (Anafilaktik shok xavfi!): Agar tomoq qisilib nafas olish qiyinlashsa, yuz va lablar shishsa yoki hushdan ketish alomatlari bo‘lsa — darhol Tez yordam chaqiring!`;
+      quickSuggestions = ["Anafilaktik shok belgilari", "Allergiyaga qarshi dorilar"];
+    }
+  } else if (categoryIntent === "kidney_colic") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Почечная колика и боли в почках\n\nОстрая приступообразная боль в пояснице, отдающая в пах и низ живота, чаще всего вызвана движением камня в мочеточнике.\n\nРекомендации ИИ-ассистента:\n1. Примите спазмолитик (Но-шпа, Дротаверин), чтобы снять спазм мочеточника и облегчить отток мочи;\n2. Строгий запрет: Не принимайте горячие ванны и не грейте поясницу, если есть температура или кровь в моче!\n3. Срочно обратитесь к врачу-урологу и сделайте УЗИ почек и мочевого пузыря;\n4. Вызывайте 103, если боль нестерпимая, моча не отходит или сопровождается неукротимой рвотой.`;
+      quickSuggestions = ["УЗИ почек", "Спазмолитики при колике", "Когда вызывать 103?"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: Kidney Colic & Flank Pain\n\nSudden, sharp, agonizing flank pain radiating to the groin usually suggests acute ureteral obstruction by a kidney stone.\n\nAI Assistant guidance:\n1. An antispasmodic (No-Spa, Drotaverine) may help relax ureteral smooth muscle;\n2. Strict warning: Avoid hot baths if hematuria (blood in urine) or fever is present;\n3. Seek urgent urology consultation and ultrasound/CT imaging to evaluate stone size and position;\n4. Call 103 immediately if anuria (inability to urinate), high fever, or intractable nausea occurs.`;
+      quickSuggestions = ["Renal ultrasound", "When to call 103", "Antispasmodics"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Buyrak sanchig‘i va buyrak og‘rig‘ida nima qilish kerak?\n\nBel sohasidan chov va qovuqqa qarab tarqaluvchi o‘tkir, kuchli sanchuvchi og‘riq ko‘pincha buyrakdagi toshning siydik yo‘liga siljishidan (buyrak sanchig‘i) kelib chiqadi.\n\nAI yordamchisi tavsiyalari:\n1. Spazmni yengillashtirish uchun bitta spazmolitik (No-shpa yoki Drotaverin) ichish mumkin;\n2. Qat'iy taqiq: Agar tana harorati yuqori bo‘lsa yoki peshobda qon ko‘rinsa, bel sohasini aslo issiq qilmang va issiq vannaga o‘tirmang!\n3. Zudlik bilan shifokor-urolog ko‘rigiga boring hamda buyrak va qovuq UZI tekshiruvidan o‘ting;\n4. Agar og‘riq chidab bo‘lmas darajada kuchli bo‘lsa, peshob kelishi to‘xtasa yoki qusish kuzatilsa — darhol 103 (Tez yordam) chaqiring!`;
+      quickSuggestions = ["Buyrak UZI tekshiruvi", "Spazmolitik dorilar", "Urolog ko‘rigiga yozilish"];
+    }
+  } else if (categoryIntent === "liver_gallbladder") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Боли в правом подреберье (Печень, Желчный пузырь)\n\nТяжесть и тупая боль в правом подреберье чаще всего связаны с дискинезией желчных путей или воспалением желчного пузыря (холециститом) после жирной пищи.\n\nРекомендации ИИ-ассистента:\n1. Исключите жирное, жареное, острое, копчености и алкоголь;\n2. Для снятия спазма допустим прием Но-шпы или ферментных препаратов (Мезим, Креон) во время еды;\n3. Категорический запрет: Не пейте желчегонные препараты и не делайте тюбаж, если у вас есть камни в желчном пузыре (риск закупорки протока!);\n4. Обратитесь к гастроэнтерологу и пройдите УЗИ органов брюшной полости.`;
+      quickSuggestions = ["Диета Стол №5", "УЗИ брюшной полости", "Консультация гастроэнтеролога"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: Right Upper Quadrant Pain (Liver & Gallbladder)\n\nRight upper abdominal pain and heaviness frequently arise from biliary dyskinesia or gallbladder inflammation (cholecystitis), typically exacerbated by rich or fatty meals.\n\nAI Assistant guidance:\n1. Adopt a strict low-fat diet (eliminate fried foods, pastries, and alcohol);\n2. Antispasmodics (No-Spa) or digestive enzymes (Pancreatin) may provide symptomatic relief;\n3. Critical warning: Never take cholagogues (bile stimulants) without an ultrasound ruling out gallstones (calculi), as this risks biliary colic or acute obstruction;\n4. Consult a gastroenterologist for an abdominal ultrasound evaluation.`;
+      quickSuggestions = ["Dietary rules", "Abdominal ultrasound", "Gastroenterologist visit"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: O‘ng qovurg‘a osti og‘rig‘i (Jigar va o‘t pufagi)\n\nO‘ng qovurg‘a ostidagi og‘irlik, og‘riq va og‘izda achchiq ta'm ko‘pincha o‘t yo‘llari diskineziyasi yoki o‘t pufagi yallig‘lanishi (xolesistit) tufayli yog‘li taomlardan keyin yuzaga keladi.\n\nAI yordamchisi tavsiyalari:\n1. Parhez: Yog‘li, qovurilgan, dudlangan, achchiq taomlar va spirtli ichimliklarni darhol to‘xtating;\n2. Spazmni yengillatish uchun No-shpa yoki hazmni yaxshilovchi fermentlar (Mezim, Kreon) qabul qilish mumkin;\n3. Qat'iy taqiq: Agar o‘t pufagingizda tosh bo‘lsa, o‘t haydovchi dorilarni aslo ichmang (tosh o‘t yo‘lini to‘sib qo‘yishi va shoshilinch operatsiyaga sabab bo‘lishi mumkin!);\n4. Qorin bo‘shlig‘i a'zolarini UZI qildirib, gastroenterolog ko‘rigidan o‘tish zarur.`;
+      quickSuggestions = ["Jigar va o‘t uchun parhez", "UZI tekshiruviga yozilish", "Mezim haqida"];
+    }
+  } else if (categoryIntent === "anemia_iron") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Анемия и низкий гемоглобин\n\nПостоянная слабость, быстрая утомляемость, головокружение, бледность и выпадение волос часто указывают на дефицит железа и падение гемоглобина.\n\nРекомендации ИИ-ассистента:\n1. Сдайте общий анализ крови (ОАК) и анализ на ферритин (запас железа в тканях);\n2. Включите в рацион продукты, богатые гемовым железом: говядина, печень, гречка, яйца, яблоки, гранат;\n3. По назначению врача принимаются препараты железа (Тотема, Мальтофер, Сорбифер) вместе с витамином C для лучшего усвоения;\n4. Важное правило: Не запивайте препараты железа чаем, кофе или молоком (кальций и танин блокируют всасывание железа!).`;
+      quickSuggestions = ["Анализ на ферритин", "Продукты с железом", "Препараты железа"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: Anemia & Low Hemoglobin\n\nPersistent fatigue, lightheadedness, pale skin, and hair thinning are classic indicators of iron-deficiency anemia.\n\nAI Assistant guidance:\n1. Have a complete blood count (CBC) and serum ferritin test performed;\n2. Enrich your diet with iron-rich foods: lean red meat, liver, buckwheat, eggs, and leafy greens;\n3. Doctor-prescribed iron supplements (e.g. Maltofer, Ferrous sulfate) are best absorbed when taken alongside vitamin C;\n4. Essential interaction rule: Avoid taking iron with tea, coffee, or milk products, as tannins and calcium inhibit iron absorption.`;
+      quickSuggestions = ["Ferritin test guide", "Iron-rich diet", "Iron supplements"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Kamqonlik (anemiya) va past gemoglobin\n\nTez charchash, holsizlik, bosh aylanishi, rang oqarishi va soch to‘kilishi organizmda temir moddasi kamayib, gemoglobin tushib ketganidan darak beradi.\n\nAI yordamchisi tavsiyalari:\n1. Laboratoriyada umumiy qon tahlili (OAK) va qon zardobidagi Ferritin (temir zaxirasi) miqdorini tekshirtiring;\n2. Ratsioningizga temirga boy mahsulotlarni qo‘shing: mol go‘shti, jigar, grechka, tuxum, anor, olma;\n3. Shifokor tavsiyasiga ko‘ra temir preparatlari (Totema, Maltofer, Ferretab) S vitamini bilan birga ichilganda yaxshiroq so‘riladi;\n4. Muhim qoida: Temir dorilarini choy, kofe yoki sut bilan birga ichmang (choy tarkibidagi tanin va sutdagi kaltsiy temirning organizmga singishini to‘sib qo‘yadi!).`;
+      quickSuggestions = ["Ferritin tahlili haqida", "Temirga boy mahsulotlar", "Qon ko‘paytiruvchi dorilar"];
+    }
+  } else if (categoryIntent === "pregnancy_meds") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Прием лекарств при беременности и грудном вскармливании\n\nВ период беременности и лактации большинство медикаментов способны проникать через плаценту или в грудное молоко, влияя на развитие ребенка.\n\nПравила безопасности:\n1. Категорический запрет: Никогда не принимайте антибиотики, НПВП (Аспирин, Нимесил), сиропы от кашля или комбинированные порошки от простуды без назначения гинеколога!\n2. При температуре или головной боли единственным относительно безопасным средством короткого приема считается Парацетамол в минимальной дозировке;\n3. При заложенности носа безопасны промывания морской водой (Аквамарис);\n4. Обязательно согласуйте любой препарат с ведущим вашу беременность врачом-акушером-гинекологом.`;
+      quickSuggestions = ["Безопасные средства при беременности", "Консультация гинеколога"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: Medications in Pregnancy & Lactation\n\nMany pharmaceutical agents cross the placental barrier or enter breast milk, carrying risks for embryonic and fetal development.\n\nSafety guidelines:\n1. Strict rule: Never self-prescribe antibiotics, NSAIDs (such as Aspirin), multi-symptom cold powders, or herbal infusions without obstetric approval;\n2. For mild fever or headache, single-dose Paracetamol is generally considered the safest first-line option;\n3. For nasal congestion, isotonic saline rinses are the preferred drug-free solution;\n4. Always verify any pharmaceutical use with your treating OB-GYN physician.`;
+      quickSuggestions = ["Pregnancy safety principles", "OB-GYN consultation"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Homiladorlik va laktatsiya (emizish) davrida dori ichish qoidalari\n\nHomiladorlik va bola emizish davrida ko‘plab dori vositalari yo‘ldosh orqali homilaga yoki ko‘krak suti orqali chaqaloqqa o‘tib, uning rivojlanishiga salbiy ta'sir ko‘rsatishi mumkin.\n\nXavfsizlik qoidalari:\n1. Qat'iy taqiq: Shifokor-ginekolog ruxsatisiz antibiotiklar, nosteroid og‘riq qoldiruvchilar (Aspirin, Nimesil), shamollashga qarshi kukunlar (Taylolxot va h.k.) yoki yo‘tal siropini o‘zboshimchalik bilan aslo ichmang!\n2. Isitma yoki bosh og‘rig‘ida shifokor bilan maslahatlashgan holda bir martalik minimal dozada Paratsetamol eng xavfsiz hisoblanadi;\n3. Burun bitganda dori tomchilar o‘rniga dengiz tuzi eritmasi (Akvamaris, LinAkva) bilan yuvish tavsiya etiladi;\n4. O‘zingiz va bolangiz salomatligi uchun har qanday dorini faqat shifokor nazorati ostida qabul qiling.`;
+      quickSuggestions = ["Homiladorlikda nima mumkin emas?", "Ginekolog maslahati", "Paratsetamol qabul qilish"];
+    }
+  } else if (categoryIntent === "skin_fungus_rash") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Кожный зуд, грибок и дерматиты\n\nЗуд, покраснение, шелушение кожи между пальцами или изменение структуры ногтей чаще всего указывают на грибковую инфекцию (микоз) или аллергический дерматит.\n\nРекомендации ИИ-ассистента:\n1. Гигиена: Держите стопы и кожу сухими, носите хлопчатобумажные носки, не используйте общую обувь;\n2. При грибковых поражениях применяются противогрибковые мази (Клотримазол, Тербинафин) тонким слоем 1–2 раза в день;\n3. Запрет: Не мажьте сильные гормональные мази без назначения дерматолога (они могут временно снять зуд, но резко усилить рост грибка);\n4. Если сыпь быстро распространяется или мокнет — обратитесь на очный прием к дерматологу.`;
+      quickSuggestions = ["Противогрибковые мази", "Консультация дерматолога"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: Skin Rashes, Itching & Fungal Infections\n\nItching, scaling, redness between toes, or nail discoloration typically indicate superficial fungal infection (tinea/mycosis) or dermatitis.\n\nAI Assistant guidance:\n1. Keep skin clean and dry, wear breathable cotton socks, and never share footwear;\n2. Topical antifungals (Clotrimazole, Terbinafine) are commonly applied thinly to affected clean skin;\n3. Warning: Avoid applying topical corticosteroids without diagnosis, as steroids promote fungal proliferation;\n4. If rashes blister, weep, or spread rapidly, seek dermatologist evaluation.`;
+      quickSuggestions = ["Antifungal topical care", "Dermatology visit"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Teri qichishi, zamburug‘ (gribok) va dermatitda yordam\n\nBarmoqlar orasining qichishi, terining po‘st tashlashi, qizarishi yoki tirnoq rangining o‘zgarishi ko‘pincha zamburug‘li infeksiya (mikoza) yoki kontakt dermatit belgisi hisoblanadi.\n\nAI yordamchisi tavsiyalari:\n1. Shaxsiy gigiyena: Teri va oyoqlarni doimo quruq saqlang, paxtali toza paypoq kiying, umumiy poyabzal yoki sochiqdan foydalanmang;\n2. Zamburug‘ga qarshi mahalliy vositalar (Klotrimazol, Terbinafin mazi) toza va quruq teriga kuniga 1–2 marta yupqa qilib surtiladi;\n3. Qat'iy taqiq: Shifokor ko‘rsatmasisiz gormonal mazlarni (Prednizolon, Deksametazon) surtmang — ular qichishishni vaqtincha bosgani bilan zamburug‘ning yanada chuqur ildiz otishiga sabab bo‘ladi;\n4. Agar toshma butun tanaga tarqalsa yoki suvli yiringli yaraga aylansa — zudlik bilan dermatolog ko‘rigiga boring.`;
+      quickSuggestions = ["Gribokka qarshi mazlar", "Dermatolog ko‘rigiga yozilish"];
+    }
+  } else if (categoryIntent === "nasal_sinusitis") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Насморк, заложенность носа и гайморит\n\nЗаложенность носа при ОРВИ возникает из-за отека слизистой оболочки и скопления слизи.\n\nРекомендации ИИ-ассистента:\n1. Промывание носа: Промывайте носовые ходы солевыми изотоническими растворами (Аквамарис, физраствор) 3–4 раза в день для очищения от вирусов и увлажнения;\n2. Сосудосуживающие спреи (Ксилометазолин, Оксиметазолин): Строгое правило — используйте не дольше 4–5 дней подряд! Длительное применение вызывает привыкание и тяжелый медикаментозный ринит;\n3. Пейте больше теплой жидкости и поддерживайте влажность воздуха в комнате (50–60%);\n4. Опасные симптомы гайморита: Боль и распирание в области лба или под глазами при наклоне головы, густые гнойные выделения и температура требуют осмотра ЛОР-врача.`;
+      quickSuggestions = ["Промывание носа правила", "Признаки гайморита", "Спреи от заложенности"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: Nasal Congestion, Rhinitis & Sinusitis\n\nNasal obstruction during respiratory viral infections is driven by mucosal vasodilation and mucus pooling.\n\nAI Assistant guidance:\n1. Saline Irrigation: Rinse nasal passages 3-4 times daily with isotonic saline sprays (e.g. seawater sprays) to liquefy secretions and clear pathogens;\n2. Decongestant Sprays (Xylometazoline, Oxymetazoline): STRICT RULE — do not exceed 4-5 consecutive days of use! Extended use leads to rebound congestion (rhinitis medicamentosa);\n3. Maintain adequate room humidity (50-60%) and generous oral hydration;\n4. Sinusitis warning signs: Facial pressure or throbbing forehead pain when bending forward, purulent nasal discharge, and fever warrant prompt ENT physician evaluation.`;
+      quickSuggestions = ["Nasal saline irrigation", "Sinusitis warning signs", "Decongestant spray rules"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Burun bitishi, shamollash tumovi va gaymoritda yordam\n\nShamollashda burun bitishi shilliq qavat shishishi va burun yo‘llarida shilimshiq to‘planishi oqibatida kelib chiqadi.\n\nAI yordamchisi tavsiyalari:\n1. Burunni yuvish: Kuniga 3–4 marta dengiz tuzi eritmasi (Akvamaris, LinAkva yoki sho‘r suv) bilan burunni chayib turing — bu shishni qaytaradi va viruslarni yuvib chiqaradi;\n2. Burun ochuvchi tomchi/spreylar (Ksilometazolin, Oksimetazolin, Naftizin): Qat'iy qoida — 4–5 kundan ortiq uzluksiz ishlatmang! Uzoq muddat sepish tomirlarni o‘rgatib qo‘yadi va surunkali dori rinitini (medikamentoz rinit) keltirib chiqaradi;\n3. Ko‘p iliq suyuqlik iching va xona havosini namlantirib turing;\n4. Gaymorit belgilari: Boshni pastga egganingizda peshona yoki ko‘z ostida kuchli bosim va og‘riq paydo bo‘lsa, yashil-sarg‘ish quyuq yiring kelsa — kechiktirmasdan LOR-shifokor ko‘rigiga boring.`;
+      quickSuggestions = ["Burunni to‘g‘ri yuvish", "Gaymorit belgilari", "Burun spreyini tanlash"];
+    }
+  } else if (categoryIntent === "helminths_parasites") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Глисты и паразитарные инфекции\n\nЗуд в области заднего прохода (особенно ночью), скрежетание зубами во сне, снижение аппетита и тошнота часто указывают на глистную инвазию (острицы, аскариды).\n\nРекомендации ИИ-ассистента:\n1. Сдайте анализ кала на яйца глист и соскоб на энтеробиоз для точного выявления вида паразита;\n2. Гигиена: Тщательно мойте руки с мылом перед едой и после туалета, коротко стригите ногти, стирайте постельное и нательное белье при высокой температуре и проглаживайте утюгом;\n3. Противоглистные препараты (Альбендазол, Пирантел) принимаются строго по назначению врача с обязательным одновременным лечением всех членов семьи;\n4. Повторный курс: Часто требуется повторный прием препарата через 14 дней для уничтожения вылупившихся личинок.`;
+      quickSuggestions = ["Анализы на глисты", "Правила профилактики", "Препараты от паразитов"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: Parasitic Worms (Helminthiasis)\n\nPerianal itching (especially nocturnal), teeth grinding during sleep, abdominal discomfort, and variable appetite are typical symptoms of intestinal parasites (pinworms, ascaris).\n\nAI Assistant guidance:\n1. Diagnostic tests: Stool ova and parasite (O&P) examination and tape test are recommended for accurate identification;\n2. Hygiene essentials: Wash hands thoroughly before meals and after restrooms, keep nails trimmed, and wash bedding in hot water followed by ironing;\n3. Antihelminthic medications (Albendazole, Pyrantel) should be taken as prescribed, typically treating all household contacts concurrently;\n4. Repeat dosing: A second dose after 14 days is frequently advised to eradicate newly hatched larvae.`;
+      quickSuggestions = ["Parasite testing", "Hygiene protocols", "Deworming medications"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Gijja va ichak parazitlarida nima qilish kerak?\n\nKechasi orqa chiqaruv yo‘lida qichishish, uyquda tish g‘ijirlatish, qorinda noaniq og‘riqlar, ishtaha pasayishi va vazn yo‘qotish ko‘pincha ichak qurtlari (gijja, ostritsa, askarida) belgisi hisoblanadi.\n\nAI yordamchisi tavsiyalari:\n1. Tahlil topshirish: Aniq parazit turini aniqlash uchun najas tahlili (kal na yaytsa glist) va enterobiozga qirilma topshirish zarur;\n2. Qat'iy gigiyena: Ovqatdan oldin qo‘llarni sovunlab yuvish, tirnoqlarni kalta olish, ichki kiyim va o‘rin-ko‘rpalarni qaynoq suvda yuvib dazmollash qayta yuqishning oldini oladi;\n3. Gijjaga qarshi dorilar (Albendazol, Pirantel, Vermoks) faqat shifokor dozalashi bo‘yicha ichiladi va qoida tariqasida butun oila a'zolari bir vaqtda davolanishi kerak;\n4. Qayta ichish: Lichinkalardan yangi chiqqan qurtlarni yo‘q qilish uchun ko‘pincha 14 kundan so‘ng kursni qaytarish buyuriladi.`;
+      quickSuggestions = ["Gijjaga tahlil topshirish", "Gijja profilaktikasi", "Qurt haydovchi dorilar"];
+    }
+  } else if (categoryIntent === "medication_rules") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Правила правильного приема лекарств\n\n1. Время приема относительно еды:\n   • До еды (за 30 минут): препараты для снижения кислотности (Омепразол), желчегонные;\n   • Во время еды: пищеварительные ферменты (Мезим, Креон), поливитамины;\n   • После еды: обезболивающие и противовоспалительные (Ибупрофен, Парацетамол, Аспирин) для защиты слизистой желудка;\n2. Чем запивать: Запивайте лекарства ТОЛЬКО чистой негазированной водой комнатной температуры (1 стакан)!\n3. Запрет: Не запивайте чаем, кофе, молоком или соками (особенно грейпфрутовым — он смертельно усиливает токсичность многих препаратов!);\n4. Курс антибиотиков: Пейте строго по часам (каждые 8 или 12 часов) и доводите курс до конца.`;
+      quickSuggestions = ["Совместимость лекарств", "Правила приема антибиотиков"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: Safe Medication Administration Rules\n\n1. Timing around meals:\n   • Before meals (30 mins): Acid-reducing agents (Omeprazole), gastric protectants;\n   • With meals: Digestive enzymes (Pancreatin), multivitamins, iron supplements;\n   • After meals: NSAIDs and analgesics (Ibuprofen, Paracetamol, Aspirin) to avoid gastric irritation;\n2. What to drink: Take medications ONLY with a full glass of plain room-temperature water;\n3. Avoid: Never take pills with tea, coffee, milk, or grapefruit juice (grapefruit inhibits liver CYP3A4 enzymes and dangerously elevates drug blood levels);\n4. Antibiotics: Take at strict even intervals (every 8 or 12 hours) and finish the entire prescribed course.`;
+      quickSuggestions = ["Drug interactions guide", "Antibiotic compliance"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Dorilarni to‘g‘ri va xavfsiz qabul qilish qoidalari\n\n1. Ovqatga nisbatan vaqtini to‘g‘ri tanlang:\n   • Ovqatdan 30 daqiqa oldin: Oshqozon kislotasini tushiruvchi dorilar (Omeprazol), o‘t haydovchilar;\n   • Ovqatlanish paytida: Hazm qilish fermentlari (Mezim, Kreon), polivitaminlar;\n   • Ovqatdan keyin: Barcha og‘riq qoldiruvchi va nosteroid dorilar (Ibuprofen, Paratsetamol, Tsitramon, Aspirin) — oshqozon shilliq qavatini shikastlamaslik uchun;\n2. Nima bilan ichish kerak: Dorilarni FAQAT bir stakan oddiy toza, xona haroratidagi suv bilan iching!\n3. Qat'iy taqiq: Choy, kofe, sut yoki meva sharbatlari (ayniqsa greypfrut sharbati) bilan ichmang — ular dorining so‘rilishini to‘sib qo‘yadi yoki xavfli asoratlarni keltirib chiqaradi;\n4. Antibiotiklar qoidasi: Aniq belgilangan soatlarda (har 12 yoki har 8 soatda) va shifokor aytgan muddatgacha to‘liq ichib tugatish shart.`;
+      quickSuggestions = ["Dorilarning o‘zaro ta'siri", "Antibiotik ichish qoidalari", "Oshqozonni asrash"];
     }
   } else if (categoryIntent === "fracture") {
     if (lang === "ru") {
