@@ -227,7 +227,8 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     });
     assert.equal(res.isMedical, true);
     assert.equal(res.matchedProducts.length, 0);
-    assert.ok(res.reply.includes("pediatr"));
+    assert.ok(res.reply.includes("AI tibbiy yordamchisi"));
+    assert.ok(res.reply.toLowerCase().includes("pediatr"));
     assert.ok(res.reply.includes("Aspirin"));
     assert.ok(res.reply.includes("Reys sindromi"));
   });
