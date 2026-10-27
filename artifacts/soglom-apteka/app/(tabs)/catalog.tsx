@@ -467,6 +467,7 @@ export default function CatalogScreen() {
   const [addingId, setAddingId] = useState<string | null>(null);
   const [recentlyAddedId, setRecentlyAddedId] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilterKey>('all');
+  const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
 
   const loadGenRef = useRef(0);
@@ -658,14 +659,20 @@ export default function CatalogScreen() {
     });
   }, [allProducts, quickFilter]);
 
-  const quickFilters = useMemo(
+  const quickFilterOptions = useMemo(
     () => [
-      { key: 'otc' as const, label: t('catalog.filterOtc'), icon: 'shield-check-outline' as const },
-      { key: 'cashback' as const, label: t('catalog.filterCashback'), icon: 'wallet-giftcard' as const },
-      { key: 'under50k' as const, label: t('catalog.filterUnder50k'), icon: 'tag-outline' as const },
+      { key: 'all', label: t('catalog.filterAll') },
+      { key: 'otc', label: t('catalog.filterOtc') },
+      { key: 'cashback', label: t('catalog.filterCashback') },
+      { key: 'under50k', label: t('catalog.filterUnder50k') },
     ],
     [t],
   );
+
+  const quickFilterLabel = useMemo(() => {
+    const found = quickFilterOptions.find((o) => o.key === quickFilter);
+    return found ? found.label : t('catalog.filterTitle');
+  }, [quickFilter, quickFilterOptions, t]);
 
   const categoryChips = useMemo(
     () => [{ id: 'all', label: t('common.all') }, ...apiCategories.map((c) => ({ id: c, label: c }))],
@@ -841,69 +848,6 @@ export default function CatalogScreen() {
           </Pressable>
         </View>
 
-        {/* Popular Quick Searches */}
-        {!query.trim() ? (
-          <View style={styles.quickSearchRow}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickSearchScroll}
-            >
-              <View style={styles.quickSearchLabelBadge}>
-                <Feather name="trending-up" size={11} color={PURPLE} />
-                <Text style={styles.quickSearchLabelText}>{t('catalog.popularSearchTitle')}</Text>
-              </View>
-              {POPULAR_SEARCHES.map((term) => (
-                <Pressable
-                  key={term}
-                  style={styles.quickSearchChip}
-                  onPress={() => {
-                    setQuery(term);
-                    setDebouncedQuery(term);
-                    syncQueryToRoute(term);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={term}
-                >
-                  {/* i18n-ignore */}
-                  <Text style={styles.quickSearchChipText}>{term}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
-
-        {/* AI Prescription Banner */}
-        <Pressable
-          style={styles.aiBanner}
-          onPress={() => router.push('/prescription')}
-          accessibilityRole="button"
-          accessibilityLabel={t('catalog.prescriptionScanBannerTitle')}
-        >
-          <View style={styles.aiBannerIconWrap}>
-            <MaterialCommunityIcons name="line-scan" size={18} color="#FFFFFF" />
-          </View>
-          <View style={styles.aiBannerLeft}>
-            <View style={styles.aiBadgeRow}>
-              <Text style={styles.aiBannerTitle} numberOfLines={1}>
-                {t('catalog.prescriptionScanBannerTitle')}
-              </Text>
-              <View style={styles.aiMiniBadge}>
-                <Text style={styles.aiMiniBadgeText}>AI</Text>
-              </View>
-            </View>
-            <Text style={styles.aiBannerSub} numberOfLines={1}>
-              {t('catalog.prescriptionScanBannerSub')}
-            </Text>
-          </View>
-          <View style={styles.aiBannerRight}>
-            <Text style={styles.aiActionText} numberOfLines={1}>
-              {t('catalog.prescriptionScanAction')}
-            </Text>
-            <Feather name="chevron-right" size={13} color={PURPLE} />
-          </View>
-        </Pressable>
-
         {catError ? (
           <View style={styles.catErrorRow}>
             <Text style={styles.catErrorText}>{t('catalog.categoriesLoadFailed')}</Text>
@@ -954,43 +898,6 @@ export default function CatalogScreen() {
           </ScrollView>
         </View>
 
-        {/* Quick Filter Sub-bar */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.subFiltersRow}
-          style={styles.subFiltersScroll}
-        >
-          {quickFilters.map((qf) => {
-            const active = quickFilter === qf.key;
-            return (
-              <Pressable
-                key={qf.key}
-                style={[styles.subFilterChip, active && styles.subFilterChipActive]}
-                onPress={() => setQuickFilter((cur) => (cur === qf.key ? 'all' : qf.key))}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={qf.label}
-              >
-                <MaterialCommunityIcons
-                  name={qf.icon}
-                  size={14}
-                  color={active ? PURPLE : '#64748B'}
-                />
-                <Text
-                  style={[styles.subFilterChipText, active && styles.subFilterChipTextActive]}
-                  numberOfLines={1}
-                >
-                  {qf.label}
-                </Text>
-                {active ? (
-                  <Feather name="x" size={11} color={PURPLE} style={{ marginLeft: 1 }} />
-                ) : null}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
         <View style={styles.toolsRow}>
           <View style={styles.foundCountBadge}>
             <Text style={styles.foundCountText}>
@@ -1003,6 +910,39 @@ export default function CatalogScreen() {
             ) : null}
           </View>
           <View style={{ flex: 1, minWidth: 4 }} />
+          <Pressable
+            style={[styles.toolChip, quickFilter !== 'all' && styles.toolChipActive]}
+            onPress={() => setFilterOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t('catalog.filterTitle')}
+          >
+            <MaterialCommunityIcons
+              name="tune-variant"
+              size={15}
+              color={quickFilter !== 'all' ? '#FFFFFF' : PURPLE_DEEP}
+            />
+            <Text
+              style={[styles.toolText, quickFilter !== 'all' && styles.toolTextActive]}
+              numberOfLines={1}
+            >
+              {quickFilter === 'all' ? t('catalog.filterTitle') : quickFilterLabel}
+            </Text>
+            {quickFilter !== 'all' ? (
+              <Pressable
+                hitSlop={8}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  setQuickFilter('all');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={t('catalog.clearFilters')}
+              >
+                <Feather name="x" size={12} color="#FFFFFF" />
+              </Pressable>
+            ) : (
+              <Feather name="chevron-down" size={13} color={MUTED} />
+            )}
+          </Pressable>
           <Pressable
             style={[styles.toolChip, narrow && styles.toolChipNarrow]}
             onPress={() => setSortOpen(true)}
@@ -1169,6 +1109,15 @@ export default function CatalogScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      <Sheet
+        visible={filterOpen}
+        title={t('catalog.filterTitle')}
+        options={quickFilterOptions}
+        selected={quickFilter}
+        onSelect={(k) => setQuickFilter(k as QuickFilterKey)}
+        onClose={() => setFilterOpen(false)}
+      />
 
       <Sheet
         visible={sortOpen}
@@ -1553,6 +1502,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: PURPLE_DEEP,
     flexShrink: 1,
+  },
+  toolChipActive: {
+    backgroundColor: PURPLE,
+    borderColor: PURPLE,
+  },
+  toolTextActive: {
+    fontFamily: 'Inter_600SemiBold',
+    color: '#FFFFFF',
   },
   viewToggle: { flexDirection: 'row', gap: 6, flexShrink: 0 },
   viewBtn: {
