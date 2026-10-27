@@ -216,4 +216,144 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.ok(res.reply.includes("ko‘richak") || res.reply.includes("appenditsit"));
     assert.ok(res.quickSuggestions.includes("No-shpa sotib olish"));
   });
+
+  it("11. Correctly handles pediatric fever with strict ban on Aspirin/Analgin", () => {
+    assert.equal(isMedicalDomain("bolamning isitmasi chiqdi"), true);
+
+    const res = handleAiMedicalChat({
+      message: "bolamning isitmasi chiqdi nima qilay",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("pediatr"));
+    assert.ok(res.reply.includes("Aspirin"));
+    assert.ok(res.reply.includes("Reys sindromi"));
+  });
+
+  it("12. Correctly handles eye irritation & redness as ophthalmology consultation", () => {
+    assert.equal(isMedicalDomain("ko'zim qizarib achishyapti"), true);
+
+    const res = handleAiMedicalChat({
+      message: "ko'zim qizarib achishyapti",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("oftalmolog"));
+    assert.ok(res.reply.includes("20-20-20"));
+  });
+
+  it("13. Correctly handles ear pain as ENT/otitis consultation forbidding alcohol drops", () => {
+    assert.equal(isMedicalDomain("qulog'im ogriyapti"), true);
+
+    const res = handleAiMedicalChat({
+      message: "qulog'im qattiq ogriyapti",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("Otit") || res.reply.includes("LOR"));
+    assert.ok(res.reply.includes("spirt"));
+  });
+
+  it("14. Correctly handles food poisoning recommending rehydration and forbidding loperamide", () => {
+    assert.equal(isMedicalDomain("ovqatdan zaharlanib ichim ketyapti"), true);
+
+    const res = handleAiMedicalChat({
+      message: "ovqatdan zaharlanib ichim ketyapti",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("Regidron"));
+    assert.ok(res.reply.includes("loperamid"));
+  });
+
+  it("15. Correctly handles constipation recommending fiber and safe laxatives", () => {
+    assert.equal(isMedicalDomain("ichim qotib qoldi nima qilsam boladi"), true);
+
+    const res = handleAiMedicalChat({
+      message: "ichim qotib qoldi nima qilsam boladi",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("Qabziyat") || res.reply.includes("Ich qotishi"));
+    assert.ok(res.reply.includes("laktuloza") || res.reply.includes("Dyufalak"));
+  });
+
+  it("16. Correctly handles thermal burns forbidding oil/toothpaste application", () => {
+    assert.equal(isMedicalDomain("issiq suv tokilib kuydim"), true);
+
+    const res = handleAiMedicalChat({
+      message: "issiq suv tokilib kuydim",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("oqova suv"));
+    assert.ok(res.reply.includes("yog‘") || res.reply.includes("sariyog‘"));
+  });
+
+  it("17. Correctly handles cystitis and burning urination", () => {
+    assert.equal(isMedicalDomain("siyganda achishyapti"), true);
+
+    const res = handleAiMedicalChat({
+      message: "siyganda achishyapti nima qilsam boladi",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("Tsistit") || res.reply.includes("urolog"));
+  });
+
+  it("18. Correctly handles elevated blood sugar & diabetes symptoms", () => {
+    assert.equal(isMedicalDomain("qandim kotarilib ketdi"), true);
+
+    const res = handleAiMedicalChat({
+      message: "qandim kotarilib ketdi",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("endokrinolog"));
+    assert.ok(res.reply.includes("HbA1c"));
+  });
+
+  it("19. Correctly handles insomnia & stress with sleep hygiene guidance", () => {
+    assert.equal(isMedicalDomain("uyqusizlik qiynayapti uxlay olmayapman"), true);
+
+    const res = handleAiMedicalChat({
+      message: "uyqusizlik qiynayapti uxlay olmayapman",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("Uyqu gigiyenasi"));
+    assert.ok(res.reply.includes("melatonin"));
+  });
+
+  it("20. Correctly handles sprain & trauma with R.I.C.E. protocol", () => {
+    assert.equal(isMedicalDomain("oyoq qayrilib lat yedi"), true);
+
+    const res = handleAiMedicalChat({
+      message: "oyoq qayrilib lat yedi",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.equal(res.matchedProducts.length, 0);
+    assert.ok(res.reply.includes("R.I.C.E."));
+    assert.ok(res.reply.includes("travmatolog"));
+  });
 });
