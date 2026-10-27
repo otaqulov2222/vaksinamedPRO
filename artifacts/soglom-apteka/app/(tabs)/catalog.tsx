@@ -899,11 +899,13 @@ export default function CatalogScreen() {
         </View>
 
         <View style={styles.toolsRow}>
-          <View style={styles.foundCountBadge}>
-            <Text style={styles.foundCountText}>
-              {t('catalog.foundCount', { count: products.length })}
-            </Text>
-          </View>
+          {debouncedQuery.trim() ? (
+            <View style={styles.foundCountBadge}>
+              <Text style={styles.foundCountText}>
+                {t('catalog.foundCount', { count: products.length })}
+              </Text>
+            </View>
+          ) : null}
           <View style={{ flex: 1 }} />
           <Pressable
             style={[styles.toolChip, quickFilter !== 'all' && styles.toolChipActive]}
@@ -963,12 +965,6 @@ export default function CatalogScreen() {
             />
           </Pressable>
         </View>
-
-        {hasBranch ? (
-          <Text style={styles.branchSubHint} numberOfLines={1}>
-            {t('catalog.branchHintScoped', { total: fmt.number(total) })}
-          </Text>
-        ) : null}
 
         {loading ? (
           <View style={styles.empty}>
