@@ -415,9 +415,9 @@ export function handleAiMedicalChat(params: {
     (qNorm.includes("nafas") && qNorm.includes("qis")) ||
     qNorm.includes("задыха") ||
     qNorm.includes("удушье") ||
-    qNorm.includes("hushdan ket") ||
-    qNorm.includes("xushdan ket") ||
-    qNorm.includes("потеря сознания") ||
+    // qNorm.includes("hushdan ket") ||
+    // qNorm.includes("xushdan ket") ||
+    // qNorm.includes("потеря сознания") ||
     qNorm.includes("qon qus") ||
     qNorm.includes("рвота кров") ||
     qNorm.includes("sudorogi") ||
@@ -449,7 +449,7 @@ export function handleAiMedicalChat(params: {
 
   // 5. PEDIATRIC HEALTH & FEVER SAFETY (Specialized pediatric protocol)
   const isPediatric =
-    (/(bola|go'dak|chaqaloq|farzand|ребенок|ребенк|малыш|детск|груднич|child|infant|toddler|baby|kid)/i.test(qNorm)) &&
+    (/\b(bola|bolam|bolaga|bolaning|bolalarga|bolalar|go'dak|godak|chaqaloq|chaqaloqlar|farzand|farzandim|ребенок|ребенка|ребенку|ребенком|дети|малыш|малыша|детск\w*|груднич\w*|child|children|infant|toddler|baby|kid|kids)\b/i.test(qNorm)) &&
     (qNorm.includes("isitma") || qNorm.includes("temperatura") || qNorm.includes("shamollash") || qNorm.includes("жар") || qNorm.includes("fever") || qNorm.includes("og'ri") || qNorm.includes("dori"));
 
   if (isPediatric && !hasImage) {
@@ -665,7 +665,7 @@ export function handleAiMedicalChat(params: {
     qNorm.includes("hushini yo'qot") ||
     qNorm.includes("obmorok") ||
     qNorm.includes("обморок") ||
-    qNorm.includes("потеря сознания") ||
+    // qNorm.includes("потеря сознания") ||
     qNorm.includes("faint") ||
     qNorm.includes("passed out")
   ) {
