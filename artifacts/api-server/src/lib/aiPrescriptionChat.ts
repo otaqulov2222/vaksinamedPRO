@@ -61,7 +61,7 @@ const OFF_TOPIC_PATTERNS = [
 // Broad medical / health keywords in Uzbek, Russian, and English
 const MEDICAL_KEYWORDS = [
   // Greetings and polite conversational markers
-  "salom", "assalom", "privet", "здравствуйте", "привет", "добрый", "доброе", "hello", "hi", "hey",
+  "salom", "assalom", "privet", "здравствуйте", "привет", "добрый", "доброе", "hello",
   "qalesiz", "yaxshimisiz", "tinchmisiz", "rahmat", "спасибо", "благодарю", "spasibo", "thanks", "tushundim",
   "sog' bo'ling", "sog buling", "salomat",
   // Prescription & meds
@@ -84,7 +84,7 @@ const MEDICAL_KEYWORDS = [
   "zahar", "zaharlan", "intoksikatsiya", "ovqatdan",
   "kuyib", "kuydim", "kuyish", "issiq suv", "jarohat", "lat yey", "lat yed", "sinish", "pay cho'zil", "shish", "qon ket", "qonash",
   "peshob", "siydik", "siyish", "achish", "tsistit", "cistit", "pielonefrit",
-  "diabet", "qand", "qandim", "qandli", "saxar", "shakar", "glyukoza", "insulin", "chanqoq",
+  "diabet", "qandli", "qandim", "qand kasali", "saxar", "shakar", "glyukoza", "insulin", "chanqoq",
   "bola", "bolam", "bolamning", "bolaga", "bolalar", "go'dak", "chaqaloq", "pediatr",
   "bosh aylan", "boshim aylan", "vertigo", "qorong'ilash",
   "otit", "shang'illa", "gaymorit", "rinit", "tumov", "kon'yunktivit", "arpa",
@@ -108,6 +108,30 @@ const MEDICAL_KEYWORDS = [
   "suprastin", "супрастин", "rehidron", "регидрон", "smecta", "смекта", "duphalac", "дюфалак",
 ];
 
+export function parseMathQuery(text: string): { isMath: boolean; a?: number; op?: string; b?: number; result?: number } {
+  const clean = text.replace(/[?!=]/g, "").trim();
+  const m = clean.match(
+    /^(\d+(?:\.\d+)?)\s*([\+\-\*\/xX×÷])\s*(\d+(?:\.\d+)?)(?:\s+(?:nechi|necha|qancha|buladi|bo'ladi|bular|nechi buladi|necha bo'ladi|boladi|skolko|сколько))?$/i
+  );
+  if (m) {
+    const a = parseFloat(m[1]);
+    const op = m[2];
+    const b = parseFloat(m[3]);
+    let result = 0;
+    if (op === "+") result = a + b;
+    else if (op === "-") result = a - b;
+    else if (op === "*" || op === "x" || op === "X" || op === "×") result = a * b;
+    else if (op === "/" || op === "÷") result = b !== 0 ? Math.round((a / b) * 100) / 100 : 0;
+    return { isMath: true, a, op, b, result };
+  }
+  return { isMath: false };
+}
+
+function hasWord(text: string, word: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\export function isMedicalDomain");
+  return new RegExp("(?:^|[\\s.,!?;:()\\/\\-])" + escaped + "(?:$|[\\s.,!?;:()\\/\\-])", "i").test(text);
+}
+
 export function isMedicalDomain(query: string): boolean {
   const q = normalizeQuery(query);
   if (q.length < 2) return true;
@@ -117,7 +141,15 @@ export function isMedicalDomain(query: string): boolean {
   }
 
   // If query matches any medical keyword/symptom/body part
-  if (MEDICAL_KEYWORDS.some((kw) => q.includes(kw))) {
+  const hasMedical = MEDICAL_KEYWORDS.some((kw) => {
+    if (kw.length <= 3) {
+      const reg = new RegExp("(?:^|[\\s.,!?;:()\\/\\-])" + kw + "(?:$|[\\s.,!?;:()\\/\\-])", "i");
+      return reg.test(q);
+    }
+    return q.includes(kw);
+  });
+
+  if (hasMedical) {
     return true;
   }
 
@@ -126,7 +158,8 @@ export function isMedicalDomain(query: string): boolean {
     q.includes("yordam") ||
     q.includes("maslahat") ||
     q.includes("nima qil") ||
-    q.includes("qanday") ||
+    q.includes("qanday ich") ||
+    q.includes("qanday qabul") ||
     q.includes("ahvol") ||
     q.includes("yomon") ||
     q.includes("kasal") ||
@@ -184,6 +217,61 @@ export function handleAiMedicalChat(params: {
   const userText = String(params.message || "").trim();
   const qNorm = normalizeQuery(userText);
   const hasImage = Boolean(params.image && params.image.trim().length > 0);
+
+  // 0. MATH CALCULATION INTENT (e.g. 2*2, 2*2 nechi buladi)
+  if (!hasImage && userText.length >= 2) {
+    const math = parseMathQuery(userText);
+    if (math.isMath && math.result !== undefined) {
+      let reply = "";
+      if (lang === "ru") {
+        reply = `${math.a} ${math.op === "*" ? "×" : math.op} ${math.b} = ${math.result} 😊.\n\nЯ медицинский ИИ-консультант аптечной сети VaksinaMed 🩺. Моя специализация — консультации по вопросам здоровья, лекарственных препаратов, дозировок и расшифровка рецептов от врача.\n\nЕсли у вас есть вопросы по самочувствию или медикаментам, с радостью помогу вам!`;
+      } else if (lang === "en") {
+        reply = `${math.a} ${math.op === "*" ? "×" : math.op} ${math.b} = ${math.result} 😊.\n\nI am the VaksinaMed Medical AI Consultant 🩺. My core expertise is health guidance, medications, and prescription analysis.\n\nFeel free to ask any health, symptom, or pharmaceutical questions!`;
+      } else {
+        reply = `${math.a} ${math.op === "*" ? "×" : math.op} ${math.b} = ${math.result} bo‘ladi 😊.\n\nMen VaksinaMed sun'iy intellekt tibbiy maslahatchisiman 🩺. Mening asosiy ixtisosligim — salomatlik, dori vositalari, simptomlar va shifokor retseptlarini tahlil qilishdir.\n\nAgar sog‘ligingiz, alomatlar yoki dorilar bo‘yicha savolingiz bo‘lsa, bemalol murojaat qilishingiz mumkin!`;
+      }
+      return {
+        success: true,
+        reply,
+        isMedical: false,
+        isPrescription: false,
+        matchedProducts: [],
+        quickSuggestions: [
+          lang === "ru" ? "Спросить о лекарствах" : lang === "en" ? "Ask about medicines" : "Dori vositalari haqida so‘rash",
+          lang === "ru" ? "Сфотографировать рецепт" : lang === "en" ? "Scan prescription" : "Retseptni rasmga olish",
+          lang === "ru" ? "Симптомы простуды" : lang === "en" ? "Cold symptoms" : "Shamollash alomatlari",
+        ],
+      };
+    }
+  }
+
+  // 0.1 IDENTITY / CAPABILITY INTENT (e.g. "sen kimsan", "nima qila olasan", "кто ты")
+  const isIdentityQuery =
+    /\b(sen kimsan|kimsan|kim bu|nima qila olasan|vazifang nima|vazifangiz nima|кто ты|кто вы|что ты умеешь|что вы умеете|who are you|what can you do)\b/i.test(
+      qNorm
+    );
+  if (!hasImage && isIdentityQuery) {
+    let reply = "";
+    if (lang === "ru") {
+      reply = "Я — официальный медицинский ИИ-консультант аптечной сети VaksinaMed 🩺.\n\nМоя задача — помогать вам в вопросах здоровья, лекарственных средств, правильного приема и дозировок, а также мгновенно расшифровывать рецепты от врача и проверять наличие препаратов в наших аптеках.\n\nЗадайте любой интересующий вас вопрос по самочувствию или медикаментам!";
+    } else if (lang === "en") {
+      reply = "I am the official VaksinaMed Medical AI Assistant 🩺.\n\nI can help you with health advice, medications, symptoms, and prescription scanning to find items in our pharmacy network.\n\nHow can I assist you with your health today?";
+    } else {
+      reply = "Men VaksinaMed dorixonalar tarmog‘ining rasmiy sun'iy intellekt tibbiy maslahatchisiman 🩺.\n\nMening asosiy vazifam — salomatlik, dori-darmonlar, ularni qabul qilish qoidalari va dozalari bo‘yicha maslahat berish, shuningdek shifokor retseptlarini tahlil qilib, dorixonalarimizdan kerakli dori vositalarini topishda ko‘maklashishdir.\n\nSalomatligingiz yoki dorilar bo‘yicha istalgan savolingizni berishingiz mumkin!";
+    }
+    return {
+      success: true,
+      reply,
+      isMedical: true,
+      isPrescription: false,
+      matchedProducts: [],
+      quickSuggestions: [
+        lang === "ru" ? "Сфотографировать рецепт" : lang === "en" ? "Scan prescription" : "Retseptni rasmga olish",
+        lang === "ru" ? "Что принять от простуды?" : lang === "en" ? "Cold remedies" : "Shamollashga nima ichiladi?",
+        lang === "ru" ? "Головная боль" : lang === "en" ? "Headache relief" : "Bosh og‘rig‘ini qoldirish",
+      ],
+    };
+  }
 
   // 1. DOMAIN GUARD: Check off-topic non-medical queries
   if (!hasImage && userText.length > 2 && !isMedicalDomain(userText)) {
@@ -612,7 +700,9 @@ export function handleAiMedicalChat(params: {
     categoryIntent = "cystitis";
   } else if (
     qNorm.includes("diabet") ||
-    qNorm.includes("qand") ||
+    hasWord(qNorm, "qand") ||
+    qNorm.includes("qandli") ||
+    qNorm.includes("qandim") ||
     qNorm.includes("saxar") ||
     qNorm.includes("shakar") ||
     qNorm.includes("glyukoza") ||
@@ -1202,8 +1292,8 @@ export function handleAiMedicalChat(params: {
       reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Antibiotik qabul qilishning qat'iy qoidalari\n\nAntibiotiklar faqat bakteriyalarga qarshi ta'sir qiladi va viruslarga (gripp, shamollash, o‘tkir bronxit) mutlaqo ta'sir ko‘rsatmaydi!\n\nXavfsizlik qoidalari:\n1. Antibiotikni faqat shifokor retsepti bo‘yicha qabul qiling;\n2. Kursni oxirigacha (odatda 5–7 kun) to‘liq yetkazing. O‘zingizni yaxshi his qilsangiz ham, ichishni to‘xtatmang — aks holda bakteriyalarda doriga o‘rganish (rezistentlik) paydo bo‘ladi;\n3. Ichak mikroflorasini asrash uchun probiotiklar bilan birga ichish tavsiya etiladi.`;
       quickSuggestions = ["Nega virusga ta'sir qilmaydi?", "Ichak mikroflorasini asrash"];
     }
-  } else {
-    // General pain fallback
+  } else if (categoryIntent === "general_pain") {
+    // General pain fallback (strictly when explicit pain was identified)
     if (lang === "ru") {
       reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Обезболивание\n\nБоль — это защитный сигнал организма. Важно не просто заглушить боль, а выяснить её причину у врача.\n\nРекомендации ИИ-ассистента:\n1. Для разового снятия умеренной боли допустим прием Парацетамола (500 мг) строго после еды;\n2. Не превышайте максимальную суточную дозу и не пейте несколько обезболивающих одновременно;\n3. При сохранении боли дольше 2 дней обязательно обратитесь к врачу.\n\n⚠️ Важное напоминание: Не занимайтесь самолечением при неизвестной причине боли.`;
       quickSuggestions = ["Первая помощь", "Осмотр врача", "Купить Парацетамол"];
@@ -1213,6 +1303,18 @@ export function handleAiMedicalChat(params: {
     } else {
       reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Og‘riqni qoldirish\n\nOg‘riq organizmning himoya signali hisoblanadi. Og‘riq qoldiruvchi dori sababni davolamaydi, faqat vaqtincha yengillashtiradi.\n\nAI yordamchisi tavsiyalari:\n1. Vaqtinchalik og‘riqni qoldirish uchun bitta Paratsetamol (500 mg) ovqatdan keyin, bir stakan suv bilan ichilishi mumkin;\n2. Sutkalik me'yordan oshirmang va bir vaqtda bir nechta dori aralashtirmang;\n3. Og‘riq 2 kundan ortiq davom etsa, albatta shifokor ko‘rigiga boring.\n\n⚠️ Muhim eslatma: Ushbu tavsiyalar axborot xarakteriga ega. Doimiy og‘riqda shifokor ko‘rigidan o‘ting.`;
       quickSuggestions = ["Birinchi yordam qoidalari", "Shifokor ko‘rigiga borish", "Paratsetamol sotib olish"];
+    }
+  } else {
+    // Attentive clinical clarification fallback (no specific symptom identified)
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-консультант VaksinaMed\n\nЧтобы предоставить вам точную и безопасную рекомендацию, пожалуйста, опишите подробнее:\n1. Какие именно симптомы или жалобы вас беспокоят (например: головная боль, температура, простуда, давление, желудок);\n2. Для кого требуется консультация (взрослый или ребенок);\n3. Либо укажите конкретное название лекарства, о котором хотите узнать.\n\nТакже вы можете сфотографировать рецепт от врача — я расшифрую назначения и проверю наличие в аптеках.\n\n⚠️ Напоминание: Все рекомендации носят информационный характер.`;
+      quickSuggestions = ["Сфотографировать рецепт", "Симптомы простуды", "Головная боль", "Витамины"];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant\n\nTo provide safe and accurate guidance, please specify:\n1. What exact symptoms you are experiencing (e.g. headache, fever, cough, stomach discomfort);\n2. Who needs care (adult or child);\n3. Or the specific medication you are inquiring about.\n\nYou can also upload a prescription photo for instant catalog matching.\n\n⚠️ Reminder: Guidance is advisory only.`;
+      quickSuggestions = ["Scan prescription", "Cold remedies", "Headache relief", "Vitamins"];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi\n\nSizga to‘g‘ri va xavfsiz yordam bera olishim uchun iltimos, holatingizni aniqroq yozib bering:\n1. Sizni aynan qanday alomatlar yoki og‘riqlar bezovta qilyapti (masalan: bosh og‘rig‘i, shamollash, isitma, oshqozon bezovtaligi, qon bosimi);\n2. Yordam kim uchun kerak (kattalar yoki bola);\n3. Yoki ma'lumot olmoqchi bo‘lgan dori vositangiz nomini ayting.\n\nShuningdek, shifokor retsepti suratini yuborsangiz, barcha belgilangan dorilarni aniqlab, dorixonalarimizdan topib beraman.\n\n⚠️ Muhim eslatma: Ushbu tavsiyalar axborot xarakteriga ega. Doimiy shikoyatlarda shifokor ko‘rigidan o‘ting.`;
+      quickSuggestions = ["Retseptni rasmga olish", "Shamollash belgilari", "Bosh og‘rig‘i", "Vitaminlar"];
     }
   }
 
