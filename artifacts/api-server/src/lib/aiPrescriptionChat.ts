@@ -51,11 +51,16 @@ function normalizeQuery(str: string): string {
 
 // Patterns that indicate clearly non-medical off-topic inquiries
 const OFF_TOPIC_PATTERNS = [
+  /\b(muchal|munajjim|burj|goroskop|zodiak|гороскоп|зодиак|horoscope|zodiac)\b/i,
   /\b(python|javascript|typescript|html|css|sql|docker|kubernetes|linux|windows|git|commit|bug|code|coding|function|class)\b/i,
   /\b(mashina|avtomobil|mator|karobka|inomarka|bmw|mercedes|chevrolet|gentra|cobalt|benzin|metan|tormoz)\b/i,
   /\b(prezident|saylov|siyosat|deputat|vazir|urush|harbiy|hukumat|davlat|parlament)\b/i,
   /\b(kripto|bitcoin|usdt|forex|treyding|aktsiya|investitsiya|kazin|stavka|1xbet)\b/i,
   /\b(futbol|barselona|real madrid|messi|ronaldo|chempionat|liga|sport|match)\b/i,
+  /\b(ob-havo|ob havo|yomgir|yomg'ir|qor|quyosh|harorat qanday|gradus)\b/i,
+  /\b(valyuta|kurs dollar|dollar kursi|yevro kursi)\b/i,
+  /\b(ovqat pishir|palov pishirish|retsept ovqat|shorva pishirish)\b/i,
+  /\b(kino|film|serial|aktyor|aktrisa|musiqa|qoshiq|klip|qo'shiq)\b/i,
 ];
 
 // Broad medical / health keywords in Uzbek, Russian, and English
@@ -137,6 +142,11 @@ export function parseMathQuery(text: string): { isMath: boolean; a?: number; op?
   return { isMath: false };
 }
 
+export function matchStem(text: string, stem: string): boolean {
+  const escaped = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp("(?:^|[\\s.,!?;:()\\/\\-])" + escaped, "i").test(text);
+}
+
 function hasWord(text: string, word: string): boolean {
   const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp("(?:^|[\\s.,!?;:()\\/\\-])" + escaped + "(?:$|[\\s.,!?;:()\\/\\-])", "i").test(text);
@@ -150,13 +160,13 @@ export function isMedicalDomain(query: string): boolean {
     if (pattern.test(q)) return false;
   }
 
-  // If query matches any medical keyword/symptom/body part
+  // If query matches any medical keyword/symptom/body part (always matching from word boundary)
   const hasMedical = MEDICAL_KEYWORDS.some((kw) => {
     if (kw.length <= 3) {
       const reg = new RegExp("(?:^|[\\s.,!?;:()\\/\\-])" + kw + "(?:$|[\\s.,!?;:()\\/\\-])", "i");
       return reg.test(q);
     }
-    return q.includes(kw);
+    return matchStem(q, kw);
   });
 
   if (hasMedical) {
@@ -165,22 +175,22 @@ export function isMedicalDomain(query: string): boolean {
 
   // If query is a general health/consultation phrase (not off-topic)
   const isGeneralHelpOrSymptom =
-    q.includes("yordam") ||
-    q.includes("maslahat") ||
-    q.includes("nima qil") ||
-    q.includes("qanday ich") ||
-    q.includes("qanday qabul") ||
-    q.includes("ahvol") ||
-    q.includes("yomon") ||
-    q.includes("kasal") ||
-    q.includes("bemor") ||
-    q.includes("dard") ||
-    q.includes("davol") ||
-    q.includes("shifo") ||
-    q.includes("pomoch") ||
-    q.includes("pomog") ||
-    q.includes("help") ||
-    q.includes("advice");
+    matchStem(q, "yordam") ||
+    matchStem(q, "maslahat") ||
+    matchStem(q, "nima qil") ||
+    matchStem(q, "qanday ich") ||
+    matchStem(q, "qanday qabul") ||
+    matchStem(q, "ahvol") ||
+    matchStem(q, "yomon") ||
+    matchStem(q, "kasal") ||
+    matchStem(q, "bemor") ||
+    matchStem(q, "dard") ||
+    matchStem(q, "davol") ||
+    matchStem(q, "shifo") ||
+    matchStem(q, "pomoch") ||
+    matchStem(q, "pomog") ||
+    matchStem(q, "help") ||
+    matchStem(q, "advice");
 
   return isGeneralHelpOrSymptom;
 }
@@ -288,11 +298,11 @@ export function handleAiMedicalChat(params: {
   if (!hasImage && userText.length > 2 && !isMedicalDomain(userText)) {
     let reply = "";
     if (lang === "ru") {
-      reply = `Извините, я специализированный медицинский ИИ-консультант VaksinaMed 🩺.\n\nМоя задача — помогать вам в вопросах здоровья, лекарственных препаратов, правильных дозировок, противопоказаний и расшифровки рецептов от врача.\n\nПожалуйста, задайте вопрос, связанный с медициной, симптомами или лекарствами, и я с радостью проконсультирую вас!`;
+      reply = `Извините, я специализированный медицинский ИИ-консультант VaksinaMed 🩺.\n\nМоя деятельность строго ограничена вопросами здоровья, симптомами заболеваний, лекарственными препаратами, правильными дозировками и расшифровкой рецептов от врача.\n\nПо сторонним темам (мучал, гороскопы, спорт, технологии, кулинария или общие вопросы) я консультаций не предоставляю.\n\nПожалуйста, задайте вопрос по здоровью, симптомам или лекарствам, и я с радостью помогу вам!`;
     } else if (lang === "en") {
-      reply = `I apologize, but I am a dedicated VaksinaMed Medical AI Assistant 🩺.\n\nMy expertise is strictly focused on health consultations, prescription scanning, symptoms, and pharmaceuticals.\n\nPlease ask a health or medication-related question, and I will be glad to assist you!`;
+      reply = `I apologize, but I am a dedicated VaksinaMed Medical AI Assistant 🩺.\n\nMy expertise is strictly limited to health consultations, symptoms, medications, dosages, and prescription analysis.\n\nI do not provide answers on non-medical topics (horoscopes, astrology, sports, tech, or general questions).\n\nPlease ask a health or medication-related question, and I will be glad to assist you!`;
     } else {
-      reply = `Kechirasiz, men VaksinaMed sun'iy intellekt tibbiy maslahatchisiman 🩺.\n\nMening asosiy vazifam — salomatlik, dori-darmonlar, simptomlar, qo‘llash usullari va shifokor retseptlarini tahlil qilishda yordam berishdir.\n\nIltimos, sog‘ligingiz, alomatlar yoki dorixonamiz preparatlari bo‘yicha savolingizni bering, sizga professional yordam berishdan mamnun bo‘laman!`;
+      reply = `Kechirasiz, men faqat tibbiyot va salomatlik bo‘yicha ixtisoslashgan VaksinaMed sun'iy intellekt maslahatchisiman 🩺.\n\nMening vazifam qat'iy ravishda salomatlik, kasallik alomatlari, dori vositalari, to‘g‘ri dozalash va shifokor retseptlarini tahlil qilish bilan cheklangan.\n\nTibbiyot sohasidan tashqari mavzularda (muchal, munajjimlar bashorati, sport, texnologiya, pazandachilik yoki umumiy savollar) ma'lumot bera olmayman.\n\nAgar sog‘ligingiz, bezovta qilayotgan alomatlar yoki dorilar bo‘yicha savolingiz bo‘lsa, bemalol murojaat qilishingiz mumkin!`;
     }
 
     return {
@@ -872,18 +882,19 @@ export function handleAiMedicalChat(params: {
   ) {
     categoryIntent = "antibiotic";
   } else if (
-    qNorm.includes("og'ri") ||
-    qNorm.includes("ogri") ||
-    qNorm.includes("paratsetamol") ||
-    qNorm.includes("paracetamol") ||
-    qNorm.includes("ibuprofen") ||
-    qNorm.includes("analgin") ||
-    qNorm.includes("tsitramon") ||
-    qNorm.includes("бол") ||
-    qNorm.includes("парацетамол") ||
-    qNorm.includes("ибупрофен") ||
-    qNorm.includes("анальгин") ||
-    qNorm.includes("pain")
+    matchStem(qNorm, "og'ri") ||
+    matchStem(qNorm, "ogri") ||
+    matchStem(qNorm, "og‘ri") ||
+    matchStem(qNorm, "paratsetamol") ||
+    matchStem(qNorm, "paracetamol") ||
+    matchStem(qNorm, "ibuprofen") ||
+    matchStem(qNorm, "analgin") ||
+    matchStem(qNorm, "tsitramon") ||
+    matchStem(qNorm, "бол") ||
+    matchStem(qNorm, "парацетамол") ||
+    matchStem(qNorm, "ибупрофен") ||
+    matchStem(qNorm, "анальгин") ||
+    matchStem(qNorm, "pain")
   ) {
     categoryIntent = "general_pain";
   }
