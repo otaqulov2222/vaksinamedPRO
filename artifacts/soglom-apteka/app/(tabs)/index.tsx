@@ -94,8 +94,8 @@ type CategoryFilterKey = 'all' | 'vitamins' | 'pain' | 'cold';
 const CATEGORY_FILTERS: { key: CategoryFilterKey; labelKey: TranslationKey; icon: string }[] = [
   { key: 'all', labelKey: 'home.categoryAll', icon: 'view-grid-outline' },
   { key: 'vitamins', labelKey: 'home.categoryVitamins', icon: 'pill' },
-  { key: 'pain', labelKey: 'home.categoryPain', icon: 'medical-bag' },
   { key: 'cold', labelKey: 'home.categoryCold', icon: 'weather-windy' },
+  { key: 'pain', labelKey: 'home.categoryPain', icon: 'medical-bag' },
 ];
 
 export default function HomeScreen() {
