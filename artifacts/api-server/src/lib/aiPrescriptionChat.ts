@@ -109,11 +109,21 @@ const MEDICAL_KEYWORDS = [
 ];
 
 export function parseMathQuery(text: string): { isMath: boolean; a?: number; op?: string; b?: number; result?: number } {
-  const clean = text.replace(/[?!=]/g, "").trim();
-  const m = clean.match(
-    /^(\d+(?:\.\d+)?)\s*([\+\-\*\/xX×÷])\s*(\d+(?:\.\d+)?)(?:\s+(?:nechi|necha|qancha|buladi|bo'ladi|bular|nechi buladi|necha bo'ladi|boladi|skolko|сколько))?$/i
-  );
-  if (m) {
+  const clean = text.replace(/[?!=\.,]/g, " ").trim();
+  const m = clean.match(/(\d+(?:\.\d+)?)\s*([\+\-\*\/xX×÷])\s*(\d+(?:\.\d+)?)/);
+  if (!m) return { isMath: false };
+
+  const remainder = clean.replace(m[0], " ").trim().toLowerCase();
+  const words = remainder.split(/\s+/).filter(Boolean);
+
+  const allowed = new Set([
+    "nechi", "necha", "nechchi", "qancha", "buladi", "bo'ladi", "boladi", "bular",
+    "chiqadi", "teng", "javob", "javobi", "nima", "skolko", "сколько", "будет",
+    "ravno", "равно", "calculate", "equals", "result", "what", "is"
+  ]);
+
+  const allAllowed = words.every((w) => allowed.has(w));
+  if (remainder.length === 0 || allAllowed) {
     const a = parseFloat(m[1]);
     const op = m[2];
     const b = parseFloat(m[3]);
@@ -128,7 +138,7 @@ export function parseMathQuery(text: string): { isMath: boolean; a?: number; op?
 }
 
 function hasWord(text: string, word: string): boolean {
-  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\export function isMedicalDomain");
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp("(?:^|[\\s.,!?;:()\\/\\-])" + escaped + "(?:$|[\\s.,!?;:()\\/\\-])", "i").test(text);
 }
 
@@ -223,12 +233,13 @@ export function handleAiMedicalChat(params: {
     const math = parseMathQuery(userText);
     if (math.isMath && math.result !== undefined) {
       let reply = "";
+      const opSymbol = math.op === "*" || math.op === "x" || math.op === "X" ? "×" : math.op === "/" ? "÷" : math.op;
       if (lang === "ru") {
-        reply = `${math.a} ${math.op === "*" ? "×" : math.op} ${math.b} = ${math.result} 😊.\n\nЯ медицинский ИИ-консультант аптечной сети VaksinaMed 🩺. Моя специализация — консультации по вопросам здоровья, лекарственных препаратов, дозировок и расшифровка рецептов от врача.\n\nЕсли у вас есть вопросы по самочувствию или медикаментам, с радостью помогу вам!`;
+        reply = `${math.a} ${opSymbol} ${math.b} = ${math.result} 😊.\n\nЯ медицинский ИИ-консультант аптечной сети VaksinaMed 🩺. Моя специализация — консультации по вопросам здоровья, лекарственных препаратов, дозировок и расшифровка рецептов от врача.\n\nЕсли у вас есть вопросы по самочувствию или медикаментам, с радостью помогу вам!`;
       } else if (lang === "en") {
-        reply = `${math.a} ${math.op === "*" ? "×" : math.op} ${math.b} = ${math.result} 😊.\n\nI am the VaksinaMed Medical AI Consultant 🩺. My core expertise is health guidance, medications, and prescription analysis.\n\nFeel free to ask any health, symptom, or pharmaceutical questions!`;
+        reply = `${math.a} ${opSymbol} ${math.b} = ${math.result} 😊.\n\nI am the VaksinaMed Medical AI Consultant 🩺. My core expertise is health guidance, medications, and prescription analysis.\n\nFeel free to ask any health, symptom, or pharmaceutical questions!`;
       } else {
-        reply = `${math.a} ${math.op === "*" ? "×" : math.op} ${math.b} = ${math.result} bo‘ladi 😊.\n\nMen VaksinaMed sun'iy intellekt tibbiy maslahatchisiman 🩺. Mening asosiy ixtisosligim — salomatlik, dori vositalari, simptomlar va shifokor retseptlarini tahlil qilishdir.\n\nAgar sog‘ligingiz, alomatlar yoki dorilar bo‘yicha savolingiz bo‘lsa, bemalol murojaat qilishingiz mumkin!`;
+        reply = `${math.a} ${opSymbol} ${math.b} = ${math.result} bo‘ladi 😊.\n\nMen VaksinaMed sun'iy intellekt tibbiy maslahatchisiman 🩺. Mening asosiy ixtisosligim — salomatlik, dori vositalari, simptomlar va shifokor retseptlarini tahlil qilishdir.\n\nAgar sog‘ligingiz, alomatlar yoki dorilar bo‘yicha savolingiz bo‘lsa, bemalol murojaat qilishingiz mumkin!`;
       }
       return {
         success: true,
