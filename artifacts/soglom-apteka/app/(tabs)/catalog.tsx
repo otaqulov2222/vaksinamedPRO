@@ -903,13 +903,8 @@ export default function CatalogScreen() {
             <Text style={styles.foundCountText}>
               {t('catalog.foundCount', { count: products.length })}
             </Text>
-            {hasBranch ? (
-              <Text style={styles.foundBranchNote} numberOfLines={1}>
-                {t('catalog.branchHintScoped', { total: fmt.number(total) })}
-              </Text>
-            ) : null}
           </View>
-          <View style={{ flex: 1, minWidth: 4 }} />
+          <View style={{ flex: 1 }} />
           <Pressable
             style={[styles.toolChip, quickFilter !== 'all' && styles.toolChipActive]}
             onPress={() => setFilterOpen(true)}
@@ -918,8 +913,8 @@ export default function CatalogScreen() {
           >
             <MaterialCommunityIcons
               name="tune-variant"
-              size={15}
-              color={quickFilter !== 'all' ? '#FFFFFF' : PURPLE_DEEP}
+              size={14}
+              color={quickFilter !== 'all' ? '#FFFFFF' : PURPLE}
             />
             <Text
               style={[styles.toolText, quickFilter !== 'all' && styles.toolTextActive]}
@@ -940,46 +935,40 @@ export default function CatalogScreen() {
                 <Feather name="x" size={12} color="#FFFFFF" />
               </Pressable>
             ) : (
-              <Feather name="chevron-down" size={13} color={MUTED} />
+              <Feather name="chevron-down" size={12} color={MUTED} />
             )}
           </Pressable>
           <Pressable
-            style={[styles.toolChip, narrow && styles.toolChipNarrow]}
+            style={styles.toolChip}
             onPress={() => setSortOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={t('catalog.sortA11y', { label: sortLabel })}
           >
-            <MaterialCommunityIcons name="swap-vertical" size={15} color={PURPLE_DEEP} />
+            <MaterialCommunityIcons name="swap-vertical" size={14} color={PURPLE} />
             <Text style={styles.toolText} numberOfLines={1}>
               {sort === 'default' ? t('catalog.sortTitle') : sortLabel}
             </Text>
-            <Feather name="chevron-down" size={13} color={MUTED} />
+            <Feather name="chevron-down" size={12} color={MUTED} />
           </Pressable>
-          <View style={styles.viewToggle}>
-            <Pressable
-              style={[styles.viewBtn, viewMode === 'grid' && styles.viewBtnActive]}
-              onPress={() => setViewMode('grid')}
-              accessibilityRole="button"
-              accessibilityState={{ selected: viewMode === 'grid' }}
-              accessibilityLabel={t('catalog.viewGridA11y')}
-            >
-              <MaterialCommunityIcons name="view-grid" size={15} color={viewMode === 'grid' ? '#fff' : PURPLE_DEEP} />
-            </Pressable>
-            <Pressable
-              style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
-              onPress={() => setViewMode('list')}
-              accessibilityRole="button"
-              accessibilityState={{ selected: viewMode === 'list' }}
-              accessibilityLabel={t('catalog.viewListA11y')}
-            >
-              <MaterialCommunityIcons
-                name="format-list-bulleted"
-                size={15}
-                color={viewMode === 'list' ? '#fff' : PURPLE_DEEP}
-              />
-            </Pressable>
-          </View>
+          <Pressable
+            style={styles.viewToggleBtn}
+            onPress={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
+            accessibilityRole="button"
+            accessibilityLabel={viewMode === 'grid' ? t('catalog.viewListA11y') : t('catalog.viewGridA11y')}
+          >
+            <MaterialCommunityIcons
+              name={viewMode === 'grid' ? 'view-grid' : 'format-list-bulleted'}
+              size={16}
+              color={PURPLE}
+            />
+          </Pressable>
         </View>
+
+        {hasBranch ? (
+          <Text style={styles.branchSubHint} numberOfLines={1}>
+            {t('catalog.branchHintScoped', { total: fmt.number(total) })}
+          </Text>
+        ) : null}
 
         {loading ? (
           <View style={styles.empty}>
@@ -1386,17 +1375,18 @@ const styles = StyleSheet.create({
 
   foundCountBadge: {
     justifyContent: 'center',
+    flexShrink: 1,
   },
   foundCountText: {
     fontFamily: 'Inter_700Bold',
     fontSize: 13,
     color: PURPLE_DEEP,
   },
-  foundBranchNote: {
+  branchSubHint: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 10.5,
+    fontSize: 11,
     color: MUTED,
-    marginTop: 1,
+    marginBottom: 8,
   },
 
   catErrorRow: {
@@ -1477,31 +1467,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 10,
-    flexWrap: 'nowrap',
+    marginBottom: 8,
   },
   toolChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: CARD,
+    gap: 5,
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 7,
-    maxWidth: '48%',
-    flexShrink: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E8E4F2',
-  },
-  toolChipNarrow: {
-    maxWidth: '55%',
-    paddingHorizontal: 8,
+    height: 34,
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
+    flexShrink: 0,
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   toolText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     color: PURPLE_DEEP,
-    flexShrink: 1,
   },
   toolChipActive: {
     backgroundColor: PURPLE,
@@ -1511,18 +1499,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     color: '#FFFFFF',
   },
-  viewToggle: { flexDirection: 'row', gap: 6, flexShrink: 0 },
-  viewBtn: {
-    width: 36,
-    height: 36,
+  viewToggleBtn: {
+    width: 34,
+    height: 34,
     borderRadius: 10,
-    backgroundColor: CARD,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#ECEAF2',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER,
+    flexShrink: 0,
+    shadowColor: '#1A1040',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  viewBtnActive: { backgroundColor: PURPLE, borderColor: PURPLE },
 
   branchHint: {
     width: '100%',
