@@ -93,6 +93,7 @@ export default function PrescriptionScreen() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
+  const [inputHeight, setInputHeight] = useState(40);
   const [attachedImage, setAttachedImage] = useState<{ uri: string; base64?: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
@@ -220,6 +221,7 @@ export default function PrescriptionScreen() {
 
     setMessages((prev) => [...prev, newMsg]);
     setInputText('');
+    setInputHeight(40);
     setAttachedImage(null);
     setSending(true);
     scrollToBottom();
@@ -581,9 +583,23 @@ export default function PrescriptionScreen() {
 
             {/* Text Input with Enter to send on Web */}
             <TextInput
-              style={styles.chatInput}
+              style={[
+                styles.chatInput,
+                { height: inputHeight, overflow: inputHeight > 40 ? 'auto' : 'hidden' },
+              ]}
               value={inputText}
-              onChangeText={setInputText}
+              onChangeText={(text) => {
+                setInputText(text);
+                if (!text.trim()) setInputHeight(40);
+              }}
+              onContentSizeChange={(e) => {
+                const contentH = e.nativeEvent?.contentSize?.height || 0;
+                if (contentH > 24) {
+                  setInputHeight(Math.max(40, Math.min(100, Math.round(contentH + 18))));
+                } else {
+                  setInputHeight(40);
+                }
+              }}
               placeholder={t('catalog.aiChatPlaceholder')}
               placeholderTextColor={TEXT_MUTED}
               multiline
@@ -592,11 +608,13 @@ export default function PrescriptionScreen() {
               returnKeyType="send"
               blurOnSubmit={false}
               onSubmitEditing={() => {
+                setInputHeight(40);
                 handleSendMessage();
               }}
               onKeyPress={(e: any) => {
                 if (Platform.OS === 'web' && e.nativeEvent?.key === KEY_ENTER && !e.nativeEvent?.shiftKey) {
                   e.preventDefault?.();
+                  setInputHeight(40);
                   handleSendMessage();
                 }
               }}
@@ -604,6 +622,7 @@ export default function PrescriptionScreen() {
               onKeyDown={(e: any) => {
                 if (e.key === KEY_ENTER && !e.shiftKey) {
                   e.preventDefault?.();
+                  setInputHeight(40);
                   handleSendMessage();
                 }
               }}
@@ -1134,7 +1153,7 @@ const styles = StyleSheet.create({
   },
   inputControlsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 8,
   },
   attachBtn: {
@@ -1147,10 +1166,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F7FC',
     borderRadius: 20,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingTop: Platform.OS === 'ios' ? 10 : 9,
     paddingBottom: Platform.OS === 'ios' ? 10 : 9,
-    fontSize: 14,
+    fontSize: 13.5,
     lineHeight: 20,
     fontFamily: 'Inter_400Regular',
     color: PURPLE_DEEP,
