@@ -71,23 +71,26 @@ function cleanText(text: string | null | undefined): string {
     .trim();
 }
 
-function getCategoryIcon(catId: string): React.ComponentProps<typeof MaterialCommunityIcons>['name'] {
+function getCategoryVisual(catId: string): {
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  bg: string;
+  color: string;
+} {
   const c = catId.toLowerCase();
-  if (c === 'all') return 'view-grid';
-  if (c.includes('vitamin')) return 'pill';
-  if (c.includes('allergiya') || c.includes('allerg')) return 'flower-outline';
-  if (c.includes('antibiotik') || c.includes('antibiot')) return 'shield-plus-outline';
-  if (c.includes('antiseptik') || c.includes('antisept')) return 'spray-bottle';
-  if (c.includes('og') || c.includes('pain') || c.includes('isitma')) return 'thermometer';
-  if (c.includes('shamollash') || c.includes('cold') || c.includes('gripp')) return 'weather-windy';
-  if (c.includes('yurak') || c.includes('heart') || c.includes('kardio')) return 'heart-pulse';
-  if (c.includes('oshqozon') || c.includes('hazm') || c.includes('stomach')) return 'stomach';
-  if (c.includes('koz') || c.includes('eye')) return 'eye-outline';
-  if (c.includes('teri') || c.includes('skin')) return 'hand-water';
-  if (c.includes('bola') || c.includes('baby') || c.includes('kid')) return 'baby-bottle-outline';
-  if (c.includes('tibbiy') || c.includes('buyum')) return 'medical-bag';
-  if (c.includes('surunkali') || c.includes('kasallik')) return 'clipboard-pulse-outline';
-  return 'medical-bag';
+  if (c === 'all') return { icon: 'view-grid', bg: '#F3EEFF', color: '#6A22D6' };
+  if (c.includes('vitamin')) return { icon: 'pill', bg: '#FEF3C7', color: '#D97706' };
+  if (c.includes('allergiya') || c.includes('allerg')) return { icon: 'flower-outline', bg: '#FCE7F3', color: '#DB2777' };
+  if (c.includes('antibiotik') || c.includes('antibiot')) return { icon: 'shield-plus-outline', bg: '#E0F2FE', color: '#0284C7' };
+  if (c.includes('antiseptik') || c.includes('antisept')) return { icon: 'spray-bottle', bg: '#E0E7FF', color: '#4F46E5' };
+  if (c.includes('og') || c.includes('pain') || c.includes('isitma')) return { icon: 'thermometer', bg: '#FEE2E2', color: '#DC2626' };
+  if (c.includes('shamollash') || c.includes('cold') || c.includes('gripp')) return { icon: 'weather-windy', bg: '#CCFBF1', color: '#0D9488' };
+  if (c.includes('yurak') || c.includes('heart') || c.includes('kardio')) return { icon: 'heart-pulse', bg: '#FFE4E6', color: '#E11D48' };
+  if (c.includes('oshqozon') || c.includes('hazm') || c.includes('stomach')) return { icon: 'stomach', bg: '#FFEDD5', color: '#EA580C' };
+  if (c.includes('koz') || c.includes('eye')) return { icon: 'eye-outline', bg: '#CFFAFE', color: '#0891B2' };
+  if (c.includes('teri') || c.includes('skin')) return { icon: 'hand-water', bg: '#D1FAE5', color: '#059669' };
+  if (c.includes('bola') || c.includes('baby') || c.includes('kid')) return { icon: 'baby-bottle-outline', bg: '#FDF4FF', color: '#C026D3' };
+  if (c.includes('tibbiy') || c.includes('buyum')) return { icon: 'medical-bag', bg: '#EDE9FE', color: '#7C3AED' };
+  return { icon: 'medical-bag', bg: '#F1F5F9', color: '#475569' };
 }
 
 type CatId = string;
@@ -875,21 +878,32 @@ export default function CatalogScreen() {
             ) : null}
             {categoryChips.map((c) => {
               const active = cat === c.id;
+              const visual = getCategoryVisual(c.id);
               return (
                 <Pressable
                   key={c.id}
-                  style={[styles.catPill, active && styles.catPillActive]}
+                  style={[styles.catCard, active && styles.catCardActive]}
                   onPress={() => setCat(c.id)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   accessibilityLabel={c.label}
                 >
-                  <MaterialCommunityIcons
-                    name={getCategoryIcon(c.id)}
-                    size={16}
-                    color={active ? '#FFFFFF' : PURPLE}
-                  />
-                  <Text style={[styles.catPillText, active && styles.catPillTextActive]} numberOfLines={1}>
+                  <View
+                    style={[
+                      styles.catCardIconWrap,
+                      { backgroundColor: active ? 'rgba(255,255,255,0.22)' : visual.bg },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name={visual.icon}
+                      size={15}
+                      color={active ? '#FFFFFF' : visual.color}
+                    />
+                  </View>
+                  <Text
+                    style={[styles.catCardText, active && styles.catCardTextActive]}
+                    numberOfLines={1}
+                  >
                     {c.label}
                   </Text>
                 </Pressable>
@@ -899,27 +913,19 @@ export default function CatalogScreen() {
         </View>
 
         <View style={styles.toolsRow}>
-          {debouncedQuery.trim() ? (
-            <View style={styles.foundCountBadge}>
-              <Text style={styles.foundCountText}>
-                {t('catalog.foundCount', { count: products.length })}
-              </Text>
-            </View>
-          ) : null}
-          <View style={{ flex: 1 }} />
           <Pressable
-            style={[styles.toolChip, quickFilter !== 'all' && styles.toolChipActive]}
+            style={[styles.toolChipFull, quickFilter !== 'all' && styles.toolChipActive]}
             onPress={() => setFilterOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={t('catalog.filterTitle')}
           >
             <MaterialCommunityIcons
               name="tune-variant"
-              size={14}
+              size={15}
               color={quickFilter !== 'all' ? '#FFFFFF' : PURPLE}
             />
             <Text
-              style={[styles.toolText, quickFilter !== 'all' && styles.toolTextActive]}
+              style={[styles.toolTextFull, quickFilter !== 'all' && styles.toolTextActive]}
               numberOfLines={1}
             >
               {quickFilter === 'all' ? t('catalog.filterTitle') : quickFilterLabel}
@@ -937,21 +943,23 @@ export default function CatalogScreen() {
                 <Feather name="x" size={12} color="#FFFFFF" />
               </Pressable>
             ) : (
-              <Feather name="chevron-down" size={12} color={MUTED} />
+              <Feather name="chevron-down" size={13} color={MUTED} />
             )}
           </Pressable>
+
           <Pressable
-            style={styles.toolChip}
+            style={styles.toolChipFull}
             onPress={() => setSortOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={t('catalog.sortA11y', { label: sortLabel })}
           >
-            <MaterialCommunityIcons name="swap-vertical" size={14} color={PURPLE} />
-            <Text style={styles.toolText} numberOfLines={1}>
+            <MaterialCommunityIcons name="swap-vertical" size={16} color={PURPLE} />
+            <Text style={styles.toolTextFull} numberOfLines={1}>
               {sort === 'default' ? t('catalog.sortTitle') : sortLabel}
             </Text>
-            <Feather name="chevron-down" size={12} color={MUTED} />
+            <Feather name="chevron-down" size={13} color={MUTED} />
           </Pressable>
+
           <Pressable
             style={styles.viewToggleBtn}
             onPress={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
@@ -960,11 +968,19 @@ export default function CatalogScreen() {
           >
             <MaterialCommunityIcons
               name={viewMode === 'grid' ? 'view-grid' : 'format-list-bulleted'}
-              size={16}
+              size={17}
               color={PURPLE}
             />
           </Pressable>
         </View>
+
+        {debouncedQuery.trim() ? (
+          <View style={styles.searchCountBar}>
+            <Text style={styles.searchCountText}>
+              {t('catalog.foundCount', { count: products.length })}
+            </Text>
+          </View>
+        ) : null}
 
         {loading ? (
           <View style={styles.empty}>
@@ -1425,37 +1441,45 @@ const styles = StyleSheet.create({
   },
   catsScroll: { flexGrow: 0, width: '100%' },
   catsRow: { gap: 8, paddingBottom: 2, alignItems: 'center' },
-  catPill: {
+  catCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 13,
-    paddingVertical: 7.5,
-    borderRadius: 20,
+    paddingLeft: 6,
+    paddingRight: 13,
+    paddingVertical: 5.5,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: '#ECEAF2',
     shadowColor: '#1A1040',
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.04,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
-  catPillActive: {
+  catCardActive: {
     backgroundColor: PURPLE,
     borderColor: PURPLE,
     shadowColor: PURPLE,
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.28,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  catPillText: {
+  catCardIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catCardText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12.5,
     color: PURPLE_DEEP,
   },
-  catPillTextActive: {
+  catCardTextActive: {
     color: '#FFFFFF',
   },
 
@@ -1463,42 +1487,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 10,
+    width: '100%',
   },
-  toolChip: {
+  toolChipFull: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    justifyContent: 'center',
+    gap: 6,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 34,
+    borderRadius: 12,
+    height: 40,
     borderWidth: 1,
     borderColor: '#ECEAF2',
-    flexShrink: 0,
+    paddingHorizontal: 10,
     shadowColor: '#1A1040',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1.5 },
+    elevation: 2,
   },
-  toolText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
+  toolTextFull: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
     color: PURPLE_DEEP,
   },
   toolChipActive: {
     backgroundColor: PURPLE,
     borderColor: PURPLE,
+    shadowColor: PURPLE,
+    shadowOpacity: 0.25,
   },
   toolTextActive: {
     fontFamily: 'Inter_600SemiBold',
     color: '#FFFFFF',
   },
   viewToggleBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#ECEAF2',
@@ -1506,10 +1534,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
     shadowColor: '#1A1040',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1.5 },
+    elevation: 2,
+  },
+  searchCountBar: {
+    marginBottom: 8,
+  },
+  searchCountText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12.5,
+    color: PURPLE_DEEP,
   },
 
   branchHint: {
