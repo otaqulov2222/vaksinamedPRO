@@ -1206,52 +1206,11 @@ export function DashboardPage(props: {
     <div className={`dashboard${isZero ? " dashboard--zero" : ""}`}>
       <AdminPageHeader
         className="dashboard-header"
-        eyebrow="VaksinaMed HQ · Operatsiyalar boshqaruvi"
+        eyebrow="VaksinaMed HQ · Operatsiyalar va Moliya markazi"
         title="Dashboard"
         meta={headerMeta}
         actions={filterControls}
       />
-
-      <div className="dash-exec-banner">
-        <div className="dash-exec-left">
-          <div className="dash-exec-avatar">
-            <span>{props.user?.name ? props.user.name.slice(0, 2).toUpperCase() : "SA"}</span>
-            <span className="dash-exec-avatar-dot" aria-hidden="true" />
-          </div>
-          <div className="dash-exec-info">
-            <h1 className="dash-exec-title">
-              Xush kelibsiz, {props.user?.name || "Super Admin"} 👋
-            </h1>
-            <p className="dash-exec-subtitle">
-              VaksinaMed farmatsevtika tarmog‘i operatsion boshqaruv markazi va real vaqt tahlili
-            </p>
-          </div>
-        </div>
-        <div className="dash-exec-right">
-          <div className="dash-exec-chip">
-            <span className="dash-chip-indicator is-live" aria-hidden="true" />
-            <span className="dash-chip-label">Tizim:</span>
-            <span className="dash-chip-val">Barqaror</span>
-          </div>
-          <div className="dash-exec-chip">
-            <span className="dash-chip-indicator is-network" aria-hidden="true" />
-            <span className="dash-chip-label">Filiallar:</span>
-            <span className="dash-chip-val">{network.open} / {network.total || 121} ochiq</span>
-          </div>
-          {props.onOpenPos ? (
-            <button type="button" className="dash-exec-btn is-primary" onClick={props.onOpenPos}>
-              <Receipt size={14} strokeWidth={2.25} aria-hidden="true" />
-              Kassa POS
-            </button>
-          ) : null}
-          {props.onOpenOrders ? (
-            <button type="button" className="dash-exec-btn is-secondary" onClick={props.onOpenOrders}>
-              <ShoppingBag size={14} strokeWidth={2.25} aria-hidden="true" />
-              Buyurtmalar
-            </button>
-          ) : null}
-        </div>
-      </div>
 
       {loading && !data ? (
         <div className="dash-skeleton" role="status" aria-label="Yuklanmoqda…">
