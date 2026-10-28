@@ -8162,3 +8162,59 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 [data-theme="dark"] .network-region.is-l2 { fill: #273D63 !important; }
 [data-theme="dark"] .network-region.is-l3 { fill: #3B5998 !important; }
 [data-theme="dark"] .network-region.is-l4 { fill: #4F46E5 !important; }
+
+
+/* Shared Card and Chart Polish */
+[data-theme="light"] .sales-bar,
+[data-theme="dark"] .sales-bar {
+  background: transparent !important;
+  border: none !important;
+}
+[data-theme="light"] .sales-bar:hover,
+[data-theme="dark"] .sales-bar:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-radius: 6px 6px 0 0 !important;
+}
+
+/* Light mode text contrast fixes */
+[data-theme="light"] .dash-network-total { color: #93C5FD !important; }
+[data-theme="light"] .dash-network-n { color: #FFFFFF !important; }
+[data-theme="light"] .dash-network-sep { color: rgba(255, 255, 255, 0.4) !important; }
+[data-theme="light"] .act-code { color: #FFFFFF !important; font-weight: 700 !important; }
+[data-theme="light"] .act-where { color: #93C5FD !important; }
+[data-theme="light"] .act-time { color: #BAE6FD !important; }
+[data-theme="light"] .act-amount { color: #FFFFFF !important; font-weight: 750 !important; }
+[data-theme="light"] .act-row:hover { background: rgba(59, 130, 246, 0.15) !important; }
+
+/* Dark mode text contrast fixes */
+[data-theme="dark"] .dash-kpi-value,
+[data-theme="dark"] .dash-hero-value { color: #FFFFFF !important; }
+[data-theme="dark"] .dash-kpi-label,
+[data-theme="dark"] .dash-kpi-unit,
+[data-theme="dark"] .dash-card-meta { color: #94A3B8 !important; }
+[data-theme="dark"] .dash-legend li {
+  background: #0B0F19 !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+[data-theme="dark"] .dash-legend-label { color: #CBD5E1 !important; }
+[data-theme="dark"] .dash-legend-value { color: #FFFFFF !important; }
+[data-theme="dark"] .dash-legend-pct { color: #94A3B8 !important; }
+[data-theme="dark"] .attn-row {
+  background: #0B0F19 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+[data-theme="dark"] .attn-row-title { color: #FFFFFF !important; }
+[data-theme="dark"] .attn-row-detail { color: #94A3B8 !important; }
+[data-theme="dark"] .attn-row-go {
+  background: #1E293B !important;
+  color: #818CF8 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+[data-theme="dark"] .dash-network-total { color: #94A3B8 !important; }
+[data-theme="dark"] .dash-network-n { color: #FFFFFF !important; }
+[data-theme="dark"] .dash-network-sep { color: #64748B !important; }
+[data-theme="dark"] .act-code { color: #FFFFFF !important; font-weight: 700 !important; }
+[data-theme="dark"] .act-where { color: #94A3B8 !important; }
+[data-theme="dark"] .act-time { color: #64748B !important; }
+[data-theme="dark"] .act-amount { color: #FFFFFF !important; font-weight: 750 !important; }
+[data-theme="dark"] .act-row:hover { background: rgba(255, 255, 255, 0.04) !important; }

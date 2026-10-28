@@ -74,20 +74,36 @@ const token = loginRes.token;
 await sendPage('Page.navigate', { url: 'http://77.83.206.192/admin/' });
 await new Promise((r) => setTimeout(r, 1500));
 
-// Store token in localStorage
+// Store token in localStorage and ensure light mode default
 await sendPage('Runtime.evaluate', {
   expression: `
     localStorage.setItem('vm-admin-token', '${token}');
+    localStorage.setItem('vm_theme', 'light');
     location.reload();
   `,
 });
 
 await new Promise((r) => setTimeout(r, 4500));
 
-const screenshot = await sendPage('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
-const buf = Buffer.from(screenshot.data, 'base64');
-fs.writeFileSync(path.join(ARTIFACTS_DIR, 'live_vps_admin_dashboard_redesigned.png'), buf);
-console.log('Saved live_vps_admin_dashboard_redesigned.png');
+// Capture Light Mode
+const shotLight = await sendPage('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+fs.writeFileSync(path.join(ARTIFACTS_DIR, 'live_vps_admin_light_mode.png'), Buffer.from(shotLight.data, 'base64'));
+fs.writeFileSync(path.join(ARTIFACTS_DIR, 'live_vps_admin_dashboard_redesigned.png'), Buffer.from(shotLight.data, 'base64'));
+console.log('Saved live_vps_admin_light_mode.png');
+
+// Toggle to Dark Mode by clicking the theme button
+await sendPage('Runtime.evaluate', {
+  expression: `
+    const btn = document.querySelector('.topbar-theme-toggle');
+    if (btn) btn.click();
+  `,
+});
+await new Promise((r) => setTimeout(r, 1200));
+
+// Capture Dark Mode
+const shotDark = await sendPage('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+fs.writeFileSync(path.join(ARTIFACTS_DIR, 'live_vps_admin_dark_mode.png'), Buffer.from(shotDark.data, 'base64'));
+console.log('Saved live_vps_admin_dark_mode.png');
 
 pageWs.close();
 browserWs.close();
