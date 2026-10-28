@@ -6472,44 +6472,42 @@ input[type="range"] { padding: 0; border: 0; min-height: 0; accent-color: var(--
 }
 .dashboard > .page-header {
   margin-bottom: 0;
-  padding-bottom: 16px;
+  padding-bottom: 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px 20px;
+  gap: 12px 18px;
   border-bottom: 1px solid #E2E8F0;
 }
 .dashboard > .page-header .page-actions { flex-shrink: 0; }
+.dashboard-header .page-eyebrow {
+  display: none !important;
+}
 .dashboard-header .page-header-text {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   min-width: 0;
-}
-.dashboard-header .page-eyebrow {
-  margin: 0;
-  color: #64748B;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  line-height: 1.2;
+  max-width: none;
 }
 .dashboard-header .page-title {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 750;
   letter-spacing: -0.025em;
   color: #0F172A;
-  line-height: 1.2;
+  line-height: 1;
+  white-space: nowrap;
 }
 .dashboard-header .page-meta {
-  margin: 3px 0 0;
+  margin: 0;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   font-size: 12px;
   color: #64748B;
 }
@@ -6525,9 +6523,9 @@ input[type="range"] { padding: 0; border: 0; min-height: 0; accent-color: var(--
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  height: 34px;
+  height: 32px;
   padding: 2px;
-  border-radius: 7px;
+  border-radius: 6px;
   background: #F1F5F9;
   border: 1px solid #E2E8F0;
   max-width: 100%;
@@ -6539,7 +6537,7 @@ input[type="range"] { padding: 0; border: 0; min-height: 0; accent-color: var(--
   height: 100%;
   padding: 0 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   color: #64748B;
   font: inherit;
@@ -6573,11 +6571,11 @@ input[type="range"] { padding: 0; border: 0; min-height: 0; accent-color: var(--
   height: 14px;
 }
 .dash-ctrl {
-  height: 34px;
-  min-height: 34px;
+  height: 32px;
+  min-height: 32px;
   font-size: 12.5px;
   font-weight: 500;
-  border-radius: 7px;
+  border-radius: 6px;
   border: 1px solid #E2E8F0;
   background: #FFFFFF;
   color: #0F172A;
@@ -6591,16 +6589,16 @@ input[type="range"] { padding: 0; border: 0; min-height: 0; accent-color: var(--
 .dash-ctrl--branch {
   width: 180px;
   max-width: 100%;
-  padding-left: 29px !important;
+  padding-left: 28px !important;
   font-weight: 550;
   cursor: pointer;
 }
 .dashboard-refresh {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
   padding: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   border: 1px solid #E2E8F0;
   background: #FFFFFF;
   color: #64748B;
