@@ -395,8 +395,41 @@ export async function applyOrderTransition(
       .where(eq(orders.id, order.id))
       .returning();
 
+    const finalOrder = updated[0];
+
+    // Asynchronously dispatch push notification to the customer on fulfillment status change
+    if (axesChanged && input.toFulfillment && input.toFulfillment !== order.fulfillmentStatus) {
+      setImmediate(async () => {
+        try {
+          const { customers: customersTable } = await import("@workspace/db");
+          const { getOrderStatusNotificationContent, sendCustomerPushNotification } = await import("./pushNotifications");
+          const custRows = await db
+            .select({ language: customersTable.language })
+            .from(customersTable)
+            .where(eq(customersTable.id, finalOrder.customerId))
+            .limit(1);
+          const lang = custRows[0]?.language || "uz";
+          const content = getOrderStatusNotificationContent(lang, finalOrder.code, nextFulfillment);
+          if (content) {
+            await sendCustomerPushNotification(finalOrder.customerId, {
+              title: content.title,
+              body: content.body,
+              data: {
+                type: "order_status",
+                orderId: finalOrder.id,
+                orderCode: finalOrder.code,
+                fulfillmentStatus: nextFulfillment,
+              },
+            });
+          }
+        } catch {
+          // Non-blocking best-effort
+        }
+      });
+    }
+
     return {
-      order: updated[0],
+      order: finalOrder,
       changed: true,
       idempotent: false,
     };

@@ -15,6 +15,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
+import {
+  getNotificationPermission,
+  requestPushPermissionAndRegister,
+  showLocalPushNotification,
+  type PushPermissionState,
+} from '@/lib/pushNotifications';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -64,6 +70,45 @@ export default function NotificationsScreen() {
   const [reminderDoses, setReminderDoses] = useState<any[]>([]);
   const [refillAlerts, setRefillAlerts] = useState<any[]>([]);
   const [cashbackRows, setCashbackRows] = useState<any[]>([]);
+
+  const [pushStatus, setPushStatus] = useState<PushPermissionState>('unsupported');
+  const [pushActionLoading, setPushActionLoading] = useState(false);
+
+  useEffect(() => {
+    setPushStatus(getNotificationPermission());
+  }, []);
+
+  const handleEnablePush = async () => {
+    setPushActionLoading(true);
+    try {
+      const res = await requestPushPermissionAndRegister();
+      setPushStatus(res.status);
+      if (res.granted) {
+        showToast(t('profile.pushEnabledStatus'));
+      } else if (res.status === 'denied') {
+        showToast(t('profile.pushDeniedNote'));
+      }
+    } catch {
+      showToast(t('profile.pushDeniedNote'));
+    } finally {
+      setPushActionLoading(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setPushActionLoading(true);
+    try {
+      const res = await api.sendTestPushNotification();
+      if (res.success) {
+        showLocalPushNotification(res.title, res.body);
+        showToast(t('profile.pushTestSent'));
+      }
+    } catch {
+      showToast(t('profile.pushTestSent'));
+    } finally {
+      setPushActionLoading(false);
+    }
+  };
 
   const showToast = useCallback((msg: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -504,6 +549,68 @@ export default function NotificationsScreen() {
             />
           }
         >
+          {/* Push Notification Card */}
+          {pushStatus !== 'unsupported' ? (
+            <View style={styles.pushCard}>
+              <View style={styles.pushCardLeft}>
+                <View
+                  style={[
+                    styles.pushIconWrap,
+                    pushStatus === 'granted' && { backgroundColor: '#ECFDF5' },
+                    pushStatus === 'denied' && { backgroundColor: '#FEF3C7' },
+                  ]}
+                >
+                  <Feather
+                    name={pushStatus === 'granted' ? 'bell' : pushStatus === 'denied' ? 'bell-off' : 'bell'}
+                    size={20}
+                    color={pushStatus === 'granted' ? GREEN : pushStatus === 'denied' ? AMBER : PURPLE}
+                  />
+                </View>
+                <View style={styles.pushTextWrap}>
+                  <Text style={styles.pushTitle}>
+                    {pushStatus === 'granted'
+                      ? t('profile.pushEnabledStatus')
+                      : t('profile.pushPermissionTitle')}
+                  </Text>
+                  <Text style={styles.pushSubtitle}>
+                    {pushStatus === 'denied'
+                      ? t('profile.pushDeniedNote')
+                      : t('profile.pushPermissionDesc')}
+                  </Text>
+                </View>
+              </View>
+              {pushStatus === 'default' ? (
+                <Pressable
+                  onPress={handleEnablePush}
+                  disabled={pushActionLoading}
+                  style={({ pressed }) => [styles.pushActionBtn, pressed && { opacity: 0.85 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.pushEnableBtn')}
+                >
+                  {pushActionLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.pushActionBtnText}>{t('profile.pushEnableBtn')}</Text>
+                  )}
+                </Pressable>
+              ) : pushStatus === 'granted' ? (
+                <Pressable
+                  onPress={handleTestPush}
+                  disabled={pushActionLoading}
+                  style={({ pressed }) => [styles.pushTestBtn, pressed && { opacity: 0.85 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.pushTestBtn')}
+                >
+                  {pushActionLoading ? (
+                    <ActivityIndicator size="small" color={PURPLE} />
+                  ) : (
+                    <Text style={styles.pushTestBtnText}>{t('profile.pushTestBtn')}</Text>
+                  )}
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
           {filteredNotifications.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconWrap}>
@@ -1153,5 +1260,74 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#F0F0F5',
+  },
+  pushCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  pushCardLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pushIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F3E8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pushTextWrap: {
+    flex: 1,
+  },
+  pushTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+  },
+  pushSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  pushActionBtn: {
+    backgroundColor: PURPLE,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pushActionBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  pushTestBtn: {
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
+  pushTestBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: PURPLE,
   },
 });

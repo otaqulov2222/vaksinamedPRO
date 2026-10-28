@@ -10,6 +10,7 @@ export * from "./payments";
 export * from "./medicationReminders";
 export * from "./familyMembers";
 export * from "./customerAddresses";
+export * from "./customerDevices";
 
 export { customers as loyaltyCustomers } from "./customers";
 export { loyaltyLedger as loyaltyTransactions } from "./commerce";

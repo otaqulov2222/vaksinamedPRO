@@ -105,6 +105,11 @@ describe("P1 migration foundation", () => {
     assert.ok(tables.includes("customer_addresses"), "missing customer_addresses table");
   });
 
+  it("creates Phase 18 customer devices table and indexes", async () => {
+    const tables = await listPublicTables(db);
+    assert.ok(tables.includes("customer_devices"), "missing customer_devices table");
+  });
+
   it("re-applying migrations is idempotent (deterministic)", async () => {
     const before = await listAppliedMigrationHashes(db);
     await applyMigrations(db, "pglite", getMigrationsFolder());

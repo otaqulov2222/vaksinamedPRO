@@ -488,6 +488,37 @@ export const api = {
     }),
   deleteAddress: (id: number) =>
     request<{ success: boolean }>(`/api/customer/addresses/${id}`, { method: 'DELETE' }),
+  registerPushToken: (body: {
+    token: string;
+    platform?: 'web' | 'android' | 'ios';
+    endpoint?: string;
+    keys?: { p256dh?: string; auth?: string };
+    userAgent?: string;
+  }) =>
+    request<{ success: boolean; deviceId: number }>('/api/customer/devices/push-token', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  unregisterPushToken: (token: string) =>
+    request<{ success: boolean }>('/api/customer/devices/push-token', {
+      method: 'DELETE',
+      body: JSON.stringify({ token }),
+    }),
+  getDevices: () =>
+    request<{
+      devices: Array<{
+        id: number;
+        platform: string;
+        userAgent: string | null;
+        isActive: boolean;
+        lastUsedAt: string | null;
+        createdAt: string;
+      }>;
+    }>('/api/customer/devices'),
+  sendTestPushNotification: () =>
+    request<{ success: boolean; sent: number; title: string; body: string }>('/api/customer/devices/test', {
+      method: 'POST',
+    }),
 };
 
 export type CustomerSavedAddress = {

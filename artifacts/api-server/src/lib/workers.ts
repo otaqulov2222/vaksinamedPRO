@@ -41,6 +41,7 @@ export const JOB_TYPES = {
   DELIVERY_PROVIDER_RETRY: "delivery_provider_retry",
   /** Read-only cashback ledger ↔ account integrity (never mutates money). */
   CASHBACK_INTEGRITY: "cashback_integrity",
+  MEDICATION_REMINDERS_SWEEP: "medication_reminders_sweep",
 } as const;
 
 export function isBackgroundWorkersEnabled(): boolean {
@@ -251,11 +252,118 @@ async function runNotificationJob(payload: Record<string, unknown>) {
   // Non-blocking: notification failure must not affect order/payment.
   // No SMS credentials logged.
   const channel = String(payload.channel || "noop");
+  if (channel === "push" && payload.customerId && payload.title) {
+    const { sendCustomerPushNotification } = await import("./pushNotifications");
+    const dispatch = await sendCustomerPushNotification(Number(payload.customerId), {
+      title: String(payload.title),
+      body: String(payload.body || ""),
+      data: (payload.data as Record<string, unknown>) || {},
+    });
+    return { delivered: dispatch.sent > 0, sent: dispatch.sent, total: dispatch.devices, channel };
+  }
   logger.info(
     { jobType: JOB_TYPES.NOTIFICATION, channel, entityId: payload.entityId ?? null },
     "Notification job (best-effort)",
   );
   return { delivered: false, code: "NOOP_OR_SYNC_SMS", channel };
+}
+
+export async function runMedicationRemindersSweep(
+  opts: { now?: Date } = {},
+  executor: DbLike = db,
+): Promise<{ scanned: number; due: number; sent: number }> {
+  const now = opts.now ?? new Date();
+  const tashkentOffsetMs = 5 * 60 * 60 * 1000;
+  const localNow = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + tashkentOffsetMs);
+  const year = localNow.getFullYear();
+  const month = String(localNow.getMonth() + 1).padStart(2, "0");
+  const day = String(localNow.getDate()).padStart(2, "0");
+  const todayYMD = `${year}-${month}-${day}`;
+  const currentHour = localNow.getHours();
+  const currentMinute = localNow.getMinutes();
+
+  const { medicationReminders, medicationLogs, customers: custTable } = await import("@workspace/db");
+  const { getMedicationReminderNotificationContent, sendCustomerPushNotification } = await import("./pushNotifications");
+
+  const activeReminders = await executor
+    .select({
+      id: medicationReminders.id,
+      customerId: medicationReminders.customerId,
+      medicineName: medicationReminders.medicineName,
+      dosage: medicationReminders.dosage,
+      mealRelation: medicationReminders.mealRelation,
+      intakeTimes: medicationReminders.intakeTimes,
+      startDate: medicationReminders.startDate,
+      endDate: medicationReminders.endDate,
+      language: custTable.language,
+    })
+    .from(medicationReminders)
+    .innerJoin(custTable, eq(medicationReminders.customerId, custTable.id))
+    .where(
+      and(
+        eq(medicationReminders.isActive, true),
+        lte(medicationReminders.startDate, todayYMD),
+        sql`(${medicationReminders.endDate} IS NULL OR ${medicationReminders.endDate} >= ${todayYMD})`,
+      ),
+    );
+
+  let dueCount = 0;
+  let sentCount = 0;
+
+  for (const rem of activeReminders) {
+    let times: string[] = [];
+    try {
+      times = JSON.parse(rem.intakeTimes || "[]");
+    } catch {
+      times = (rem.intakeTimes || "").split(",").map((s) => s.trim());
+    }
+
+    for (const targetTime of times) {
+      if (!targetTime || !targetTime.includes(":")) continue;
+      const [tH, tM] = targetTime.split(":").map(Number);
+      const diffMinutes = Math.abs((currentHour * 60 + currentMinute) - (tH * 60 + tM));
+      if (diffMinutes <= 15) {
+        dueCount++;
+        const existingLogs = await executor
+          .select({ id: medicationLogs.id })
+          .from(medicationLogs)
+          .where(
+            and(
+              eq(medicationLogs.reminderId, rem.id),
+              eq(medicationLogs.scheduledDate, todayYMD),
+              eq(medicationLogs.scheduledTime, targetTime),
+            ),
+          )
+          .limit(1);
+
+        if (existingLogs.length === 0) {
+          const content = getMedicationReminderNotificationContent(
+            rem.language || "uz",
+            rem.medicineName,
+            rem.dosage,
+            rem.mealRelation,
+          );
+          const dispatch = await sendCustomerPushNotification(
+            rem.customerId,
+            {
+              title: content.title,
+              body: content.body,
+              data: {
+                type: "medication_reminder",
+                reminderId: rem.id,
+                scheduledTime: targetTime,
+                scheduledDate: todayYMD,
+              },
+            },
+            executor,
+          );
+          if (dispatch.sent > 0) sentCount++;
+        }
+      }
+    }
+  }
+
+  return { scanned: activeReminders.length, due: dueCount, sent: sentCount };
 }
 
 async function runFomRetry(payload: Record<string, unknown>) {
@@ -317,6 +425,8 @@ export async function processWorkerJob(job: typeof workerJobs.$inferSelect) {
       const { runCashbackIntegrityCheck } = await import("./cashbackIntegrity");
       return runCashbackIntegrityCheck(db, { emitAlerts: true });
     }
+    case JOB_TYPES.MEDICATION_REMINDERS_SWEEP:
+      return runMedicationRemindersSweep();
     default:
       throw Object.assign(new Error(`Unknown job type: ${job.jobType}`), { code: "UNKNOWN_JOB_TYPE" });
   }
@@ -470,6 +580,12 @@ export async function ensureSweepJobsEnqueued() {
     jobType: JOB_TYPES.PAYMENT_EXPIRY,
     entityKey: "sweep",
     idempotencyKey: `sweep:payment:${new Date().toISOString().slice(0, 13)}`,
+    payload: {},
+  });
+  await enqueueJob({
+    jobType: JOB_TYPES.MEDICATION_REMINDERS_SWEEP,
+    entityKey: "sweep",
+    idempotencyKey: `sweep:medication:${new Date().toISOString().slice(0, 16)}`,
     payload: {},
   });
 }
