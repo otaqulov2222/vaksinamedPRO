@@ -336,7 +336,7 @@ export default function PrescriptionScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('catalog.aiChatResetBtn')}
         >
-          <Feather name="rotate-ccw" size={19} color={TEXT_MUTED} />
+          <Feather name="edit-3" size={18} color={PURPLE_DEEP} />
         </Pressable>
       </View>
 
