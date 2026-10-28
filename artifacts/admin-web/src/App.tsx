@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Eye, EyeOff } from "lucide-react";
+import { Calendar, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Eye, EyeOff, Moon, Sun } from "lucide-react";
 import { request, softRequest, money, type AdminUser } from "./api";
 import {
   NAV,
@@ -67,6 +67,18 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("vm-admin-sidebar") === "1",
   );
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("vm_theme");
+      if (saved === "dark" || saved === "light") return saved;
+    }
+    return "light";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("vm_theme", theme);
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
   const [activePreset, setActivePreset] = useState<Preset>("today");
   const [customDate, setCustomDate] = useState("");
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -323,7 +335,7 @@ export default function App() {
     && visibleNav.every((i) => i.id === "fom" || i.id === "settings" || i.id === "admins");
 
   return (
-    <div className={`shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <div className={`shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`} data-theme={theme}>
       <aside className="side" aria-label="Asosiy menyu">
         <div className="side-head">
           <div className="side-brand-row">
@@ -437,6 +449,25 @@ export default function App() {
             <span className="crumb-page" aria-current="location">{pageTitle}</span>
           </nav>
           <div className="topbar-meta">
+            <button
+              type="button"
+              className="topbar-theme-toggle"
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              title={theme === "dark" ? "Kunduzgi rejimga o‘tish (Oq fon)" : "Kechgi rejimga o‘tish (Qorong‘i fon)"}
+              aria-label={theme === "dark" ? "Kunduzgi rejimga o‘tish" : "Kechgi rejimga o‘tish"}
+            >
+              {theme === "dark" ? (
+                <>
+                  <Sun size={13} className="topbar-theme-icon" aria-hidden="true" />
+                  <span className="topbar-theme-text">Kunduzgi</span>
+                </>
+              ) : (
+                <>
+                  <Moon size={13} className="topbar-theme-icon" aria-hidden="true" />
+                  <span className="topbar-theme-text">Kechgi</span>
+                </>
+              )}
+            </button>
             <div className="topbar-date-anchor" ref={datePickerRef}>
               <button
                 type="button"
