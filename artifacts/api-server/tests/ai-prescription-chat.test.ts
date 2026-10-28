@@ -357,4 +357,50 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.ok(res.reply.includes("R.I.C.E."));
     assert.ok(res.reply.includes("travmatolog"));
   });
+
+  it("21. Correctly handles nail trauma and broken/detached nails", () => {
+    assert.equal(isMedicalDomain("tirnoq sinsa nima qilish kerak"), true);
+    assert.equal(isMedicalDomain("tirnogim tushib qoldi deyayabman"), true);
+    assert.equal(isMedicalDomain("сорвал ноготь что делать"), true);
+
+    const res1 = handleAiMedicalChat({
+      message: "tirnoq sinsa nima qilish kerak",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res1.isMedical, true);
+    assert.ok(res1.reply.includes("Tirnoq sinishi"));
+    assert.ok(res1.reply.includes("Levomekol"));
+    assert.ok(res1.reply.includes("Xlorgeksidin"));
+
+    const res2 = handleAiMedicalChat({
+      message: "tirnogim tushib qoldi deyayabman",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res2.isMedical, true);
+    assert.ok(res2.reply.includes("Tirnoq"));
+    assert.ok(res2.reply.includes("jarrohga"));
+  });
+
+  it("22. Strictly blocks non-medical knowledge queries like chatgpt and metric units", () => {
+    assert.equal(isMedicalDomain("1 km necha metrga teng"), false);
+    assert.equal(isMedicalDomain("chatgpt haqida malumot ber"), false);
+
+    const resKm = handleAiMedicalChat({
+      message: "1 km necha metrga teng",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(resKm.isMedical, false);
+    assert.ok(resKm.reply.includes("faqat tibbiyot va salomatlik"));
+
+    const resGpt = handleAiMedicalChat({
+      message: "chatgpt haqida malumot ber",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(resGpt.isMedical, false);
+    assert.ok(resGpt.reply.includes("faqat tibbiyot va salomatlik"));
+  });
 });

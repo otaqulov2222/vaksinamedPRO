@@ -88,6 +88,7 @@ const MEDICAL_KEYWORDS = [
   "ich qot", "ichim qot", "qabziyat", "zapor", "dam bo'l", "meteorizm", "gaz", "klizma",
   "zahar", "zaharlan", "intoksikatsiya", "ovqatdan",
   "kuyib", "kuydim", "kuyish", "issiq suv", "jarohat", "lat yey", "lat yed", "sinish", "pay cho'zil", "shish", "qon ket", "qonash",
+  "tirnoq", "tirnog", "tirnogim", "tirnoqlar", "tirnoqqa", "tirnoqdan", "ko'chib", "kochib", "tushib qol", "sinsa", "sinib", "yulib", "yulin", "barmoq", "barmog", "barmogim", "barmoqlar", "tikan", "zirapcha", "qadoq", "yiring", "gematoma", "chiqib ket",
   "peshob", "siydik", "siyish", "achish", "tsistit", "cistit", "pielonefrit",
   "diabet", "qandli", "qandim", "qand kasali", "saxar", "shakar", "glyukoza", "insulin", "chanqoq",
   "bola", "bolam", "bolamning", "bolaga", "bolalar", "go'dak", "chaqaloq", "pediatr",
@@ -97,9 +98,9 @@ const MEDICAL_KEYWORDS = [
   "бол", "болит", "боле", "живот", "желуд", "печен", "почк", "голов", "зуб", "спин", "горл", "кашел",
   "жар", "температур", "простуд", "грипп", "тошн", "рвот", "понос", "диаре", "сып", "зуд", "сердц", "давлен",
   "аппендицит", "спазм", "гастрит", "бессонн", "глаз", "ух", "нос", "ожог", "запор", "отравлен", "моч",
-  "цистит", "сахар", "диабет", "ребен", "малыш", "головокружен", "травм", "ушиб", "растяжен",
+  "цистит", "сахар", "диабет", "ребен", "малыш", "головокружен", "травм", "ушиб", "растяжен", "ноготь", "ногтя", "ногтем", "ногте", "ногтей", "ногти", "сорвал", "сорвала", "оторвал", "оторвался", "слез", "сошел", "врастает", "вросший", "палец", "пальца", "пальцы", "заноза", "мозоль", "гной",
   // English roots
-  "pain", "ache", "hurt", "stomach", "belly", "abdomen", "head", "tooth", "throat", "cough", "fever", "cold",
+  "pain", "ache", "hurt", "nail", "nails", "toenail", "fingernail", "detached", "avulsion", "ingrown", "splinter", "stomach", "belly", "abdomen", "head", "tooth", "throat", "cough", "fever", "cold",
   "sleep", "insomnia", "constipat", "poison", "burn", "eye", "ear", "nosebleed", "dizzy", "dizziness",
   "child", "infant", "kidney", "urine", "cystitis", "diabet", "sprain", "wound",
   // Vitamins & supplements
@@ -628,6 +629,7 @@ export function handleAiMedicalChat(params: {
     | "nasal_sinusitis"
     | "helminths_parasites"
     | "medication_rules"
+    | "nail_trauma"
     | "fracture"
     | "wound_cut"
     | "choking"
@@ -792,23 +794,50 @@ export function handleAiMedicalChat(params: {
   ) {
     categoryIntent = "medication_rules";
   } else
+  // Nail Trauma & Injury priority (tirnoq sinishi, ko'chishi, tushib qolishi, yulinishi)
+  if (
+    (qNorm.includes("tirnoq") ||
+      qNorm.includes("tirnog") ||
+      qNorm.includes("tirnoqlar") ||
+      qNorm.includes("nogot") ||
+      qNorm.includes("ноготь") ||
+      qNorm.includes("ногтя") ||
+      qNorm.includes("ногте") ||
+      qNorm.includes("ногтей") ||
+      qNorm.includes("ногти") ||
+      qNorm.includes("nail") ||
+      qNorm.includes("toenail") ||
+      qNorm.includes("fingernail")) &&
+    !qNorm.includes("gribok") &&
+    !qNorm.includes("zamburug") &&
+    !qNorm.includes("грибок")
+  ) {
+    categoryIntent = "nail_trauma";
+  } else
   // Fracture & Broken Bones priority (qo'l/oyoq singanda birinchi yordam)
   if (
-    qNorm.includes("singan") ||
-    qNorm.includes("sinish") ||
-    qNorm.includes("suyak sin") ||
-    qNorm.includes("qo'l sin") ||
-    qNorm.includes("qol sin") ||
-    qNorm.includes("oyoq sin") ||
-    qNorm.includes("shina qo'y") ||
-    qNorm.includes("перелом") ||
-    qNorm.includes("сломал") ||
-    qNorm.includes("сломала") ||
-    qNorm.includes("сломан") ||
-    qNorm.includes("fracture") ||
-    qNorm.includes("broken bone") ||
-    qNorm.includes("broken arm") ||
-    qNorm.includes("broken leg")
+    !qNorm.includes("tirnoq") &&
+    !qNorm.includes("tirnog") &&
+    !qNorm.includes("ноготь") &&
+    !qNorm.includes("ногт") &&
+    !qNorm.includes("nail") &&
+    (qNorm.includes("singan") ||
+      qNorm.includes("sinish") ||
+      qNorm.includes("suyak sin") ||
+      qNorm.includes("qo'l sin") ||
+      qNorm.includes("qol sin") ||
+      qNorm.includes("oyoq sin") ||
+      ((qNorm.includes("qo'l") || qNorm.includes("qol") || qNorm.includes("oyoq") || qNorm.includes("suyak") || qNorm.includes("barmoq") || qNorm.includes("yelka") || qNorm.includes("tirsak")) &&
+        (qNorm.includes("sin") || qNorm.includes("shina"))) ||
+      qNorm.includes("shina qo'y") ||
+      qNorm.includes("перелом") ||
+      qNorm.includes("сломал") ||
+      qNorm.includes("сломала") ||
+      qNorm.includes("сломан") ||
+      qNorm.includes("fracture") ||
+      qNorm.includes("broken bone") ||
+      qNorm.includes("broken arm") ||
+      qNorm.includes("broken leg"))
   ) {
     categoryIntent = "fracture";
   } else if (
@@ -1392,6 +1421,76 @@ export function handleAiMedicalChat(params: {
     } else {
       reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Dorilarni to‘g‘ri va xavfsiz qabul qilish qoidalari\n\n1. Ovqatga nisbatan vaqtini to‘g‘ri tanlang:\n   • Ovqatdan 30 daqiqa oldin: Oshqozon kislotasini tushiruvchi dorilar (Omeprazol), o‘t haydovchilar;\n   • Ovqatlanish paytida: Hazm qilish fermentlari (Mezim, Kreon), polivitaminlar;\n   • Ovqatdan keyin: Barcha og‘riq qoldiruvchi va nosteroid dorilar (Ibuprofen, Paratsetamol, Tsitramon, Aspirin) — oshqozon shilliq qavatini shikastlamaslik uchun;\n2. Nima bilan ichish kerak: Dorilarni FAQAT bir stakan oddiy toza, xona haroratidagi suv bilan iching!\n3. Qat'iy taqiq: Choy, kofe, sut yoki meva sharbatlari (ayniqsa greypfrut sharbati) bilan ichmang — ular dorining so‘rilishini to‘sib qo‘yadi yoki xavfli asoratlarni keltirib chiqaradi;\n4. Antibiotiklar qoidasi: Aniq belgilangan soatlarda (har 12 yoki har 8 soatda) va shifokor aytgan muddatgacha to‘liq ichib tugatish shart.`;
       quickSuggestions = ["Dorilarning o‘zaro ta'siri", "Antibiotik ichish qoidalari", "Oshqozonni asrash"];
+    }
+  } else if (categoryIntent === "nail_trauma") {
+    if (lang === "ru") {
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Первая помощь при травме, надломе или срыве ногтя
+
+При повреждении, надломе или отрыве ногтевой пластины главная цель — остановить кровотечение, защитить ростковую зону (матрикс) и не допустить инфицирования.
+
+Стандарт неотложной помощи:
+1. Промывание и дезинфекция: Осторожно промойте палец раствором Хлоргексидина или Мирамистина (или кипяченой водой). Не лейте в открытую рану чистый спирт или йод — это вызовет химический ожог обнаженного ногтевого ложа;
+2. Не срывайте ноготь силой: Если ноготь сорван частично, ни в коем случае не отрывайте его насильно! Осторожно срежьте стерильными ножницами только свободно болтающийся край, чтобы он не цеплялся;
+3. Защитная повязка: Нанесите антисептическую мазь (Левомеколь или Бепантен) и зафиксируйте стерильной марлевой салфеткой с пластырем или дышащим бинтом;
+4. Снятие отека и боли: Приложите к пальцу холод через сухое полотенце на 10–15 минут. При выраженной боли допустим прием Парацетамола или Ибупрофена;
+5. Когда срочно нужен хирург:
+   • Ноготь оторван полностью или сильно смещен;
+   • Под ногтем быстро нарастает черно-синяя пульсирующая гематома (распирающая боль);
+   • Появился гной, палец сильно покраснел и пульсирует;
+   • Есть подозрение на перелом фаланги пальца;
+   • Прошло более 5 лет после прививки от столбняка.
+
+ℹ️ Сроки заживления: Новая ногтевая пластина на пальцах рук полностью отрастает за 4–6 месяцев, на ногах — за 9–12 месяцев.`;
+      quickSuggestions = [
+        "Купить Хлоргексидин",
+        "Мазь Левомеколь",
+        "Правила перевязки",
+      ];
+    } else if (lang === "en") {
+      reply = `🩺 VaksinaMed Medical AI Assistant: First Aid for Broken, Torn, or Avulsed Nails
+
+When a nail breaks, tears, or detaches, the priority is to stop bleeding, prevent bacterial infection, and protect the delicate nail bed and germinative matrix.
+
+Action Protocol:
+1. Cleanse and disinfect: Gently wash with Chlorhexidine or mild saline. Never pour pure rubbing alcohol or strong iodine onto an open exposed nail bed;
+2. Do not rip the nail off: If the nail is partially torn, do not pull or rip it forcefully! Carefully trim only the freely detached edge using clean, sterilized scissors;
+3. Antibacterial dressing: Apply an antibacterial ointment (such as Levomekol or bacitracin) and secure with a sterile breathable gauze and medical tape;
+4. Reduce pain and swelling: Apply a cold compress wrapped in a cloth for 10–15 minutes. Take Paracetamol or Ibuprofen if needed for pain relief;
+5. When to visit a surgeon:
+   • The nail has completely avulsed from the root;
+   • A large, throbbing subungual hematoma (blood trapped under nail) causes severe pressure;
+   • Suspected bone fracture of the fingertip/toetip;
+   • Signs of infection, pus, or if tetanus booster is outdated (>5 years).
+
+ℹ️ Recovery timeline: Complete fingernail regrowth takes 4–6 months; toenails take 9–12 months.`;
+      quickSuggestions = [
+        "Buy Chlorhexidine",
+        "Levomekol ointment",
+        "Wound dressing rules",
+      ];
+    } else {
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Tirnoq sinishi, ko'chishi yoki tushib qolishida birinchi yordam
+
+Tirnoq shikastlanganda, yulib ketganda yoki tushib qolganda asosiy maqsad — qon ketishini to'xtatish, tirnoq o'sish o'rnini (matritsasini) asrash va infeksiya tushishining oldini olishdir.
+
+Zudlik bilan nimalar qilish kerak:
+1. Qonni to'xtatish va yuvish: Barmoqni Xlorgeksidin yoki Miramistin antiseptigi (yoki toza xona haroratidagi suv) bilan ehtiyotkorlik bilan yuving. Ochiq qonagan tirnoq o'rniga spirt yoki konsentrlangan yod quymang (to'qimani kuydiradi va bitishini qiyinlashtiradi);
+2. Ko'chgan tirnoqni kuch bilan sug'urib olmang: Agar tirnoq qisman ko'chgan bo'lsa, uni tortib yulib olmang! Faqat osilib qolgan, kiyimga ilinuvchi xalaqit berayotgan qismini steril qaychi bilan ehtiyotkorlik bilan kesib oling;
+3. Antiseptik malham va steril bog'lam: Yaraning ustiga Levomekol yoki Bepanten malhami surtib, steril doka va leykoplastir bilan bog'lab qo'ying (kir va bakteriyalar tushmasligi uchun);
+4. Shish va og'riqni kamaytirish: Zararlangan barmoqqa quruq sochiqqa o'ralgan muz yoki sovuq narsa bosing (10-15 daqiqa). Kuchli og'riqda Paratsetamol yoki Ibuprofen ichish mumkin;
+5. Qachon zudlik bilan jarrohga (xirurg / travmatolog) borish kerak:
+   • Tirnoq tagidan to'liq ko'chib (tushib) ketgan bo'lsa;
+   • Tirnoq ostiga ko'p qon quyilib qoraygan bo'lsa (subungual gematoma) va kuchli lo'qillovchi og'riq bersa;
+   • Barmoq suyagi lat yegan yoki singan bo'lish ehtimoli bo'lsa;
+   • Yara yiringlasa, qizarish va shish kengaysa;
+   • So'nggi 5 yil ichida qoqsholga (stolbnyak) qarshi emlanmagan bo'lsangiz.
+
+ℹ️ Eslatma: O'z o'rnidan to'liq tushib ketgan tirnoq o'rniga yangi tirnoq qo'l barmoqlarida 4–6 oyda, oyoq barmoqlarida esa 9–12 oyda to'liq o'sib chiqadi.`;
+      quickSuggestions = [
+        "Xlorgeksidin sotib olish",
+        "Levomekol malhami",
+        "Yarani bog'lash qoidalari",
+      ];
     }
   } else if (categoryIntent === "fracture") {
     if (lang === "ru") {
