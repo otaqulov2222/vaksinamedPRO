@@ -676,6 +676,7 @@ function DashMetric(props: {
   const className = `dash-kpi dash-kpi--${props.accent}${props.onOpen ? " dash-kpi--btn" : ""}`;
   const body = (
     <>
+      <span className="dash-kpi-bar" aria-hidden="true" />
       <span className="dash-kpi-top">
         <span className="dash-kpi-heading">
           <span className="dash-kpi-icon-wrap" aria-hidden="true">
@@ -1211,6 +1212,47 @@ export function DashboardPage(props: {
         actions={filterControls}
       />
 
+      <div className="dash-exec-banner">
+        <div className="dash-exec-left">
+          <div className="dash-exec-avatar">
+            <span>{props.user?.name ? props.user.name.slice(0, 2).toUpperCase() : "SA"}</span>
+            <span className="dash-exec-avatar-dot" aria-hidden="true" />
+          </div>
+          <div className="dash-exec-info">
+            <h1 className="dash-exec-title">
+              Xush kelibsiz, {props.user?.name || "Super Admin"} 👋
+            </h1>
+            <p className="dash-exec-subtitle">
+              VaksinaMed farmatsevtika tarmog‘i operatsion boshqaruv markazi va real vaqt tahlili
+            </p>
+          </div>
+        </div>
+        <div className="dash-exec-right">
+          <div className="dash-exec-chip">
+            <span className="dash-chip-indicator is-live" aria-hidden="true" />
+            <span className="dash-chip-label">Tizim:</span>
+            <span className="dash-chip-val">Barqaror</span>
+          </div>
+          <div className="dash-exec-chip">
+            <span className="dash-chip-indicator is-network" aria-hidden="true" />
+            <span className="dash-chip-label">Filiallar:</span>
+            <span className="dash-chip-val">{network.open} / {network.total || 121} ochiq</span>
+          </div>
+          {props.onOpenPos ? (
+            <button type="button" className="dash-exec-btn is-primary" onClick={props.onOpenPos}>
+              <Receipt size={14} strokeWidth={2.25} aria-hidden="true" />
+              Kassa POS
+            </button>
+          ) : null}
+          {props.onOpenOrders ? (
+            <button type="button" className="dash-exec-btn is-secondary" onClick={props.onOpenOrders}>
+              <ShoppingBag size={14} strokeWidth={2.25} aria-hidden="true" />
+              Buyurtmalar
+            </button>
+          ) : null}
+        </div>
+      </div>
+
       {loading && !data ? (
         <div className="dash-skeleton" role="status" aria-label="Yuklanmoqda…">
           <span className="dash-skel dash-skel--metrics" />
@@ -1228,6 +1270,7 @@ export function DashboardPage(props: {
         >
           <section className="dash-metrics" aria-label="Asosiy ko‘rsatkichlar">
             <article className="dash-kpi dash-hero" aria-label="Savdo">
+              <span className="dash-kpi-bar" aria-hidden="true" />
               <div className="dash-hero-stage">
                 <div className="dash-kpi-top">
                   <span className="dash-kpi-heading">
