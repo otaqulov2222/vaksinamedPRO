@@ -325,27 +325,27 @@ export function handleAiMedicalChat(params: {
     };
   }
 
-  // 2. GREETINGS INTENT: User says hello / greeting without specific symptoms (Strictly NO products)
-  const GREETING_STARTS = [
-    "salom", "assalom", "xayrli", "privet", "zdravstvuyte",
-    "здравствуйте", "привет", "добрый", "доброе", "hello", "hi", "hey"
-  ];
-  const uzGreetingRegex =
-    /(?:^|[\s.,!?;:()\/\-])(salom|assalom|xayrli|privet|zdravstvuyte|здравствуйте|привет|добрый|доброе|hello|hi|hey|yaxshimi|yaxshimisan|yaxshimisiz|yaxshimisilar|qalay|qalaysan|qalaysiz|qalesan|qalesiz|qandaysan|qandaysiz|tuzukmi|tuzukmisan|tuzukmisiz|tinchmi|tinchmisiz|tinchmisan|ahvol|ishlar|nima gap|how are you|how are u|how do you do|hows it going|what's up|whats up)(?:$|[\s.,!?;:()\/\-])/i;
+  // 2. GREETINGS INTENT: User says hello / greeting / how are you in any morphological variation (Strictly NO products)
+  const uzGreetingStemRegex =
+    /(?:^|[\s.,!?;:()\/\-])(salom\w*|assalom\w*|as-salom\w*|assalam\w*|xayr\w*|privet\w*|priv\w*|zdrav\w*|drast\w*|hello|hi|hey)(?:$|[\s.,!?;:()\/\-])/i;
+  const uzInformalStemRegex =
+    /(?:^|[\s.,!?;:()\/\-])(qal[aeiouy]\w*|qanday\w*|qandey\w*|yaxsh[aeiouy]\w*|tuz[ui]k\w*|tinch\w*|omon\w*|charcham\w*|ahvol\w*|eshit\w*)(?:$|[\s.,!?;:()\/\-])/i;
+  const uzPhrasesRegex =
+    /(?:^|[\s.,!?;:()\/\-])(nima gap|nima yangilik|gaplar qalay|ishlar qalay|bormisiz|kim bor|tinchlikmi|sog['`ʼ]?misiz|sog['`ʼ]?lik|salomatchilik)(?:$|[\s.,!?;:()\/\-])/i;
   const ruGreetingRegex =
-    /(?:^|[\s.,!?;:()\/\-])(как дела|как поживаете|как поживаешь|как ты|как вы)(?:$|[\s.,!?;:()\/\-])/i;
+    /(?:^|[\s.,!?;:()\/\-])(привет|здравствуй|здравствуйте|добр[а-я]+ (?:день|утро|вечер|суток)|как дела|как пожива|как ты|как вы|че как|чо как|kak dela|kak ti|kak vi|zdravstvuyte|zdravstvuy|dobriy den|dobroye utro)(?:$|[\s.,!?;:()\/\-])/i;
+  const enGreetingRegex =
+    /(?:^|[\s.,!?;:()\/\-])(how are you|how are u|how do you do|hows it going|what's up|whats up|good morning|good afternoon|good evening)(?:$|[\s.,!?;:()\/\-])/i;
 
   const isGreetingWord =
-    GREETING_STARTS.some((w) => qNorm.startsWith(w)) ||
-    uzGreetingRegex.test(qNorm) ||
+    uzGreetingStemRegex.test(qNorm) ||
+    uzInformalStemRegex.test(qNorm) ||
+    uzPhrasesRegex.test(qNorm) ||
     ruGreetingRegex.test(qNorm) ||
-    qNorm === "qalesiz" ||
-    qNorm === "yaxshimisiz" ||
-    qNorm === "yaxshimisan" ||
-    qNorm === "tinchmisiz";
+    enGreetingRegex.test(qNorm);
 
   const hasSpecificSymptomOrDrug =
-    /(og'ri|ogri|ogriy|og'riy|bosh|tish|milk|karies|pulpit|qorn|qorin|oshqozon|jigar|buyrak|isitma|temperatura|жар|бол|голов|зуб|живот|желуд|shamollash|gripp|dori|retsept|рецепт|preparat|vitamin|витамин|davleniye|давлен|qon bosimi|ich ket|diareya|диаре|ko'z|koz|quloq|burun|kuyib|kuyd|kuygan|kuyish|tirnoq|zahar|uyqu|uxla|peshob|diabet|tsistit)/i.test(
+    /(?:og['`ʼ]?r|ogri|sanch|bosh|tish|milk|karies|pulpit|qorn|qorin|oshqozon|jigar|buyrak|isitma|temperatura|harorat|shamol|gripp|dori|retsept|preparat|vitamin|davlen|bosim|ich ket|diareya|ich qot|qabziyat|ko['`ʼ]?z|koz|quloq|burun|kuy[a-z]*|zahar|uyqu|uxla|peshob|siydik|qand|qandim|diabet|tsistit|jarohat|бол|зуб|голов|живот|желуд|жар|температур|давлен|сердц|порез|ожог|травм|перелом|сахар|простуд|грипп|кашель|горл|тошн|рвот|отравл|глаз|ухо|отит|kesil|singan|sinish|sindi|lat ye|qon |qonay|shish|yiring|toshma|allergi|tomoq|yo['`ʼ]?tal|balg['`ʼ]?am|nafas|bo['`ʼ]?g['`ʼ]?il|hush|behush|asab|yurak|puls|xirurg|travma|parasetamol|analgin|aspirin|ibuprofen|antibiotik|maz|malham|kapsula|tabletka|spirt|yod|xlorgeksidin|levomekol|pufak|yaracha|yara|bolam|chaqaloq|homilador)/i.test(
       qNorm
     );
 
@@ -370,6 +370,35 @@ export function handleAiMedicalChat(params: {
         lang === "ru" ? "Болит зуб, что делать?" : lang === "en" ? "Toothache advice" : "Tishim og‘riyapti, nima ichiladi?",
         lang === "ru" ? "Беспокоит головная боль" : lang === "en" ? "Headache relief" : "Bosh og‘rig‘i bezovta qilyapti",
         lang === "ru" ? "Симптомы простуды и жар" : lang === "en" ? "Cold and fever symptoms" : "Shamollash va isitma belgilari",
+      ],
+    };
+  }
+
+  // 2.1 GENERAL HELP / CONSULTATION REQUEST (e.g. "yordam kerak", "maslahat bering", "savolim bor", "нужна помощь")
+  const isGeneralHelpRequest =
+    /(?:^|[\s.,!?;:()\/\-])(yordam kerak|maslahat kerak|savolim bor|savol bor|maslahat bering|yordam bering|shifokor maslahati|konsultatsiya|menga yordam|yordam bera olasizmi|нужна помощь|нужен совет|есть вопрос|помогите|помощь|need help|have a question|can you help)(?:$|[\s.,!?;:()\/\-])/i.test(
+      qNorm
+    );
+  if (isGeneralHelpRequest && !hasSpecificSymptomOrDrug && !hasImage) {
+    let reply = "";
+    if (lang === "ru") {
+      reply = "Здравствуйте! Конечно, с радостью помогу вам 🩺. Я медицинский ИИ-консультант аптечной сети VaksinaMed.\n\nВы можете задать мне любой вопрос по состоянию здоровья, симптомам, лекарственным препаратам, дозировкам или расшифровке рецепта от врача.\n\nОпишите, пожалуйста, что именно вас беспокоит или какое лекарство вас интересует?";
+    } else if (lang === "en") {
+      reply = "Hello! I am here to help you 🩺. I am the VaksinaMed Medical AI Consultant.\n\nYou can ask any question regarding symptoms, medical guidance, pharmaceuticals, dosages, or upload a prescription for instant scanning.\n\nPlease describe what symptoms you are experiencing or what medication you need assistance with!";
+    } else {
+      reply = "Assalomu alaykum! Albatta, marhamat, savolingizni bering 🩺. Men VaksinaMed sun'iy intellekt tibbiy maslahatchisiman.\n\nSizga salomatlik, bezovta qilayotgan alomatlar, dori-darmonlar, ularni to‘g‘ri qabul qilish qoidalari yoki shifokor retseptlarini tahlil qilish bo‘yicha to‘liq yordam bera olaman.\n\nAynan qanday masala bo‘yicha yordam kerak? Alomatlaringizni yoki sizni qiziqtirgan dori vositasi nomini yozsangiz, mutaxassis tavsiyalari bilan ko‘rib chiqaman!";
+    }
+    return {
+      success: true,
+      reply,
+      isMedical: true,
+      isPrescription: false,
+      matchedProducts: [],
+      quickSuggestions: [
+        lang === "ru" ? "Симптомы простуды" : lang === "en" ? "Cold symptoms" : "Shamollash va isitma belgilari",
+        lang === "ru" ? "Болит голова" : lang === "en" ? "Headache relief" : "Bosh og‘rig‘i bezovta qilyapti",
+        lang === "ru" ? "Сфотографировать рецепт" : lang === "en" ? "Scan prescription photo" : "Retseptni rasmga olish",
+        lang === "ru" ? "Витамины и БАДы" : lang === "en" ? "Vitamins" : "Vitaminlar",
       ],
     };
   }
@@ -919,7 +948,7 @@ export function handleAiMedicalChat(params: {
   ) {
     categoryIntent = "ear";
   } else if (
-    (qNorm.includes("burun") || qNorm.includes("burnim") || qNorm.includes("нос")) &&
+    (qNorm.includes("burun") || qNorm.includes("burnim") || qNorm.includes("burni") || qNorm.includes("нос")) &&
     (qNorm.includes("qon") || qNorm.includes("кров") || qNorm.includes("bleed"))
   ) {
     categoryIntent = "nosebleed";
@@ -936,7 +965,7 @@ export function handleAiMedicalChat(params: {
     qNorm.includes("обожгла") ||
     qNorm.includes("обожглась") ||
     qNorm.includes("обожгло") ||
-    qNorm.includes("burn")
+    /\b(burn|burned|burns|scalding)\b/i.test(qNorm)
   ) {
     categoryIntent = "burns";
   } else if (

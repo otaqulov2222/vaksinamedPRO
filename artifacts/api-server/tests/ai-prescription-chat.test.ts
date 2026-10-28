@@ -436,4 +436,32 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.ok(res.reply.includes("oqova suv") || res.reply.includes("suv ostida"));
     assert.equal(res.matchedProducts.length, 0);
   });
+  it("25. Correctly handles informal Uzbek 'qalisan' and general help queries with 0 products", () => {
+    const resQalisan = handleAiMedicalChat({
+      message: "qalisan",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(resQalisan.isMedical, true);
+    assert.ok(resQalisan.reply.includes("Assalomu alaykum! Rahmat, yaxshiman"));
+    assert.equal(resQalisan.matchedProducts.length, 0);
+
+    const resHelp = handleAiMedicalChat({
+      message: "savolim bor yordam bera olasizmi",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(resHelp.isMedical, true);
+    assert.ok(resHelp.reply.includes("Assalomu alaykum! Albatta, marhamat"));
+    assert.equal(resHelp.matchedProducts.length, 0);
+
+    const resNose = handleAiMedicalChat({
+      message: "bolamning burni qonayapti",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(resNose.isMedical, true);
+    assert.ok(resNose.reply.includes("burun") || resNose.reply.includes("Burun"));
+    assert.equal(resNose.matchedProducts.length, 0);
+  });
 });
