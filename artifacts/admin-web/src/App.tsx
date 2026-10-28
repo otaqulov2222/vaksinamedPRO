@@ -67,7 +67,67 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("vm-admin-sidebar") === "1",
   );
+  const [activePreset, setActivePreset] = useState<Preset>("today");
+  const [customDate, setCustomDate] = useState("");
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
+  const today = useMemo(() => new Date(), []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
+        setDatePickerOpen(false);
+      }
+    }
+    if (datePickerOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [datePickerOpen]);
+
+  const { topbarWeekday, topbarDay } = useMemo(() => {
+    if (activePreset === "yesterday") {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      return {
+        topbarWeekday: UZ_WEEKDAYS[y.getDay()],
+        topbarDay: `${y.getDate()} ${UZ_MONTHS[y.getMonth()]} ${y.getFullYear()}`,
+      };
+    }
+    if (activePreset === "7d") {
+      return {
+        topbarWeekday: "So‘nggi",
+        topbarDay: "7 kunlik davr",
+      };
+    }
+    if (activePreset === "30d") {
+      return {
+        topbarWeekday: "So‘nggi",
+        topbarDay: "30 kunlik davr",
+      };
+    }
+    if (activePreset === "all") {
+      return {
+        topbarWeekday: "Barcha",
+        topbarDay: "Davr hisoboti",
+      };
+    }
+    if (activePreset === "custom" && customDate) {
+      const [y, m, d] = customDate.split("-").map(Number);
+      if (y && m && d) {
+        const dt = new Date(y, m - 1, d);
+        return {
+          topbarWeekday: UZ_WEEKDAYS[dt.getDay()],
+          topbarDay: `${dt.getDate()} ${UZ_MONTHS[dt.getMonth()]} ${dt.getFullYear()}`,
+        };
+      }
+    }
+    return {
+      topbarWeekday: UZ_WEEKDAYS[today.getDay()],
+      topbarDay: `${today.getDate()} ${UZ_MONTHS[today.getMonth()]} ${today.getFullYear()}`,
+    };
+  }, [activePreset, customDate, today]);
 
   /** Scroll only the nav container (never the page) so the active item and its indicator stay visible. */
   useEffect(() => {
@@ -258,67 +318,6 @@ export default function App() {
   const pageTitle = PAGE_TITLES[tab] || "Admin";
   const groupLabel = groupLabelForTab(tab);
   const crumbGroup = groupLabel !== pageTitle && groupLabel !== "Admin" ? groupLabel : null;
-  const today = useMemo(() => new Date(), []);
-  const [activePreset, setActivePreset] = useState<Preset>("today");
-  const [customDate, setCustomDate] = useState("");
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const datePickerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
-        setDatePickerOpen(false);
-      }
-    }
-    if (datePickerOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [datePickerOpen]);
-
-  const { topbarWeekday, topbarDay } = useMemo(() => {
-    if (activePreset === "yesterday") {
-      const y = new Date(today);
-      y.setDate(y.getDate() - 1);
-      return {
-        topbarWeekday: UZ_WEEKDAYS[y.getDay()],
-        topbarDay: `${y.getDate()} ${UZ_MONTHS[y.getMonth()]} ${y.getFullYear()}`,
-      };
-    }
-    if (activePreset === "7d") {
-      return {
-        topbarWeekday: "So‘nggi",
-        topbarDay: "7 kunlik davr",
-      };
-    }
-    if (activePreset === "30d") {
-      return {
-        topbarWeekday: "So‘nggi",
-        topbarDay: "30 kunlik davr",
-      };
-    }
-    if (activePreset === "all") {
-      return {
-        topbarWeekday: "Barcha",
-        topbarDay: "Davr hisoboti",
-      };
-    }
-    if (activePreset === "custom" && customDate) {
-      const [y, m, d] = customDate.split("-").map(Number);
-      if (y && m && d) {
-        const dt = new Date(y, m - 1, d);
-        return {
-          topbarWeekday: UZ_WEEKDAYS[dt.getDay()],
-          topbarDay: `${dt.getDate()} ${UZ_MONTHS[dt.getMonth()]} ${dt.getFullYear()}`,
-        };
-      }
-    }
-    return {
-      topbarWeekday: UZ_WEEKDAYS[today.getDay()],
-      topbarDay: `${today.getDate()} ${UZ_MONTHS[today.getMonth()]} ${today.getFullYear()}`,
-    };
-  }, [activePreset, customDate, today]);
-
   const onlyHqShell =
     visibleNav.length > 0
     && visibleNav.every((i) => i.id === "fom" || i.id === "settings" || i.id === "admins");
