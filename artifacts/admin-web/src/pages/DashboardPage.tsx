@@ -677,9 +677,17 @@ function DashMetric(props: {
   const body = (
     <>
       <span className="dash-kpi-top">
-        <Icon className="dash-kpi-icon" size={14} strokeWidth={2} aria-hidden="true" />
-        <span className="dash-kpi-label">{props.label}</span>
-        {props.onOpen ? <ArrowUpRight className="dash-kpi-go" size={14} strokeWidth={2} aria-hidden="true" /> : null}
+        <span className="dash-kpi-heading">
+          <span className="dash-kpi-icon-wrap" aria-hidden="true">
+            <Icon className="dash-kpi-icon" size={15} strokeWidth={2.25} />
+          </span>
+          <span className="dash-kpi-label">{props.label}</span>
+        </span>
+        {props.onOpen ? (
+          <span className="dash-kpi-go" aria-hidden="true">
+            <ArrowUpRight size={13} strokeWidth={2.5} />
+          </span>
+        ) : null}
       </span>
       <span className="dash-kpi-figure">
         <span className="dash-kpi-value">{props.value}</span>
@@ -1097,21 +1105,27 @@ export function DashboardPage(props: {
       ) : null}
       <FilterField label="Filial" hideLabel>
         {isHq ? (
-          <select
-            className="dash-ctrl dash-ctrl--branch"
-            ref={branchSelectRef}
-            id="dash-branch-filter"
-            value={branchId}
-            aria-label="Filial"
-            onChange={(e) => setBranchId(e.target.value)}
-          >
-            <option value="">Barcha filiallar</option>
-            {(props.branches || []).map((b) => (
-              <option key={b.id} value={String(b.id)}>{b.name}</option>
-            ))}
-          </select>
+          <div className="dash-branch-picker">
+            <Store size={14} className="dash-branch-icon" aria-hidden="true" />
+            <select
+              className="dash-ctrl dash-ctrl--branch"
+              ref={branchSelectRef}
+              id="dash-branch-filter"
+              value={branchId}
+              aria-label="Filial"
+              onChange={(e) => setBranchId(e.target.value)}
+            >
+              <option value="">Barcha filiallar ({props.branches?.length || 0})</option>
+              {(props.branches || []).map((b) => (
+                <option key={b.id} value={String(b.id)}>{b.name}</option>
+              ))}
+            </select>
+          </div>
         ) : (
-          <input className="dash-ctrl dash-ctrl--branch" value="O‘z filiali" disabled readOnly aria-label="Filial" />
+          <div className="dash-branch-picker">
+            <Store size={14} className="dash-branch-icon" aria-hidden="true" />
+            <input className="dash-ctrl dash-ctrl--branch" value="O‘z filiali" disabled readOnly aria-label="Filial" />
+          </div>
         )}
       </FilterField>
       <button
@@ -1168,6 +1182,10 @@ export function DashboardPage(props: {
 
   const headerMeta = (
     <>
+      <span className="dash-live-badge" title="Tizim real vaqt rejimida sinxronlanmoqda">
+        <span className="dash-live-dot" aria-hidden="true" />
+        Jonli
+      </span>
       {hasAttention ? (
         <span className={`dash-pulse is-${attnState}`} role="status">
           <span className="dash-pulse-dot" aria-hidden="true" />
@@ -1187,7 +1205,7 @@ export function DashboardPage(props: {
     <div className={`dashboard${isZero ? " dashboard--zero" : ""}`}>
       <AdminPageHeader
         className="dashboard-header"
-        eyebrow="VaksinaMed HQ · Operatsiyalar"
+        eyebrow="VaksinaMed HQ · Operatsiyalar boshqaruvi"
         title="Dashboard"
         meta={headerMeta}
         actions={filterControls}
@@ -1212,7 +1230,12 @@ export function DashboardPage(props: {
             <article className="dash-kpi dash-hero" aria-label="Savdo">
               <div className="dash-hero-stage">
                 <div className="dash-kpi-top">
-                  <h2 className="dash-kpi-label">{salesLabel(preset)}</h2>
+                  <span className="dash-kpi-heading">
+                    <span className="dash-kpi-icon-wrap" aria-hidden="true">
+                      <Receipt className="dash-kpi-icon" size={15} strokeWidth={2.25} />
+                    </span>
+                    <h2 className="dash-kpi-label">{salesLabel(preset)}</h2>
+                  </span>
                   <span className="dash-hero-period">{periodText(dateBounds)}</span>
                 </div>
                 <div className="dash-hero-value">{money(revenue)}</div>
