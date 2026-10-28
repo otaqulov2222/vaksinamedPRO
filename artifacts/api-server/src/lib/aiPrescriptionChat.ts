@@ -330,10 +330,18 @@ export function handleAiMedicalChat(params: {
     "salom", "assalom", "xayrli", "privet", "zdravstvuyte",
     "здравствуйте", "привет", "добрый", "доброе", "hello", "hi", "hey"
   ];
+  const uzGreetingRegex =
+    /(?:^|[\s.,!?;:()\/\-])(salom|assalom|xayrli|privet|zdravstvuyte|здравствуйте|привет|добрый|доброе|hello|hi|hey|yaxshimi|yaxshimisan|yaxshimisiz|yaxshimisilar|qalay|qalaysan|qalaysiz|qalesan|qalesiz|qandaysan|qandaysiz|tuzukmi|tuzukmisan|tuzukmisiz|tinchmi|tinchmisiz|tinchmisan|ahvol|ishlar|nima gap|how are you|how are u|how do you do|hows it going|what's up|whats up)(?:$|[\s.,!?;:()\/\-])/i;
+  const ruGreetingRegex =
+    /(?:^|[\s.,!?;:()\/\-])(как дела|как поживаете|как поживаешь|как ты|как вы)(?:$|[\s.,!?;:()\/\-])/i;
+
   const isGreetingWord =
     GREETING_STARTS.some((w) => qNorm.startsWith(w)) ||
+    uzGreetingRegex.test(qNorm) ||
+    ruGreetingRegex.test(qNorm) ||
     qNorm === "qalesiz" ||
     qNorm === "yaxshimisiz" ||
+    qNorm === "yaxshimisan" ||
     qNorm === "tinchmisiz";
 
   const hasSpecificSymptomOrDrug =
@@ -348,7 +356,7 @@ export function handleAiMedicalChat(params: {
     } else if (lang === "en") {
       reply = `Hello! I am your VaksinaMed Medical AI Consultant 🩺.\n\nHow are you feeling today? Please let me know what symptoms you are experiencing (e.g. toothache, headache, cold, fever, fatigue), or ask about any medication, dosage, or interactions.\n\nYou can also upload or take a photo of a doctor's prescription for instant catalog matching.\n\n⚠️ Medical note: All advice is advisory. Please consult your physician before taking medications.`;
     } else {
-      reply = `Assalomu alaykum! Men VaksinaMed sun'iy intellekt tibbiy maslahatchisiman 🩺.\n\nBugun o‘zingizni qanday his qilyapsiz? Agar sizda biror bezovtalik (masalan: tish og‘rig‘i, bosh og‘rig‘i, shamollash, isitma, oshqozon noqulayligi) bo‘lsa, batafsil yozib qoldiring yoki qaysi dori vositasi haqida ma'lumot olmoqchi ekanligingizni ayting.\n\nShuningdek, shifokor retsepti suratini yuborsangiz, barcha belgilangan dorilarni aniqlab, filiallarimizdagi mavjudligini ko‘rsatib beraman.\n\n⚠️ Muhim eslatma: Men bergan barcha ma'lumotlar tavsiyaviy xarakterga ega. Aniq tashxis qo‘yish va davolash uchun davolovchi shifokoringiz bilan maslahatlashing.`;
+      reply = `Assalomu alaykum! Rahmat, yaxshiman 🩺. Men VaksinaMed sun'iy intellekt tibbiy maslahatchisiman.\n\nBugun o‘zingizni qanday his qilyapsiz? Agar sizda biror bezovtalik (masalan: tish og‘rig‘i, bosh og‘rig‘i, shamollash, isitma, oshqozon noqulayligi) bo‘lsa, batafsil yozib qoldiring yoki qaysi dori vositasi haqida ma'lumot olmoqchi ekanligingizni ayting.\n\nShuningdek, shifokor retsepti suratini yuborsangiz, barcha belgilangan dorilarni aniqlab, filiallarimizdagi mavjudligini ko‘rsatib beraman.\n\n⚠️ Muhim eslatma: Men bergan barcha ma'lumotlar tavsiyaviy xarakterga ega. Aniq tashxis qo‘yish va davolash uchun davolovchi shifokoringiz bilan maslahatlashing.`;
     }
 
     return {

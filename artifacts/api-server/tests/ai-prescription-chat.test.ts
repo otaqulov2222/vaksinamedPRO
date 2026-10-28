@@ -87,7 +87,7 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.ok(res.reply.includes("VaksinaMed"));
   });
 
-  it("2. Does NOT attach products on general greetings (salom / privet)", () => {
+  it("2. Does NOT attach products on general greetings (salom / privet / yaxshimisan)", () => {
     const resUz = handleAiMedicalChat({
       message: "salom",
       language: "uz",
@@ -97,6 +97,17 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.equal(resUz.matchedProducts.length, 0); // No products on pure greeting!
     assert.ok(resUz.reply.includes("Assalomu alaykum"));
     assert.ok(resUz.reply.includes("shifokor"));
+
+    // Check conversational greeting "yaxshimisan"
+    const resYaxshi = handleAiMedicalChat({
+      message: "yaxshimisan",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(resYaxshi.isMedical, true);
+    assert.equal(resYaxshi.matchedProducts.length, 0);
+    assert.ok(resYaxshi.reply.includes("Assalomu alaykum"));
+    assert.ok(resYaxshi.reply.includes("yaxshiman"));
 
     const resRu = handleAiMedicalChat({
       message: "Здравствуйте",
