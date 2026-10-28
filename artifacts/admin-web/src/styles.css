@@ -6893,46 +6893,74 @@ input[type="range"] { padding: 0; border: 0; min-height: 0; accent-color: var(--
 .dash-sales {
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 22px 24px;
   border: 1px solid #E2E8F0;
   border-radius: 12px;
   background: #FFFFFF;
   box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04);
 }
-.dash-sales-stats {
+.dash-sales .dash-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+  margin-bottom: 16px;
+}
+.dash-sales .dash-title {
   margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0F172A;
+  letter-spacing: -0.015em;
+}
+.dash-sales .dash-card-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: #64748B;
+  letter-spacing: 0.01em;
+}
+.dash-sales-stats {
+  margin: 0 0 20px 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 12px 16px;
-  border-radius: 8px;
+  padding: 14px 18px;
+  border-radius: 10px;
   background: #F8FAFC;
   border: 1px solid #E2E8F0;
-  gap: 14px;
+  gap: 16px;
 }
 .dash-sales-stats > div {
   display: grid;
   align-content: start;
   gap: 3px;
   min-width: 0;
-  padding: 0 14px;
+  padding: 0 16px;
   border-left: 1px solid #E2E8F0;
 }
 .dash-sales-stats > div:first-child { padding-left: 0; border-left: 0; }
 .dash-sales-stats dt { font-size: 11px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: #64748B; }
-.dash-sales-stats dd { margin: 0; font-size: 19px; font-weight: 750; letter-spacing: -0.02em; color: #0F172A; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dash-sales-stats dd.dash-sales-note { font-size: 11.5px; font-weight: 500; letter-spacing: 0; color: #64748B; }
-.dash-sales-chart { flex: 1; display: flex; min-height: 0; margin-top: 16px; }
+.dash-sales-stats dd { margin: 0; font-size: 21px; font-weight: 750; letter-spacing: -0.025em; color: #0F172A; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.dash-sales-stats dd.dash-sales-note { font-size: 12px; font-weight: 500; letter-spacing: 0; color: #64748B; margin-top: 1px; }
+.dash-sales-chart { flex: 1; display: flex; min-height: 0; margin-top: 4px; }
 
 /* 7-day revenue bars — sleek slender vector look */
-.sales-chart { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.sales-chart.has-scale { padding-left: 44px; }
-.sales-chart-plot { position: relative; flex: 1; min-height: 160px; }
+.sales-chart { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sales-chart.has-scale { padding-left: 52px; }
+.sales-chart-plot { position: relative; flex: 1; min-height: 180px; }
 .sales-chart-grid { position: absolute; inset: 0; pointer-events: none; }
 .sales-chart-gridline { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed #E2E8F0; }
 .sales-chart-gridline:last-child { border-top: 1px solid #CBD5E1; }
 .sales-chart-tick {
   position: absolute;
-  right: calc(100% + 8px);
+  right: calc(100% + 10px);
   top: 0;
   transform: translateY(-50%);
   font-size: 11px;
@@ -6947,30 +6975,37 @@ input[type="range"] { padding: 0; border: 0; min-height: 0; accent-color: var(--
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   align-items: end;
-  gap: 12px;
+  gap: 16px;
   padding: 0 4px;
 }
 .sales-bar {
+  position: relative;
   height: 100%;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   min-width: 0;
+  width: 100%;
+  max-width: 32px;
+  margin: 0 auto;
   padding: 0;
-  border: 0;
-  border-radius: 4px 4px 0 0;
-  background: transparent;
+  border: 1px solid #F1F5F9;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: #F8FAFC;
   font: inherit;
   cursor: pointer;
-  transition: background-color var(--vm-dur-fast) ease;
+  transition: all var(--vm-dur-fast) ease;
 }
-.sales-bar:hover { background: rgba(241, 245, 249, 0.6); }
+.sales-bar:hover {
+  background: #EEF2F6;
+  border-color: #E2E8F0;
+}
 span.sales-bar { cursor: default; }
 .sales-bar-fill {
   display: block;
   width: 100%;
-  max-width: 22px;
-  border-radius: 4px 4px 0 0;
+  border-radius: 5px 5px 0 0;
   background: #4F46E5;
   transition: height var(--vm-dur-slow) var(--vm-ease), background-color var(--vm-dur-fast) ease;
 }
@@ -6982,6 +7017,17 @@ button.sales-bar.is-focus:hover .sales-bar-fill,
 .sales-bar:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25); }
 .sales-chart-zero .sales-bar-fill { height: 2px; background: #CBD5E1; }
 .sales-chart-zero.is-focus .sales-bar-fill { background: var(--vm-accent); }
+.sales-bar.is-zero::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #CBD5E1;
+  border-radius: 2px;
+}
+.sales-bar.is-zero.is-focus::after { background: var(--vm-accent); }
 .sales-bar.is-skeleton .sales-bar-fill { background: #E2E8F0; animation: vm-pulse 1.4s ease-in-out infinite; }
 .sales-bar.is-skeleton:nth-child(1) .sales-bar-fill { height: 40%; }
 .sales-bar.is-skeleton:nth-child(2) .sales-bar-fill { height: 62%; }
@@ -6990,24 +7036,45 @@ button.sales-bar.is-focus:hover .sales-bar-fill,
 .sales-bar.is-skeleton:nth-child(5) .sales-bar-fill { height: 56%; }
 .sales-bar.is-skeleton:nth-child(6) .sales-bar-fill { height: 68%; }
 .sales-bar.is-skeleton:nth-child(7) .sales-bar-fill { height: 44%; }
-.sales-chart-axis { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; padding: 0 4px; }
-.sales-chart-axis span { text-align: center; font-size: 11px; font-weight: 550; color: #64748B; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.sales-chart-axis span.is-focus { color: #0F172A; font-weight: 700; }
+.sales-chart-axis { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 16px; padding: 0 4px; margin-top: 6px; }
+.sales-chart-axis span {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: #64748B;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  display: block;
+}
+.sales-chart-axis span.is-focus {
+  color: #4F46E5;
+  font-weight: 700;
+}
 .sales-chart-tip {
   position: absolute;
   z-index: 3;
   display: grid;
   gap: 2px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border-radius: 7px;
   background: #0F172A;
   color: #FFFFFF;
-  box-shadow: 0 6px 18px -3px rgba(0, 0, 0, 0.25);
-  font-size: 11.5px;
+  box-shadow: 0 8px 20px -2px rgba(15, 23, 42, 0.25);
+  font-size: 12px;
   white-space: nowrap;
-  transform: translate(-50%, calc(-100% - 8px));
+  transform: translate(-50%, calc(-100% - 10px));
   pointer-events: none;
   animation: vm-fade var(--vm-dur) var(--vm-ease) both;
+}
+.sales-chart-tip strong {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+.sales-chart-tip-date {
+  font-size: 11px;
+  color: #94A3B8;
+  font-weight: 500;
 }
 .sales-chart-tip.is-left { transform: translate(-88%, calc(-100% - 8px)); }
 .sales-chart-tip strong { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: #FFFFFF; }
