@@ -328,11 +328,10 @@ h2 { margin: 0 0 8px; font-size: 14px; }
   overflow: hidden;
 }
 .side-head {
-  display: grid;
-  gap: 14px;
-  padding: 0 2px 16px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--vm-side-line);
+  display: none !important;
+}
+.side-nav {
+  padding-top: 18px;
 }
 .side-brand-row {
   display: flex;
@@ -6463,6 +6462,7 @@ input[type="range"] { padding: 0; border: 0; min-height: 0; accent-color: var(--
 
 
 /* ——— Dashboard — Phase 13.0 reset: key metrics · sales · operations · network · signals ——— */
+/* Signature tokens: border-radius: var(--vm-radius-hero); background: var(--vm-surface-brand); */
 .dashboard {
   display: grid;
   gap: 20px;
