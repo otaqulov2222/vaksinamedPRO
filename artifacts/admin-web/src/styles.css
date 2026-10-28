@@ -328,10 +328,14 @@ h2 { margin: 0 0 8px; font-size: 14px; }
   overflow: hidden;
 }
 .side-head {
-  display: none !important;
+  display: flex;
+  flex-direction: column;
+  padding: 0 2px 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .side-nav {
-  padding-top: 18px;
+  padding-top: 4px;
 }
 .side-brand-row {
   display: flex;
@@ -350,12 +354,7 @@ h2 { margin: 0 0 8px; font-size: 14px; }
   white-space: nowrap;
 }
 .brand-sub {
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--vm-side-faint);
-  line-height: 1.2;
-  white-space: nowrap;
+  display: none !important;
 }
 .side-collapse {
   width: 28px;
@@ -373,13 +372,7 @@ h2 { margin: 0 0 8px; font-size: 14px; }
 .side-collapse:hover { background: var(--vm-side-hover); color: var(--vm-text-inverse); }
 .side-collapse:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--vm-accent-ring); }
 .side-operator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 8px;
-  border-radius: var(--vm-radius);
-  background: var(--vm-side-hover);
+  display: none !important;
 }
 .side-avatar {
   width: 30px;
@@ -423,25 +416,24 @@ h2 { margin: 0 0 8px; font-size: 14px; }
   scrollbar-width: thin;
   scrollbar-color: var(--vm-side-line) transparent;
 }
-.nav-group { display: grid; gap: 3px; }
+.nav-group { display: grid; gap: 2px; }
 .nav-group + .nav-group {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 18px;
 }
 .nav-group-items { display: grid; gap: 2px; }
 .nav-group-label {
   font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #94A3B8;
-  padding: 0 10px 6px 12px;
+  color: #64748B;
+  padding: 0 12px 6px;
   display: flex;
   align-items: center;
+  user-select: none;
   transition: color var(--vm-dur-fast) ease;
 }
-.nav-group-active .nav-group-label { color: #F8FAFC; font-weight: 800; }
+.nav-group-active .nav-group-label { color: #A5B4FC; }
 .side-nav .nav-item {
   position: relative;
   width: 100%;
