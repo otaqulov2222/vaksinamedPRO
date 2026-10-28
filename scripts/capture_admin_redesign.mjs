@@ -84,7 +84,7 @@ await sendPage('Runtime.evaluate', {
 
 await new Promise((r) => setTimeout(r, 4500));
 
-const screenshot = await sendPage('Page.captureScreenshot', { format: 'png' });
+const screenshot = await sendPage('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
 const buf = Buffer.from(screenshot.data, 'base64');
 fs.writeFileSync(path.join(ARTIFACTS_DIR, 'live_vps_admin_dashboard_redesigned.png'), buf);
 console.log('Saved live_vps_admin_dashboard_redesigned.png');
