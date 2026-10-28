@@ -61,6 +61,10 @@ const OFF_TOPIC_PATTERNS = [
   /\b(valyuta|kurs dollar|dollar kursi|yevro kursi)\b/i,
   /\b(ovqat pishir|palov pishirish|retsept ovqat|shorva pishirish)\b/i,
   /\b(kino|film|serial|aktyor|aktrisa|musiqa|qoshiq|klip|qo'shiq)\b/i,
+  /\b(chatgpt|openai|ai nima|ai haqida|bot nima|нейросеть|искусственный интеллект|artificial intelligence)\b/i,
+  /\b(kompyuter|noutbuk|planshet|smartfon|telefon sotib|protsessor|videokarta|operativka|компьютер|ноутбук|смартфон)\b/i,
+  /\b(mushuk ruschada|it ruschada|hayvon ruschada|tarjima qil)\b/i,
+  /(?:\b\d+\s*(?:km|metr|kg|gramm|sm|mm)\b|\b(?:necha metr|necha km|necha gramm|aholisi qancha|poytaxti qayer)\b)/i,
 ];
 
 // Broad medical / health keywords in Uzbek, Russian, and English
@@ -169,43 +173,32 @@ export function isMedicalDomain(query: string): boolean {
   const q = normalizeQuery(query);
   if (q.length < 2) return true;
 
+  // 1. Math query expression check (e.g. "4*2 nechi boladi", "10 / 2", "5 + 5")
+  const mathParsed = parseMathQuery(query);
+  if (mathParsed.isMath) {
+    return false;
+  }
+
+  // 2. Off-topic domain guard
   for (const pattern of OFF_TOPIC_PATTERNS) {
-    if (pattern.test(q)) return false;
-  }
-
-  // If query matches any medical keyword/symptom/body part (always matching from word boundary)
-  const hasMedical = MEDICAL_KEYWORDS.some((kw) => {
-    if (kw.length <= 3) {
-      const reg = new RegExp("(?:^|[\\s.,!?;:()\\/\\-])" + kw + "(?:$|[\\s.,!?;:()\\/\\-])", "i");
-      return reg.test(q);
+    if (pattern.test(q)) {
+      // Animal bites, scratches, stings or vehicle accident trauma are medical emergencies
+      const isTraumaOrBite =
+        q.includes("tishla") ||
+        q.includes("qop") ||
+        q.includes("tirna") ||
+        q.includes("chaq") ||
+        q.includes("jarohat") ||
+        q.includes("avariya") ||
+        q.includes("kuyish");
+      if (!isTraumaOrBite) {
+        return false;
+      }
     }
-    return matchStem(q, kw);
-  });
-
-  if (hasMedical) {
-    return true;
   }
 
-  // If query is a general health/consultation phrase (not off-topic)
-  const isGeneralHelpOrSymptom =
-    matchStem(q, "yordam") ||
-    matchStem(q, "maslahat") ||
-    matchStem(q, "nima qil") ||
-    matchStem(q, "qanday ich") ||
-    matchStem(q, "qanday qabul") ||
-    matchStem(q, "ahvol") ||
-    matchStem(q, "yomon") ||
-    matchStem(q, "kasal") ||
-    matchStem(q, "bemor") ||
-    matchStem(q, "dard") ||
-    matchStem(q, "davol") ||
-    matchStem(q, "shifo") ||
-    matchStem(q, "pomoch") ||
-    matchStem(q, "pomog") ||
-    matchStem(q, "help") ||
-    matchStem(q, "advice");
-
-  return isGeneralHelpOrSymptom;
+  // 3. Any query in this healthcare chat that is not explicitly off-topic is treated as a clinical health inquiry!
+  return true;
 }
 
 export function isExplicitMedicinePurchaseRequest(query: string): boolean {

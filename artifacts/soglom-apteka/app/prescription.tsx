@@ -302,7 +302,7 @@ export default function PrescriptionScreen() {
 
         <View style={styles.headerIdentity}>
           <View style={styles.avatarWrap}>
-            <MaterialCommunityIcons name="robot-happy-outline" size={24} color="#FFFFFF" />
+            <MaterialCommunityIcons name="robot" size={22} color="#FFFFFF" />
             <View style={styles.onlineDot} />
           </View>
           <View style={styles.headerTextWrap}>
@@ -315,9 +315,18 @@ export default function PrescriptionScreen() {
                 <Text style={styles.aiBadgeText}>AI</Text>
               </View>
             </View>
-            <Text style={styles.headerSub} numberOfLines={1}>
-              {t('catalog.aiChatSubtitle')} • {t('catalog.aiChatOnline')}
-            </Text>
+            <View style={styles.headerSubRow}>
+              <Text style={styles.headerSubRole} numberOfLines={1}>
+                {t('catalog.aiChatSubtitle')}
+              </Text>
+              <Text style={styles.headerSubDot}>•</Text>
+              <View style={styles.onlineBadge}>
+                <View style={styles.onlineDotSmall} />
+                <Text style={styles.headerSubOnline}>
+                  {t('catalog.aiChatOnline')}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -698,18 +707,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 11,
     backgroundColor: CARD_BG,
     borderBottomWidth: 1,
-    borderBottomColor: '#ECEAF2',
+    borderBottomColor: '#F1F5F9',
+    ...Platform.select({
+      ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6 },
+      android: { elevation: 2 },
+      web: { boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' },
+    }),
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8F7FC',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   headerIdentity: {
     flex: 1,
@@ -719,18 +735,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   avatarWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     backgroundColor: PURPLE,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    shadowColor: PURPLE,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    ...Platform.select({
+      ios: { shadowColor: PURPLE, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
+      android: { elevation: 3 },
+      web: { boxShadow: '0 2px 8px rgba(108, 56, 204, 0.25)' },
+    }),
   },
   onlineDot: {
     position: 'absolute',
@@ -745,6 +761,7 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: {
     flex: 1,
+    justifyContent: 'center',
   },
   titleRow: {
     flexDirection: 'row',
@@ -753,27 +770,54 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    lineHeight: 20,
-    color: PURPLE_DEEP,
+    fontSize: 15.5,
+    lineHeight: 19,
+    color: '#0F172A',
   },
   aiBadge: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#EDE9FE',
     paddingHorizontal: 5,
     paddingVertical: 1.5,
-    borderRadius: 6,
+    borderRadius: 5,
   },
   aiBadgeText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 9,
-    color: '#D97706',
+    fontSize: 9.5,
+    color: PURPLE,
+    letterSpacing: 0.3,
   },
-  headerSub: {
+  headerSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  headerSubRole: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11.5,
     lineHeight: 15,
+    color: '#64748B',
+  },
+  headerSubDot: {
+    fontSize: 10,
+    color: '#CBD5E1',
+  },
+  onlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3.5,
+  },
+  onlineDotSmall: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  headerSubOnline: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    lineHeight: 15,
     color: '#059669',
-    marginTop: 1,
   },
 
   // CHAT STREAM
