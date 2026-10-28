@@ -7099,16 +7099,21 @@ button.sales-bar.is-focus:hover .sales-bar-fill,
 .attn-row {
   border-top: 0;
   border-radius: 6px;
-  background: #F8FAFC;
+  background: #FFFFFF;
   border: 1px solid #E2E8F0;
   overflow: hidden;
+  transition: border-color var(--vm-dur-fast) ease, box-shadow var(--vm-dur-fast) ease;
+}
+.attn-row:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 .attn-warn {
-  background: #FFFBEB;
-  border-color: #FDE68A;
+  background: #FFFFFF;
+  border-color: #E2E8F0;
 }
 .attn-danger {
-  background: #FEF2F2;
+  background: #FFFFFF;
   border-color: #FECACA;
 }
 .attn-row-main {
