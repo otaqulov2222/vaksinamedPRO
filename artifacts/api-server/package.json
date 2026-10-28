@@ -12,7 +12,7 @@
     "migrate:release:status": "node --enable-source-maps ./dist/migrate.mjs --status",
     "seed:staging-catalog": "node --enable-source-maps ./dist/seed-staging-catalog.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test tests/**/*.test.ts",
+    "test": "tsx --test --test-concurrency=1 tests/**/*.test.ts",
     "test:security": "tsx --test tests/security-*.test.ts",
     "p13:load": "tsx src/scripts/p13-real-pg-load.ts",
     "p13:http": "tsx src/scripts/p13-http-load.ts",
