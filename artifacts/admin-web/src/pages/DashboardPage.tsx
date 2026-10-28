@@ -716,7 +716,7 @@ const PERIODS: Array<[Preset, string]> = [
   ["custom", "Maxsus"],
 ];
 
-type Preset = "all" | "today" | "yesterday" | "7d" | "30d" | "custom";
+export type Preset = "all" | "today" | "yesterday" | "7d" | "30d" | "custom";
 type AttnTone = "danger" | "warn" | "info";
 
 type AttentionItem = {
@@ -757,6 +757,9 @@ export function DashboardPage(props: {
   permissions?: string[];
   user?: AdminUser | null;
   branches?: any[];
+  activePreset?: Preset;
+  onPresetChange?: (preset: Preset) => void;
+  customDate?: string;
   onOpenOrder?: (orderId: number) => void;
   onOpenInventory?: () => void;
   onOpenOrders?: () => void;
@@ -777,11 +780,29 @@ export function DashboardPage(props: {
   const [prevRevenue, setPrevRevenue] = useState<number | null>(null);
   const loadSeq = useRef(0);
 
-  const [preset, setPreset] = useState<Preset>("today");
+  const [preset, setInternalPreset] = useState<Preset>(props.activePreset || "today");
   const [branchId, setBranchId] = useState("");
-  const [createdFrom, setCreatedFrom] = useState("");
-  const [createdTo, setCreatedTo] = useState("");
+  const [createdFrom, setCreatedFrom] = useState(props.customDate || "");
+  const [createdTo, setCreatedTo] = useState(props.customDate || "");
   const branchSelectRef = useRef<HTMLSelectElement>(null);
+
+  const setPreset = (p: Preset) => {
+    setInternalPreset(p);
+    props.onPresetChange?.(p);
+  };
+
+  useEffect(() => {
+    if (props.activePreset && props.activePreset !== preset) {
+      setInternalPreset(props.activePreset);
+      if (props.activePreset === "custom" && props.customDate) {
+        setCreatedFrom(props.customDate);
+        setCreatedTo(props.customDate);
+      } else if (props.activePreset !== "custom") {
+        setCreatedFrom("");
+        setCreatedTo("");
+      }
+    }
+  }, [props.activePreset, props.customDate]);
 
   const canPosSales = (props.permissions || []).includes("pos:sales:read");
   const canAudit = (props.permissions || []).includes("audit:read");

@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { ChevronRight, ChevronsLeft, ChevronsRight, Eye, EyeOff } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Calendar, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Eye, EyeOff } from "lucide-react";
 import { request, softRequest, money, type AdminUser } from "./api";
 import {
   NAV,
@@ -12,7 +12,7 @@ import {
 import { NAV_ICONS, LOGOUT_ICON, NAV_ICON_SIZE, NAV_ICON_STROKE } from "./navIcons";
 import { PAGE_DENSITY } from "./ui";
 import { PosTerminal } from "./PosTerminal";
-import { DashboardPage } from "./pages/DashboardPage";
+import { DashboardPage, type Preset } from "./pages/DashboardPage";
 import { BranchesPage } from "./pages/BranchesPage";
 import { CatalogPage } from "./pages/CatalogPage";
 import { InventoryPage } from "./pages/InventoryPage";
@@ -258,7 +258,67 @@ export default function App() {
   const pageTitle = PAGE_TITLES[tab] || "Admin";
   const groupLabel = groupLabelForTab(tab);
   const crumbGroup = groupLabel !== pageTitle && groupLabel !== "Admin" ? groupLabel : null;
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
+  const [activePreset, setActivePreset] = useState<Preset>("today");
+  const [customDate, setCustomDate] = useState("");
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
+        setDatePickerOpen(false);
+      }
+    }
+    if (datePickerOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [datePickerOpen]);
+
+  const { topbarWeekday, topbarDay } = useMemo(() => {
+    if (activePreset === "yesterday") {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      return {
+        topbarWeekday: UZ_WEEKDAYS[y.getDay()],
+        topbarDay: `${y.getDate()} ${UZ_MONTHS[y.getMonth()]} ${y.getFullYear()}`,
+      };
+    }
+    if (activePreset === "7d") {
+      return {
+        topbarWeekday: "So‘nggi",
+        topbarDay: "7 kunlik davr",
+      };
+    }
+    if (activePreset === "30d") {
+      return {
+        topbarWeekday: "So‘nggi",
+        topbarDay: "30 kunlik davr",
+      };
+    }
+    if (activePreset === "all") {
+      return {
+        topbarWeekday: "Barcha",
+        topbarDay: "Davr hisoboti",
+      };
+    }
+    if (activePreset === "custom" && customDate) {
+      const [y, m, d] = customDate.split("-").map(Number);
+      if (y && m && d) {
+        const dt = new Date(y, m - 1, d);
+        return {
+          topbarWeekday: UZ_WEEKDAYS[dt.getDay()],
+          topbarDay: `${dt.getDate()} ${UZ_MONTHS[dt.getMonth()]} ${dt.getFullYear()}`,
+        };
+      }
+    }
+    return {
+      topbarWeekday: UZ_WEEKDAYS[today.getDay()],
+      topbarDay: `${today.getDate()} ${UZ_MONTHS[today.getMonth()]} ${today.getFullYear()}`,
+    };
+  }, [activePreset, customDate, today]);
+
   const onlyHqShell =
     visibleNav.length > 0
     && visibleNav.every((i) => i.id === "fom" || i.id === "settings" || i.id === "admins");
@@ -378,10 +438,103 @@ export default function App() {
             <span className="crumb-page" aria-current="location">{pageTitle}</span>
           </nav>
           <div className="topbar-meta">
-            <time className="topbar-date" dateTime={today.toISOString().slice(0, 10)}>
-              <span className="topbar-weekday">{UZ_WEEKDAYS[today.getDay()]}</span>
-              <span className="topbar-day">{`${today.getDate()} ${UZ_MONTHS[today.getMonth()]} ${today.getFullYear()}`}</span>
-            </time>
+            <div className="topbar-date-anchor" ref={datePickerRef}>
+              <button
+                type="button"
+                className={`topbar-date${datePickerOpen ? " is-open" : ""}`}
+                onClick={() => setDatePickerOpen((v) => !v)}
+                title="Sana tanlash yoki o‘zgartirish"
+                aria-expanded={datePickerOpen}
+              >
+                <Calendar size={13} className="topbar-cal-icon" aria-hidden="true" />
+                <span className="topbar-weekday">{topbarWeekday}</span>
+                <span className="topbar-day">{topbarDay}</span>
+                <ChevronDown size={12} className="topbar-chevron" aria-hidden="true" />
+              </button>
+              {datePickerOpen ? (
+                <div className="topbar-date-popover" role="dialog" aria-label="Sana tanlash">
+                  <div className="topbar-pop-head">Sana tanlash</div>
+                  <div className="topbar-pop-presets">
+                    <button
+                      type="button"
+                      className={`topbar-pop-btn${activePreset === "today" ? " is-active" : ""}`}
+                      onClick={() => {
+                        setActivePreset("today");
+                        setCustomDate("");
+                        setDatePickerOpen(false);
+                      }}
+                    >
+                      <span>Bugun</span>
+                      <small className="topbar-pop-hint">{today.getDate()}-{UZ_MONTHS[today.getMonth()].slice(0, 3)}</small>
+                    </button>
+                    <button
+                      type="button"
+                      className={`topbar-pop-btn${activePreset === "yesterday" ? " is-active" : ""}`}
+                      onClick={() => {
+                        setActivePreset("yesterday");
+                        setCustomDate("");
+                        setDatePickerOpen(false);
+                      }}
+                    >
+                      <span>Kecha</span>
+                      <small className="topbar-pop-hint">{new Date(today.getTime() - 86400000).getDate()}-{UZ_MONTHS[new Date(today.getTime() - 86400000).getMonth()].slice(0, 3)}</small>
+                    </button>
+                    <button
+                      type="button"
+                      className={`topbar-pop-btn${activePreset === "7d" ? " is-active" : ""}`}
+                      onClick={() => {
+                        setActivePreset("7d");
+                        setCustomDate("");
+                        setDatePickerOpen(false);
+                      }}
+                    >
+                      <span>7 kun</span>
+                      <small className="topbar-pop-hint">Oxirgi 7 kun</small>
+                    </button>
+                    <button
+                      type="button"
+                      className={`topbar-pop-btn${activePreset === "30d" ? " is-active" : ""}`}
+                      onClick={() => {
+                        setActivePreset("30d");
+                        setCustomDate("");
+                        setDatePickerOpen(false);
+                      }}
+                    >
+                      <span>30 kun</span>
+                      <small className="topbar-pop-hint">Oxirgi 30 kun</small>
+                    </button>
+                    <button
+                      type="button"
+                      className={`topbar-pop-btn${activePreset === "all" ? " is-active" : ""}`}
+                      onClick={() => {
+                        setActivePreset("all");
+                        setCustomDate("");
+                        setDatePickerOpen(false);
+                      }}
+                    >
+                      <span>Barchasi</span>
+                      <small className="topbar-pop-hint">Butun davr</small>
+                    </button>
+                  </div>
+                  <div className="topbar-pop-divider" />
+                  <div className="topbar-pop-custom">
+                    <label className="topbar-pop-label">Kalendardan tanlash:</label>
+                    <input
+                      type="date"
+                      className="topbar-pop-input"
+                      value={customDate || today.toISOString().slice(0, 10)}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setCustomDate(e.target.value);
+                          setActivePreset("custom");
+                          setDatePickerOpen(false);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
@@ -398,6 +551,9 @@ export default function App() {
               permissions={permissions}
               user={user}
               branches={branches}
+              activePreset={activePreset}
+              onPresetChange={(p) => setActivePreset(p)}
+              customDate={customDate}
               onOpenOrder={(orderId) => {
                 setFocusOrderId(orderId);
                 setTab("orders");
