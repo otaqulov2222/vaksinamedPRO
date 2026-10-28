@@ -274,7 +274,7 @@ export function handleAiMedicalChat(params: {
 
   // 0.1 IDENTITY / CAPABILITY INTENT (e.g. "sen kimsan", "nima qila olasan", "кто ты")
   const isIdentityQuery =
-    /\b(sen kimsan|kimsan|kim bu|nima qila olasan|vazifang nima|vazifangiz nima|кто ты|кто вы|что ты умеешь|что вы умеете|who are you|what can you do)\b/i.test(
+    /(?:sen kimsan|siz kimsiz|kimsan|kimsiz|kim bu|nima qila olasan|nima qila olasiz|nima qilyapsan|nima qilyapsiz|nima qilasiz|vazifang nima|vazifangiz nima|qanday yordam bera olasan|qanday yordam bera olasiz|кто ты|кто вы|что ты умеешь|что вы умеете|чем можешь помочь|who are you|what can you do)/i.test(
       qNorm
     );
   if (!hasImage && isIdentityQuery) {
@@ -345,7 +345,7 @@ export function handleAiMedicalChat(params: {
     qNorm === "tinchmisiz";
 
   const hasSpecificSymptomOrDrug =
-    /(og'ri|ogri|ogriy|og'riy|bosh|tish|milk|karies|pulpit|qorn|qorin|oshqozon|jigar|buyrak|isitma|temperatura|жар|бол|голов|зуб|живот|желуд|shamollash|gripp|dori|retsept|рецепт|preparat|vitamin|витамин|davleniye|давлен|qon bosimi|ich ket|diareya|диаре|ko'z|koz|quloq|burun|kuyib|zahar|uyqu|uxla|peshob|diabet|tsistit)/i.test(
+    /(og'ri|ogri|ogriy|og'riy|bosh|tish|milk|karies|pulpit|qorn|qorin|oshqozon|jigar|buyrak|isitma|temperatura|жар|бол|голов|зуб|живот|желуд|shamollash|gripp|dori|retsept|рецепт|preparat|vitamin|витамин|davleniye|давлен|qon bosimi|ich ket|diareya|диаре|ko'z|koz|quloq|burun|kuyib|kuyd|kuygan|kuyish|tirnoq|zahar|uyqu|uxla|peshob|diabet|tsistit)/i.test(
       qNorm
     );
 
@@ -926,11 +926,16 @@ export function handleAiMedicalChat(params: {
   } else if (
     qNorm.includes("kuyib") ||
     qNorm.includes("kuydim") ||
+    qNorm.includes("kuydi") ||
+    qNorm.includes("kuygan") ||
     qNorm.includes("kuyish") ||
     qNorm.includes("issiq suv") ||
     qNorm.includes("quyoshda kuy") ||
     qNorm.includes("ожог") ||
     qNorm.includes("обжег") ||
+    qNorm.includes("обожгла") ||
+    qNorm.includes("обожглась") ||
+    qNorm.includes("обожгло") ||
     qNorm.includes("burn")
   ) {
     categoryIntent = "burns";

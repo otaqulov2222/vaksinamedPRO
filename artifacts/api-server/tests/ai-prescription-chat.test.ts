@@ -414,4 +414,26 @@ describe("VaksinaMed AI Medical & Prescription Chat Engine", () => {
     assert.equal(resGpt.isMedical, false);
     assert.ok(resGpt.reply.includes("faqat tibbiyot va salomatlik"));
   });
+  it("23. Correctly handles identity queries (siz kimsiz / nima qila olasiz) with zero products", () => {
+    const res = handleAiMedicalChat({
+      message: "siz kimsiz",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.ok(res.reply.includes("Men VaksinaMed dorixonalar tarmog‘ining"));
+    assert.equal(res.matchedProducts.length, 0);
+  });
+
+  it("24. Correctly handles colloquial burn query 'qo\'lim kuydi' with zero products", () => {
+    const res = handleAiMedicalChat({
+      message: "qo'lim kuydi",
+      language: "uz",
+      candidates: mockCatalog,
+    });
+    assert.equal(res.isMedical, true);
+    assert.ok(res.reply.includes("kuyish") || res.reply.includes("Kuyish") || res.reply.includes("Termik kuyish"));
+    assert.ok(res.reply.includes("oqova suv") || res.reply.includes("suv ostida"));
+    assert.equal(res.matchedProducts.length, 0);
+  });
 });
