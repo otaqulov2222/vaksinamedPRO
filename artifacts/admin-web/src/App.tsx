@@ -454,19 +454,13 @@ export default function App() {
               type="button"
               className="topbar-theme-toggle"
               onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-              title={theme === "dark" ? "Kunduzgi rejimga o‘tish (Oq fon)" : "Kechgi rejimga o‘tish (Qorong‘i fon)"}
-              aria-label={theme === "dark" ? "Kunduzgi rejimga o‘tish" : "Kechgi rejimga o‘tish"}
+              title={theme === "dark" ? "Kunduzgi rejim (Oq fon)" : "Kechgi rejim (Qorong‘i fon)"}
+              aria-label={theme === "dark" ? "Kunduzgi rejim" : "Kechgi rejim"}
             >
               {theme === "dark" ? (
-                <>
-                  <Sun size={13} className="topbar-theme-icon" aria-hidden="true" />
-                  <span className="topbar-theme-text">Kunduzgi</span>
-                </>
+                <Sun size={15} className="topbar-theme-icon" aria-hidden="true" />
               ) : (
-                <>
-                  <Moon size={13} className="topbar-theme-icon" aria-hidden="true" />
-                  <span className="topbar-theme-text">Kechgi</span>
-                </>
+                <Moon size={15} className="topbar-theme-icon" aria-hidden="true" />
               )}
             </button>
             <div className="topbar-date-anchor" ref={datePickerRef}>
