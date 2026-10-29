@@ -100,7 +100,7 @@
   /* Sidebar — deep luxury plum / violet rail matching VaksinaMed CMS */
   --vm-side-bg: #1E1035;
   --vm-side-hover: rgba(139, 92, 246, 0.14);
-  --vm-side-active: #2E1850;
+  --vm-side-active: rgba(167, 139, 250, 0.16);
   --vm-side-line: rgba(139, 92, 246, 0.14);
   --vm-side-line-strong: rgba(139, 92, 246, 0.28);
   --vm-side-text: #C4B5FD;
@@ -470,11 +470,11 @@ h2 { margin: 0 0 8px; font-size: 14px; }
   width: 3px;
   height: 0;
   border-radius: 0 3px 3px 0;
-  background: var(--vm-side-gold);
+  background: var(--vm-accent);
   transform: translateY(-50%);
   transition: height var(--vm-dur) var(--vm-ease);
 }
-.side-nav .nav-item.active::before { height: 16px; }
+.side-nav .nav-item.active::before { height: 16px; background: var(--vm-side-gold); }
 .side-nav .nav-item.active .nav-icon { opacity: 1; color: var(--vm-side-gold); }
 .side-nav .nav-item:focus-visible {
   outline: none;
