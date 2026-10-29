@@ -15,8 +15,7 @@ import {
   Layers,
 } from "lucide-react";
 import { request, money, type AdminUser } from "../api";
-import { AdminPageHeader, ErrorState, LoadingBlock, StatusBadge } from "../ui";
-import { PAGE_DESCRIPTIONS } from "../nav";
+import { ErrorState, LoadingBlock, StatusBadge } from "../ui";
 
 /**
  * Settings console — read-only view over the real server sources.
@@ -71,10 +70,10 @@ const DRIVER_LABELS: Record<string, string> = {
 
 /** Sources that the server keeps outside any admin API — shown as not visible, never as a status. */
 const NOT_EXPOSED = [
-  "SMS va xabarnomalar (Eskiz provayderi)",
-  "Fon jarayonlari (workerlar)",
-  "Payme / Click rejimi (sandbox yoki production)",
-  "Sessiya muddati, OTP va so‘rov limitlari",
+  "SMS va xabarnomalar",
+  "Fon jarayonlari",
+  "Payme / Click rejimi",
+  "Sessiya muddati, OTP",
   "Buyurtma bron muddati",
 ];
 
@@ -201,7 +200,7 @@ export function SettingsPage(props: {
     canOpen(tab) ? (
       <button type="button" className="btn-tertiary st-link" onClick={() => props.onOpenTab?.(tab)}>
         {label}
-        <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
+        <ArrowRight size={13} strokeWidth={2} aria-hidden="true" />
       </button>
     ) : null;
 
@@ -212,53 +211,54 @@ export function SettingsPage(props: {
 
   return (
     <div className="settings-page st-page page-module">
-      <AdminPageHeader
-        title="Sozlamalar"
-        description={PAGE_DESCRIPTIONS.settings}
-        meta={
-          <span className="st-meta">
-            <span className="st-chip">Faqat ko‘rish</span>
-            <span className="st-chip">Faqat HQ</span>
-            <span className="st-chip">Har bo‘lim o‘z server ruxsati bilan</span>
-          </span>
-        }
-        actions={
-          <button
-            className={`btn-secondary st-refresh${loading ? " is-busy" : ""}`}
-            type="button"
-            disabled={loading}
-            onClick={() => void load()}
-          >
-            <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />
-            Yangilash
-          </button>
-        }
-      />
-
-      <div className="st-categories" role="tablist" aria-label="Sozlama toifalari">
-        {CATEGORY_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isSelected = activeCat === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={isSelected}
-              className={`st-cat-btn${isSelected ? " is-active" : ""}`}
-              onClick={() => setActiveCat(tab.id)}
+      <div className="st-header">
+        <div className="st-header-top">
+          <div className="st-header-title-row">
+            <h1 className="st-header-title" title="Sozlamalar">Sozlamalar</h1>
+            <span
+              className="st-header-hint"
+              title="Alohida sozlamalar API’si yo‘q: har bir qiymat o‘z server manbasidan o‘qiladi va bu yerdan o‘zgartirilmaydi."
             >
-              <Icon size={14} strokeWidth={isSelected ? 2.2 : 1.8} aria-hidden="true" />
-              <span>{tab.label}</span>
+              Alohida sozlamalar API’si yo‘q
+            </span>
+            {checkedAt ? (
+              <span className="st-intro-time" title="Oxirgi server tekshiruvi (Asia/Tashkent)">
+                {formatTime(checkedAt)}
+              </span>
+            ) : null}
+          </div>
+          <div className="st-header-actions">
+            <button
+              className={`btn-secondary st-refresh${loading ? " is-busy" : ""}`}
+              type="button"
+              disabled={loading}
+              onClick={() => void load()}
+            >
+              <RefreshCw size={13} strokeWidth={2} aria-hidden="true" />
+              Yangilash
             </button>
-          );
-        })}
+          </div>
+        </div>
+        <div className="st-categories" role="tablist" aria-label="Sozlama toifalari">
+          {CATEGORY_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isSelected = activeCat === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                className={`st-cat-btn${isSelected ? " is-active" : ""}`}
+                onClick={() => setActiveCat(tab.id)}
+              >
+                <Icon size={14} strokeWidth={isSelected ? 2.2 : 1.8} aria-hidden="true" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
-
-      <p className="st-intro">
-        Alohida sozlamalar API’si yo‘q: har bir qiymat o‘z server manbasidan o‘qiladi va bu yerdan o‘zgartirilmaydi.
-        {checkedAt ? <span className="st-intro-time"> Oxirgi o‘qish: {formatTime(checkedAt)} (Asia/Tashkent).</span> : null}
-      </p>
 
       {pageError ? (
         <ErrorState
@@ -272,9 +272,9 @@ export function SettingsPage(props: {
           {showSection("cashback") ? (
             <Section
               id="st-cashback"
-              icon={<Coins size={18} aria-hidden="true" />}
+              icon={<Coins size={16} aria-hidden="true" />}
               title="Cashback / Loyalty"
-              lead="Cashback hisoblash qoidalari. Mijozlar balansi va ledger bu yerda emas — ular Cashback / Loyalty bo‘limida."
+              lead="Mijozlar balansi va ledger bu yerda emas"
               source="GET /api/cashback/rules"
               error={rules.error}
               onRetry={() => void load()}
@@ -287,9 +287,9 @@ export function SettingsPage(props: {
           {showSection("branches") ? (
             <Section
               id="st-branches"
-              icon={<Store size={18} aria-hidden="true" />}
+              icon={<Store size={16} aria-hidden="true" />}
               title="Filiallar va to‘lov kabinetlari"
-              lead="Filial yozuvlaridagi holat va Payme / Click kabineti sozlanganmi. Kalit qiymatlari hech qachon ko‘rsatilmaydi."
+              lead="Kalit qiymatlari hech qachon ko‘rsatilmaydi."
               source="GET /api/admin/branches"
               error={branches.error}
               onRetry={() => void load()}
@@ -302,40 +302,35 @@ export function SettingsPage(props: {
           {showSection("delivery") ? (
             <Section
               id="st-delivery"
-              icon={<Truck size={18} aria-hidden="true" />}
+              icon={<Truck size={16} aria-hidden="true" />}
               title="Yetkazib berish"
-              lead="Yetkazib berish haqi va tashqi provayder holati."
+              lead="Yetkazib berish haqi va provayder holati"
               source="GET /api/cashback/rules · GET /api/admin/deliveries"
               error={delivery.error && rules.error ? delivery.error : null}
               onRetry={() => void load()}
               footer={openLink("delivery", "Yetkazishlar — Yetkazib berish bo‘limi")}
             >
               <SettingRow
-                icon={<Truck size={16} aria-hidden="true" />}
+                icon={<Truck size={15} aria-hidden="true" />}
                 title="Yetkazib berish haqi"
-                desc="Yetkazib berish buyurtmasiga qo‘shiladi. Cashback bu summadan hisoblanmaydi."
                 source="Server kodi · o‘zgarmas qiymat"
                 value={finite(rules.data?.deliveryFee) != null ? money(Number(rules.data?.deliveryFee)) : null}
                 missing={rules.error ? rules.error.message : undefined}
-                action={openLink("delivery", "Yetkazishlarni ko‘rish")}
+                action={openLink("delivery", "Ko‘rish")}
               />
               <SettingRow
-                icon={<Layers size={16} aria-hidden="true" />}
+                icon={<Layers size={15} aria-hidden="true" />}
                 title="Tashqi yetkazib berish provayderi"
-                desc={
-                  delivery.data?.externalProvider === "CONTRACT_PENDING"
-                    ? "Hali ulanmagan — tashqi provider contract mavjud emas. Yetkazishlar ichki kuryer orqali yuritiladi."
-                    : "Server qaytargan provayder holati."
-                }
                 source="Yetkazib berish API · externalProvider"
+                desc="Hali ulanmagan — tashqi provider contract mavjud emas."
                 value={
                   delivery.data?.externalProvider === "CONTRACT_PENDING"
                     ? "Hali ulanmagan"
                     : delivery.data?.externalProvider || null
                 }
                 missing={delivery.error ? delivery.error.message : undefined}
-                toggle={{ active: false, label: "Tashqi kuryer yo‘q" }}
-                action={openLink("delivery", "Yetkazib berish bo‘limi")}
+                toggle={{ active: false, label: "Ulanmagan" }}
+                action={openLink("delivery", "Sozlash")}
               />
             </Section>
           ) : null}
@@ -344,9 +339,9 @@ export function SettingsPage(props: {
             <>
               <Section
                 id="st-fom"
-                icon={<Cpu size={18} aria-hidden="true" />}
+                icon={<Cpu size={16} aria-hidden="true" />}
                 title="FOM integratsiyasi"
-                lead="Dorixona kassasi (FOM) bilan ko‘prik holati."
+                lead="Dorixona kassasi (FOM) bilan ko‘prik holati"
                 source="GET /api/integrations/fom/status"
                 error={fom.error}
                 onRetry={() => void load()}
@@ -355,25 +350,23 @@ export function SettingsPage(props: {
                 {fom.data ? (
                   <>
                     <SettingRow
-                      icon={<Cpu size={16} aria-hidden="true" />}
+                      icon={<Cpu size={15} aria-hidden="true" />}
                       title="Integratsiya holati"
-                      desc="Tashqi FOM kassa shartnomasi holati."
                       source="FOM holati API"
                       value={fom.data.status ? FOM_STATUS_LABELS[fom.data.status] || fom.data.status : null}
                       status={fom.data.ready === false ? { tone: "warn", label: "Production uchun tayyor emas" } : undefined}
-                      action={openLink("fom", "FOM bo‘limi")}
+                      action={openLink("fom", "Ko‘rish")}
                     />
                     <SettingRow
-                      icon={<Sliders size={16} aria-hidden="true" />}
+                      icon={<Sliders size={15} aria-hidden="true" />}
                       title="FOM inventar yozuvi"
-                      desc="FOM ombor qoldig‘ini tizimga yozadimi."
                       source="FOM holati API"
                       value={fom.data.inventoryWriter === "OFF" ? "O‘chirilgan" : fom.data.inventoryWriter || null}
                       toggle={{
                         active: fom.data.inventoryWriter !== "OFF",
                         label: fom.data.inventoryWriter === "OFF" ? "O‘chirilgan" : "Faol",
                       }}
-                      action={openLink("fom", "FOM sozlamalari")}
+                      action={openLink("fom", "Sozlash")}
                     />
                   </>
                 ) : null}
@@ -381,48 +374,41 @@ export function SettingsPage(props: {
 
               <Section
                 id="st-access"
-                icon={<ShieldCheck size={18} aria-hidden="true" />}
+                icon={<ShieldCheck size={16} aria-hidden="true" />}
                 title="Kirish va ruxsatlar"
-                lead="Joriy sessiya serverdan olingan rol va ruxsatlar bilan ishlaydi. Alohida sozlamalar ruxsati yo‘q."
+                lead="Joriy sessiya serverdan olingan rol va ruxsatlar bilan ishlaydi"
                 source="GET /api/admin/me"
                 footer={openLink("admins", "Rol va ruxsatlar — Adminlar bo‘limi")}
               >
                 <SettingRow
-                  icon={<ShieldCheck size={16} aria-hidden="true" />}
+                  icon={<ShieldCheck size={15} aria-hidden="true" />}
                   title="Joriy rol"
-                  desc="Kirish paytida server tasdiqlagan rol."
                   source="Admin sessiyasi"
                   value={role ? ROLE_LABELS[role] || role : null}
-                  action={openLink("admins", "Adminlar ro‘yxati")}
+                  action={openLink("admins", "Adminlar")}
                 />
                 <SettingRow
-                  icon={<Sliders size={16} aria-hidden="true" />}
+                  icon={<Sliders size={15} aria-hidden="true" />}
                   title="Server ruxsatlari"
-                  desc="Har bir bo‘lim va amal serverda shu ruxsatlar bilan tekshiriladi."
                   source="Admin sessiyasi"
                   value={permissionCount != null ? `${permissionCount} ta` : null}
-                  action={openLink("admins", "Ruxsatlarni ko‘rish")}
+                  action={openLink("admins", "Ko‘rish")}
                 />
               </Section>
 
               <Section
                 id="st-system"
-                icon={<Database size={18} aria-hidden="true" />}
+                icon={<Database size={16} aria-hidden="true" />}
                 title="Tizim holati"
-                lead="Server tekshiruvi natijasi — faqat API qaytargan javob."
+                lead="Server tekshiruvi natijasi"
                 source="GET /api/healthz"
                 error={health.error}
                 onRetry={() => void load()}
               >
                 {health.data ? (
                   <SettingRow
-                    icon={<Database size={16} aria-hidden="true" />}
+                    icon={<Database size={15} aria-hidden="true" />}
                     title="Ma'lumotlar bazasi"
-                    desc={
-                      health.data.status === "not_ready"
-                        ? "Server tekshiruvi 503 qaytardi — ma'lumotlar bazasi tayyor emas."
-                        : `Tekshirilgan vaqt: ${formatTime(health.data.time)} (Asia/Tashkent).`
-                    }
                     source="Server tekshiruvi"
                     value={health.data.driver ? DRIVER_LABELS[health.data.driver] || health.data.driver : null}
                     status={
@@ -434,7 +420,7 @@ export function SettingsPage(props: {
                     }
                     toggle={{
                       active: health.data.database === "up",
-                      label: health.data.database === "up" ? "Ulanish faol" : "Ulanish uzilgan",
+                      label: health.data.database === "up" ? "Ulanish barqaror" : "Ulanish uzilgan",
                     }}
                   />
                 ) : null}
@@ -442,10 +428,6 @@ export function SettingsPage(props: {
 
               <section className="st-hidden" aria-labelledby="st-hidden-title">
                 <h2 id="st-hidden-title" className="st-hidden-title">Admin API orqali ko‘rinmaydi</h2>
-                <p className="st-hidden-lead">
-                  Bu qiymatlar server muhiti yoki kodida saqlanadi. Admin panel ularni ko‘rsatmaydi va o‘zgartirmaydi —
-                  holat taxmin qilinmaydi.
-                </p>
                 <ul className="st-hidden-list">
                   {NOT_EXPOSED.map((item) => (
                     <li key={item}>{item}</li>
@@ -475,14 +457,11 @@ function Section(props: {
   return (
     <section className="st-section" aria-labelledby={`${props.id}-title`}>
       <header className="st-section-head">
-        <div className="st-section-text">
-          <div className="st-section-title-wrap">
-            {props.icon ? <span className="st-section-icon">{props.icon}</span> : null}
-            <h2 id={`${props.id}-title`} className="st-section-title">{props.title}</h2>
-          </div>
-          <p className="st-section-lead">{props.lead}</p>
+        <div className="st-section-title-wrap">
+          {props.icon ? <span className="st-section-icon">{props.icon}</span> : null}
+          <h2 id={`${props.id}-title`} className="st-section-title">{props.title}</h2>
         </div>
-        <span className="st-source" title="Ma'lumot manbasi">{props.source}</span>
+        <span className="st-source" title={`Ma'lumot manbasi: ${props.source}`}>{props.source}</span>
       </header>
       {props.error ? (
         <div className="st-section-error">
@@ -499,8 +478,8 @@ function Section(props: {
 function SettingRow(props: {
   icon?: ReactNode;
   title: string;
-  desc?: ReactNode;
   source: string;
+  desc?: string;
   value: ReactNode | null;
   status?: { tone: Tone; label: string };
   missing?: string;
@@ -509,22 +488,15 @@ function SettingRow(props: {
   children?: ReactNode;
 }) {
   return (
-    <div className="st-row">
-      <div className="st-row-main">
-        <div className="st-row-header">
-          {props.icon ? <div className="st-row-icon" aria-hidden="true">{props.icon}</div> : null}
-          <div className="st-row-heading">
-            <div className="st-row-title">{props.title}</div>
-            <p className="st-row-source">Manba: {props.source}</p>
-          </div>
-        </div>
-        {props.desc ? <p className="st-row-desc">{props.desc}</p> : null}
+    <div className="st-row" title={`${props.title} · Manba: ${props.source}${props.desc ? ` · ${props.desc}` : ""}`}>
+      <div className="st-row-left">
+        {props.icon ? <span className="st-row-icon" aria-hidden="true">{props.icon}</span> : null}
+        <span className="st-row-title">{props.title}</span>
         {props.missing && (props.value == null || props.value === "") ? (
-          <p className="st-row-missing" role="status">{props.missing}</p>
+          <span className="st-row-missing" role="status">{props.missing}</span>
         ) : null}
-        {props.children}
       </div>
-      <div className="st-row-aside">
+      <div className="st-row-right">
         {props.toggle ? (
           <div className={`st-switch-control ${props.toggle.active ? "is-active" : "is-inactive"}`}>
             <span className="st-switch-track" aria-hidden="true">
@@ -544,8 +516,9 @@ function SettingRow(props: {
           {props.status ? <StatusBadge tone={props.status.tone}>{props.status.label}</StatusBadge> : null}
           <span className="st-readonly" title={READ_ONLY}>Faqat ko‘rish</span>
         </span>
-        {props.action ? <div className="st-row-action">{props.action}</div> : null}
+        {props.action ? <span className="st-row-action">{props.action}</span> : null}
       </div>
+      {props.children ? <div className="st-row-extra">{props.children}</div> : null}
     </div>
   );
 }
@@ -561,28 +534,25 @@ function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: stri
   return (
     <>
       <SettingRow
-        icon={<Coins size={16} aria-hidden="true" />}
+        icon={<Coins size={15} aria-hidden="true" />}
         title="Cashback ishlatish limiti"
-        desc="Mahsulotlar summasining eng ko‘p shu qismi cashback bilan to‘lanadi (yetkazib berish haqidan emas)."
         source="Server sozlamasi · system_settings (standart 30%)"
         value={maxSpendPercent != null ? `${maxSpendPercent}%` : null}
-        action={props.openLink("cashback", "Cashback bo‘limida boshqarish")}
+        action={props.openLink("cashback", "Boshqarish")}
       />
       <SettingRow
-        icon={<ShoppingBag size={16} aria-hidden="true" />}
+        icon={<ShoppingBag size={15} aria-hidden="true" />}
         title="Minimal xarid summasi"
-        desc="Server cashback hisob-kitobida mahsulot summasi uchun minimal chegara sifatida qo‘llaydi."
         source="Server kodi · o‘zgarmas qiymat"
         value={minPurchase != null ? money(minPurchase) : null}
-        action={props.openLink("cashback", "Qoidalarni ko‘rish")}
+        action={props.openLink("cashback", "Ko‘rish")}
       />
       <SettingRow
-        icon={<Sliders size={16} aria-hidden="true" />}
+        icon={<Sliders size={15} aria-hidden="true" />}
         title="Loyalty darajalari"
-        desc="Mijozning jami xaridi bo‘yicha daraja va undan keyingi xaridlardan cashback foizi."
         source="Server kodi · o‘zgarmas qiymat"
         value={tiers.length ? `${tiers.length} ta daraja` : null}
-        action={props.openLink("cashback", "Darajalarni ko‘rish")}
+        action={props.openLink("cashback", "Darajalar")}
       >
         {tiers.length ? (
           <table className="st-tiers">
@@ -606,21 +576,21 @@ function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: stri
         ) : null}
       </SettingRow>
       <SettingRow
-        icon={<Clock size={16} aria-hidden="true" />}
+        icon={<Clock size={15} aria-hidden="true" />}
         title="Cashback amal qilish muddati"
-        desc="Qoidalarda e’lon qilingan. Muddati o‘tgan cashbackni hisobdan chiqaradigan server jarayoni hozircha yo‘q."
         source="Server kodi · o‘zgarmas qiymat"
+        desc="Muddati o‘tgan cashbackni hisobdan chiqaradigan server jarayoni hozircha yo‘q."
         value={ttlDays != null ? `${ttlDays} kun` : null}
         status={ttlDays != null ? { tone: "warn", label: "Serverda qo‘llanmaydi" } : undefined}
-        toggle={{ active: false, label: "Jarayon mavjud emas" }}
+        toggle={{ active: false, label: "Mavjud emas" }}
       />
       {earnWhen.length || spendWhen.length ? (
         <details className="st-rules-text">
-          <summary>Hisoblash va ishlatish shartlari (server matni)</summary>
+          <summary>Shartlar (server matni)</summary>
           <div className="st-rules-grid">
             {earnWhen.length ? (
               <div>
-                <h3 className="st-rules-head">Cashback qachon hisoblanadi</h3>
+                <h3 className="st-rules-head">Cashback hisoblanishi</h3>
                 <ul className="st-rules-list">
                   {earnWhen.map((line) => <li key={line}>{line}</li>)}
                 </ul>
@@ -628,7 +598,7 @@ function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: stri
             ) : null}
             {spendWhen.length ? (
               <div>
-                <h3 className="st-rules-head">Cashback qachon ishlatiladi</h3>
+                <h3 className="st-rules-head">Cashback ishlatilishi</h3>
                 <ul className="st-rules-list">
                   {spendWhen.map((line) => <li key={line}>{line}</li>)}
                 </ul>
@@ -659,42 +629,38 @@ function BranchRows(props: { rows: BranchRow[]; openLink: (tab: string, label: s
   return (
     <>
       <SettingRow
-        icon={<CreditCard size={16} aria-hidden="true" />}
-        title="Payme kabineti sozlangan filiallar"
-        desc="Kabinet ID va maxfiy kalit ikkalasi saqlangan filiallar soni."
+        icon={<CreditCard size={15} aria-hidden="true" />}
+        title="Payme kabineti"
         source="Filial yozuvlari · hasPayme"
         value={of(payme)}
         status={providerStatus(payme)}
         toggle={{ active: payme > 0, label: payme > 0 ? "Faol" : "Ulanmagan" }}
-        action={props.openLink("branches", "Filiallarda sozlash")}
+        action={props.openLink("branches", "Sozlash")}
       />
       <SettingRow
-        icon={<CreditCard size={16} aria-hidden="true" />}
-        title="Click kabineti sozlangan filiallar"
-        desc="Kabinet ID va maxfiy kalit ikkalasi saqlangan filiallar soni."
+        icon={<CreditCard size={15} aria-hidden="true" />}
+        title="Click kabineti"
         source="Filial yozuvlari · hasClick"
         value={of(click)}
         status={providerStatus(click)}
         toggle={{ active: click > 0, label: click > 0 ? "Faol" : "Ulanmagan" }}
-        action={props.openLink("branches", "Filiallarda sozlash")}
+        action={props.openLink("branches", "Sozlash")}
       />
       <SettingRow
-        icon={<Store size={16} aria-hidden="true" />}
+        icon={<Store size={15} aria-hidden="true" />}
         title="Ochiq filiallar"
-        desc="Filial yozuvida “ochiq” deb belgilangan filiallar."
         source="Filial yozuvlari · isOpen"
         value={of(open)}
         toggle={{ active: open > 0, label: `${open} ta ochiq` }}
-        action={props.openLink("branches", "Filiallar ro‘yxati")}
+        action={props.openLink("branches", "Filiallar")}
       />
       <SettingRow
-        icon={<Clock size={16} aria-hidden="true" />}
+        icon={<Clock size={15} aria-hidden="true" />}
         title="24/7 ishlaydigan filiallar"
-        desc="Kechayu kunduz ishlaydi deb belgilangan filiallar."
         source="Filial yozuvlari · is24h"
         value={of(allDay)}
         toggle={{ active: allDay > 0, label: "24/7 rejim" }}
-        action={props.openLink("branches", "Filiallar ro‘yxati")}
+        action={props.openLink("branches", "Filiallar")}
       />
       {configured.length ? (
         <ul className="st-branch-list" aria-label="To‘lov kabineti sozlangan filiallar">
