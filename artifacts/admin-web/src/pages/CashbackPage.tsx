@@ -454,41 +454,45 @@ export function CashbackPage(props: { token: string }) {
           ) : !rules ? (
             <LoadingBlock rows={3} />
           ) : (
-            <>
-              <table className="cb-tiers">
-                <caption className="cb-tiers-caption">Loyalty darajalari</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Daraja</th>
-                    <th scope="col" className="num">Cashback</th>
-                    <th scope="col" className="num">Xaridlar summasidan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tiers.map((t) => (
-                    <tr key={String(t.tier)}>
-                      <th scope="row"><span className={`cb-tier cb-tier--${String(t.tier).toLowerCase()}`}>{String(t.tier)}</span></th>
-                      <td className="num">{String(t.rate ?? "—")}</td>
-                      <td className="num">{t.fromTotal != null ? money(Number(t.fromTotal)) : "—"}</td>
+            <div className="cb-rules-body">
+              <div className="cb-rules-left">
+                <table className="cb-tiers">
+                  <caption className="cb-tiers-caption">Loyalty darajalari</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Daraja</th>
+                      <th scope="col" className="num">Cashback</th>
+                      <th scope="col" className="num">Xaridlar summasidan</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <ul className="cb-rule-list">
-                <li>Bitta tijorat tranzaksiyasi uchun ko‘pi bilan bitta hisoblash yozuvi.</li>
-                <li>To‘lov (PAID) o‘zi cashback bermaydi — buyurtma yakunlanganda yoki kassa sotuvi tasdiqlanganda.</li>
-                <li>Qaytarish asl yozuvni o‘chirmaydi — alohida qaytarish yozuvi qo‘shiladi.</li>
-              </ul>
-              <div className="cb-caveats">
-                <div className="cb-caveats-title">Tizimda qo‘llanmaydi</div>
-                <ul className="cb-rule-list">
-                  {rules.ttlDays != null ? (
-                    <li>Qoidalarda {rules.ttlDays} kunlik muddat e’lon qilingan — muddat o‘tishi amalga oshirilmagan.</li>
-                  ) : null}
-                  <li>Daraja avtomatik faqat kassa (POS) sotuvida yangilanadi; ilova buyurtmasi darajani o‘zgartirmaydi.</li>
-                </ul>
+                  </thead>
+                  <tbody>
+                    {tiers.map((t) => (
+                      <tr key={String(t.tier)}>
+                        <th scope="row"><span className={`cb-tier cb-tier--${String(t.tier).toLowerCase()}`}>{String(t.tier)}</span></th>
+                        <td className="num">{String(t.rate ?? "—")}</td>
+                        <td className="num">{t.fromTotal != null ? money(Number(t.fromTotal)) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </>
+              <div className="cb-rules-right">
+                <ul className="cb-rule-list">
+                  <li>Bitta tijorat tranzaksiyasi uchun ko‘pi bilan bitta hisoblash yozuvi.</li>
+                  <li>To‘lov (PAID) o‘zi cashback bermaydi — buyurtma yakunlanganda yoki kassa sotuvi tasdiqlanganda.</li>
+                  <li>Qaytarish asl yozuvni o‘chirmaydi — alohida qaytarish yozuvi qo‘shiladi.</li>
+                </ul>
+                <div className="cb-caveats">
+                  <div className="cb-caveats-title">Tizimda qo‘llanmaydi</div>
+                  <ul className="cb-rule-list">
+                    {rules.ttlDays != null ? (
+                      <li>Qoidalarda {rules.ttlDays} kunlik muddat e’lon qilingan — muddat o‘tishi amalga oshirilmagan.</li>
+                    ) : null}
+                    <li>Daraja avtomatik faqat kassa (POS) sotuvida yangilanadi; ilova buyurtmasi darajani o‘zgartirmaydi.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           )}
         </aside>
       </div>
