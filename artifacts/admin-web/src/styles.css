@@ -7949,7 +7949,11 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 
 /* ——— Day (Kunduzgi) & Night (Kechgi) Modes ——— */
 
-/* 1. KUNDUZGI REJIM (Light Mode) — Dashboard to'liq oq fon, kartochkalar esa to'q ko'k rangda */
+/* ==========================================================================
+   1. KUNDUZGI REJIM (LIGHT MODE) — Pure White Canvas with Rich Royal Blue Cards
+   ========================================================================== */
+
+/* Canvas & Global Surfaces */
 [data-theme="light"] body,
 [data-theme="light"] .shell,
 [data-theme="light"] .main-wrap,
@@ -7957,45 +7961,170 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   background: #F8FAFC !important;
   color: #0F172A !important;
 }
+
+/* Topbar Header */
 [data-theme="light"] .topbar {
   background: #FFFFFF !important;
   border-bottom: 1px solid #E2E8F0 !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
 }
-[data-theme="light"] .crumb-page { color: #0F172A !important; font-weight: 700 !important; }
-[data-theme="light"] .crumb-group { color: #64748B !important; }
-[data-theme="light"] .topbar-date,
+[data-theme="light"] .crumb-root,
+[data-theme="light"] .crumb-sep {
+  color: #64748B !important;
+  font-weight: 500 !important;
+}
+[data-theme="light"] .crumb-page {
+  color: #0F172A !important;
+  font-weight: 700 !important;
+}
+
+/* Topbar Interactive Controls */
 [data-theme="light"] .topbar-theme-toggle {
   background: #F1F5F9 !important;
-  border-color: #CBD5E1 !important;
+  border: 1px solid #CBD5E1 !important;
   color: #0F172A !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
 }
-[data-theme="light"] .topbar-date:hover,
 [data-theme="light"] .topbar-theme-toggle:hover {
   background: #E2E8F0 !important;
   border-color: #94A3B8 !important;
 }
-[data-theme="light"] .topbar-weekday { color: #64748B !important; }
-[data-theme="light"] .topbar-day { color: #0F172A !important; }
+[data-theme="light"] .topbar-theme-icon {
+  color: #D97706 !important;
+}
+[data-theme="light"] .topbar-date {
+  background: #F1F5F9 !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #0F172A !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+[data-theme="light"] .topbar-date:hover {
+  background: #E2E8F0 !important;
+  border-color: #94A3B8 !important;
+}
+[data-theme="light"] .topbar-cal-icon {
+  color: #2563EB !important;
+}
+[data-theme="light"] .topbar-weekday {
+  color: #475569 !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .topbar-day {
+  color: #0F172A !important;
+  font-weight: 700 !important;
+}
+
+/* Topbar Date Popover */
 [data-theme="light"] .topbar-date-popover {
   background: #FFFFFF !important;
   border: 1px solid #E2E8F0 !important;
   color: #0F172A !important;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12) !important;
 }
-[data-theme="light"] .topbar-pop-btn { color: #334155 !important; }
-[data-theme="light"] .topbar-pop-btn:hover { background: #F1F5F9 !important; color: #0F172A !important; }
-[data-theme="light"] .topbar-pop-input { background: #FFFFFF !important; color: #0F172A !important; border-color: #CBD5E1 !important; }
-[data-theme="light"] .dashboard-header .page-title { color: #0F172A !important; }
-[data-theme="light"] .dashboard-header .page-meta { color: #64748B !important; }
-[data-theme="light"] .dashboard > .page-header { border-bottom: 1px solid #E2E8F0 !important; }
-[data-theme="light"] .dash-period { background: #F1F5F9 !important; border: 1px solid #CBD5E1 !important; }
-[data-theme="light"] .dash-period-btn { color: #64748B !important; }
-[data-theme="light"] .dash-period-btn.is-active { background: #2563EB !important; color: #FFFFFF !important; }
-[data-theme="light"] .dash-ctrl--branch { background: #FFFFFF !important; border-color: #CBD5E1 !important; color: #0F172A !important; }
-[data-theme="light"] .dashboard-refresh { background: #FFFFFF !important; border-color: #CBD5E1 !important; color: #64748B !important; }
+[data-theme="light"] .topbar-pop-head {
+  color: #64748B !important;
+  font-weight: 700 !important;
+}
+[data-theme="light"] .topbar-pop-btn {
+  color: #334155 !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .topbar-pop-btn:hover {
+  background: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+[data-theme="light"] .topbar-pop-btn.is-active {
+  background: #EFF6FF !important;
+  color: #2563EB !important;
+  font-weight: 700 !important;
+}
+[data-theme="light"] .topbar-pop-hint {
+  color: #64748B !important;
+}
+[data-theme="light"] .topbar-pop-divider {
+  background: #E2E8F0 !important;
+}
+[data-theme="light"] .topbar-pop-label {
+  color: #475569 !important;
+  font-weight: 600 !important;
+}
+[data-theme="light"] .topbar-pop-input {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #0F172A !important;
+}
 
-/* Kartochkalar ko'k rangda (Rich Deep Navy Blue) */
+/* Dashboard Header & Toolbar */
+[data-theme="light"] .dashboard-header .page-title,
+[data-theme="light"] .page-title {
+  color: #0F172A !important;
+  font-weight: 800 !important;
+}
+[data-theme="light"] .dashboard-header .page-meta,
+[data-theme="light"] .page-meta {
+  color: #475569 !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .dash-meta-item {
+  color: #475569 !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .dash-meta-item::before {
+  background: #94A3B8 !important;
+}
+[data-theme="light"] .dashboard > .page-header {
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+/* Period Segmented Control */
+[data-theme="light"] .dash-period {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+}
+[data-theme="light"] .dash-period-btn {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+[data-theme="light"] .dash-period-btn:hover {
+  background: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+[data-theme="light"] .dash-period-btn.is-active {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.3) !important;
+}
+
+/* Branch Filter Dropdown & Refresh Button */
+[data-theme="light"] .dash-ctrl--branch {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #0F172A !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+}
+[data-theme="light"] .dash-ctrl--branch:focus {
+  border-color: #2563EB !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+[data-theme="light"] .dashboard-refresh {
+  background: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #475569 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+}
+[data-theme="light"] .dashboard-refresh:hover {
+  background: #F8FAFC !important;
+  border-color: #94A3B8 !important;
+  color: #0F172A !important;
+}
+
+/* ==========================================================================
+   CARDS IN LIGHT MODE — Deep Royal Blue Luxury (#0C1A30 / #0F2038)
+   ========================================================================== */
 [data-theme="light"] .dash-kpi,
 [data-theme="light"] .dash-hero,
 [data-theme="light"] .dash-sales,
@@ -8003,95 +8132,375 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 [data-theme="light"] .dash-network,
 [data-theme="light"] .dash-activity,
 [data-theme="light"] .act {
-  background: #0F2038 !important;
-  border: 1px solid rgba(59, 130, 246, 0.3) !important;
-  box-shadow: 0 6px 20px -2px rgba(15, 32, 56, 0.18) !important;
+  background: #0C1A30 !important;
+  border: 1px solid rgba(59, 130, 246, 0.35) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px -4px rgba(15, 26, 48, 0.22) !important;
   color: #FFFFFF !important;
 }
-[data-theme="light"] .dash-hero {
-  background: #0C1A30 !important;
-  border: 1px solid rgba(59, 130, 246, 0.5) !important;
-  box-shadow: 0 6px 24px -2px rgba(37, 99, 235, 0.25) !important;
+[data-theme="light"] .dash-kpi:hover,
+[data-theme="light"] .dash-hero:hover,
+[data-theme="light"] .dash-sales:hover,
+[data-theme="light"] .dash-orders:hover,
+[data-theme="light"] .dash-network:hover,
+[data-theme="light"] .dash-activity:hover,
+[data-theme="light"] .act:hover {
+  border-color: rgba(96, 165, 250, 0.55) !important;
+  box-shadow: 0 12px 28px -4px rgba(15, 26, 48, 0.32) !important;
+}
+
+/* Headings, Subheadings & Links Inside Cards */
+[data-theme="light"] .dash-title {
+  color: #FFFFFF !important;
+  font-weight: 750 !important;
+  letter-spacing: -0.01em !important;
+}
+[data-theme="light"] .dash-card-meta {
+  color: #BAE6FD !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .dash-link {
+  color: #38BDF8 !important;
+  font-weight: 650 !important;
+}
+[data-theme="light"] .dash-link:hover {
+  color: #BAE6FD !important;
+}
+
+/* KPI Card Specific Elements */
+[data-theme="light"] .dash-kpi-heading {
+  color: #FFFFFF !important;
+}
+[data-theme="light"] .dash-kpi-label {
+  color: #E0E7FF !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.02em !important;
 }
 [data-theme="light"] .dash-kpi-value,
-[data-theme="light"] .dash-hero-value,
-[data-theme="light"] .dash-sales .dash-title,
-[data-theme="light"] .dash-orders .dash-title,
-[data-theme="light"] .dash-network .dash-title,
-[data-theme="light"] .dash-activity .dash-title {
+[data-theme="light"] .dash-hero-value {
   color: #FFFFFF !important;
+  font-weight: 800 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
 }
-[data-theme="light"] .dash-kpi-label,
-[data-theme="light"] .dash-kpi-unit,
-[data-theme="light"] .dash-card-meta,
-[data-theme="light"] .dash-hero-period {
+[data-theme="light"] .dash-kpi-unit {
   color: #93C5FD !important;
+  font-weight: 650 !important;
+}
+[data-theme="light"] .dash-kpi-caption {
+  color: #CBD5E1 !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  line-height: 1.35 !important;
 }
 [data-theme="light"] .dash-kpi-detail {
-  border-top-color: rgba(59, 130, 246, 0.2) !important;
+  border-top: 1px solid rgba(147, 197, 253, 0.22) !important;
+  color: #BAE6FD !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .dash-hero-delta-row,
+[data-theme="light"] .dash-delta-note {
   color: #93C5FD !important;
 }
+[data-theme="light"] .dash-delta.is-idle,
+[data-theme="light"] .dash-delta.is-flat {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  color: #F8FAFC !important;
+}
+[data-theme="light"] .dash-kpi-icon-wrap {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #FFFFFF !important;
+}
+[data-theme="light"] .dash-hero .dash-kpi-icon-wrap {
+  background: rgba(16, 185, 129, 0.25) !important;
+  border: 1px solid rgba(52, 211, 153, 0.45) !important;
+  color: #34D399 !important;
+}
+[data-theme="light"] .dash-kpi--orders .dash-kpi-icon-wrap {
+  background: rgba(59, 130, 246, 0.25) !important;
+  border: 1px solid rgba(96, 165, 250, 0.45) !important;
+  color: #93C5FD !important;
+}
+[data-theme="light"] .dash-kpi--cash .dash-kpi-icon-wrap {
+  background: rgba(245, 158, 11, 0.25) !important;
+  border: 1px solid rgba(251, 191, 36, 0.45) !important;
+  color: #FCD34D !important;
+}
+[data-theme="light"] .dash-kpi--network .dash-kpi-icon-wrap {
+  background: rgba(139, 92, 246, 0.25) !important;
+  border: 1px solid rgba(167, 139, 250, 0.45) !important;
+  color: #C4B5FD !important;
+}
+[data-theme="light"] .dash-kpi-go {
+  color: #93C5FD !important;
+}
+[data-theme="light"] .dash-kpi:hover .dash-kpi-go {
+  color: #FFFFFF !important;
+}
+
+/* Savdo Dinamikasi (Sales Intelligence & Chart) */
 [data-theme="light"] .dash-sales-stats {
-  background: #0A1626 !important;
-  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+  background: #071220 !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  border-radius: 8px !important;
 }
 [data-theme="light"] .dash-sales-stats > div {
-  border-left-color: rgba(59, 130, 246, 0.2) !important;
+  border-left: 1px solid rgba(59, 130, 246, 0.25) !important;
 }
-[data-theme="light"] .dash-sales-stats dt { color: #93C5FD !important; }
-[data-theme="light"] .dash-sales-stats dd { color: #FFFFFF !important; }
-[data-theme="light"] .dash-sales-stats dd.dash-sales-note { color: #60A5FA !important; }
+[data-theme="light"] .dash-sales-stats dt {
+  color: #93C5FD !important;
+  font-weight: 700 !important;
+}
+[data-theme="light"] .dash-sales-stats dd {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="light"] .dash-sales-stats dd.dash-sales-note {
+  color: #BAE6FD !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .sales-chart-gridline {
+  stroke: rgba(255, 255, 255, 0.12) !important;
+}
+[data-theme="light"] .sales-chart-axis span {
+  color: #BAE6FD !important;
+  font-weight: 600 !important;
+  font-size: 11.5px !important;
+}
+[data-theme="light"] .sales-bar {
+  background: transparent !important;
+  border: none !important;
+}
+[data-theme="light"] .sales-bar:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-radius: 6px 6px 0 0 !important;
+}
 [data-theme="light"] .sales-bar-fill {
   background: #38BDF8 !important;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.45) !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.6) !important;
 }
-[data-theme="light"] .sales-chart-axis span { color: #93C5FD !important; }
-[data-theme="light"] .dash-legend li {
-  background: #0A1626 !important;
-  border-color: rgba(59, 130, 246, 0.18) !important;
+[data-theme="light"] .sales-bar:hover .sales-bar-fill {
+  background: #7DD3FC !important;
+  box-shadow: 0 0 20px rgba(125, 211, 252, 0.85) !important;
 }
-[data-theme="light"] .dash-legend-label { color: #BAE6FD !important; }
-[data-theme="light"] .dash-legend-value { color: #FFFFFF !important; }
-[data-theme="light"] .attn { border-top-color: rgba(59, 130, 246, 0.2) !important; }
-[data-theme="light"] .attn-row {
-  background: #0A1626 !important;
-  border-color: rgba(59, 130, 246, 0.2) !important;
-}
-[data-theme="light"] .attn-row-title { color: #FFFFFF !important; }
-[data-theme="light"] .attn-row-detail { color: #93C5FD !important; }
-[data-theme="light"] .attn-row-go {
-  background: rgba(59, 130, 246, 0.2) !important;
+[data-theme="light"] .sales-chart-empty {
   color: #93C5FD !important;
-  border-color: rgba(59, 130, 246, 0.35) !important;
+  font-weight: 550 !important;
+}
+
+/* Buyurtmalar Holati (Orders Status Breakdown) */
+[data-theme="light"] .dash-orders-status {
+  background: #071220 !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+  border-radius: 8px !important;
+}
+[data-theme="light"] .dash-legend li {
+  background: #071220 !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+  border-radius: 6px !important;
+}
+[data-theme="light"] .dash-legend-label {
+  color: #F8FAFC !important;
+  font-weight: 600 !important;
+}
+[data-theme="light"] .dash-legend-value {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="light"] .dash-legend-pct {
+  color: #93C5FD !important;
+  font-weight: 600 !important;
+}
+[data-theme="light"] .dash-orders-empty {
+  color: #93C5FD !important;
+  font-weight: 550 !important;
+}
+
+/* Holat / Attention Banner */
+[data-theme="light"] .attn {
+  border-top: 1px solid rgba(59, 130, 246, 0.25) !important;
+}
+[data-theme="light"] .attn-state {
+  background: rgba(6, 78, 59, 0.45) !important;
+  border: 1px solid rgba(52, 211, 153, 0.45) !important;
+  border-radius: 8px !important;
+  color: #A7F3D0 !important;
+}
+[data-theme="light"] .attn-state-mark {
+  background: #10B981 !important;
+  color: #FFFFFF !important;
+}
+[data-theme="light"] .attn-calm-note {
+  color: #ECFDF5 !important;
+  font-weight: 600 !important;
+}
+[data-theme="light"] .attn-row {
+  background: #071220 !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+  border-radius: 6px !important;
+}
+[data-theme="light"] .attn-row-title {
+  color: #FFFFFF !important;
+  font-weight: 650 !important;
+}
+[data-theme="light"] .attn-row-detail {
+  color: #93C5FD !important;
+}
+[data-theme="light"] .attn-row-go {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: #93C5FD !important;
+  border: 1px solid rgba(59, 130, 246, 0.45) !important;
+}
+[data-theme="light"] .attn-row-go:hover {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+}
+
+/* Filiallar Tarmog'i (Map & Stats Rail) */
+[data-theme="light"] .dash-network-total {
+  color: #93C5FD !important;
+}
+[data-theme="light"] .dash-network-n {
+  color: #FFFFFF !important;
+  font-weight: 750 !important;
+}
+[data-theme="light"] .dash-network-sep {
+  color: rgba(255, 255, 255, 0.4) !important;
 }
 [data-theme="light"] .dash-network-map {
-  background: #0A1626 !important;
-  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+  background: #071220 !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  border-radius: 8px !important;
 }
 [data-theme="light"] .network-band {
-  background: #0A1626 !important;
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2) !important;
+  background: #071220 !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
 }
-[data-theme="light"] .network-band-name { color: #FFFFFF !important; }
-[data-theme="light"] .network-band-k { color: #93C5FD !important; }
+[data-theme="light"] .network-band-k {
+  color: #93C5FD !important;
+  font-weight: 650 !important;
+}
+[data-theme="light"] .network-band-name {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="light"] .network-band-stats dt {
+  color: #93C5FD !important;
+  font-weight: 600 !important;
+}
+[data-theme="light"] .network-band-stats dd {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="light"] .network-band-stats .is-lead dd {
+  color: #38BDF8 !important;
+}
+[data-theme="light"] .network-band-note {
+  color: #BAE6FD !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .dash-net-k {
+  color: #93C5FD !important;
+  font-weight: 650 !important;
+}
+[data-theme="light"] .dash-regions li {
+  border-top: 1px solid rgba(59, 130, 246, 0.2) !important;
+}
+[data-theme="light"] .dash-region-btn {
+  color: #E2E8F0 !important;
+}
+[data-theme="light"] .dash-region-btn:hover {
+  background: rgba(59, 130, 246, 0.22) !important;
+}
+[data-theme="light"] .dash-region-name {
+  color: #F8FAFC !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .dash-region-n {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="light"] .dash-region-rank {
+  background: rgba(59, 130, 246, 0.28) !important;
+  color: #BAE6FD !important;
+  font-weight: 750 !important;
+}
+[data-theme="light"] .dash-regions li.is-rest .dash-region-name,
+[data-theme="light"] .dash-regions li.is-rest .dash-region-n {
+  color: #93C5FD !important;
+  font-weight: 600 !important;
+}
 [data-theme="light"] .network-region {
   fill: #132746 !important;
-  stroke: #0A1626 !important;
+  stroke: #071220 !important;
 }
 [data-theme="light"] .network-region.is-l1 { fill: #1D3D6F !important; }
 [data-theme="light"] .network-region.is-l2 { fill: #2563EB !important; }
 [data-theme="light"] .network-region.is-l3 { fill: #3B82F6 !important; }
 [data-theme="light"] .network-region.is-l4 { fill: #60A5FA !important; }
-[data-theme="light"] .dash-feed-item { border-top-color: rgba(59, 130, 246, 0.15) !important; }
+[data-theme="light"] .network-legend-dot { border-color: #071220 !important; }
+[data-theme="light"] .network-legend-note { color: #93C5FD !important; }
+
+/* So'nggi Faollik & Oxirgi Buyurtmalar */
+[data-theme="light"] .dash-count {
+  background: rgba(59, 130, 246, 0.28) !important;
+  color: #BAE6FD !important;
+}
+[data-theme="light"] .dash-feed-item {
+  border-top: 1px solid rgba(59, 130, 246, 0.2) !important;
+}
 [data-theme="light"] .dash-feed-node {
-  background: #0A1626 !important;
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: #38BDF8 !important;
+  border: 1px solid rgba(59, 130, 246, 0.4) !important;
+}
+[data-theme="light"] .dash-feed-title {
+  color: #FFFFFF !important;
+  font-weight: 650 !important;
+}
+[data-theme="light"] .dash-feed-detail {
+  color: #BAE6FD !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .dash-feed-kind {
+  color: #38BDF8 !important;
+  font-weight: 650 !important;
+}
+[data-theme="light"] .dash-feed-time {
   color: #93C5FD !important;
 }
-[data-theme="light"] .dash-feed-title { color: #FFFFFF !important; }
-[data-theme="light"] .dash-feed-detail { color: #93C5FD !important; }
-[data-theme="light"] .dash-feed-time { color: #FFFFFF !important; }
+[data-theme="light"] .act-row {
+  border-top: 1px solid rgba(59, 130, 246, 0.2) !important;
+}
+[data-theme="light"] .act-row:hover {
+  background: rgba(59, 130, 246, 0.2) !important;
+}
+[data-theme="light"] .act-code {
+  color: #FFFFFF !important;
+  font-weight: 750 !important;
+}
+[data-theme="light"] .act-where {
+  color: #BAE6FD !important;
+  font-weight: 550 !important;
+}
+[data-theme="light"] .act-time {
+  color: #93C5FD !important;
+}
+[data-theme="light"] .act-amount {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
 
-/* 2. KECHGI REJIM (Dark Mode) — Midnight Slate */
+
+/* ==========================================================================
+   2. KECHGI REJIM (DARK MODE) — Midnight Slate Luxury
+   ========================================================================== */
+
+/* Canvas & Global Surfaces */
 [data-theme="dark"] body,
 [data-theme="dark"] .shell,
 [data-theme="dark"] .main-wrap,
@@ -8099,19 +8508,165 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   background: #0B0F19 !important;
   color: #F8FAFC !important;
 }
+
+/* Topbar Header */
 [data-theme="dark"] .topbar {
   background: #0F172A !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
   box-shadow: none !important;
 }
-[data-theme="dark"] .topbar-date,
+[data-theme="dark"] .crumb-root,
+[data-theme="dark"] .crumb-sep {
+  color: #94A3B8 !important;
+  font-weight: 500 !important;
+}
+[data-theme="dark"] .crumb-page {
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+}
+
+/* Topbar Interactive Controls */
 [data-theme="dark"] .topbar-theme-toggle {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: #1E293B !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #F8FAFC !important;
+  font-weight: 600 !important;
+}
+[data-theme="dark"] .topbar-theme-toggle:hover {
+  background: #334155 !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+[data-theme="dark"] .topbar-theme-icon {
+  color: #F59E0B !important;
+}
+[data-theme="dark"] .topbar-date {
+  background: #1E293B !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
   color: #F8FAFC !important;
 }
-[data-theme="dark"] .topbar-weekday { color: #94A3B8 !important; }
-[data-theme="dark"] .topbar-day { color: #FFFFFF !important; }
+[data-theme="dark"] .topbar-date:hover {
+  background: #334155 !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+[data-theme="dark"] .topbar-cal-icon {
+  color: #818CF8 !important;
+}
+[data-theme="dark"] .topbar-weekday {
+  color: #94A3B8 !important;
+  font-weight: 500 !important;
+}
+[data-theme="dark"] .topbar-day {
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+}
+
+/* Topbar Date Popover */
+[data-theme="dark"] .topbar-date-popover {
+  background: #131C2E !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #F8FAFC !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6) !important;
+}
+[data-theme="dark"] .topbar-pop-head {
+  color: #94A3B8 !important;
+  font-weight: 700 !important;
+}
+[data-theme="dark"] .topbar-pop-btn {
+  color: #E2E8F0 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .topbar-pop-btn:hover {
+  background: #1E293B !important;
+  color: #FFFFFF !important;
+}
+[data-theme="dark"] .topbar-pop-btn.is-active {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+}
+[data-theme="dark"] .topbar-pop-hint {
+  color: #94A3B8 !important;
+}
+[data-theme="dark"] .topbar-pop-divider {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+[data-theme="dark"] .topbar-pop-label {
+  color: #94A3B8 !important;
+  font-weight: 600 !important;
+}
+[data-theme="dark"] .topbar-pop-input {
+  background: #0B0F19 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #FFFFFF !important;
+}
+
+/* Dashboard Header & Toolbar */
+[data-theme="dark"] .dashboard-header .page-title,
+[data-theme="dark"] .page-title {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="dark"] .dashboard-header .page-meta,
+[data-theme="dark"] .page-meta {
+  color: #94A3B8 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .dash-meta-item {
+  color: #94A3B8 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .dash-meta-item::before {
+  background: #64748B !important;
+}
+[data-theme="dark"] .dashboard > .page-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Period Segmented Control */
+[data-theme="dark"] .dash-period {
+  background: #131C2E !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+[data-theme="dark"] .dash-period-btn {
+  color: #94A3B8 !important;
+  font-weight: 600 !important;
+}
+[data-theme="dark"] .dash-period-btn:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #FFFFFF !important;
+}
+[data-theme="dark"] .dash-period-btn.is-active {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4) !important;
+}
+
+/* Branch Filter Dropdown & Refresh Button in Dark Mode */
+[data-theme="dark"] .dash-ctrl--branch {
+  background: #131C2E !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #F8FAFC !important;
+  font-weight: 600 !important;
+}
+[data-theme="dark"] .dash-ctrl--branch:focus {
+  border-color: #6366F1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+}
+[data-theme="dark"] .dashboard-refresh {
+  background: #131C2E !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #94A3B8 !important;
+}
+[data-theme="dark"] .dashboard-refresh:hover {
+  background: #1E293B !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: #FFFFFF !important;
+}
+
+/* ==========================================================================
+   CARDS IN DARK MODE — Deep Midnight Slate (#131C2E)
+   ========================================================================== */
 [data-theme="dark"] .dash-kpi,
 [data-theme="dark"] .dash-hero,
 [data-theme="dark"] .dash-sales,
@@ -8121,25 +8676,304 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 [data-theme="dark"] .act {
   background: #131C2E !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
   box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.5) !important;
   color: #F8FAFC !important;
 }
-[data-theme="dark"] .dash-hero {
-  background: #151F33 !important;
-  border: 1px solid rgba(99, 102, 241, 0.45) !important;
+[data-theme="dark"] .dash-kpi:hover,
+[data-theme="dark"] .dash-hero:hover,
+[data-theme="dark"] .dash-sales:hover,
+[data-theme="dark"] .dash-orders:hover,
+[data-theme="dark"] .dash-network:hover,
+[data-theme="dark"] .dash-activity:hover,
+[data-theme="dark"] .act:hover {
+  border-color: rgba(99, 102, 241, 0.45) !important;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.6) !important;
 }
+
+/* Headings, Subheadings & Links Inside Cards */
+[data-theme="dark"] .dash-title {
+  color: #FFFFFF !important;
+  font-weight: 750 !important;
+  letter-spacing: -0.01em !important;
+}
+[data-theme="dark"] .dash-card-meta {
+  color: #94A3B8 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .dash-link {
+  color: #818CF8 !important;
+  font-weight: 650 !important;
+}
+[data-theme="dark"] .dash-link:hover {
+  color: #A5B4FC !important;
+}
+
+/* KPI Card Specific Elements */
+[data-theme="dark"] .dash-kpi-heading {
+  color: #F8FAFC !important;
+}
+[data-theme="dark"] .dash-kpi-label {
+  color: #CBD5E1 !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.02em !important;
+}
+[data-theme="dark"] .dash-kpi-value,
+[data-theme="dark"] .dash-hero-value {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="dark"] .dash-kpi-unit {
+  color: #94A3B8 !important;
+  font-weight: 650 !important;
+}
+[data-theme="dark"] .dash-kpi-caption {
+  color: #94A3B8 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+}
+[data-theme="dark"] .dash-kpi-detail {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #94A3B8 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .dash-hero-delta-row,
+[data-theme="dark"] .dash-delta-note {
+  color: #94A3B8 !important;
+}
+[data-theme="dark"] .dash-delta.is-idle,
+[data-theme="dark"] .dash-delta.is-flat {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #CBD5E1 !important;
+}
+[data-theme="dark"] .dash-kpi-icon-wrap {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #818CF8 !important;
+}
+[data-theme="dark"] .dash-hero .dash-kpi-icon-wrap {
+  background: rgba(16, 185, 129, 0.16) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  color: #34D399 !important;
+}
+[data-theme="dark"] .dash-kpi--orders .dash-kpi-icon-wrap {
+  background: rgba(99, 102, 241, 0.16) !important;
+  border: 1px solid rgba(99, 102, 241, 0.28) !important;
+  color: #A5B4FC !important;
+}
+[data-theme="dark"] .dash-kpi--cash .dash-kpi-icon-wrap {
+  background: rgba(245, 158, 11, 0.16) !important;
+  border: 1px solid rgba(245, 158, 11, 0.28) !important;
+  color: #FBBF24 !important;
+}
+[data-theme="dark"] .dash-kpi--network .dash-kpi-icon-wrap {
+  background: rgba(139, 92, 246, 0.16) !important;
+  border: 1px solid rgba(139, 92, 246, 0.28) !important;
+  color: #C4B5FD !important;
+}
+[data-theme="dark"] .dash-kpi-go {
+  color: #64748B !important;
+}
+[data-theme="dark"] .dash-kpi:hover .dash-kpi-go {
+  color: #818CF8 !important;
+}
+
+/* Savdo Dinamikasi in Dark Mode */
 [data-theme="dark"] .dash-sales-stats {
   background: #0B0F19 !important;
-  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+}
+[data-theme="dark"] .dash-sales-stats > div {
+  border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+[data-theme="dark"] .dash-sales-stats dt {
+  color: #94A3B8 !important;
+  font-weight: 700 !important;
+}
+[data-theme="dark"] .dash-sales-stats dd {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="dark"] .dash-sales-stats dd.dash-sales-note {
+  color: #818CF8 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .sales-chart-gridline {
+  stroke: rgba(255, 255, 255, 0.06) !important;
+}
+[data-theme="dark"] .sales-chart-axis span {
+  color: #94A3B8 !important;
+  font-weight: 600 !important;
+  font-size: 11.5px !important;
+}
+[data-theme="dark"] .sales-bar {
+  background: transparent !important;
+  border: none !important;
+}
+[data-theme="dark"] .sales-bar:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-radius: 6px 6px 0 0 !important;
 }
 [data-theme="dark"] .sales-bar-fill {
   background: #6366F1 !important;
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.5) !important;
+}
+[data-theme="dark"] .sales-bar:hover .sales-bar-fill {
+  background: #818CF8 !important;
+  box-shadow: 0 0 20px rgba(129, 140, 248, 0.75) !important;
+}
+[data-theme="dark"] .sales-chart-empty {
+  color: #94A3B8 !important;
+  font-weight: 550 !important;
+}
+
+/* Buyurtmalar Holati in Dark Mode */
+[data-theme="dark"] .dash-orders-status {
+  background: #0B0F19 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+}
+[data-theme="dark"] .dash-legend li {
+  background: #0B0F19 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 6px !important;
+}
+[data-theme="dark"] .dash-legend-label {
+  color: #E2E8F0 !important;
+  font-weight: 600 !important;
+}
+[data-theme="dark"] .dash-legend-value {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="dark"] .dash-legend-pct {
+  color: #94A3B8 !important;
+  font-weight: 600 !important;
+}
+[data-theme="dark"] .dash-orders-empty {
+  color: #94A3B8 !important;
+  font-weight: 550 !important;
+}
+
+/* Holat in Dark Mode */
+[data-theme="dark"] .attn {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+[data-theme="dark"] .attn-state {
+  background: rgba(6, 78, 59, 0.35) !important;
+  border: 1px solid rgba(52, 211, 153, 0.35) !important;
+  border-radius: 8px !important;
+  color: #6EE7B7 !important;
+}
+[data-theme="dark"] .attn-state-mark {
+  background: #059669 !important;
+  color: #FFFFFF !important;
+}
+[data-theme="dark"] .attn-calm-note {
+  color: #E2E8F0 !important;
+  font-weight: 600 !important;
+}
+[data-theme="dark"] .attn-row {
+  background: #0B0F19 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 6px !important;
+}
+[data-theme="dark"] .attn-row-title {
+  color: #FFFFFF !important;
+  font-weight: 650 !important;
+}
+[data-theme="dark"] .attn-row-detail {
+  color: #94A3B8 !important;
+}
+[data-theme="dark"] .attn-row-go {
+  background: #1E293B !important;
+  color: #818CF8 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+[data-theme="dark"] .attn-row-go:hover {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+}
+
+/* Filiallar Tarmog'i in Dark Mode */
+[data-theme="dark"] .dash-network-total {
+  color: #94A3B8 !important;
+}
+[data-theme="dark"] .dash-network-n {
+  color: #FFFFFF !important;
+  font-weight: 750 !important;
+}
+[data-theme="dark"] .dash-network-sep {
+  color: #64748B !important;
 }
 [data-theme="dark"] .dash-network-map {
   background: #0B0F19 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
 }
 [data-theme="dark"] .network-band {
   background: #0B0F19 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+[data-theme="dark"] .network-band-k {
+  color: #94A3B8 !important;
+  font-weight: 650 !important;
+}
+[data-theme="dark"] .network-band-name {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="dark"] .network-band-stats dt {
+  color: #94A3B8 !important;
+  font-weight: 600 !important;
+}
+[data-theme="dark"] .network-band-stats dd {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="dark"] .network-band-stats .is-lead dd {
+  color: #818CF8 !important;
+}
+[data-theme="dark"] .network-band-note {
+  color: #94A3B8 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .dash-net-k {
+  color: #94A3B8 !important;
+  font-weight: 650 !important;
+}
+[data-theme="dark"] .dash-regions li {
+  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+[data-theme="dark"] .dash-region-btn {
+  color: #CBD5E1 !important;
+}
+[data-theme="dark"] .dash-region-btn:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+[data-theme="dark"] .dash-region-name {
+  color: #E2E8F0 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .dash-region-n {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+[data-theme="dark"] .dash-region-rank {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #94A3B8 !important;
+  font-weight: 750 !important;
+}
+[data-theme="dark"] .dash-regions li.is-rest .dash-region-name,
+[data-theme="dark"] .dash-regions li.is-rest .dash-region-n {
+  color: #94A3B8 !important;
+  font-weight: 600 !important;
 }
 [data-theme="dark"] .network-region {
   fill: #182235 !important;
@@ -8149,97 +8983,55 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 [data-theme="dark"] .network-region.is-l2 { fill: #273D63 !important; }
 [data-theme="dark"] .network-region.is-l3 { fill: #3B5998 !important; }
 [data-theme="dark"] .network-region.is-l4 { fill: #4F46E5 !important; }
+[data-theme="dark"] .network-legend-dot { border-color: #0B0F19 !important; }
+[data-theme="dark"] .network-legend-note { color: #94A3B8 !important; }
 
-
-/* Shared Card and Chart Polish */
-[data-theme="light"] .sales-bar,
-[data-theme="dark"] .sales-bar {
-  background: transparent !important;
-  border: none !important;
+/* So'nggi Faollik & Oxirgi Buyurtmalar in Dark Mode */
+[data-theme="dark"] .dash-count {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #94A3B8 !important;
 }
-[data-theme="light"] .sales-bar:hover,
-[data-theme="dark"] .sales-bar:hover {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-radius: 6px 6px 0 0 !important;
+[data-theme="dark"] .dash-feed-item {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
-
-/* Light mode text contrast fixes */
-[data-theme="light"] .dash-network-total { color: #93C5FD !important; }
-[data-theme="light"] .dash-network-n { color: #FFFFFF !important; }
-[data-theme="light"] .dash-network-sep { color: rgba(255, 255, 255, 0.4) !important; }
-[data-theme="light"] .act-code { color: #FFFFFF !important; font-weight: 700 !important; }
-[data-theme="light"] .act-where { color: #93C5FD !important; }
-[data-theme="light"] .act-time { color: #BAE6FD !important; }
-[data-theme="light"] .act-amount { color: #FFFFFF !important; font-weight: 750 !important; }
-[data-theme="light"] .act-row:hover { background: rgba(59, 130, 246, 0.15) !important; }
-
-/* Dark mode text contrast fixes */
-[data-theme="dark"] .dash-kpi-value,
-[data-theme="dark"] .dash-hero-value { color: #FFFFFF !important; }
-[data-theme="dark"] .dash-kpi-label,
-[data-theme="dark"] .dash-kpi-unit,
-[data-theme="dark"] .dash-card-meta { color: #94A3B8 !important; }
-[data-theme="dark"] .dash-legend li {
-  background: #0B0F19 !important;
-  border-color: rgba(255, 255, 255, 0.06) !important;
-}
-[data-theme="dark"] .dash-legend-label { color: #CBD5E1 !important; }
-[data-theme="dark"] .dash-legend-value { color: #FFFFFF !important; }
-[data-theme="dark"] .dash-legend-pct { color: #94A3B8 !important; }
-[data-theme="dark"] .attn-row {
-  background: #0B0F19 !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-[data-theme="dark"] .attn-row-title { color: #FFFFFF !important; }
-[data-theme="dark"] .attn-row-detail { color: #94A3B8 !important; }
-[data-theme="dark"] .attn-row-go {
-  background: #1E293B !important;
+[data-theme="dark"] .dash-feed-node {
+  background: rgba(255, 255, 255, 0.08) !important;
   color: #818CF8 !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
-[data-theme="dark"] .dash-network-total { color: #94A3B8 !important; }
-[data-theme="dark"] .dash-network-n { color: #FFFFFF !important; }
-[data-theme="dark"] .dash-network-sep { color: #64748B !important; }
-[data-theme="dark"] .act-code { color: #FFFFFF !important; font-weight: 700 !important; }
-[data-theme="dark"] .act-where { color: #94A3B8 !important; }
-[data-theme="dark"] .act-time { color: #64748B !important; }
-[data-theme="dark"] .act-amount { color: #FFFFFF !important; font-weight: 750 !important; }
-[data-theme="dark"] .act-row:hover { background: rgba(255, 255, 255, 0.04) !important; }
-
-
-/* Dark mode comprehensive typography & contrast polish */
-[data-theme="dark"] .crumb-root,
-[data-theme="dark"] .crumb-sep { color: #94A3B8 !important; }
-[data-theme="dark"] .crumb-page { color: #F8FAFC !important; font-weight: 700 !important; }
-
-[data-theme="dark"] .dashboard-header .page-title,
-[data-theme="dark"] .page-title,
-[data-theme="dark"] .dash-title { color: #FFFFFF !important; }
-
-[data-theme="dark"] .dashboard-header .page-meta,
-[data-theme="dark"] .page-meta,
-[data-theme="dark"] .page-eyebrow,
-[data-theme="dark"] .dash-sub,
-[data-theme="dark"] .dash-period-btn { color: #94A3B8 !important; }
-[data-theme="dark"] .dash-period { background: #131C2E !important; border-color: rgba(255, 255, 255, 0.12) !important; }
-[data-theme="dark"] .dash-period-btn.is-active { background: #2563EB !important; color: #FFFFFF !important; }
-
-[data-theme="dark"] .dash-sales-stats dt { color: #94A3B8 !important; }
-[data-theme="dark"] .dash-sales-stats dd { color: #FFFFFF !important; }
-[data-theme="dark"] .dash-sales-stats dd.dash-sales-note { color: #64748B !important; }
-[data-theme="dark"] .sales-chart-axis { color: #64748B !important; }
-
-[data-theme="dark"] .dash-feed-title { color: #FFFFFF !important; font-weight: 600 !important; }
-[data-theme="dark"] .dash-feed-kind { color: #818CF8 !important; }
-[data-theme="dark"] .dash-feed-detail { color: #94A3B8 !important; }
-[data-theme="dark"] .dash-feed-time { color: #64748B !important; }
-
-[data-theme="dark"] .network-band-k { color: #94A3B8 !important; }
-[data-theme="dark"] .network-band-name { color: #FFFFFF !important; }
-[data-theme="dark"] .network-band-stats dt { color: #94A3B8 !important; }
-[data-theme="dark"] .network-band-stats dd { color: #FFFFFF !important; }
-[data-theme="dark"] .network-band-stats .is-lead dd { color: #60A5FA !important; }
-[data-theme="dark"] .dash-net-k { color: #94A3B8 !important; }
-[data-theme="dark"] .dash-region-name { color: #CBD5E1 !important; }
-[data-theme="dark"] .dash-region-n { color: #94A3B8 !important; }
-[data-theme="dark"] .dash-region-btn:hover { background: rgba(255, 255, 255, 0.06) !important; }
+[data-theme="dark"] .dash-feed-title {
+  color: #FFFFFF !important;
+  font-weight: 650 !important;
+}
+[data-theme="dark"] .dash-feed-detail {
+  color: #94A3B8 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .dash-feed-kind {
+  color: #818CF8 !important;
+  font-weight: 650 !important;
+}
+[data-theme="dark"] .dash-feed-time {
+  color: #64748B !important;
+}
+[data-theme="dark"] .act-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+[data-theme="dark"] .act-row:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+[data-theme="dark"] .act-code {
+  color: #FFFFFF !important;
+  font-weight: 750 !important;
+}
+[data-theme="dark"] .act-where {
+  color: #94A3B8 !important;
+  font-weight: 550 !important;
+}
+[data-theme="dark"] .act-time {
+  color: #64748B !important;
+}
+[data-theme="dark"] .act-amount {
+  color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
