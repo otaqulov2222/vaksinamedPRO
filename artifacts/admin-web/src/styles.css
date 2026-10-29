@@ -474,7 +474,7 @@ h2 { margin: 0 0 8px; font-size: 14px; }
   transform: translateY(-50%);
   transition: height var(--vm-dur) var(--vm-ease);
 }
-.side-nav .nav-item.active::before { height: 16px; background: var(--vm-side-gold); }
+.side-nav .nav-item.active::before { height: 16px; }
 .side-nav .nav-item.active .nav-icon { opacity: 1; color: var(--vm-side-gold); }
 .side-nav .nav-item:focus-visible {
   outline: none;
