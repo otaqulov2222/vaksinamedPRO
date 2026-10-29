@@ -8318,9 +8318,23 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   font-weight: 550 !important;
 }
 
-/* Holat / Attention Banner */
+/* Holat / Attention Banner & Calm Note (CRITICAL FIX FOR INVISIBLE TEXT) */
 [data-theme="light"] .attn {
   border-top: 1px solid rgba(59, 130, 246, 0.25) !important;
+}
+[data-theme="light"] .attn-calm-note {
+  background: rgba(16, 185, 129, 0.18) !important;
+  border: 1px solid rgba(52, 211, 153, 0.4) !important;
+  border-radius: 8px !important;
+  color: #A7F3D0 !important;
+  font-weight: 600 !important;
+  font-size: 12.5px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+[data-theme="light"] .attn-calm-mark {
+  color: #34D399 !important;
 }
 [data-theme="light"] .attn-state {
   background: rgba(6, 78, 59, 0.45) !important;
@@ -8331,10 +8345,6 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 [data-theme="light"] .attn-state-mark {
   background: #10B981 !important;
   color: #FFFFFF !important;
-}
-[data-theme="light"] .attn-calm-note {
-  color: #ECFDF5 !important;
-  font-weight: 600 !important;
 }
 [data-theme="light"] .attn-row {
   background: #071220 !important;
@@ -8445,7 +8455,21 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 [data-theme="light"] .network-legend-dot { border-color: #071220 !important; }
 [data-theme="light"] .network-legend-note { color: #93C5FD !important; }
 
-/* So'nggi Faollik & Oxirgi Buyurtmalar */
+/* So'nggi Faollik & Oxirgi Buyurtmalar (CRITICAL FIX FOR INVISIBLE EMPTY TEXT) */
+[data-theme="light"] .dash-empty-icon {
+  background: rgba(59, 130, 246, 0.25) !important;
+  border: 1px solid rgba(96, 165, 250, 0.4) !important;
+  color: #38BDF8 !important;
+}
+[data-theme="light"] .dash-empty-copy strong {
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  font-size: 13.5px !important;
+}
+[data-theme="light"] .dash-empty-copy span {
+  color: #BAE6FD !important;
+  font-weight: 500 !important;
+}
 [data-theme="light"] .dash-count {
   background: rgba(59, 130, 246, 0.28) !important;
   color: #BAE6FD !important;
@@ -8859,9 +8883,23 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   font-weight: 550 !important;
 }
 
-/* Holat in Dark Mode */
+/* Holat in Dark Mode (CRITICAL FIX FOR INVISIBLE TEXT) */
 [data-theme="dark"] .attn {
   border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+[data-theme="dark"] .attn-calm-note {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(52, 211, 153, 0.25) !important;
+  border-radius: 8px !important;
+  color: #6EE7B7 !important;
+  font-weight: 600 !important;
+  font-size: 12.5px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+[data-theme="dark"] .attn-calm-mark {
+  color: #10B981 !important;
 }
 [data-theme="dark"] .attn-state {
   background: rgba(6, 78, 59, 0.35) !important;
@@ -8872,10 +8910,6 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 [data-theme="dark"] .attn-state-mark {
   background: #059669 !important;
   color: #FFFFFF !important;
-}
-[data-theme="dark"] .attn-calm-note {
-  color: #E2E8F0 !important;
-  font-weight: 600 !important;
 }
 [data-theme="dark"] .attn-row {
   background: #0B0F19 !important;
@@ -8986,7 +9020,21 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 [data-theme="dark"] .network-legend-dot { border-color: #0B0F19 !important; }
 [data-theme="dark"] .network-legend-note { color: #94A3B8 !important; }
 
-/* So'nggi Faollik & Oxirgi Buyurtmalar in Dark Mode */
+/* So'nggi Faollik & Oxirgi Buyurtmalar in Dark Mode (CRITICAL FIX FOR INVISIBLE EMPTY TEXT) */
+[data-theme="dark"] .dash-empty-icon {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #818CF8 !important;
+}
+[data-theme="dark"] .dash-empty-copy strong {
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  font-size: 13.5px !important;
+}
+[data-theme="dark"] .dash-empty-copy span {
+  color: #94A3B8 !important;
+  font-weight: 500 !important;
+}
 [data-theme="dark"] .dash-count {
   background: rgba(255, 255, 255, 0.08) !important;
   color: #94A3B8 !important;
