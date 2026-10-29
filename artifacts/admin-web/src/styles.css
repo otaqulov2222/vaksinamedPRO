@@ -11749,3 +11749,50 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 [data-theme="dark"] .st-rules-list {
   color: #C4B5FD !important;
 }
+
+/* --------------------------------------------------------------------------
+   Executive Cleanliness: Suppress Redundant Subtitles, Verbose Contracts & Technical Disclaimers
+   -------------------------------------------------------------------------- */
+.page-desc,
+.page-header:not(.dashboard-header) .page-meta,
+.pr-contract,
+.pr-readonly,
+.pr-surface-note,
+.pr-note,
+.cb-readonly,
+.cb-caveats,
+.cb-section-meta,
+.cat-readonly,
+.cu-readonly,
+.rt-readonly,
+.rt-note,
+.st-readonly,
+.st-source,
+.rp-meta,
+.au-meta,
+.ac-meta,
+.rp-chip,
+.au-chip,
+.ac-chip,
+.au-controls-note,
+.rp-controls-note,
+.rp-note,
+.ac-note,
+.inv-scope-note,
+.inv-fom,
+.inv-controls-note,
+.inv-note,
+.br-scope-note,
+.del-scope-note,
+.fom-scope-note,
+.fom-server-note,
+.orders-summary-hint,
+.payments-summary-hint,
+.payments-controls-note,
+.payments-health-capped,
+.pos-field-hint,
+.pos-pay-hint,
+.filter-bar-meta {
+  display: none !important;
+}
+
