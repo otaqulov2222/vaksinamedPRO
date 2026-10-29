@@ -278,6 +278,7 @@ export function CashbackPage(props: { token: string }) {
           items={[
             {
               hero: true,
+              tone: "ok",
               label: "Jami cashback majburiyati",
               value: liability && "value" in liability ? money(liability.value) : "—",
               hint:
@@ -286,11 +287,13 @@ export function CashbackPage(props: { token: string }) {
                   : liability?.note || "Yuklanmoqda…",
             },
             {
+              tone: "info",
               label: "Maks. ishlatish",
               value: rules?.maxSpendPercent != null ? `${rules.maxSpendPercent}%` : "—",
               hint: rules ? "Xarid summasidan · server sozlamasi" : rulesFailed ? "Qoidalar yuklanmadi" : "Yuklanmoqda…",
             },
             {
+              tone: "warn",
               label: "Minimal xarid",
               value: rules?.minPurchase != null ? money(Number(rules.minPurchase)) : "—",
               hint: rules ? "Cashback hisoblash uchun" : rulesFailed ? "Qoidalar yuklanmadi" : "Yuklanmoqda…",
@@ -408,11 +411,16 @@ export function CashbackPage(props: { token: string }) {
                           onKeyDown={rowKeys(open)}
                         >
                           <td className="cb-cell-main">
-                            <span className="cb-name">{customerName(item)}</span>
-                            <span className="cb-phone">{item.phoneMasked || "—"}</span>
+                            <div className="cb-customer-row">
+                              <span className="cb-avatar" aria-hidden="true">{customerName(item).charAt(0).toUpperCase()}</span>
+                              <div className="cb-customer-meta">
+                                <span className="cb-name">{customerName(item)}</span>
+                                <span className="cb-phone">{item.phoneMasked || "—"}</span>
+                              </div>
+                            </div>
                           </td>
                           <td className="cb-cell-tier">
-                            {item.tier ? <span className="cb-tier">{item.tier}</span> : <span className="cb-muted">—</span>}
+                            {item.tier ? <span className={`cb-tier cb-tier--${String(item.tier).toLowerCase()}`}>{item.tier}</span> : <span className="cb-muted">—</span>}
                           </td>
                           <td className="num cb-cell-balance">{money(Number(item.cashbackBalance || 0))}</td>
                         </tr>
@@ -459,7 +467,7 @@ export function CashbackPage(props: { token: string }) {
                 <tbody>
                   {tiers.map((t) => (
                     <tr key={String(t.tier)}>
-                      <th scope="row"><span className="cb-tier">{String(t.tier)}</span></th>
+                      <th scope="row"><span className={`cb-tier cb-tier--${String(t.tier).toLowerCase()}`}>{String(t.tier)}</span></th>
                       <td className="num">{String(t.rate ?? "—")}</td>
                       <td className="num">{t.fromTotal != null ? money(Number(t.fromTotal)) : "—"}</td>
                     </tr>
