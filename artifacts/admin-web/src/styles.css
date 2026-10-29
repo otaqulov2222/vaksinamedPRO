@@ -8353,7 +8353,12 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   border-radius: 8px !important;
 }
 [data-theme="light"] .dash-sales-stats > div {
+  padding: 0 16px !important;
   border-left: 1px solid #E2E8F0 !important;
+}
+[data-theme="light"] .dash-sales-stats > div:first-child {
+  padding-left: 0 !important;
+  border-left: none !important;
 }
 [data-theme="light"] .dash-sales-stats dt {
   color: #64748B !important;
@@ -9068,7 +9073,12 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   border-radius: 8px !important;
 }
 [data-theme="dark"] .dash-sales-stats > div {
+  padding: 0 16px !important;
   border-left: 1px solid rgba(139, 92, 246, 0.2) !important;
+}
+[data-theme="dark"] .dash-sales-stats > div:first-child {
+  padding-left: 0 !important;
+  border-left: none !important;
 }
 [data-theme="dark"] .dash-sales-stats dt {
   color: #C4B5FD !important;
