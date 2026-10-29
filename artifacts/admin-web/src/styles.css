@@ -11247,6 +11247,29 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   color: #E2E8F0 !important;
   font-size: 12px !important;
 }
+[data-theme="dark"] .st-section {
+  background: #180D2C !important;
+  border: 1px solid rgba(139, 92, 246, 0.22) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+[data-theme="dark"] .st-section-head {
+  background: rgba(19, 9, 36, 0.8) !important;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2) !important;
+}
+[data-theme="dark"] .st-section-title {
+  color: #FFFFFF !important;
+  font-size: 15px !important;
+  font-weight: 750 !important;
+}
+[data-theme="dark"] .st-section-lead {
+  color: #DDD6FE !important;
+  font-size: 12.5px !important;
+}
+[data-theme="dark"] .st-source {
+  background: rgba(139, 92, 246, 0.15) !important;
+  border: 1px solid rgba(139, 92, 246, 0.25) !important;
+  color: #DDD6FE !important;
+}
 [data-theme="dark"] .st-row-action .st-link {
   background: rgba(139, 92, 246, 0.14) !important;
   border: 1px solid rgba(139, 92, 246, 0.28) !important;
@@ -11257,6 +11280,7 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   border-color: #8B5CF6 !important;
   color: #FFFFFF !important;
 }
+
 
 /* Dark Mode Refinements — Global Filter Labels & Specific Detail Elements */
 [data-theme="dark"] .filter-label {
