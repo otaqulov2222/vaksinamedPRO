@@ -87,15 +87,16 @@ export default function App() {
   const today = useMemo(() => new Date(), []);
 
   useEffect(() => {
+    if (!datePickerOpen) {
+      return undefined;
+    }
     function handleClickOutside(e: MouseEvent) {
       if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
         setDatePickerOpen(false);
       }
     }
-    if (datePickerOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [datePickerOpen]);
 
   const { topbarWeekday, topbarDay } = useMemo(() => {
