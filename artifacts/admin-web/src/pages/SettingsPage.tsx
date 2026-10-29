@@ -1,5 +1,19 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowRight, RefreshCw } from "lucide-react";
+import {
+  ArrowRight,
+  RefreshCw,
+  Coins,
+  Store,
+  CreditCard,
+  Truck,
+  Cpu,
+  Database,
+  Clock,
+  ShieldCheck,
+  ShoppingBag,
+  Sliders,
+  Layers,
+} from "lucide-react";
 import { request, money, type AdminUser } from "../api";
 import { AdminPageHeader, ErrorState, LoadingBlock, StatusBadge } from "../ui";
 import { PAGE_DESCRIPTIONS } from "../nav";
@@ -16,6 +30,7 @@ type Tone = "ok" | "warn" | "danger" | "neutral" | "info";
 type LoadError = { kind: "session" | "forbidden" | "notfound" | "network" | "failed"; message: string };
 type Source<T> = { data: T | null; error: LoadError | null };
 type SourceKey = "rules" | "branches" | "delivery" | "fom" | "health";
+type SettingsCategory = "all" | "cashback" | "branches" | "delivery" | "integrations";
 
 type Rules = {
   maxSpendPercent?: number;
@@ -61,6 +76,14 @@ const NOT_EXPOSED = [
   "Payme / Click rejimi (sandbox yoki production)",
   "Sessiya muddati, OTP va so‘rov limitlari",
   "Buyurtma bron muddati",
+];
+
+const CATEGORY_TABS: Array<{ id: SettingsCategory; label: string; icon: typeof Sliders }> = [
+  { id: "all", label: "Barchasi", icon: Sliders },
+  { id: "cashback", label: "Cashback & Qoidalar", icon: Coins },
+  { id: "branches", label: "Filiallar & To‘lovlar", icon: Store },
+  { id: "delivery", label: "Yetkazib berish", icon: Truck },
+  { id: "integrations", label: "FOM & Tizim", icon: Cpu },
 ];
 
 const TIME_FMT = new Intl.DateTimeFormat("en-GB", {
@@ -117,6 +140,7 @@ export function SettingsPage(props: {
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+  const [activeCat, setActiveCat] = useState<SettingsCategory>("all");
   const loadSeq = useRef(0);
 
   async function load() {
@@ -184,6 +208,8 @@ export function SettingsPage(props: {
   const role = String(props.user?.role || "");
   const permissionCount = Array.isArray(props.permissions) ? props.permissions.length : null;
 
+  const showSection = (cat: SettingsCategory) => activeCat === "all" || activeCat === cat;
+
   return (
     <div className="settings-page st-page page-module">
       <AdminPageHeader
@@ -209,6 +235,26 @@ export function SettingsPage(props: {
         }
       />
 
+      <div className="st-categories" role="tablist" aria-label="Sozlama toifalari">
+        {CATEGORY_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isSelected = activeCat === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              className={`st-cat-btn${isSelected ? " is-active" : ""}`}
+              onClick={() => setActiveCat(tab.id)}
+            >
+              <Icon size={14} strokeWidth={isSelected ? 2.2 : 1.8} aria-hidden="true" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <p className="st-intro">
         Alohida sozlamalar API’si yo‘q: har bir qiymat o‘z server manbasidan o‘qiladi va bu yerdan o‘zgartirilmaydi.
         {checkedAt ? <span className="st-intro-time"> Oxirgi o‘qish: {formatTime(checkedAt)} (Asia/Tashkent).</span> : null}
@@ -223,153 +269,191 @@ export function SettingsPage(props: {
         <LoadingBlock rows={4} label="Sozlamalar o‘qilmoqda…" />
       ) : (
         <div className={`st-sections${loading ? " is-refreshing" : ""}`}>
-          <Section
-            id="st-cashback"
-            title="Cashback / Loyalty"
-            lead="Cashback hisoblash qoidalari. Mijozlar balansi va ledger bu yerda emas — ular Cashback / Loyalty bo‘limida."
-            source="GET /api/cashback/rules"
-            error={rules.error}
-            onRetry={() => void load()}
-            footer={openLink("cashback", "Balanslar va ledger — Cashback / Loyalty")}
-          >
-            {rules.data ? <CashbackRows rules={rules.data} /> : null}
-          </Section>
+          {showSection("cashback") ? (
+            <Section
+              id="st-cashback"
+              icon={<Coins size={18} aria-hidden="true" />}
+              title="Cashback / Loyalty"
+              lead="Cashback hisoblash qoidalari. Mijozlar balansi va ledger bu yerda emas — ular Cashback / Loyalty bo‘limida."
+              source="GET /api/cashback/rules"
+              error={rules.error}
+              onRetry={() => void load()}
+              footer={openLink("cashback", "Balanslar va ledger — Cashback / Loyalty")}
+            >
+              {rules.data ? <CashbackRows rules={rules.data} openLink={openLink} /> : null}
+            </Section>
+          ) : null}
 
-          <Section
-            id="st-branches"
-            title="Filiallar va to‘lov kabinetlari"
-            lead="Filial yozuvlaridagi holat va Payme / Click kabineti sozlanganmi. Kalit qiymatlari hech qachon ko‘rsatilmaydi."
-            source="GET /api/admin/branches"
-            error={branches.error}
-            onRetry={() => void load()}
-            footer={openLink("branches", "Filial ma'lumotlari va kabinetlar — Filiallar bo‘limida boshqariladi")}
-          >
-            {branches.data ? <BranchRows rows={branches.data} /> : null}
-          </Section>
+          {showSection("branches") ? (
+            <Section
+              id="st-branches"
+              icon={<Store size={18} aria-hidden="true" />}
+              title="Filiallar va to‘lov kabinetlari"
+              lead="Filial yozuvlaridagi holat va Payme / Click kabineti sozlanganmi. Kalit qiymatlari hech qachon ko‘rsatilmaydi."
+              source="GET /api/admin/branches"
+              error={branches.error}
+              onRetry={() => void load()}
+              footer={openLink("branches", "Filial ma'lumotlari va kabinetlar — Filiallar bo‘limida boshqariladi")}
+            >
+              {branches.data ? <BranchRows rows={branches.data} openLink={openLink} /> : null}
+            </Section>
+          ) : null}
 
-          <Section
-            id="st-delivery"
-            title="Yetkazib berish"
-            lead="Yetkazib berish haqi va tashqi provayder holati."
-            source="GET /api/cashback/rules · GET /api/admin/deliveries"
-            error={delivery.error && rules.error ? delivery.error : null}
-            onRetry={() => void load()}
-            footer={openLink("delivery", "Yetkazishlar — Yetkazib berish bo‘limi")}
-          >
-            <SettingRow
-              title="Yetkazib berish haqi"
-              desc="Yetkazib berish buyurtmasiga qo‘shiladi. Cashback bu summadan hisoblanmaydi."
-              source="Server kodi · o‘zgarmas qiymat"
-              value={finite(rules.data?.deliveryFee) != null ? money(Number(rules.data?.deliveryFee)) : null}
-              missing={rules.error ? rules.error.message : undefined}
-            />
-            <SettingRow
-              title="Tashqi yetkazib berish provayderi"
-              desc={
-                delivery.data?.externalProvider === "CONTRACT_PENDING"
-                  ? "Hali ulanmagan — tashqi provider contract mavjud emas. Yetkazishlar ichki kuryer orqali yuritiladi."
-                  : "Server qaytargan provayder holati."
-              }
-              source="Yetkazib berish API · externalProvider"
-              value={
-                delivery.data?.externalProvider === "CONTRACT_PENDING"
-                  ? "Hali ulanmagan"
-                  : delivery.data?.externalProvider || null
-              }
-              missing={delivery.error ? delivery.error.message : undefined}
-            />
-          </Section>
-
-          <Section
-            id="st-fom"
-            title="FOM integratsiyasi"
-            lead="Dorixona kassasi (FOM) bilan ko‘prik holati."
-            source="GET /api/integrations/fom/status"
-            error={fom.error}
-            onRetry={() => void load()}
-            footer={openLink("fom", "Batafsil — FOM bo‘limi")}
-          >
-            {fom.data ? (
-              <>
-                <SettingRow
-                  title="Integratsiya holati"
-                  desc="Tashqi FOM kassa shartnomasi holati."
-                  source="FOM holati API"
-                  value={fom.data.status ? FOM_STATUS_LABELS[fom.data.status] || fom.data.status : null}
-                  status={fom.data.ready === false ? { tone: "warn", label: "Production uchun tayyor emas" } : undefined}
-                />
-                <SettingRow
-                  title="FOM inventar yozuvi"
-                  desc="FOM ombor qoldig‘ini tizimga yozadimi."
-                  source="FOM holati API"
-                  value={fom.data.inventoryWriter === "OFF" ? "O‘chirilgan" : fom.data.inventoryWriter || null}
-                />
-              </>
-            ) : null}
-          </Section>
-
-          <Section
-            id="st-access"
-            title="Kirish va ruxsatlar"
-            lead="Joriy sessiya serverdan olingan rol va ruxsatlar bilan ishlaydi. Alohida sozlamalar ruxsati yo‘q."
-            source="GET /api/admin/me"
-            footer={openLink("admins", "Rol va ruxsatlar — Adminlar bo‘limi")}
-          >
-            <SettingRow
-              title="Joriy rol"
-              desc="Kirish paytida server tasdiqlagan rol."
-              source="Admin sessiyasi"
-              value={role ? ROLE_LABELS[role] || role : null}
-            />
-            <SettingRow
-              title="Server ruxsatlari"
-              desc="Har bir bo‘lim va amal serverda shu ruxsatlar bilan tekshiriladi."
-              source="Admin sessiyasi"
-              value={permissionCount != null ? `${permissionCount} ta` : null}
-            />
-          </Section>
-
-          <Section
-            id="st-system"
-            title="Tizim holati"
-            lead="Server tekshiruvi natijasi — faqat API qaytargan javob."
-            source="GET /api/healthz"
-            error={health.error}
-            onRetry={() => void load()}
-          >
-            {health.data ? (
+          {showSection("delivery") ? (
+            <Section
+              id="st-delivery"
+              icon={<Truck size={18} aria-hidden="true" />}
+              title="Yetkazib berish"
+              lead="Yetkazib berish haqi va tashqi provayder holati."
+              source="GET /api/cashback/rules · GET /api/admin/deliveries"
+              error={delivery.error && rules.error ? delivery.error : null}
+              onRetry={() => void load()}
+              footer={openLink("delivery", "Yetkazishlar — Yetkazib berish bo‘limi")}
+            >
               <SettingRow
-                title="Ma'lumotlar bazasi"
-                desc={
-                  health.data.status === "not_ready"
-                    ? "Server tekshiruvi 503 qaytardi — ma'lumotlar bazasi tayyor emas."
-                    : `Tekshirilgan vaqt: ${formatTime(health.data.time)} (Asia/Tashkent).`
-                }
-                source="Server tekshiruvi"
-                value={health.data.driver ? DRIVER_LABELS[health.data.driver] || health.data.driver : null}
-                status={
-                  health.data.database === "up"
-                    ? { tone: "ok", label: "Javob berdi" }
-                    : health.data.database === "down"
-                      ? { tone: "danger", label: "Javob bermadi" }
-                      : undefined
-                }
+                icon={<Truck size={16} aria-hidden="true" />}
+                title="Yetkazib berish haqi"
+                desc="Yetkazib berish buyurtmasiga qo‘shiladi. Cashback bu summadan hisoblanmaydi."
+                source="Server kodi · o‘zgarmas qiymat"
+                value={finite(rules.data?.deliveryFee) != null ? money(Number(rules.data?.deliveryFee)) : null}
+                missing={rules.error ? rules.error.message : undefined}
+                action={openLink("delivery", "Yetkazishlarni ko‘rish")}
               />
-            ) : null}
-          </Section>
+              <SettingRow
+                icon={<Layers size={16} aria-hidden="true" />}
+                title="Tashqi yetkazib berish provayderi"
+                desc={
+                  delivery.data?.externalProvider === "CONTRACT_PENDING"
+                    ? "Hali ulanmagan — tashqi provider contract mavjud emas. Yetkazishlar ichki kuryer orqali yuritiladi."
+                    : "Server qaytargan provayder holati."
+                }
+                source="Yetkazib berish API · externalProvider"
+                value={
+                  delivery.data?.externalProvider === "CONTRACT_PENDING"
+                    ? "Hali ulanmagan"
+                    : delivery.data?.externalProvider || null
+                }
+                missing={delivery.error ? delivery.error.message : undefined}
+                toggle={{ active: false, label: "Tashqi kuryer yo‘q" }}
+                action={openLink("delivery", "Yetkazib berish bo‘limi")}
+              />
+            </Section>
+          ) : null}
 
-          <section className="st-hidden" aria-labelledby="st-hidden-title">
-            <h2 id="st-hidden-title" className="st-hidden-title">Admin API orqali ko‘rinmaydi</h2>
-            <p className="st-hidden-lead">
-              Bu qiymatlar server muhiti yoki kodida saqlanadi. Admin panel ularni ko‘rsatmaydi va o‘zgartirmaydi —
-              holat taxmin qilinmaydi.
-            </p>
-            <ul className="st-hidden-list">
-              {NOT_EXPOSED.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </section>
+          {showSection("integrations") ? (
+            <>
+              <Section
+                id="st-fom"
+                icon={<Cpu size={18} aria-hidden="true" />}
+                title="FOM integratsiyasi"
+                lead="Dorixona kassasi (FOM) bilan ko‘prik holati."
+                source="GET /api/integrations/fom/status"
+                error={fom.error}
+                onRetry={() => void load()}
+                footer={openLink("fom", "Batafsil — FOM bo‘limi")}
+              >
+                {fom.data ? (
+                  <>
+                    <SettingRow
+                      icon={<Cpu size={16} aria-hidden="true" />}
+                      title="Integratsiya holati"
+                      desc="Tashqi FOM kassa shartnomasi holati."
+                      source="FOM holati API"
+                      value={fom.data.status ? FOM_STATUS_LABELS[fom.data.status] || fom.data.status : null}
+                      status={fom.data.ready === false ? { tone: "warn", label: "Production uchun tayyor emas" } : undefined}
+                      action={openLink("fom", "FOM bo‘limi")}
+                    />
+                    <SettingRow
+                      icon={<Sliders size={16} aria-hidden="true" />}
+                      title="FOM inventar yozuvi"
+                      desc="FOM ombor qoldig‘ini tizimga yozadimi."
+                      source="FOM holati API"
+                      value={fom.data.inventoryWriter === "OFF" ? "O‘chirilgan" : fom.data.inventoryWriter || null}
+                      toggle={{
+                        active: fom.data.inventoryWriter !== "OFF",
+                        label: fom.data.inventoryWriter === "OFF" ? "O‘chirilgan" : "Faol",
+                      }}
+                      action={openLink("fom", "FOM sozlamalari")}
+                    />
+                  </>
+                ) : null}
+              </Section>
+
+              <Section
+                id="st-access"
+                icon={<ShieldCheck size={18} aria-hidden="true" />}
+                title="Kirish va ruxsatlar"
+                lead="Joriy sessiya serverdan olingan rol va ruxsatlar bilan ishlaydi. Alohida sozlamalar ruxsati yo‘q."
+                source="GET /api/admin/me"
+                footer={openLink("admins", "Rol va ruxsatlar — Adminlar bo‘limi")}
+              >
+                <SettingRow
+                  icon={<ShieldCheck size={16} aria-hidden="true" />}
+                  title="Joriy rol"
+                  desc="Kirish paytida server tasdiqlagan rol."
+                  source="Admin sessiyasi"
+                  value={role ? ROLE_LABELS[role] || role : null}
+                  action={openLink("admins", "Adminlar ro‘yxati")}
+                />
+                <SettingRow
+                  icon={<Sliders size={16} aria-hidden="true" />}
+                  title="Server ruxsatlari"
+                  desc="Har bir bo‘lim va amal serverda shu ruxsatlar bilan tekshiriladi."
+                  source="Admin sessiyasi"
+                  value={permissionCount != null ? `${permissionCount} ta` : null}
+                  action={openLink("admins", "Ruxsatlarni ko‘rish")}
+                />
+              </Section>
+
+              <Section
+                id="st-system"
+                icon={<Database size={18} aria-hidden="true" />}
+                title="Tizim holati"
+                lead="Server tekshiruvi natijasi — faqat API qaytargan javob."
+                source="GET /api/healthz"
+                error={health.error}
+                onRetry={() => void load()}
+              >
+                {health.data ? (
+                  <SettingRow
+                    icon={<Database size={16} aria-hidden="true" />}
+                    title="Ma'lumotlar bazasi"
+                    desc={
+                      health.data.status === "not_ready"
+                        ? "Server tekshiruvi 503 qaytardi — ma'lumotlar bazasi tayyor emas."
+                        : `Tekshirilgan vaqt: ${formatTime(health.data.time)} (Asia/Tashkent).`
+                    }
+                    source="Server tekshiruvi"
+                    value={health.data.driver ? DRIVER_LABELS[health.data.driver] || health.data.driver : null}
+                    status={
+                      health.data.database === "up"
+                        ? { tone: "ok", label: "Javob berdi" }
+                        : health.data.database === "down"
+                          ? { tone: "danger", label: "Javob bermadi" }
+                          : undefined
+                    }
+                    toggle={{
+                      active: health.data.database === "up",
+                      label: health.data.database === "up" ? "Ulanish faol" : "Ulanish uzilgan",
+                    }}
+                  />
+                ) : null}
+              </Section>
+
+              <section className="st-hidden" aria-labelledby="st-hidden-title">
+                <h2 id="st-hidden-title" className="st-hidden-title">Admin API orqali ko‘rinmaydi</h2>
+                <p className="st-hidden-lead">
+                  Bu qiymatlar server muhiti yoki kodida saqlanadi. Admin panel ularni ko‘rsatmaydi va o‘zgartirmaydi —
+                  holat taxmin qilinmaydi.
+                </p>
+                <ul className="st-hidden-list">
+                  {NOT_EXPOSED.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </section>
+            </>
+          ) : null}
         </div>
       )}
     </div>
@@ -378,6 +462,7 @@ export function SettingsPage(props: {
 
 function Section(props: {
   id: string;
+  icon?: ReactNode;
   title: string;
   lead: string;
   source: string;
@@ -391,7 +476,10 @@ function Section(props: {
     <section className="st-section" aria-labelledby={`${props.id}-title`}>
       <header className="st-section-head">
         <div className="st-section-text">
-          <h2 id={`${props.id}-title`} className="st-section-title">{props.title}</h2>
+          <div className="st-section-title-wrap">
+            {props.icon ? <span className="st-section-icon">{props.icon}</span> : null}
+            <h2 id={`${props.id}-title`} className="st-section-title">{props.title}</h2>
+          </div>
           <p className="st-section-lead">{props.lead}</p>
         </div>
         <span className="st-source" title="Ma'lumot manbasi">{props.source}</span>
@@ -409,41 +497,60 @@ function Section(props: {
 }
 
 function SettingRow(props: {
+  icon?: ReactNode;
   title: string;
   desc?: ReactNode;
   source: string;
   value: ReactNode | null;
   status?: { tone: Tone; label: string };
   missing?: string;
+  action?: ReactNode;
+  toggle?: { active: boolean; label?: string };
   children?: ReactNode;
 }) {
   return (
     <div className="st-row">
       <div className="st-row-main">
-        <div className="st-row-title">{props.title}</div>
+        <div className="st-row-header">
+          {props.icon ? <div className="st-row-icon" aria-hidden="true">{props.icon}</div> : null}
+          <div className="st-row-heading">
+            <div className="st-row-title">{props.title}</div>
+            <p className="st-row-source">Manba: {props.source}</p>
+          </div>
+        </div>
         {props.desc ? <p className="st-row-desc">{props.desc}</p> : null}
-        <p className="st-row-source">Manba: {props.source}</p>
         {props.missing && (props.value == null || props.value === "") ? (
           <p className="st-row-missing" role="status">{props.missing}</p>
         ) : null}
         {props.children}
       </div>
       <div className="st-row-aside">
-        {props.value != null && props.value !== "" ? (
-          <span className="st-value">{props.value}</span>
-        ) : (
-          <span className="st-value is-missing">—</span>
-        )}
+        {props.toggle ? (
+          <div className={`st-switch-control ${props.toggle.active ? "is-active" : "is-inactive"}`}>
+            <span className="st-switch-track" aria-hidden="true">
+              <span className="st-switch-thumb" />
+            </span>
+            {props.toggle.label ? <span className="st-switch-label">{props.toggle.label}</span> : null}
+          </div>
+        ) : null}
+        <div className="st-value-wrap">
+          {props.value != null && props.value !== "" ? (
+            <span className="st-value">{props.value}</span>
+          ) : (
+            <span className="st-value is-missing">—</span>
+          )}
+        </div>
         <span className="st-badges">
           {props.status ? <StatusBadge tone={props.status.tone}>{props.status.label}</StatusBadge> : null}
           <span className="st-readonly" title={READ_ONLY}>Faqat ko‘rish</span>
         </span>
+        {props.action ? <div className="st-row-action">{props.action}</div> : null}
       </div>
     </div>
   );
 }
 
-function CashbackRows(props: { rules: Rules }) {
+function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: string) => ReactNode }) {
   const r = props.rules;
   const maxSpendPercent = finite(r.maxSpendPercent);
   const minPurchase = finite(r.minPurchase);
@@ -454,22 +561,28 @@ function CashbackRows(props: { rules: Rules }) {
   return (
     <>
       <SettingRow
+        icon={<Coins size={16} aria-hidden="true" />}
         title="Cashback ishlatish limiti"
         desc="Mahsulotlar summasining eng ko‘p shu qismi cashback bilan to‘lanadi (yetkazib berish haqidan emas)."
         source="Server sozlamasi · system_settings (standart 30%)"
         value={maxSpendPercent != null ? `${maxSpendPercent}%` : null}
+        action={props.openLink("cashback", "Cashback bo‘limida boshqarish")}
       />
       <SettingRow
+        icon={<ShoppingBag size={16} aria-hidden="true" />}
         title="Minimal xarid summasi"
         desc="Server cashback hisob-kitobida mahsulot summasi uchun minimal chegara sifatida qo‘llaydi."
         source="Server kodi · o‘zgarmas qiymat"
         value={minPurchase != null ? money(minPurchase) : null}
+        action={props.openLink("cashback", "Qoidalarni ko‘rish")}
       />
       <SettingRow
+        icon={<Sliders size={16} aria-hidden="true" />}
         title="Loyalty darajalari"
         desc="Mijozning jami xaridi bo‘yicha daraja va undan keyingi xaridlardan cashback foizi."
         source="Server kodi · o‘zgarmas qiymat"
         value={tiers.length ? `${tiers.length} ta daraja` : null}
+        action={props.openLink("cashback", "Darajalarni ko‘rish")}
       >
         {tiers.length ? (
           <table className="st-tiers">
@@ -493,11 +606,13 @@ function CashbackRows(props: { rules: Rules }) {
         ) : null}
       </SettingRow>
       <SettingRow
+        icon={<Clock size={16} aria-hidden="true" />}
         title="Cashback amal qilish muddati"
         desc="Qoidalarda e’lon qilingan. Muddati o‘tgan cashbackni hisobdan chiqaradigan server jarayoni hozircha yo‘q."
         source="Server kodi · o‘zgarmas qiymat"
         value={ttlDays != null ? `${ttlDays} kun` : null}
         status={ttlDays != null ? { tone: "warn", label: "Serverda qo‘llanmaydi" } : undefined}
+        toggle={{ active: false, label: "Jarayon mavjud emas" }}
       />
       {earnWhen.length || spendWhen.length ? (
         <details className="st-rules-text">
@@ -526,7 +641,7 @@ function CashbackRows(props: { rules: Rules }) {
   );
 }
 
-function BranchRows(props: { rows: BranchRow[] }) {
+function BranchRows(props: { rows: BranchRow[]; openLink: (tab: string, label: string) => ReactNode }) {
   const rows = props.rows;
   const total = rows.length;
   const tally = (pick: (b: BranchRow) => boolean) => rows.filter(pick).length;
@@ -544,30 +659,42 @@ function BranchRows(props: { rows: BranchRow[] }) {
   return (
     <>
       <SettingRow
+        icon={<CreditCard size={16} aria-hidden="true" />}
         title="Payme kabineti sozlangan filiallar"
         desc="Kabinet ID va maxfiy kalit ikkalasi saqlangan filiallar soni."
         source="Filial yozuvlari · hasPayme"
         value={of(payme)}
         status={providerStatus(payme)}
+        toggle={{ active: payme > 0, label: payme > 0 ? "Faol" : "Ulanmagan" }}
+        action={props.openLink("branches", "Filiallarda sozlash")}
       />
       <SettingRow
+        icon={<CreditCard size={16} aria-hidden="true" />}
         title="Click kabineti sozlangan filiallar"
         desc="Kabinet ID va maxfiy kalit ikkalasi saqlangan filiallar soni."
         source="Filial yozuvlari · hasClick"
         value={of(click)}
         status={providerStatus(click)}
+        toggle={{ active: click > 0, label: click > 0 ? "Faol" : "Ulanmagan" }}
+        action={props.openLink("branches", "Filiallarda sozlash")}
       />
       <SettingRow
+        icon={<Store size={16} aria-hidden="true" />}
         title="Ochiq filiallar"
         desc="Filial yozuvida “ochiq” deb belgilangan filiallar."
         source="Filial yozuvlari · isOpen"
         value={of(open)}
+        toggle={{ active: open > 0, label: `${open} ta ochiq` }}
+        action={props.openLink("branches", "Filiallar ro‘yxati")}
       />
       <SettingRow
+        icon={<Clock size={16} aria-hidden="true" />}
         title="24/7 ishlaydigan filiallar"
         desc="Kechayu kunduz ishlaydi deb belgilangan filiallar."
         source="Filial yozuvlari · is24h"
         value={of(allDay)}
+        toggle={{ active: allDay > 0, label: "24/7 rejim" }}
+        action={props.openLink("branches", "Filiallar ro‘yxati")}
       />
       {configured.length ? (
         <ul className="st-branch-list" aria-label="To‘lov kabineti sozlangan filiallar">
