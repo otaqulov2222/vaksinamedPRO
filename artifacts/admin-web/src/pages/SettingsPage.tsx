@@ -320,7 +320,7 @@ export function SettingsPage(props: {
               />
               <SettingRow
                 icon={<Layers size={15} aria-hidden="true" />}
-                title="Tashqi yetkazib berish provayderi"
+                title="Tashqi provayder"
                 source="Yetkazib berish API · externalProvider"
                 desc="Hali ulanmagan — tashqi provider contract mavjud emas."
                 value={
@@ -329,7 +329,6 @@ export function SettingsPage(props: {
                     : delivery.data?.externalProvider || null
                 }
                 missing={delivery.error ? delivery.error.message : undefined}
-                toggle={{ active: false, label: "Ulanmagan" }}
                 action={openLink("delivery", "Sozlash")}
               />
             </Section>
@@ -354,7 +353,6 @@ export function SettingsPage(props: {
                       title="Integratsiya holati"
                       source="FOM holati API"
                       value={fom.data.status ? FOM_STATUS_LABELS[fom.data.status] || fom.data.status : null}
-                      status={fom.data.ready === false ? { tone: "warn", label: "Production uchun tayyor emas" } : undefined}
                       action={openLink("fom", "Ko‘rish")}
                     />
                     <SettingRow
@@ -362,10 +360,6 @@ export function SettingsPage(props: {
                       title="FOM inventar yozuvi"
                       source="FOM holati API"
                       value={fom.data.inventoryWriter === "OFF" ? "O‘chirilgan" : fom.data.inventoryWriter || null}
-                      toggle={{
-                        active: fom.data.inventoryWriter !== "OFF",
-                        label: fom.data.inventoryWriter === "OFF" ? "O‘chirilgan" : "Faol",
-                      }}
                       action={openLink("fom", "Sozlash")}
                     />
                   </>
@@ -385,6 +379,7 @@ export function SettingsPage(props: {
                   title="Joriy rol"
                   source="Admin sessiyasi"
                   value={role ? ROLE_LABELS[role] || role : null}
+                  status={{ tone: "info", label: "Joriy hisob" }}
                   action={openLink("admins", "Adminlar")}
                 />
                 <SettingRow
@@ -418,10 +413,6 @@ export function SettingsPage(props: {
                           ? { tone: "danger", label: "Javob bermadi" }
                           : undefined
                     }
-                    toggle={{
-                      active: health.data.database === "up",
-                      label: health.data.database === "up" ? "Ulanish barqaror" : "Ulanish uzilgan",
-                    }}
                   />
                 ) : null}
               </Section>
@@ -457,9 +448,10 @@ function Section(props: {
   return (
     <section className="st-section" aria-labelledby={`${props.id}-title`}>
       <header className="st-section-head">
-        <div className="st-section-title-wrap">
+        <div className="st-section-title-wrap" title={props.lead}>
           {props.icon ? <span className="st-section-icon">{props.icon}</span> : null}
           <h2 id={`${props.id}-title`} className="st-section-title">{props.title}</h2>
+          <span className="st-readonly" title={READ_ONLY}>Faqat ko‘rish</span>
         </div>
         <span className="st-source" title={`Ma'lumot manbasi: ${props.source}`}>{props.source}</span>
       </header>
@@ -497,14 +489,6 @@ function SettingRow(props: {
         ) : null}
       </div>
       <div className="st-row-right">
-        {props.toggle ? (
-          <div className={`st-switch-control ${props.toggle.active ? "is-active" : "is-inactive"}`}>
-            <span className="st-switch-track" aria-hidden="true">
-              <span className="st-switch-thumb" />
-            </span>
-            {props.toggle.label ? <span className="st-switch-label">{props.toggle.label}</span> : null}
-          </div>
-        ) : null}
         <div className="st-value-wrap">
           {props.value != null && props.value !== "" ? (
             <span className="st-value">{props.value}</span>
@@ -512,10 +496,7 @@ function SettingRow(props: {
             <span className="st-value is-missing">—</span>
           )}
         </div>
-        <span className="st-badges">
-          {props.status ? <StatusBadge tone={props.status.tone}>{props.status.label}</StatusBadge> : null}
-          <span className="st-readonly" title={READ_ONLY}>Faqat ko‘rish</span>
-        </span>
+        {props.status ? <StatusBadge tone={props.status.tone}>{props.status.label}</StatusBadge> : null}
         {props.action ? <span className="st-row-action">{props.action}</span> : null}
       </div>
       {props.children ? <div className="st-row-extra">{props.children}</div> : null}
@@ -529,8 +510,6 @@ function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: stri
   const minPurchase = finite(r.minPurchase);
   const ttlDays = finite(r.ttlDays);
   const tiers = Array.isArray(r.tiers) ? r.tiers : [];
-  const earnWhen = Array.isArray(r.earnWhen) ? r.earnWhen.map(String) : [];
-  const spendWhen = Array.isArray(r.spendWhen) ? r.spendWhen.map(String) : [];
   return (
     <>
       <SettingRow
@@ -555,24 +534,13 @@ function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: stri
         action={props.openLink("cashback", "Darajalar")}
       >
         {tiers.length ? (
-          <table className="st-tiers">
-            <thead>
-              <tr>
-                <th scope="col">Daraja</th>
-                <th scope="col">Cashback</th>
-                <th scope="col">Jami xarid</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tiers.map((t, i) => (
-                <tr key={`${t.tier || "tier"}-${i}`}>
-                  <td>{t.tier || "—"}</td>
-                  <td>{t.rate || "—"}</td>
-                  <td>{finite(t.fromTotal) != null ? `${money(Number(t.fromTotal))} dan` : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="st-tiers-bar">
+            {tiers.map((t, i) => (
+              <span key={`${t.tier || "tier"}-${i}`} className="st-tier-tag">
+                <strong>{t.tier || "—"}:</strong> {t.rate || "—"} ({finite(t.fromTotal) != null ? `${money(Number(t.fromTotal))} dan` : "—"})
+              </span>
+            ))}
+          </div>
         ) : null}
       </SettingRow>
       <SettingRow
@@ -582,31 +550,7 @@ function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: stri
         desc="Muddati o‘tgan cashbackni hisobdan chiqaradigan server jarayoni hozircha yo‘q."
         value={ttlDays != null ? `${ttlDays} kun` : null}
         status={ttlDays != null ? { tone: "warn", label: "Serverda qo‘llanmaydi" } : undefined}
-        toggle={{ active: false, label: "Mavjud emas" }}
       />
-      {earnWhen.length || spendWhen.length ? (
-        <details className="st-rules-text">
-          <summary>Shartlar (server matni)</summary>
-          <div className="st-rules-grid">
-            {earnWhen.length ? (
-              <div>
-                <h3 className="st-rules-head">Cashback hisoblanishi</h3>
-                <ul className="st-rules-list">
-                  {earnWhen.map((line) => <li key={line}>{line}</li>)}
-                </ul>
-              </div>
-            ) : null}
-            {spendWhen.length ? (
-              <div>
-                <h3 className="st-rules-head">Cashback ishlatilishi</h3>
-                <ul className="st-rules-list">
-                  {spendWhen.map((line) => <li key={line}>{line}</li>)}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        </details>
-      ) : null}
     </>
   );
 }
@@ -619,7 +563,6 @@ function BranchRows(props: { rows: BranchRow[]; openLink: (tab: string, label: s
   const click = tally((b) => b.hasClick === true);
   const open = tally((b) => b.isOpen === true);
   const allDay = tally((b) => b.is24h === true);
-  const configured = rows.filter((b) => b.hasPayme === true || b.hasClick === true);
   const of = (n: number) => (total ? `${n} / ${total}` : null);
   const providerStatus = (n: number): { tone: Tone; label: string } =>
     n === 0 ? { tone: "neutral", label: "Sozlanmagan" } : n === total ? { tone: "ok", label: "Barchasida sozlangan" } : { tone: "info", label: "Qisman sozlangan" };
@@ -634,7 +577,6 @@ function BranchRows(props: { rows: BranchRow[]; openLink: (tab: string, label: s
         source="Filial yozuvlari · hasPayme"
         value={of(payme)}
         status={providerStatus(payme)}
-        toggle={{ active: payme > 0, label: payme > 0 ? "Faol" : "Ulanmagan" }}
         action={props.openLink("branches", "Sozlash")}
       />
       <SettingRow
@@ -643,7 +585,6 @@ function BranchRows(props: { rows: BranchRow[]; openLink: (tab: string, label: s
         source="Filial yozuvlari · hasClick"
         value={of(click)}
         status={providerStatus(click)}
-        toggle={{ active: click > 0, label: click > 0 ? "Faol" : "Ulanmagan" }}
         action={props.openLink("branches", "Sozlash")}
       />
       <SettingRow
@@ -651,7 +592,7 @@ function BranchRows(props: { rows: BranchRow[]; openLink: (tab: string, label: s
         title="Ochiq filiallar"
         source="Filial yozuvlari · isOpen"
         value={of(open)}
-        toggle={{ active: open > 0, label: `${open} ta ochiq` }}
+        status={open > 0 ? { tone: "ok", label: "Faol" } : { tone: "neutral", label: "Yopiq" }}
         action={props.openLink("branches", "Filiallar")}
       />
       <SettingRow
@@ -659,22 +600,9 @@ function BranchRows(props: { rows: BranchRow[]; openLink: (tab: string, label: s
         title="24/7 ishlaydigan filiallar"
         source="Filial yozuvlari · is24h"
         value={of(allDay)}
-        toggle={{ active: allDay > 0, label: "24/7 rejim" }}
+        status={allDay > 0 ? { tone: "ok", label: "24/7 rejim" } : { tone: "neutral", label: "Mavjud emas" }}
         action={props.openLink("branches", "Filiallar")}
       />
-      {configured.length ? (
-        <ul className="st-branch-list" aria-label="To‘lov kabineti sozlangan filiallar">
-          {configured.map((b) => (
-            <li key={b.id}>
-              <span className="st-branch-name">{b.name || `Filial #${b.id}`}</span>
-              <span className="st-badges">
-                {b.hasPayme ? <StatusBadge tone="ok">Payme</StatusBadge> : null}
-                {b.hasClick ? <StatusBadge tone="ok">Click</StatusBadge> : null}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </>
   );
 }
