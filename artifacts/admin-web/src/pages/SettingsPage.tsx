@@ -299,6 +299,38 @@ export function SettingsPage(props: {
             </Section>
           ) : null}
 
+          {showSection("integrations") ? (
+            <Section
+              id="st-fom"
+              icon={<Cpu size={16} aria-hidden="true" />}
+              title="FOM integratsiyasi"
+              lead="Dorixona kassasi (FOM) bilan ko‘prik holati"
+              source="GET /api/integrations/fom/status"
+              error={fom.error}
+              onRetry={() => void load()}
+              footer={openLink("fom", "Batafsil — FOM bo‘limi")}
+            >
+              {fom.data ? (
+                <>
+                  <SettingRow
+                    icon={<Cpu size={15} aria-hidden="true" />}
+                    title="Integratsiya holati"
+                    source="FOM holati API"
+                    value={fom.data.status ? FOM_STATUS_LABELS[fom.data.status] || fom.data.status : null}
+                    action={openLink("fom", "Ko‘rish")}
+                  />
+                  <SettingRow
+                    icon={<Sliders size={15} aria-hidden="true" />}
+                    title="FOM inventar yozuvi"
+                    source="FOM holati API"
+                    value={fom.data.inventoryWriter === "OFF" ? "O‘chirilgan" : fom.data.inventoryWriter || null}
+                    action={openLink("fom", "Sozlash")}
+                  />
+                </>
+              ) : null}
+            </Section>
+          ) : null}
+
           {showSection("delivery") ? (
             <Section
               id="st-delivery"
@@ -336,36 +368,6 @@ export function SettingsPage(props: {
 
           {showSection("integrations") ? (
             <>
-              <Section
-                id="st-fom"
-                icon={<Cpu size={16} aria-hidden="true" />}
-                title="FOM integratsiyasi"
-                lead="Dorixona kassasi (FOM) bilan ko‘prik holati"
-                source="GET /api/integrations/fom/status"
-                error={fom.error}
-                onRetry={() => void load()}
-                footer={openLink("fom", "Batafsil — FOM bo‘limi")}
-              >
-                {fom.data ? (
-                  <>
-                    <SettingRow
-                      icon={<Cpu size={15} aria-hidden="true" />}
-                      title="Integratsiya holati"
-                      source="FOM holati API"
-                      value={fom.data.status ? FOM_STATUS_LABELS[fom.data.status] || fom.data.status : null}
-                      action={openLink("fom", "Ko‘rish")}
-                    />
-                    <SettingRow
-                      icon={<Sliders size={15} aria-hidden="true" />}
-                      title="FOM inventar yozuvi"
-                      source="FOM holati API"
-                      value={fom.data.inventoryWriter === "OFF" ? "O‘chirilgan" : fom.data.inventoryWriter || null}
-                      action={openLink("fom", "Sozlash")}
-                    />
-                  </>
-                ) : null}
-              </Section>
-
               <Section
                 id="st-access"
                 icon={<ShieldCheck size={16} aria-hidden="true" />}
