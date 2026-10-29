@@ -8159,6 +8159,14 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   color: #BAE6FD !important;
   font-weight: 550 !important;
 }
+[data-theme="light"] .dash-sales .dash-card-meta {
+  background: rgba(59, 130, 246, 0.16) !important;
+  border: 1px solid rgba(147, 197, 253, 0.35) !important;
+  color: #BAE6FD !important;
+  font-weight: 600 !important;
+  padding: 4px 10px !important;
+  border-radius: 999px !important;
+}
 [data-theme="light"] .dash-link {
   color: #38BDF8 !important;
   font-weight: 650 !important;
@@ -8292,30 +8300,81 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 
 /* Buyurtmalar Holati (Orders Status Breakdown) */
 [data-theme="light"] .dash-orders-status {
-  background: #071220 !important;
-  border: 1px solid rgba(59, 130, 246, 0.25) !important;
-  border-radius: 8px !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+[data-theme="light"] .orders-stack.is-empty {
+  display: none !important;
+}
+[data-theme="light"] .orders-stack {
+  background: rgba(255, 255, 255, 0.08) !important;
+  height: 6px !important;
+  border-radius: 999px !important;
+  margin: 10px 0 12px !important;
+}
+[data-theme="light"] .orders-stack-seg.is-ok { background: #10B981 !important; }
+[data-theme="light"] .orders-stack-seg.is-info { background: #38BDF8 !important; }
+[data-theme="light"] .orders-stack-seg.is-warn { background: #F59E0B !important; }
+[data-theme="light"] .orders-stack-seg.is-muted { background: #94A3B8 !important; }
+
+[data-theme="light"] .dash-legend {
+  margin: 10px 0 0 !important;
+  gap: 8px !important;
 }
 [data-theme="light"] .dash-legend li {
-  background: #071220 !important;
-  border: 1px solid rgba(59, 130, 246, 0.25) !important;
-  border-radius: 6px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(59, 130, 246, 0.22) !important;
+  border-radius: 8px !important;
+  min-height: 40px !important;
+  padding: 8px 12px !important;
+  margin-bottom: 6px !important;
+  transition: all 0.15s ease !important;
+}
+[data-theme="light"] .dash-legend li:hover {
+  background: rgba(59, 130, 246, 0.12) !important;
+  border-color: rgba(96, 165, 250, 0.45) !important;
+}
+[data-theme="light"] .dash-legend li.is-ok::before {
+  background: #10B981 !important;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5) !important;
+}
+[data-theme="light"] .dash-legend li.is-info::before {
+  background: #38BDF8 !important;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.5) !important;
+}
+[data-theme="light"] .dash-legend li.is-warn::before {
+  background: #F59E0B !important;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5) !important;
+}
+[data-theme="light"] .dash-legend li.is-muted::before {
+  background: #94A3B8 !important;
 }
 [data-theme="light"] .dash-legend-label {
   color: #F8FAFC !important;
+  font-size: 13px !important;
   font-weight: 600 !important;
 }
 [data-theme="light"] .dash-legend-value {
   color: #FFFFFF !important;
+  font-size: 14px !important;
   font-weight: 800 !important;
 }
 [data-theme="light"] .dash-legend-pct {
   color: #93C5FD !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
 }
 [data-theme="light"] .dash-orders-empty {
-  color: #93C5FD !important;
+  margin: 12px 0 0 !important;
+  padding: 8px 12px !important;
+  border-radius: 8px !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+  border: 1px dashed rgba(147, 197, 253, 0.3) !important;
+  color: #BAE6FD !important;
+  font-size: 12px !important;
   font-weight: 550 !important;
+  text-align: center !important;
 }
 
 /* Holat / Attention Banner & Calm Note (CRITICAL FIX FOR INVISIBLE TEXT) */
@@ -8470,9 +8529,11 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   color: #BAE6FD !important;
   font-weight: 500 !important;
 }
-[data-theme="light"] .dash-count {
+[data-theme="light"] .dash-count,
+[data-theme="light"] .attn-count {
   background: rgba(59, 130, 246, 0.28) !important;
   color: #BAE6FD !important;
+  border: 1px solid rgba(147, 197, 253, 0.35) !important;
 }
 [data-theme="light"] .dash-feed-item {
   border-top: 1px solid rgba(59, 130, 246, 0.2) !important;
@@ -8725,6 +8786,14 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   color: #94A3B8 !important;
   font-weight: 550 !important;
 }
+[data-theme="dark"] .dash-sales .dash-card-meta {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #E2E8F0 !important;
+  font-weight: 600 !important;
+  padding: 4px 10px !important;
+  border-radius: 999px !important;
+}
 [data-theme="dark"] .dash-link {
   color: #818CF8 !important;
   font-weight: 650 !important;
@@ -8857,30 +8926,81 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 
 /* Buyurtmalar Holati in Dark Mode */
 [data-theme="dark"] .dash-orders-status {
-  background: #0B0F19 !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 8px !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+[data-theme="dark"] .orders-stack.is-empty {
+  display: none !important;
+}
+[data-theme="dark"] .orders-stack {
+  background: rgba(255, 255, 255, 0.08) !important;
+  height: 6px !important;
+  border-radius: 999px !important;
+  margin: 10px 0 12px !important;
+}
+[data-theme="dark"] .orders-stack-seg.is-ok { background: #10B981 !important; }
+[data-theme="dark"] .orders-stack-seg.is-info { background: #38BDF8 !important; }
+[data-theme="dark"] .orders-stack-seg.is-warn { background: #F59E0B !important; }
+[data-theme="dark"] .orders-stack-seg.is-muted { background: #94A3B8 !important; }
+
+[data-theme="dark"] .dash-legend {
+  margin: 10px 0 0 !important;
+  gap: 8px !important;
 }
 [data-theme="dark"] .dash-legend li {
-  background: #0B0F19 !important;
+  background: rgba(255, 255, 255, 0.04) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 6px !important;
+  border-radius: 8px !important;
+  min-height: 40px !important;
+  padding: 8px 12px !important;
+  margin-bottom: 6px !important;
+  transition: all 0.15s ease !important;
+}
+[data-theme="dark"] .dash-legend li:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+[data-theme="dark"] .dash-legend li.is-ok::before {
+  background: #10B981 !important;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5) !important;
+}
+[data-theme="dark"] .dash-legend li.is-info::before {
+  background: #38BDF8 !important;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.5) !important;
+}
+[data-theme="dark"] .dash-legend li.is-warn::before {
+  background: #F59E0B !important;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5) !important;
+}
+[data-theme="dark"] .dash-legend li.is-muted::before {
+  background: #94A3B8 !important;
 }
 [data-theme="dark"] .dash-legend-label {
   color: #E2E8F0 !important;
+  font-size: 13px !important;
   font-weight: 600 !important;
 }
 [data-theme="dark"] .dash-legend-value {
   color: #FFFFFF !important;
+  font-size: 14px !important;
   font-weight: 800 !important;
 }
 [data-theme="dark"] .dash-legend-pct {
   color: #94A3B8 !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
 }
 [data-theme="dark"] .dash-orders-empty {
+  margin: 12px 0 0 !important;
+  padding: 8px 12px !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.14) !important;
   color: #94A3B8 !important;
+  font-size: 12px !important;
   font-weight: 550 !important;
+  text-align: center !important;
 }
 
 /* Holat in Dark Mode (CRITICAL FIX FOR INVISIBLE TEXT) */
@@ -9035,9 +9155,11 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   color: #94A3B8 !important;
   font-weight: 500 !important;
 }
-[data-theme="dark"] .dash-count {
+[data-theme="dark"] .dash-count,
+[data-theme="dark"] .attn-count {
   background: rgba(255, 255, 255, 0.08) !important;
-  color: #94A3B8 !important;
+  color: #E2E8F0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
 }
 [data-theme="dark"] .dash-feed-item {
   border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
