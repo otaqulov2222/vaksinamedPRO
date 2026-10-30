@@ -17,6 +17,16 @@ function resolveApiUrl(): string {
   return envUrl || 'https://api-staging.vaksinamedgps.uz';
 }
 
+export function resolveImageUrl(url: string | null | undefined): string | null {
+  if (!url || typeof url !== 'string' || !url.trim()) return null;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  const base = resolveApiUrl();
+  return `${base.replace(/\/+$/, '')}/${trimmed.replace(/^\/+/, '')}`;
+}
+
 const API_URL = resolveApiUrl();
 const TOKEN_KEY = 'vaksinamed-customer-token';
 

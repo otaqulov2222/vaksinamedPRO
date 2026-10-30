@@ -53,19 +53,19 @@ describe("Admin Phase 13.5 Catalog — backend contract (unchanged)", () => {
     assert.match(catalogBody('router.get("/catalog/categories"'), /selectDistinct\(\{ category: products\.category \}\)/);
   });
 
-  it("admin writes: POST + PATCH gated by products:manage; no delete / category / media routes", () => {
+  it("admin writes: POST + PATCH gated by products:manage; no delete / category routes", () => {
     assert.match(adminBody('router.post("/admin/products"'), /requirePermission\(user, "products:manage"\)/);
     assert.match(adminBody('router.patch("/admin/products/:id"'), /requirePermission\(user, "products:manage"\)/);
     assert.match(adminBody('router.get("/admin/products"'), /requirePermission\(user, "products:read"\)/);
     assert.doesNotMatch(adminRoute, /router\.delete\("\/admin\/products/);
     assert.doesNotMatch(adminRoute + catalogRoute, /router\.(post|patch|put|delete)\("\/(admin|catalog)\/categor/);
-    assert.doesNotMatch(adminRoute + catalogRoute, /upload|multer|barcode/i);
+    assert.doesNotMatch(adminRoute + catalogRoute, /multer|barcode/i);
   });
 
-  it("schema has no status / image / barcode columns — the UI must not invent them", () => {
+  it("schema has no status / barcode columns — the UI must not invent them", () => {
     const products = between(schema, 'pgTable("products"', "});");
-    assert.doesNotMatch(products, /status|active|image|barcode|archived/i);
-    for (const col of ["sku", "nameUz", "nameRu", "category", "manufacturer", "description", "unit", "price", "icon", "analogGroup", "requiresPrescription", "createdAt"]) {
+    assert.doesNotMatch(products, /status|active|barcode|archived/i);
+    for (const col of ["sku", "nameUz", "nameRu", "category", "manufacturer", "description", "unit", "price", "icon", "imageUrl", "analogGroup", "requiresPrescription", "createdAt"]) {
       assert.match(products, new RegExp(`\\b${col}:`), col);
     }
   });
@@ -120,8 +120,8 @@ describe("Admin Phase 13.5 Catalog — table, status, price, inventory", () => {
     assert.match(page, /tabIndex=\{0\}/);
   });
 
-  it("no invented status, KPI, media, barcode, import/export or delete", () => {
-    assert.doesNotMatch(page, /ACTIVE|INACTIVE|ARCHIVED|StatCard|MetricStrip|<img|type="file"|barcode|shtrix|Import|Eksport|method:\s*"DELETE"|O‘chirish|Arxiv/);
+  it("no invented status, KPI, barcode, import/export or delete", () => {
+    assert.doesNotMatch(page, /ACTIVE|INACTIVE|ARCHIVED|StatCard|MetricStrip|barcode|shtrix|Import|Eksport|method:\s*"DELETE"|O‘chirish|Arxiv/);
     assert.doesNotMatch(page, /oldPrice|discount|chegirma|margin|purchase/i);
     assert.match(page, /<StatusBadge tone="warn">Retsept<\/StatusBadge>/);
   });

@@ -36,35 +36,7 @@ const OK = '#16A34A';
 const PAYME_COLOR = '#00BFA5';
 const CLICK_COLOR = '#0073FF';
 
-const PRODUCT_IMAGES: Record<string, any> = {
-  'cat-p1': require('../assets/images/cat-p1-d3.png'),
-  'cat-p2': require('../assets/images/cat-p2-c.png'),
-  'cat-p3': require('../assets/images/cat-p3-mg.png'),
-  'cat-p4': require('../assets/images/cat-p4-omega.png'),
-  'cat-p5': require('../assets/images/cat-p5-zn.png'),
-  'cat-p6': require('../assets/images/cat-p6-para.png'),
-};
-
-function getProductImage(item: { id?: number | string; analogGroup?: string; icon?: string } | null | undefined) {
-  if (!item) return null;
-  const id = Number(item.id);
-  if (id === 1) return PRODUCT_IMAGES['cat-p1'];
-  if (id === 2) return PRODUCT_IMAGES['cat-p2'];
-  if (id === 3) return PRODUCT_IMAGES['cat-p3'];
-  if (id === 4) return PRODUCT_IMAGES['cat-p4'];
-  if (id === 5) return PRODUCT_IMAGES['cat-p5'];
-  if (id === 6 || id === 7 || id === 8) return PRODUCT_IMAGES['cat-p6'];
-
-  const group = String(item.analogGroup || '').toLowerCase();
-  if (group.includes('vitamin-d')) return PRODUCT_IMAGES['cat-p1'];
-  if (group.includes('vitamin-c')) return PRODUCT_IMAGES['cat-p2'];
-  if (group.includes('magnesium')) return PRODUCT_IMAGES['cat-p3'];
-  if (group.includes('omega')) return PRODUCT_IMAGES['cat-p4'];
-  if (group.includes('zinc')) return PRODUCT_IMAGES['cat-p5'];
-  if (group.includes('analgesic')) return PRODUCT_IMAGES['cat-p6'];
-
-  return null;
-}
+import { getProductImage } from '@/lib/productImage';
 
 function cleanText(text: string | null | undefined): string {
   if (!text) return '';

@@ -39,14 +39,7 @@ const OK = '#3D7A55';
 const BAD = '#B91C1C';
 const WARN = '#B45309';
 
-const PRODUCT_IMAGES: Record<string, any> = {
-  'cat-p1': require('../../assets/images/cat-p1-d3.png'),
-  'cat-p2': require('../../assets/images/cat-p2-c.png'),
-  'cat-p3': require('../../assets/images/cat-p3-mg.png'),
-  'cat-p4': require('../../assets/images/cat-p4-omega.png'),
-  'cat-p5': require('../../assets/images/cat-p5-zn.png'),
-  'cat-p6': require('../../assets/images/cat-p6-para.png'),
-};
+import { getProductImage } from '@/lib/productImage';
 
 function cleanText(text: string | null | undefined): string {
   if (!text) return '';
@@ -57,26 +50,13 @@ function cleanText(text: string | null | undefined): string {
     .trim();
 }
 
-function getProductThumb(item?: { productId?: number | string; id?: number | string; title?: string; name?: string; analogGroup?: string }) {
+function getProductThumb(item?: { productId?: number | string; id?: number | string; title?: string; name?: string; analogGroup?: string; imageUrl?: string; image_url?: string }) {
   if (!item) return null;
-  const id = Number(item.productId ?? item.id);
-  if (id === 1) return PRODUCT_IMAGES['cat-p1'];
-  if (id === 2) return PRODUCT_IMAGES['cat-p2'];
-  if (id === 3) return PRODUCT_IMAGES['cat-p3'];
-  if (id === 4) return PRODUCT_IMAGES['cat-p4'];
-  if (id === 5) return PRODUCT_IMAGES['cat-p5'];
-  if (id === 6 || id === 7 || id === 8) return PRODUCT_IMAGES['cat-p6'];
-
-  const name = String(item.title || item.name || '').toLowerCase();
-  const group = String(item.analogGroup || '').toLowerCase();
-  if (name.includes('d3') || group.includes('vitamin-d')) return PRODUCT_IMAGES['cat-p1'];
-  if (name.includes('ascorb') || group.includes('vitamin-c')) return PRODUCT_IMAGES['cat-p2'];
-  if (name.includes('magne') || group.includes('magnesium')) return PRODUCT_IMAGES['cat-p3'];
-  if (name.includes('omega') || group.includes('omega')) return PRODUCT_IMAGES['cat-p4'];
-  if (name.includes('sink') || name.includes('zinc') || group.includes('zinc')) return PRODUCT_IMAGES['cat-p5'];
-  if (name.includes('para') || name.includes('ibup') || name.includes('nuro') || group.includes('analgesic')) return PRODUCT_IMAGES['cat-p6'];
-
-  return null;
+  return getProductImage({
+    id: item.productId ?? item.id,
+    analogGroup: item.analogGroup,
+    imageUrl: item.imageUrl ?? item.image_url,
+  });
 }
 
 function StatusRow({

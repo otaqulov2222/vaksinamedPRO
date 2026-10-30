@@ -1,4 +1,7 @@
 import { Router } from "express";
+import path from "node:path";
+import fs from "node:fs";
+import crypto from "node:crypto";
 import { and, count, desc, eq, gt, gte, ilike, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import {
@@ -567,6 +570,39 @@ router.get("/admin/products", async (req, res, next) => {
   }
 });
 
+router.post("/admin/uploads", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "products:manage");
+    const { data } = req.body ?? {};
+    if (!data || typeof data !== "string") {
+      return res.status(400).json({ message: "Rasm ma'lumotlari kiritilmadi" });
+    }
+    const matches = data.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
+    if (!matches) {
+      return res.status(400).json({ message: "Rasm formati noto‘g‘ri. Faqat PNG, JPG yoki WEBP qabul qilinadi." });
+    }
+    const ext = matches[1] === "jpeg" ? "jpg" : matches[1];
+    const buffer = Buffer.from(matches[2], "base64");
+    if (buffer.length > 10 * 1024 * 1024) {
+      return res.status(400).json({ message: "Rasm hajmi 10 MB dan oshmasligi kerak" });
+    }
+
+    const uploadsDir = path.resolve(process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads"));
+    const productsDir = path.join(uploadsDir, "products");
+    fs.mkdirSync(productsDir, { recursive: true });
+
+    const safeName = `prod-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.${ext}`;
+    const filePath = path.join(productsDir, safeName);
+    fs.writeFileSync(filePath, buffer);
+
+    const publicUrl = `/uploads/products/${safeName}`;
+    return res.status(201).json({ ok: true, url: publicUrl, filename: safeName });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post("/admin/products", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
@@ -581,6 +617,7 @@ router.post("/admin/products", async (req, res, next) => {
       description: String(body.description || ""),
       price: Number(body.price) || 0,
       icon: String(body.icon || "pill"),
+      imageUrl: body.imageUrl && typeof body.imageUrl === "string" ? body.imageUrl.trim() : null,
       analogGroup: String(body.analogGroup || ""),
       requiresPrescription: Boolean(body.requiresPrescription),
     }).returning();
@@ -590,6 +627,8 @@ router.post("/admin/products", async (req, res, next) => {
         productId: created[0].id,
         branchId: branch.id,
         quantity: Number(body.quantity) || 10,
+        physicalQuantity: Number(body.quantity) || 10,
+        reservedQuantity: 0,
       })));
     }
     try {
@@ -622,6 +661,7 @@ router.patch("/admin/products/:id", async (req, res, next) => {
       category: typeof body.category === "string" ? body.category : current.category,
       price: typeof body.price === "number" ? body.price : current.price,
       description: typeof body.description === "string" ? body.description : current.description,
+      imageUrl: typeof body.imageUrl === "string" ? (body.imageUrl.trim() || null) : (body.imageUrl === null ? null : current.imageUrl),
       requiresPrescription: typeof body.requiresPrescription === "boolean" ? body.requiresPrescription : current.requiresPrescription,
     }).where(eq(products.id, id)).returning();
     try {

@@ -11,6 +11,7 @@ export const products = pgTable("products", {
   unit: text("unit").notNull().default("quti"),
   price: integer("price").notNull(),
   icon: text("icon").notNull().default("pill"),
+  imageUrl: text("image_url"),
   analogGroup: text("analog_group").notNull().default(""),
   requiresPrescription: boolean("requires_prescription").notNull().default(false),
   mxikCode: text("mxik_code").notNull().default("02106001001000000"),

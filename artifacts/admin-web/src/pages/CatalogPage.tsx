@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Plus, RefreshCw, Search } from "lucide-react";
+import { Plus, RefreshCw, Search, Upload } from "lucide-react";
 import { request, softRequest, money, fmtDate, isHqRole, type AdminUser } from "../api";
 import {
   StatusBadge,
@@ -34,6 +34,7 @@ type Draft = {
   category: string;
   manufacturer: string;
   price: string;
+  imageUrl: string;
   description: string;
   requiresPrescription: boolean;
 };
@@ -48,6 +49,7 @@ const EMPTY_DRAFT: Draft = {
   category: "",
   manufacturer: "",
   price: "",
+  imageUrl: "",
   description: "",
   requiresPrescription: false,
 };
@@ -88,6 +90,7 @@ function draftFrom(item: any): Draft {
     category: String(item.category || ""),
     manufacturer: String(item.manufacturer || ""),
     price: String(item.price ?? ""),
+    imageUrl: String(item.imageUrl || item.image_url || ""),
     description: String(item.description || ""),
     requiresPrescription: Boolean(item.requiresPrescription),
   };
@@ -116,6 +119,16 @@ function diffDraft(item: any, d: Draft): Change[] {
   if (nameRu !== String(item.nameRu || "")) out.push({ key: "nameRu", label: "Nomi (ru)", from: String(item.nameRu || "—"), to: nameRu, value: nameRu });
   if (category !== String(item.category || "")) out.push({ key: "category", label: "Kategoriya", from: String(item.category || "—"), to: category || "—", value: category });
   if (price !== Number(item.price)) out.push({ key: "price", label: "Narx", from: money(Number(item.price || 0)), to: money(price), value: price });
+  const imageUrl = d.imageUrl.trim();
+  if (imageUrl !== String(item.imageUrl || item.image_url || "")) {
+    out.push({
+      key: "imageUrl",
+      label: "Rasm",
+      from: (item.imageUrl || item.image_url) ? "mavjud" : "—",
+      to: imageUrl ? "yangi rasm" : "o‘chirildi",
+      value: imageUrl,
+    });
+  }
   if (description !== String(item.description || "")) out.push({ key: "description", label: "Tavsif", from: item.description ? "matn" : "—", to: description ? "yangi matn" : "—", value: description });
   if (d.requiresPrescription !== Boolean(item.requiresPrescription)) {
     out.push({ key: "requiresPrescription", label: "Retsept", from: rxText(Boolean(item.requiresPrescription)), to: rxText(d.requiresPrescription), value: d.requiresPrescription });
@@ -159,6 +172,38 @@ export function CatalogPage(props: {
   const [drawerNotice, setDrawerNotice] = useState<Notice | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    setUploadingImage(true);
+    setFormError("");
+    reader.onload = async () => {
+      try {
+        setBusy(true);
+        const res = await request("/api/admin/uploads", props.token, {
+          method: "POST",
+          body: JSON.stringify({ data: reader.result, filename: file.name }),
+        });
+        if (res?.url) {
+          setField("imageUrl", res.url);
+        }
+      } catch (err: any) {
+        setFormError(err?.message || "Rasm yuklanmadi. Qayta urinib ko‘ring.");
+      } finally {
+        setBusy(false);
+        setUploadingImage(false);
+      }
+    };
+    reader.onerror = () => {
+      setUploadingImage(false);
+      setFormError("Faylni o‘qishda xatolik yuz berdi.");
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
 
   const listSeq = useRef(0);
   const hasFilters = Boolean(applied.q.trim() || applied.category);
@@ -329,6 +374,7 @@ export function CatalogPage(props: {
             category: draft.category.trim(),
             manufacturer: draft.manufacturer.trim(),
             price: parsePrice(draft.price) ?? 0,
+            imageUrl: draft.imageUrl.trim() || null,
             description: draft.description.trim(),
             requiresPrescription: draft.requiresPrescription,
           }),
@@ -540,7 +586,13 @@ export function CatalogPage(props: {
                     >
                       <td className="cat-cell-product">
                         <div className="cat-product">
-                          <span className="cat-mark" aria-hidden="true">{name.charAt(0).toUpperCase()}</span>
+                          <span className="cat-mark" aria-hidden="true">
+                            {(item.imageUrl || item.image_url) ? (
+                              <img src={item.imageUrl || item.image_url} alt="" className="cat-mark-img" />
+                            ) : (
+                              name.charAt(0).toUpperCase()
+                            )}
+                          </span>
                           <span className="cat-identity">
                             <span className="cat-name">{name}</span>
                             <span className="cat-sub">
@@ -679,6 +731,46 @@ export function CatalogPage(props: {
                     required
                   />
                 </label>
+                <div className="filter-field cat-form-full cat-image-control">
+                  <span className="filter-label">Mahsulot rasmi</span>
+                  <div className="cat-image-box">
+                    {draft.imageUrl ? (
+                      <div className="cat-preview-box">
+                        <img src={draft.imageUrl} alt="Mahsulot prevyusi" className="cat-preview-img" />
+                        <div className="cat-preview-info">
+                          <span className="cat-preview-url">{draft.imageUrl.length > 50 ? `${draft.imageUrl.slice(0, 47)}…` : draft.imageUrl}</span>
+                          <button
+                            type="button"
+                            className="btn-tertiary cat-remove-img"
+                            onClick={() => setField("imageUrl", "")}
+                          >
+                            Rasmni o‘chirish
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="cat-image-actions">
+                      <label className={`btn-secondary cat-upload-label${uploadingImage ? " is-busy" : ""}`}>
+                        <Upload size={14} strokeWidth={2} aria-hidden="true" />
+                        <span>{uploadingImage ? "Yuklanmoqda…" : "Fayldan tanlash"}</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          disabled={uploadingImage || busy}
+                          style={{ display: "none" }}
+                          onChange={handleImageUpload}
+                        />
+                      </label>
+                      <input
+                        type="url"
+                        className="cat-url-input"
+                        placeholder="yoki rasm havolasini (URL) kiriting: https://..."
+                        value={draft.imageUrl}
+                        onChange={(e) => setField("imageUrl", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
                 <label className="filter-field cat-form-full">
                   <span className="filter-label">Tavsif</span>
                   <textarea value={draft.description} onChange={(e) => setField("description", e.target.value)} rows={3} />
@@ -710,6 +802,11 @@ export function CatalogPage(props: {
         {mode === "view" && selected ? (
           <>
             <DrawerSection title="Mahsulot">
+              {(selected.imageUrl || selected.image_url) ? (
+                <div className="cat-view-image-wrap">
+                  <img src={selected.imageUrl || selected.image_url} alt={selected.nameUz} className="cat-view-image" />
+                </div>
+              ) : null}
               <dl className="cat-kv">
                 <div>
                   <dt>Nomi (uz)</dt>

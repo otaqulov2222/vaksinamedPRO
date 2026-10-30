@@ -134,6 +134,13 @@
       "when": 1759000000000,
       "tag": "0018_customer_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1760000000000,
+      "tag": "0019_product_image_url",
+      "breakpoints": true
     }
   ]
 }
