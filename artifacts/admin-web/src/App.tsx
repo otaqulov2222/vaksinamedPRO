@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Eye, EyeOff, Moon, Sun } from "lucide-react";
+import { Calendar, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Eye, EyeOff, Menu, Moon, Sun, X } from "lucide-react";
 import { request, softRequest, money, type AdminUser } from "./api";
 import {
   NAV,
@@ -82,6 +82,7 @@ export default function App() {
   const [activePreset, setActivePreset] = useState<Preset>("today");
   const [customDate, setCustomDate] = useState("");
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const datePickerRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const today = useMemo(() => new Date(), []);
@@ -340,6 +341,15 @@ export default function App() {
       <aside className="side" aria-label="Asosiy menyu">
         <div className="side-head">
           <div className="side-brand-row">
+            <button
+              type="button"
+              className="side-mobile-toggle"
+              onClick={() => setMobileNavOpen((prev) => !prev)}
+              aria-label="Menyu"
+              title="Menyu"
+            >
+              <Menu size={20} strokeWidth={2} aria-hidden="true" />
+            </button>
             <div className="brand" aria-label="VaksinaMed">
               <span className="brand-mark">VM</span>
               {!sidebarCollapsed ? (
@@ -683,6 +693,86 @@ export default function App() {
           ) : null}
         </main>
       </div>
+
+      {mobileNavOpen ? (
+        <div className="mobile-nav-root">
+          <div className="mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
+          <div className="mobile-nav-drawer" role="dialog" aria-modal="true" aria-label="Bo‘limlar menyusi">
+            <div className="mobile-nav-head">
+              <div className="brand">
+                <span className="brand-mark">VM</span>
+                <span className="brand-lockup">
+                  <span className="brand-text">VAKSINA MED</span>
+                  <span className="brand-sub">{user.name} ({roleLabel(user.role)})</span>
+                </span>
+              </div>
+              <button
+                type="button"
+                className="mobile-nav-close"
+                onClick={() => setMobileNavOpen(false)}
+                aria-label="Yopish"
+              >
+                <X size={20} strokeWidth={2} />
+              </button>
+            </div>
+            <div className="mobile-nav-body">
+              {NAV_GROUPS.map((group) => {
+                const items = group.items.filter((item) => navVisible(item, permissions, user.role));
+                if (!items.length) return null;
+                return (
+                  <div key={group.id} className="mobile-nav-group">
+                    <div className="mobile-nav-group-title">{group.label}</div>
+                    <div className="mobile-nav-group-items">
+                      {items.map((item) => {
+                        const active = tab === item.id;
+                        const Icon = NAV_ICONS[item.id];
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`mobile-nav-item${active ? " is-active" : ""}`}
+                            onClick={() => {
+                              setTab(item.id);
+                              setMobileNavOpen(false);
+                            }}
+                          >
+                            <span className="nav-icon" aria-hidden="true">
+                              {Icon ? <Icon size={18} strokeWidth={2} /> : null}
+                            </span>
+                            <span className="mobile-nav-label">{item.label}</span>
+                            {active ? <span className="mobile-nav-active-dot" /> : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mobile-nav-footer">
+              <button
+                type="button"
+                className="mobile-nav-theme-btn"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              >
+                {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                <span>{theme === "dark" ? "Kunduzgi rejim" : "Tungi rejim"}</span>
+              </button>
+              <button
+                type="button"
+                className="mobile-nav-logout-btn"
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  void logout();
+                }}
+              >
+                <LOGOUT_ICON size={16} />
+                <span>Chiqish</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
