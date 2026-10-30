@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Plus, RefreshCw, Search, Upload } from "lucide-react";
+import { Plus, RefreshCw, Search, Upload, Wand2 } from "lucide-react";
 import { request, softRequest, money, fmtDate, isHqRole, type AdminUser } from "../api";
 import {
   StatusBadge,
@@ -174,6 +174,20 @@ export function CatalogPage(props: {
   const [busy, setBusy] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  const [branchMode, setBranchMode] = useState<"all" | "selected">("all");
+  const [selectedBranchIds, setSelectedBranchIds] = useState<number[]>([]);
+  const [initialStock, setInitialStock] = useState<string>("10");
+
+  function autoGenerateSku() {
+    const raw = (draft.nameUz.trim() || draft.category.trim() || "DORI");
+    const base = raw
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 6);
+    const rnd = Math.floor(1000 + Math.random() * 9000);
+    setField("sku", `VM-${base || "MED"}-${rnd}`);
+  }
+
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -310,6 +324,9 @@ export function CatalogPage(props: {
     setFormError("");
     setDrawerNotice(null);
     setNotice(null);
+    setBranchMode("all");
+    setSelectedBranchIds(props.branches.map((b) => Number(b.id)));
+    setInitialStock("10");
   }
 
   function startEdit() {
@@ -365,6 +382,8 @@ export function CatalogPage(props: {
     try {
       if (pending.kind === "create") {
         const nameUz = draft.nameUz.trim();
+        const targetBranchIds = branchMode === "all" ? "all" : selectedBranchIds;
+        const initialQuantity = Math.max(0, parseInt(initialStock, 10) || 0);
         const data = await request("/api/admin/products", props.token, {
           method: "POST",
           body: JSON.stringify({
@@ -377,6 +396,8 @@ export function CatalogPage(props: {
             imageUrl: draft.imageUrl.trim() || null,
             description: draft.description.trim(),
             requiresPrescription: draft.requiresPrescription,
+            targetBranchIds,
+            initialQuantity,
           }),
         });
         const created = data?.product;
@@ -686,8 +707,25 @@ export function CatalogPage(props: {
               <div className="cat-form-grid">
                 {mode === "create" ? (
                   <label className="filter-field">
-                    <span className="filter-label">SKU *</span>
-                    <input value={draft.sku} onChange={(e) => setField("sku", e.target.value)} required autoComplete="off" />
+                    <span className="filter-label cat-sku-header">
+                      <span>SKU (Noyob kod) *</span>
+                      <button
+                        type="button"
+                        className="cat-auto-sku-btn"
+                        onClick={autoGenerateSku}
+                        title="Avtomatik unikal SKU generatsiya qilish"
+                      >
+                        <Wand2 size={12} strokeWidth={2.2} aria-hidden="true" />
+                        <span>Avto yaratish</span>
+                      </button>
+                    </span>
+                    <input
+                      value={draft.sku}
+                      onChange={(e) => setField("sku", e.target.value)}
+                      placeholder="Masalan: VM-D3-60"
+                      required
+                      autoComplete="off"
+                    />
                   </label>
                 ) : null}
                 <label className="filter-field">
@@ -796,6 +834,69 @@ export function CatalogPage(props: {
               </p>
               {formError ? <FeedbackBanner tone="danger">{formError}</FeedbackBanner> : null}
             </DrawerSection>
+
+            {mode === "create" ? (
+              <DrawerSection title="Filiallar va boshlang‘ich qoldiq">
+                <div className="cat-branch-scope-box">
+                  <div className="cat-scope-radios">
+                    <label className="cat-radio-row">
+                      <input
+                        type="radio"
+                        name="catBranchScope"
+                        checked={branchMode === "all"}
+                        onChange={() => setBranchMode("all")}
+                      />
+                      <span>Barcha filiallar ({props.branches.length} ta)</span>
+                    </label>
+                    <label className="cat-radio-row">
+                      <input
+                        type="radio"
+                        name="catBranchScope"
+                        checked={branchMode === "selected"}
+                        onChange={() => setBranchMode("selected")}
+                      />
+                      <span>Faqat tanlangan filiallar</span>
+                    </label>
+                  </div>
+
+                  {branchMode === "selected" ? (
+                    <div className="cat-branch-checklist">
+                      {props.branches.map((b) => {
+                        const bId = Number(b.id);
+                        const checked = selectedBranchIds.includes(bId);
+                        return (
+                          <label key={bId} className="cat-branch-check-row">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedBranchIds((prev) => [...prev, bId]);
+                                } else {
+                                  setSelectedBranchIds((prev) => prev.filter((id) => id !== bId));
+                                }
+                              }}
+                            />
+                            <span>{b.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  <label className="filter-field cat-init-stock-field">
+                    <span className="filter-label">Boshlang‘ich fizik qoldiq (dona)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={initialStock}
+                      onChange={(e) => setInitialStock(e.target.value)}
+                      placeholder="10"
+                    />
+                  </label>
+                </div>
+              </DrawerSection>
+            ) : null}
           </form>
         ) : null}
 
@@ -941,12 +1042,20 @@ export function CatalogPage(props: {
                 <dd>{draft.category.trim() || "Boshqa"}</dd>
               </div>
               <div>
+                <dt>Filiallar</dt>
+                <dd>{branchMode === "all" ? `Barcha (${props.branches.length} ta)` : `${selectedBranchIds.length} ta tanlangan`}</dd>
+              </div>
+              <div>
+                <dt>Boshlang‘ich qoldiq</dt>
+                <dd>{initialStock || "10"} dona</dd>
+              </div>
+              <div>
                 <dt>Retsept</dt>
                 <dd>{rxText(draft.requiresPrescription)}</dd>
               </div>
             </dl>
             <p className="cat-note">
-              Server barcha filiallarga boshlang‘ich 10 dona fizik qoldiq yozadi. Keyin qoldiqni Ombor bo‘limida tekshiring.
+              Server barcha filiallarga boshlang‘ich 10 dona fizik qoldiq (yoki tanlangan filiallar kesimida) yozadi. Keyin qoldiqni Ombor bo‘limida tekshiring.
             </p>
           </div>
         }

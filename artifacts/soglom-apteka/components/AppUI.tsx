@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 
-export function Screen({ children, scroll = true }: PropsWithChildren<{ scroll?: boolean }>) {
+export function Screen({ children, scroll = true, refreshControl }: PropsWithChildren<{ scroll?: boolean; refreshControl?: React.ReactElement }>) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const segments = useSegments();
@@ -38,7 +38,8 @@ export function Screen({ children, scroll = true }: PropsWithChildren<{ scroll?:
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
         alwaysBounceHorizontal={false}
-        bounces={false}
+        bounces={Boolean(refreshControl)}
+        refreshControl={refreshControl}
         directionalLockEnabled
         keyboardShouldPersistTaps="handled"
       >

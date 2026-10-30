@@ -623,13 +623,22 @@ router.post("/admin/products", async (req, res, next) => {
     }).returning();
     const allBranches = await db.select().from(branches);
     if (allBranches.length) {
-      await db.insert(productStocks).values(allBranches.map((branch) => ({
-        productId: created[0].id,
-        branchId: branch.id,
-        quantity: Number(body.quantity) || 10,
-        physicalQuantity: Number(body.quantity) || 10,
-        reservedQuantity: 0,
-      })));
+      const targetIds = Array.isArray(body.targetBranchIds)
+        ? new Set(body.targetBranchIds.map(Number))
+        : null;
+      const initialQty = body.initialQuantity != null ? Math.max(0, Number(body.initialQuantity)) : (Number(body.quantity) || 10);
+
+      await db.insert(productStocks).values(allBranches.map((branch) => {
+        const hasStock = targetIds == null || targetIds.has(branch.id);
+        const qty = hasStock ? initialQty : 0;
+        return {
+          productId: created[0].id,
+          branchId: branch.id,
+          quantity: Number(body.quantity) || 10,
+          physicalQuantity: qty,
+          reservedQuantity: 0,
+        };
+      }));
     }
     try {
       await db.insert(auditLog).values({

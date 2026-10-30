@@ -1,11 +1,12 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -81,6 +82,7 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Record<string, boolean>>({});
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilterKey>('all');
@@ -91,7 +93,7 @@ export default function HomeScreen() {
     setProductsLoading(true);
     setProductsError(false);
     void api
-      .products('?limit=24&offset=0')
+      .products('?limit=50&offset=0')
       .then((data) => {
         setProducts(data.products || []);
         setProductsError(false);
@@ -100,12 +102,27 @@ export default function HomeScreen() {
         setProducts([]);
         setProductsError(true);
       })
-      .finally(() => setProductsLoading(false));
+      .finally(() => {
+        setProductsLoading(false);
+        setRefreshing(false);
+      });
   }, []);
 
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProducts();
+    }, [loadProducts]),
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadProducts();
+    void refresh();
+  }, [loadProducts, refresh]);
 
   const onSearch = () => {
     const q = query.trim();
@@ -195,7 +212,16 @@ export default function HomeScreen() {
   }, [products, selectedCategory, language]);
 
   return (
-    <Screen>
+    <Screen
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[PURPLE]}
+          tintColor={PURPLE}
+        />
+      }
+    >
       {/* HEADER — Clean Brand Logo + Actions */}
       <View style={styles.header}>
         <Image
