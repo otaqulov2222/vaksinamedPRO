@@ -11782,6 +11782,12 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
 .inv-fom,
 .inv-controls-note,
 .inv-note,
+.cat-summary-note,
+.cat-controls-note,
+.cu-summary-note,
+.cu-controls-note,
+.orders-summary-note,
+.orders-controls-note,
 .br-scope-note,
 .del-scope-note,
 .fom-scope-note,
@@ -12610,5 +12616,425 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   padding: 0 12px !important;
   border-radius: 8px !important;
 }
+
+/* ==========================================================================
+   Ombor (Inventory) — Executive Visual Overhaul
+   ========================================================================== */
+
+.inv-summary {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04) !important;
+}
+
+.inv-summary-cell {
+  padding: 16px 20px !important;
+}
+
+.inv-summary-v {
+  font-size: 26px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.inv-controls {
+  border-radius: 14px !important;
+  padding: 18px 20px !important;
+}
+
+.inv-controls-scope {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding-bottom: 14px !important;
+  border-bottom: 1px solid var(--vm-border-subtle) !important;
+}
+
+.inv-controls-scope .filter-field {
+  min-width: 280px !important;
+}
+
+.inv-controls-scope select,
+.inv-controls-scope .inv-branch-fixed {
+  height: 44px !important;
+  font-size: 14.5px !important;
+  font-weight: 650 !important;
+  border-radius: 9px !important;
+}
+
+.inv-controls-primary {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: flex-end !important;
+  gap: 12px 14px !important;
+  padding-top: 14px !important;
+}
+
+.inv-surface {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04) !important;
+}
+
+.inv-surface .table th {
+  padding: 14px 18px !important;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+
+.inv-surface .table td {
+  padding: 14px 18px !important;
+  font-size: 14px !important;
+}
+
+.inv-surface .inv-name {
+  font-size: 14.5px !important;
+  font-weight: 700 !important;
+}
+
+.inv-surface .table td.inv-avail {
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  color: #10B981 !important;
+}
+
+.inv-surface .table td.num {
+  font-size: 14px !important;
+  font-weight: 650 !important;
+}
+
+/* Light Mode Overrides for Inventory */
+[data-theme="light"] .inv-summary,
+[data-theme="light"] .inv-controls,
+[data-theme="light"] .inv-surface,
+[data-theme="light"] .inv-idle {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .inv-summary-cell {
+  background: #FFFFFF !important;
+  box-shadow: inset 1px 0 0 #F1F5F9 !important;
+}
+
+[data-theme="light"] .inv-summary-cell.is-ok .inv-summary-v {
+  color: #059669 !important;
+}
+
+[data-theme="light"] .inv-summary-cell.is-warn .inv-summary-v {
+  color: #D97706 !important;
+}
+
+[data-theme="light"] .inv-summary-cell.is-info .inv-summary-v {
+  color: #2563EB !important;
+}
+
+[data-theme="light"] .inv-summary-cell.is-danger .inv-summary-v {
+  color: #DC2626 !important;
+}
+
+[data-theme="light"] .inv-idle-icon {
+  background: #EDE9FE !important;
+  color: #7C3AED !important;
+  border: 1px solid #DDD6FE !important;
+}
+
+[data-theme="light"] .inv-idle-axes {
+  background: #F8FAFC !important;
+  border: 1px solid #E2E8F0 !important;
+}
+
+[data-theme="light"] .inv-idle-axes > div {
+  box-shadow: inset 1px 0 0 #E2E8F0 !important;
+}
+
+[data-theme="light"] .inv-surface tr.inv-row:hover td {
+  background: #F8FAFC !important;
+}
+
+/* Dark Mode Overrides for Inventory */
+[data-theme="dark"] .inv-summary,
+[data-theme="dark"] .inv-controls,
+[data-theme="dark"] .inv-surface,
+[data-theme="dark"] .inv-idle {
+  background: #180D2C !important;
+  border: 1px solid rgba(139, 92, 246, 0.22) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="dark"] .inv-summary-cell {
+  background: transparent !important;
+  box-shadow: inset 1px 0 0 rgba(139, 92, 246, 0.16) !important;
+}
+
+[data-theme="dark"] .inv-summary-k {
+  color: #C4B5FD !important;
+}
+
+[data-theme="dark"] .inv-summary-v {
+  color: #FFFFFF !important;
+}
+
+[data-theme="dark"] .inv-summary-cell.is-ok .inv-summary-v {
+  color: #34D399 !important;
+}
+
+[data-theme="dark"] .inv-summary-cell.is-warn .inv-summary-v {
+  color: #FBBF24 !important;
+}
+
+[data-theme="dark"] .inv-summary-cell.is-info .inv-summary-v {
+  color: #60A5FA !important;
+}
+
+[data-theme="dark"] .inv-summary-cell.is-danger .inv-summary-v {
+  color: #F87171 !important;
+}
+
+[data-theme="dark"] .inv-idle-icon {
+  background: rgba(139, 92, 246, 0.2) !important;
+  color: #C4B5FD !important;
+  border: 1px solid rgba(139, 92, 246, 0.35) !important;
+}
+
+[data-theme="dark"] .inv-idle-title {
+  color: #FFFFFF !important;
+}
+
+[data-theme="dark"] .inv-idle-desc {
+  color: #C4B5FD !important;
+}
+
+[data-theme="dark"] .inv-idle-axes {
+  background: rgba(19, 9, 36, 0.75) !important;
+  border: 1px solid rgba(139, 92, 246, 0.22) !important;
+}
+
+[data-theme="dark"] .inv-idle-axes > div {
+  box-shadow: inset 1px 0 0 rgba(139, 92, 246, 0.16) !important;
+}
+
+[data-theme="dark"] .inv-idle-axes dt {
+  color: #FFFFFF !important;
+}
+
+[data-theme="dark"] .inv-idle-axes dd {
+  color: #A78BFA !important;
+}
+
+[data-theme="dark"] .inv-surface tr.inv-row:hover td {
+  background: rgba(139, 92, 246, 0.12) !important;
+}
+
+[data-theme="dark"] .inv-surface .table td.inv-avail {
+  color: #34D399 !important;
+}
+
+/* ==========================================================================
+   Katalog (Catalog) — Executive Visual Overhaul
+   ========================================================================== */
+
+.cat-controls {
+  border-radius: 14px !important;
+  padding: 18px 20px !important;
+}
+
+.cat-surface {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04) !important;
+}
+
+.cat-surface .table th {
+  padding: 14px 18px !important;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+
+.cat-surface .table td {
+  padding: 14px 18px !important;
+  font-size: 14px !important;
+}
+
+.cat-product {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+}
+
+.cat-mark {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  transition: all 0.2s ease !important;
+}
+
+.cat-name {
+  font-size: 14.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.cat-cell-price {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* Light Mode Overrides for Catalog */
+[data-theme="light"] .cat-controls,
+[data-theme="light"] .cat-surface {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .cat-mark {
+  background: #EDE9FE !important;
+  color: #7C3AED !important;
+  border: 1px solid #DDD6FE !important;
+}
+
+[data-theme="light"] .cat-name {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .cat-cell-price {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .cat-surface tr.cat-row:hover td {
+  background: #F8FAFC !important;
+}
+
+/* Dark Mode Overrides for Catalog */
+[data-theme="dark"] .cat-controls,
+[data-theme="dark"] .cat-surface {
+  background: #180D2C !important;
+  border: 1px solid rgba(139, 92, 246, 0.22) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="dark"] .cat-mark {
+  background: rgba(139, 92, 246, 0.2) !important;
+  color: #C4B5FD !important;
+  border: 1px solid rgba(139, 92, 246, 0.35) !important;
+}
+
+[data-theme="dark"] .cat-name {
+  color: #FFFFFF !important;
+}
+
+[data-theme="dark"] .cat-cell-price {
+  color: #FFFFFF !important;
+}
+
+[data-theme="dark"] .cat-surface tr.cat-row:hover td {
+  background: rgba(139, 92, 246, 0.12) !important;
+}
+
+/* ==========================================================================
+   Buyurtmalar (Orders) & To‘lovlar (Payments) — Executive Visual Overhaul
+   ========================================================================== */
+
+.orders-controls,
+.payments-controls {
+  border-radius: 14px !important;
+  padding: 18px 20px !important;
+}
+
+.orders-surface,
+.payments-surface {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04) !important;
+}
+
+.orders-surface .table th,
+.payments-surface .table th {
+  padding: 14px 18px !important;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+
+.orders-surface .table td,
+.payments-surface .table td {
+  padding: 14px 18px !important;
+  font-size: 14px !important;
+}
+
+.orders-code {
+  font-size: 14.5px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.02em !important;
+}
+
+.orders-cell-sum {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* Light Mode Overrides for Orders & Payments */
+[data-theme="light"] .orders-controls,
+[data-theme="light"] .orders-surface,
+[data-theme="light"] .payments-controls,
+[data-theme="light"] .payments-surface {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .orders-code {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .orders-cell-sum {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .orders-surface tr.orders-row:hover td,
+[data-theme="light"] .payments-surface tr.payments-row:hover td {
+  background: #F8FAFC !important;
+}
+
+/* Dark Mode Overrides for Orders & Payments */
+[data-theme="dark"] .orders-controls,
+[data-theme="dark"] .orders-surface,
+[data-theme="dark"] .payments-controls,
+[data-theme="dark"] .payments-surface {
+  background: #180D2C !important;
+  border: 1px solid rgba(139, 92, 246, 0.22) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="dark"] .orders-code {
+  color: #FFFFFF !important;
+}
+
+[data-theme="dark"] .orders-sub {
+  color: #C4B5FD !important;
+}
+
+[data-theme="dark"] .orders-cell-sum {
+  color: #FFFFFF !important;
+}
+
+[data-theme="dark"] .orders-surface tr.orders-row:hover td,
+[data-theme="dark"] .payments-surface tr.payments-row:hover td {
+  background: rgba(139, 92, 246, 0.12) !important;
+}
+
+
+
 
 
