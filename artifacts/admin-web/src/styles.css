@@ -13034,6 +13034,142 @@ button.act-row:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--
   background: rgba(139, 92, 246, 0.12) !important;
 }
 
+/* ==========================================================================
+   Mijozlar (Customers) & Baholar (Ratings) — Executive Visual Overhaul
+   ========================================================================== */
+
+.cu-controls,
+.rt-controls {
+  border-radius: 14px !important;
+  padding: 18px 20px !important;
+}
+
+.cu-surface,
+.rt-surface {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04) !important;
+}
+
+.cu-surface .table th,
+.rt-surface .table th {
+  padding: 14px 18px !important;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+
+.cu-surface .table td,
+.rt-surface .table td {
+  padding: 14px 18px !important;
+  font-size: 14px !important;
+}
+
+.cu-avatar {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 10px !important;
+  font-size: 13.5px !important;
+  font-weight: 800 !important;
+  transition: all 0.2s ease !important;
+}
+
+.cu-name {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.cu-phone {
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+}
+
+.cu-cell-balance {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.rt-score {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.rt-score-num {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+/* Light Mode Overrides for Customers & Ratings */
+[data-theme="light"] .cu-controls,
+[data-theme="light"] .cu-surface,
+[data-theme="light"] .rt-controls,
+[data-theme="light"] .rt-surface {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .cu-avatar {
+  background: #EDE9FE !important;
+  color: #7C3AED !important;
+  border: 1px solid #DDD6FE !important;
+}
+
+[data-theme="light"] .cu-name {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .cu-phone {
+  color: #64748B !important;
+}
+
+[data-theme="light"] .cu-cell-balance {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] .cu-surface tr.cu-row:hover td,
+[data-theme="light"] .rt-surface tr.rt-row:hover td {
+  background: #F8FAFC !important;
+}
+
+/* Dark Mode Overrides for Customers & Ratings */
+[data-theme="dark"] .cu-controls,
+[data-theme="dark"] .cu-surface,
+[data-theme="dark"] .rt-controls,
+[data-theme="dark"] .rt-surface {
+  background: #180D2C !important;
+  border: 1px solid rgba(139, 92, 246, 0.22) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="dark"] .cu-avatar {
+  background: rgba(139, 92, 246, 0.2) !important;
+  color: #C4B5FD !important;
+  border: 1px solid rgba(139, 92, 246, 0.35) !important;
+}
+
+[data-theme="dark"] .cu-name {
+  color: #FFFFFF !important;
+}
+
+[data-theme="dark"] .cu-phone {
+  color: #C4B5FD !important;
+}
+
+[data-theme="dark"] .cu-cell-balance {
+  color: #FFFFFF !important;
+}
+
+[data-theme="dark"] .cu-surface tr.cu-row:hover td,
+[data-theme="dark"] .rt-surface tr.rt-row:hover td {
+  background: rgba(139, 92, 246, 0.12) !important;
+}
+
+
 
 
 
