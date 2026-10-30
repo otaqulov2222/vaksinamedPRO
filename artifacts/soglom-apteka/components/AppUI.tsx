@@ -1,11 +1,11 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { PropsWithChildren } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type RefreshControlProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 
-export function Screen({ children, scroll = true, refreshControl }: PropsWithChildren<{ scroll?: boolean; refreshControl?: React.ReactElement }>) {
+export function Screen({ children, scroll = true, refreshControl }: PropsWithChildren<{ scroll?: boolean; refreshControl?: React.ReactElement<RefreshControlProps> }>) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const segments = useSegments();
