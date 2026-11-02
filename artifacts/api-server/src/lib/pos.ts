@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { adminUsers, branches, cashbackLedger, commercialTransactions, customers, db, loyaltyLedger, posSales } from "@workspace/db";
+import { adminUsers, branches, cashbackLedger, commercialTransactions, customers, db, loyaltyLedger, orders, posSales } from "@workspace/db";
 import { formatDate } from "./money";
 import {
   MIN_PURCHASE_UZS,
@@ -142,6 +142,16 @@ async function findCustomerByStaticCode(raw: string) {
   if (card) {
     const byId = await db.select().from(customers).where(eq(customers.id, Number(card[1]))).limit(1);
     if (byId[0]) return byId[0];
+  }
+
+  // Order code or QR payload: VM-MVYSPYTS or VAKSINA-VM-MVYSPYTS
+  const orderCandidate = text.startsWith('VAKSINA-') ? text.slice(8) : text;
+  if (/^VM-[A-Z0-9]+$/i.test(orderCandidate)) {
+    const orderRows = await db.select().from(orders).where(eq(orders.code, orderCandidate)).limit(1);
+    if (orderRows[0]) {
+      const byId = await db.select().from(customers).where(eq(customers.id, orderRows[0].customerId)).limit(1);
+      if (byId[0]) return byId[0];
+    }
   }
 
   return null;
