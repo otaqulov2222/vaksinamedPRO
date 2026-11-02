@@ -528,7 +528,7 @@ export function PosTerminal({ token, branches, defaultBranchId, operatorName, re
                 <div><dt>Xarid summasi</dt><dd>{money(receipt.amount)}</dd></div>
                 <div><dt>Cashback ishlatildi</dt><dd>−{money(receipt.cashbackUsed)}</dd></div>
               </dl>
-              <div className="pos-total">
+              <div className="pos-total is-ready">
                 <span>To‘landi</span>
                 <b>{money(receipt.payable)}</b>
               </div>
@@ -567,7 +567,7 @@ export function PosTerminal({ token, branches, defaultBranchId, operatorName, re
                   <dd>{preview ? `−${money(preview.cashbackUsed)}` : <span className="pos-dim">—</span>}</dd>
                 </div>
               </dl>
-              <div className="pos-total">
+              <div className={`pos-total${preview ? " is-ready" : " is-idle"}`}>
                 <span>To‘lanadi</span>
                 <b>{preview ? money(preview.payable) : <span className="pos-dim">—</span>}</b>
               </div>
