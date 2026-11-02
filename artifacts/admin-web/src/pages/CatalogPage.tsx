@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Plus, RefreshCw, Search, Upload, Wand2 } from "lucide-react";
+import { Plus, RefreshCw, Search, Upload } from "lucide-react";
 import { request, softRequest, money, fmtDate, isHqRole, type AdminUser } from "../api";
 import {
   StatusBadge,
@@ -96,8 +96,7 @@ function draftFrom(item: any): Draft {
   };
 }
 
-function validate(d: Draft, mode: Mode): string {
-  if (mode === "create" && !d.sku.trim()) return "SKU majburiy.";
+function validate(d: Draft, _mode: Mode): string {
   if (!d.nameUz.trim()) return "Nomi (uz) majburiy.";
   if (parsePrice(d.price) == null) return "Narx butun son bo‘lishi kerak (so‘m, 0 yoki undan katta).";
   return "";
@@ -178,14 +177,14 @@ export function CatalogPage(props: {
   const [selectedBranchIds, setSelectedBranchIds] = useState<number[]>([]);
   const [initialStock, setInitialStock] = useState<string>("10");
 
-  function autoGenerateSku() {
-    const raw = (draft.nameUz.trim() || draft.category.trim() || "DORI");
+  function generateAutoSku(name = "") {
+    const raw = (name.trim() || draft.nameUz.trim() || draft.category.trim() || "DORI");
     const base = raw
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, "")
       .slice(0, 6);
     const rnd = Math.floor(1000 + Math.random() * 9000);
-    setField("sku", `VM-${base || "MED"}-${rnd}`);
+    return `VM-${base || "MED"}-${rnd}`;
   }
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -320,7 +319,7 @@ export function CatalogPage(props: {
     setMode("create");
     setOpenId(null);
     setSelected(null);
-    setDraft(EMPTY_DRAFT);
+    setDraft({ ...EMPTY_DRAFT, sku: generateAutoSku() });
     setFormError("");
     setDrawerNotice(null);
     setNotice(null);
@@ -382,12 +381,13 @@ export function CatalogPage(props: {
     try {
       if (pending.kind === "create") {
         const nameUz = draft.nameUz.trim();
+        const sku = draft.sku.trim() || generateAutoSku(nameUz);
         const targetBranchIds = branchMode === "all" ? "all" : selectedBranchIds;
         const initialQuantity = Math.max(0, parseInt(initialStock, 10) || 0);
         const data = await request("/api/admin/products", props.token, {
           method: "POST",
           body: JSON.stringify({
-            sku: draft.sku.trim(),
+            sku,
             nameUz,
             nameRu: draft.nameRu.trim() || nameUz,
             category: draft.category.trim(),
@@ -697,37 +697,8 @@ export function CatalogPage(props: {
 
         {formMode ? (
           <form id="cat-form" className="cat-form" onSubmit={submitForm} noValidate>
-            {mode === "create" ? (
-              <FeedbackBanner tone="warn">
-                Server yangi mahsulotni barcha filiallarga boshlang‘ich 10 dona fizik qoldiq bilan qo‘shadi.
-                Bu ombor harakati sifatida yozilmaydi — qo‘shgandan so‘ng qoldiqni Ombor bo‘limida tekshiring.
-              </FeedbackBanner>
-            ) : null}
             <DrawerSection title="Asosiy ma’lumotlar">
               <div className="cat-form-grid">
-                {mode === "create" ? (
-                  <label className="filter-field">
-                    <span className="filter-label cat-sku-header">
-                      <span>SKU (Noyob kod) *</span>
-                      <button
-                        type="button"
-                        className="cat-auto-sku-btn"
-                        onClick={autoGenerateSku}
-                        title="Avtomatik unikal SKU generatsiya qilish"
-                      >
-                        <Wand2 size={12} strokeWidth={2.2} aria-hidden="true" />
-                        <span>Avto yaratish</span>
-                      </button>
-                    </span>
-                    <input
-                      value={draft.sku}
-                      onChange={(e) => setField("sku", e.target.value)}
-                      placeholder="Masalan: VM-D3-60"
-                      required
-                      autoComplete="off"
-                    />
-                  </label>
-                ) : null}
                 <label className="filter-field">
                   <span className="filter-label">Nomi (uz) *</span>
                   <input value={draft.nameUz} onChange={(e) => setField("nameUz", e.target.value)} required />
@@ -1025,10 +996,6 @@ export function CatalogPage(props: {
         description={
           <div className="cat-confirm">
             <dl className="cat-kv">
-              <div>
-                <dt>SKU</dt>
-                <dd className="cat-kv-mono">{draft.sku.trim()}</dd>
-              </div>
               <div>
                 <dt>Nomi</dt>
                 <dd>{draft.nameUz.trim()}</dd>
