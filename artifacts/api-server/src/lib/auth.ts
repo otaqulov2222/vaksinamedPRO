@@ -24,7 +24,6 @@ import { normalizeAdminRole } from "./securityEnv";
 import { earnCashback } from "./cashbackFinance";
 import { WELCOME_BONUS_UZS } from "./cashback";
 import {
-  confirmFacePresence,
   createPendingAdminLogin,
   verifyWebauthnAndBind,
   type PendingLogin,
@@ -610,18 +609,21 @@ export async function completeAdminBiometricLogin(
   req?: Request,
 ) {
   const method = String(body.method || "webauthn").toLowerCase();
-  const bound =
-    method === "face"
-      ? await confirmFacePresence(ticket)
-      : await verifyWebauthnAndBind(ticket, body);
+  if (method === "face") {
+    throw Object.assign(new Error("Face ID majburiy — kamera tugmasi orqali kirib bo‘lmaydi"), {
+      status: 401,
+      code: "WEBAUTHN_REQUIRED",
+    });
+  }
+  const bound = await verifyWebauthnAndBind(ticket, body);
   const rows = await db.select().from(adminUsers).where(eq(adminUsers.id, bound.adminUserId)).limit(1);
   const user = rows[0];
   if (!user || user.status !== ADMIN_ACTIVE_STATUS) {
     throw Object.assign(new Error("Hisob faol emas. Bosh administratorga murojaat qiling."), { status: 403, code: "ADMIN_DISABLED" });
   }
   return finalizeAdminLogin(user, req, {
-    factor: method === "face" ? "face" : "webauthn",
-    enrolled: "enrolled" in bound ? bound.enrolled : false,
+    factor: "webauthn",
+    enrolled: bound.enrolled,
   });
 }
 

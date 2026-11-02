@@ -385,13 +385,11 @@ export async function verifyWebauthnAndBind(ticket: string, body: WebauthnAssert
   return { adminUserId: challenge.adminUserId, enrolled: false };
 }
 
-export async function confirmFacePresence(ticket: string): Promise<{ adminUserId: number }> {
-  const challenge = await consumeChallenge(ticket);
-  const credentials = await listWebauthnCredentials(challenge.adminUserId);
-  if (credentials.length && challenge.purpose === "assert") {
-    throw Object.assign(new Error("Bu hisob uchun Face ID majburiy"), { status: 401, code: "WEBAUTHN_REQUIRED" });
-  }
-  return { adminUserId: challenge.adminUserId };
+export async function confirmFacePresence(_ticket: string): Promise<{ adminUserId: number }> {
+  throw Object.assign(new Error("Face ID majburiy — kamera tugmasi orqali kirib bo‘lmaydi"), {
+    status: 401,
+    code: "WEBAUTHN_REQUIRED",
+  });
 }
 
 export const ADMIN_LOGIN_CHALLENGE_TTL_MS = CHALLENGE_TTL_MS;

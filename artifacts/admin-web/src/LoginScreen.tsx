@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, ScanFace, ShieldCheck } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { Eye, EyeOff, ScanFace } from "lucide-react";
 import { request } from "./api";
 
 type LoginUser = { id: number; email: string; name: string; role: string; branchId: number | null };
@@ -100,22 +100,6 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingLogin | null>(null);
-  const [faceHint, setFaceHint] = useState("Qurilma Face ID / Windows Hello so‘raydi");
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-  }
-
-  useEffect(() => () => stopCamera(), []);
-
-  async function finishWithToken(token: string) {
-    stopCamera();
-    onAuthenticated(token);
-  }
 
   async function submitPassword(event: FormEvent) {
     event.preventDefault();
@@ -126,16 +110,12 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
         method: "POST",
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      if (data.token) {
-        await finishWithToken(data.token);
-        return;
-      }
       if (data.ticket && (data.status === "WEBAUTHN_REQUIRED" || data.status === "WEBAUTHN_ENROLL")) {
         setPending(data as PendingLogin);
-        setFaceHint(data.status === "WEBAUTHN_ENROLL"
-          ? "Birinchi marta: Face ID ni ushbu qurilmaga bog‘lang"
-          : "Yuz yoki barmoq izi bilan tasdiqlang");
         return;
+      }
+      if (data.token) {
+        throw new Error("Paroldan keyin Face ID majburiy");
       }
       throw new Error("Kirish javobi kutilmagan");
     } catch (err) {
@@ -152,7 +132,7 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
       body: JSON.stringify({ ticket: pending.ticket, ...body }),
     });
     if (!data.token) throw new Error("Sessiya ochilmadi");
-    await finishWithToken(data.token);
+    onAuthenticated(data.token);
   }
 
   async function runWebauthn() {
@@ -164,7 +144,6 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
         throw new Error("SECURE_CONTEXT");
       }
       if (pending.status === "WEBAUTHN_ENROLL" && pending.webauthn.creation) {
-        setFaceHint("Yuzingizni kameraga tuting — qurilma kalit yaratadi");
         const cred = await navigator.credentials.create({
           publicKey: hydrateCreation(pending.webauthn.creation),
         }) as PublicKeyCredential;
@@ -182,7 +161,6 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
         return;
       }
       if (pending.status === "WEBAUTHN_REQUIRED" && pending.webauthn.request) {
-        setFaceHint("Face ID yoki Windows Hello ni tasdiqlang");
         const assertion = await navigator.credentials.get({
           publicKey: hydrateRequest(pending.webauthn.request),
         }) as PublicKeyCredential;
@@ -199,43 +177,13 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
       throw new Error("SECURE_CONTEXT");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Face ID xatosi";
-      if (message === "SECURE_CONTEXT" || /secure context|https|publickeycredential/i.test(message)) {
-        setFaceHint("HTTPS yo‘q — kameradan jonli tasdiqlash");
-        await startCameraFallback();
+      if (message === "SECURE_CONTEXT" || /secure context|https|publickeycredential|rpid/i.test(message)) {
+        setError("Face ID faqat HTTPS da ishlaydi. http://IP orqali yuzsiz kirib bo‘lmaydi.");
       } else if ((err as { name?: string }).name === "NotAllowedError") {
-        setError("Face ID bekor qilindi. Qayta urinib ko‘ring.");
+        setError("Yuz tasdiqlanmadi. Face ID / Windows Hello ni qayta urinib ko‘ring.");
       } else {
         setError(message);
       }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function startCameraFallback() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => undefined);
-      }
-      setFaceHint("Yuzingiz kadirda bo‘lsin, keyin tasdiqlang");
-    } catch {
-      setFaceHint("Kamera ochilmadi — shu qurilmadan tasdiqlang");
-    }
-  }
-
-  async function confirmFace() {
-    setError("");
-    setBusy(true);
-    try {
-      await completeBiometric({ method: "face", presenceConfirmed: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Tasdiqlash xatosi");
     } finally {
       setBusy(false);
     }
@@ -245,7 +193,7 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
     if (!pending) return;
     const timer = window.setTimeout(() => {
       void runWebauthn();
-    }, 350);
+    }, 250);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending]);
@@ -253,112 +201,84 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
   return (
     <div className="login-wrap">
       <div className="login-aurora" aria-hidden="true" />
-      <div className="login-shell">
-        <aside className="login-hero" aria-hidden="true">
-          <div className="login-hero-badge">VM</div>
-          <p className="login-hero-kicker">Vaksina Med</p>
-          <h2>Boshqaruv faqat tasdiqlangan operatorlarga</h2>
-          <p>Avval parol. Keyin shu qurilmadagi Face ID, Windows Hello yoki jonli yuz tasdiqlovi.</p>
-          <ul>
-            <li>Sessiya paroldan keyin ochilmaydi</li>
-            <li>Ticket 2 daqiqada yonadi</li>
-            <li>Platforma biometriyasi — yuz rasmi saqlanmaydi</li>
-          </ul>
-        </aside>
+      <section className="login-card" aria-label="Admin kirish">
+        <div className="brand">
+          <span className="brand-mark">VM</span>
+          <span className="brand-text">VAKSINA MED</span>
+        </div>
+        <h1>Admin panel</h1>
+        <p className="muted">{pending ? "Yuzni tasdiqlang" : "Boshqaruv konsoliga kirish"}</p>
 
-        <section className="login-card" aria-label="Admin kirish">
-          <div className="brand">
-            <span className="brand-mark">VM</span>
-            <span className="brand-text">VAKSINA MED</span>
-          </div>
-          <h1>Admin panel</h1>
-          <p className="muted">{pending ? "Ikkinchi qadam — yuzni tasdiqlash" : "Boshqaruv konsoliga xavfsiz kirish"}</p>
-
-          <ol className="login-steps" aria-label="Kirish qadamlari">
-            <li className={pending ? "done" : "active"}><span>1</span> Parol</li>
-            <li className={pending ? "active" : ""}><span>2</span> Face ID</li>
-          </ol>
-
-          {!pending ? (
-            <form className="login-form" onSubmit={submitPassword}>
-              <label className="login-field">
-                <span>Email yoki login</span>
+        {!pending ? (
+          <form className="login-form" onSubmit={submitPassword}>
+            <label className="login-field">
+              <span>Email yoki login</span>
+              <input
+                type="text"
+                inputMode="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                autoComplete="username"
+                required
+              />
+            </label>
+            <label className="login-field">
+              <span>Parol</span>
+              <div className="login-password-wrap">
                 <input
-                  type="text"
-                  inputMode="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email"
-                  autoComplete="username"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Parol"
+                  autoComplete="current-password"
                   required
                 />
-              </label>
-              <label className="login-field">
-                <span>Parol</span>
-                <div className="login-password-wrap">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Parol"
-                    autoComplete="current-password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="login-password-toggle"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setShowPassword((prev) => !prev);
-                    }}
-                    title={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}
-                    aria-label={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </label>
-              {error ? <div className="login-error" role="alert">{error}</div> : null}
-              <button className="btn-primary" type="submit" disabled={busy}>
-                {busy ? "Tekshirilmoqda…" : "Davom etish"}
-              </button>
-              <p className="login-fineprint">
-                <ShieldCheck size={14} aria-hidden="true" />
-                Keyingi oynada Face ID so‘raladi. Yuz rasmi serverga yuborilmaydi.
-              </p>
-            </form>
-          ) : (
-            <div className="login-face">
-              <div className={`login-scan ${busy ? "scanning" : ""}`}>
-                <video ref={videoRef} className="login-scan-video" playsInline muted autoPlay />
-                <div className="login-scan-ring" />
-                <ScanFace size={42} strokeWidth={1.6} aria-hidden="true" />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowPassword((prev) => !prev);
+                  }}
+                  title={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}
+                  aria-label={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
-              <p className="login-face-user">{pending.user.name}</p>
-              <p className="login-face-hint">{faceHint}</p>
-              {error ? <div className="login-error" role="alert">{error}</div> : null}
-              <button className="btn-primary" type="button" disabled={busy} onClick={() => void runWebauthn()}>
-                {busy ? "Kutilmoqda…" : "Face ID ni ochish"}
-              </button>
-              <button className="login-secondary" type="button" disabled={busy} onClick={() => void confirmFace()}>
-                Kameradan yuzni tasdiqlash
-              </button>
-              <button
-                className="login-text-btn"
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  stopCamera();
-                  setPending(null);
-                  setError("");
-                }}
-              >
-                Boshqa hisob
-              </button>
+            </label>
+            {error ? <div className="login-error" role="alert">{error}</div> : null}
+            <button className="btn-primary" type="submit" disabled={busy}>
+              {busy ? "Tekshirilmoqda…" : "Kirish"}
+            </button>
+          </form>
+        ) : (
+          <div className="login-face">
+            <div className={`login-scan ${busy ? "scanning" : ""}`}>
+              <div className="login-scan-ring" />
+              <ScanFace size={42} strokeWidth={1.6} aria-hidden="true" />
             </div>
-          )}
-        </section>
-      </div>
+            <p className="login-face-user">{pending.user.name}</p>
+            <p className="login-face-hint">Faqat shu qurilmadagi Face ID / Windows Hello</p>
+            {error ? <div className="login-error" role="alert">{error}</div> : null}
+            <button className="btn-primary" type="button" disabled={busy} onClick={() => void runWebauthn()}>
+              {busy ? "Kutilmoqda…" : "Face ID bilan tasdiqlash"}
+            </button>
+            <button
+              className="login-text-btn"
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setPending(null);
+                setError("");
+              }}
+            >
+              Orqaga
+            </button>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

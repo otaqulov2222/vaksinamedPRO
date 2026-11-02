@@ -145,6 +145,7 @@ describe("Admin WebAuthn / Face ID login", () => {
     assert.equal(second.body.status, "WEBAUTHN_REQUIRED");
     const face = await call("POST", "/api/admin/login/biometric", { ticket: second.body.ticket, method: "face" });
     assert.equal(face.status, 401);
+    assert.equal(face.body.token, undefined);
 
     const login3 = await call("POST", "/api/admin/login", { email: "hq@webauthn.local", password: PW });
     const getCd = clientData("webauthn.get", login3.body.webauthn.request.challenge);
@@ -165,13 +166,15 @@ describe("Admin WebAuthn / Face ID login", () => {
     assert.equal(stored[0].signCount, 2);
   });
 
-  it("camera presence can complete first-time login when no key is enrolled yet", async () => {
+  it("camera presence never issues a session, even before a Face ID key exists", async () => {
     await db.delete(adminWebauthnCredentials);
     const login = await call("POST", "/api/admin/login", { email: "hq@webauthn.local", password: PW });
     assert.equal(login.body.status, "WEBAUTHN_ENROLL");
     const done = await call("POST", "/api/admin/login/biometric", { ticket: login.body.ticket, method: "face" });
-    assert.equal(done.status, 200, done.text);
-    assert.match(String(done.body.token), /^s1\./);
+    assert.equal(done.status, 401, done.text);
+    assert.equal(done.body.token, undefined);
+    const me = await call("GET", "/api/admin/me");
+    assert.equal(me.status, 401);
   });
 
   it("ES256 helper verifies a platform-style signature", () => {
@@ -199,5 +202,7 @@ describe("Admin Face ID source contracts", () => {
     assert.match(webauthn, /authenticatorAttachment: "platform"/);
     assert.match(ui, /navigator\.credentials/);
     assert.doesNotMatch(ui, /admin@vaksinamed\.uz|kassa@vaksinamed/);
+    assert.doesNotMatch(ui, /method:\s*"face"|presenceConfirmed|Kameradan yuzni|login-hero/);
+    assert.doesNotMatch(auth, /confirmFacePresence/);
   });
 });
