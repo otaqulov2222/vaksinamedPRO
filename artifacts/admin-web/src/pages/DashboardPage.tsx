@@ -1125,41 +1125,43 @@ export function DashboardPage(props: {
           </FilterField>
         </div>
       ) : null}
-      <FilterField label="Filial" hideLabel>
-        {isHq ? (
-          <div className="dash-branch-picker">
-            <Store size={14} className="dash-branch-icon" aria-hidden="true" />
-            <select
-              className="dash-ctrl dash-ctrl--branch"
-              ref={branchSelectRef}
-              id="dash-branch-filter"
-              value={branchId}
-              aria-label="Filial"
-              onChange={(e) => setBranchId(e.target.value)}
-            >
-              <option value="">Barcha filiallar ({props.branches?.length || 0})</option>
-              {(props.branches || []).map((b) => (
-                <option key={b.id} value={String(b.id)}>{b.name}</option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div className="dash-branch-picker">
-            <Store size={14} className="dash-branch-icon" aria-hidden="true" />
-            <input className="dash-ctrl dash-ctrl--branch" value="O‘z filiali" disabled readOnly aria-label="Filial" />
-          </div>
-        )}
-      </FilterField>
-      <button
-        className={`btn-secondary btn-icon dashboard-refresh${loading ? " is-busy" : ""}`}
-        type="button"
-        disabled={loading}
-        onClick={() => void load()}
-        aria-label="Yangilash"
-        title="Yangilash"
-      >
-        <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
-      </button>
+      <div className="dash-toolbar">
+        <FilterField label="Filial" hideLabel>
+          {isHq ? (
+            <div className="dash-branch-picker">
+              <Store size={14} className="dash-branch-icon" aria-hidden="true" />
+              <select
+                className="dash-ctrl dash-ctrl--branch"
+                ref={branchSelectRef}
+                id="dash-branch-filter"
+                value={branchId}
+                aria-label="Filial"
+                onChange={(e) => setBranchId(e.target.value)}
+              >
+                <option value="">Barcha filiallar ({props.branches?.length || 0})</option>
+                {(props.branches || []).map((b) => (
+                  <option key={b.id} value={String(b.id)}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="dash-branch-picker">
+              <Store size={14} className="dash-branch-icon" aria-hidden="true" />
+              <input className="dash-ctrl dash-ctrl--branch" value="O‘z filiali" disabled readOnly aria-label="Filial" />
+            </div>
+          )}
+        </FilterField>
+        <button
+          className={`btn-secondary btn-icon dashboard-refresh${loading ? " is-busy" : ""}`}
+          type="button"
+          disabled={loading}
+          onClick={() => void load()}
+          aria-label="Yangilash"
+          title="Yangilash"
+        >
+          <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 
@@ -1209,9 +1211,14 @@ export function DashboardPage(props: {
         Jonli
       </span>
       {hasAttention ? (
-        <span className={`dash-pulse is-${attnState}`} role="status">
+        <span
+          className={`dash-pulse is-${attnState}`}
+          role="status"
+          title={`${attentionItems.length} ta signal e’tibor talab qiladi`}
+        >
           <span className="dash-pulse-dot" aria-hidden="true" />
-          {attentionItems.length} ta signal e’tibor talab qiladi
+          <span className="dash-pulse-full">{attentionItems.length} ta signal e’tibor talab qiladi</span>
+          <span className="dash-pulse-short">{attentionItems.length} ta signal</span>
         </span>
       ) : (
         <div className="dash-health">
@@ -1219,7 +1226,12 @@ export function DashboardPage(props: {
           <p className="dash-status" role="status">Muammo yo‘q</p>
         </div>
       )}
-      {loadedAt ? <span className="dash-meta-item">Yangilandi {clockLabel(loadedAt)}</span> : null}
+      {loadedAt ? (
+        <span className="dash-meta-item">
+          <span className="dash-meta-prefix">Yangilandi </span>
+          {clockLabel(loadedAt)}
+        </span>
+      ) : null}
     </>
   );
 
