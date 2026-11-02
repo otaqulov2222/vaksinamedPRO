@@ -12,6 +12,7 @@ import {
   cashbackAccounts,
   customers,
   db,
+  deleteUnusedProduct,
   deliveries,
   fomSaleEvents,
   inventoryMovements,
@@ -53,6 +54,8 @@ const router = Router();
 
 const ADMIN_ORDERS_DEFAULT_LIMIT = 25;
 const ADMIN_ORDERS_MAX_LIMIT = 50;
+const ADMIN_PAYMENTS_DEFAULT_LIMIT = 25;
+const ADMIN_PAYMENTS_MAX_LIMIT = 50;
 const ADMIN_AUDIT_DEFAULT_LIMIT = 40;
 const ADMIN_AUDIT_MAX_LIMIT = 100;
 const ADMIN_CUSTOMERS_DEFAULT_LIMIT = 25;
@@ -689,6 +692,42 @@ router.patch("/admin/products/:id", async (req, res, next) => {
   }
 });
 
+router.delete("/admin/products/:id", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "products:manage");
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "Mahsulot identifikatori noto‘g‘ri", code: "INVALID_ID" });
+    }
+    const result = await deleteUnusedProduct(db, id);
+    if (!result.ok && result.code === "NOT_FOUND") {
+      return res.status(404).json({ message: "Mahsulot topilmadi", code: "NOT_FOUND" });
+    }
+    if (!result.ok) {
+      const by = result.blockedBy === "reservation" ? "bron" : "buyurtma";
+      return res.status(409).json({
+        message: `Bu mahsulot ${by}da ishlatilgan — o‘chirib bo‘lmaydi.`,
+        code: "PRODUCT_IN_USE",
+        blockedBy: result.blockedBy,
+      });
+    }
+    try {
+      await db.insert(auditLog).values({
+        actor: user.email,
+        action: "product.delete",
+        entity: "product",
+        payload: JSON.stringify({ productId: result.id, sku: result.sku }),
+      });
+    } catch {
+      // audit must not block delete
+    }
+    return res.json({ ok: true, id: result.id, sku: result.sku });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get("/admin/orders", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
@@ -1112,30 +1151,88 @@ router.get("/admin/payments", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
     await requirePermission(user, "payments:read");
-    // Legacy payments list — strip nothing sensitive (no secrets on legacy rows).
-    // P7 reconciliation detail: GET /admin/payments/intents/:id
-    const rows = await db.select().from(payments).orderBy(desc(payments.id)).limit(200);
-    const scoped = [];
-    for (const row of rows) {
-      try {
-        await assertBranchScope(user, row.branchId);
-        scoped.push({
-          id: row.id,
-          orderId: row.orderId,
-          provider: row.provider,
-          branchId: row.branchId,
-          merchantId: row.merchantId,
-          status: row.status,
-          amount: row.amount,
-          currency: row.currency,
-          paymentIntentId: row.paymentIntentId,
-          externalId: row.externalId,
-        });
-      } catch {
-        // skip out-of-scope branch rows
-      }
-    }
-    return res.json({ payments: scoped });
+
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0
+      ? Math.min(ADMIN_PAYMENTS_MAX_LIMIT, Math.floor(limitRaw))
+      : ADMIN_PAYMENTS_DEFAULT_LIMIT;
+    const offsetRaw = Number(req.query.offset);
+    const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0;
+    const status = typeof req.query.status === "string" ? req.query.status.trim() : "";
+    const provider = typeof req.query.provider === "string" ? req.query.provider.trim() : "";
+    const requestedBranch = req.query.branchId != null ? Number(req.query.branchId) : undefined;
+    const branchFilter = resolveStaffBranchFilter(
+      user,
+      Number.isFinite(requestedBranch as number) ? (requestedBranch as number) : undefined,
+    );
+
+    const filters: SQL[] = [];
+    if (branchFilter != null) filters.push(eq(payments.branchId, branchFilter));
+    if (status) filters.push(eq(payments.status, status));
+    if (provider) filters.push(eq(payments.provider, provider));
+    const where = filters.length ? and(...filters) : undefined;
+
+    const [totalRow] = await db.select({ value: count() }).from(payments).where(where);
+    const total = Number(totalRow?.value || 0);
+
+    const [summaryRow] = await db
+      .select({
+        total: count(),
+        paidCount: sql<number>`count(*) filter (where upper(${payments.status}) in ('PAID','SUCCEEDED'))`.mapWith(Number),
+        paidAmount: sql<number>`coalesce(sum(${payments.amount}) filter (where upper(${payments.status}) in ('PAID','SUCCEEDED')), 0)`.mapWith(Number),
+        pendingCount: sql<number>`count(*) filter (where upper(${payments.status}) in ('PENDING','CREATED','REQUIRES_PAYMENT','PROCESSING','STARTED','AWAITING_POS','PENDING_KEYS'))`.mapWith(Number),
+        pendingAmount: sql<number>`coalesce(sum(${payments.amount}) filter (where upper(${payments.status}) in ('PENDING','CREATED','REQUIRES_PAYMENT','PROCESSING','STARTED','AWAITING_POS','PENDING_KEYS')), 0)`.mapWith(Number),
+        refunded: sql<number>`count(*) filter (where upper(${payments.status}) = 'REFUNDED')`.mapWith(Number),
+        partiallyRefunded: sql<number>`count(*) filter (where upper(${payments.status}) = 'PARTIALLY_REFUNDED')`.mapWith(Number),
+        other: sql<number>`count(*) filter (where upper(${payments.status}) not in ('PAID','SUCCEEDED','PENDING','CREATED','REQUIRES_PAYMENT','PROCESSING','STARTED','AWAITING_POS','PENDING_KEYS','REFUNDED','PARTIALLY_REFUNDED'))`.mapWith(Number),
+        currencyMin: sql<string | null>`min(${payments.currency})`,
+        currencyMax: sql<string | null>`max(${payments.currency})`,
+      })
+      .from(payments)
+      .where(where);
+
+    const rows = await db
+      .select()
+      .from(payments)
+      .where(where)
+      .orderBy(desc(payments.id))
+      .limit(limit)
+      .offset(offset);
+
+    const scoped = rows.map((row) => ({
+      id: row.id,
+      orderId: row.orderId,
+      provider: row.provider,
+      branchId: row.branchId,
+      merchantId: row.merchantId,
+      status: row.status,
+      amount: row.amount,
+      currency: row.currency,
+      paymentIntentId: row.paymentIntentId,
+      externalId: row.externalId,
+    }));
+
+    const currencyMin = summaryRow?.currencyMin ? String(summaryRow.currencyMin).toUpperCase() : null;
+    const currencyMax = summaryRow?.currencyMax ? String(summaryRow.currencyMax).toUpperCase() : null;
+    const hasMore = offset + scoped.length < total;
+    return res.json({
+      payments: scoped,
+      pagination: { limit, offset, total, hasMore, nextOffset: hasMore ? offset + scoped.length : null },
+      summary: {
+        total: Number(summaryRow?.total || 0),
+        paid: { count: Number(summaryRow?.paidCount || 0), amount: Number(summaryRow?.paidAmount || 0) },
+        pending: { count: Number(summaryRow?.pendingCount || 0), amount: Number(summaryRow?.pendingAmount || 0) },
+        refunded: Number(summaryRow?.refunded || 0),
+        partiallyRefunded: Number(summaryRow?.partiallyRefunded || 0),
+        other: Number(summaryRow?.other || 0),
+        currency: currencyMin && currencyMin === currencyMax ? currencyMin : null,
+      },
+      filters: {
+        branchId: branchFilter ?? null,
+        status: status || null,
+        provider: provider || null,
+      },
+    });
   } catch (error) {
     return next(error);
   }

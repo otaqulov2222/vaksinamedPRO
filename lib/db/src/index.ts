@@ -100,6 +100,7 @@ export * from "./migrate";
 export * from "./migrationLock";
 export * from "./poolConfig";
 export * from "./stagingCatalogSeed";
+export * from "./productDelete";
 export { getMigrationsFolder } from "./migrationsPath";
 /** @deprecated Prefer versioned migrations. Kept for reference / emergency local repair. */
 export { bootstrapSchema } from "./bootstrap";

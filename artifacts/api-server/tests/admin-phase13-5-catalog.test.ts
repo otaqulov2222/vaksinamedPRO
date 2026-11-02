@@ -53,11 +53,13 @@ describe("Admin Phase 13.5 Catalog — backend contract (unchanged)", () => {
     assert.match(catalogBody('router.get("/catalog/categories"'), /selectDistinct\(\{ category: products\.category \}\)/);
   });
 
-  it("admin writes: POST + PATCH gated by products:manage; no delete / category routes", () => {
+  it("admin writes: POST + PATCH + DELETE gated by products:manage; no category routes", () => {
     assert.match(adminBody('router.post("/admin/products"'), /requirePermission\(user, "products:manage"\)/);
     assert.match(adminBody('router.patch("/admin/products/:id"'), /requirePermission\(user, "products:manage"\)/);
+    assert.match(adminBody('router.delete("/admin/products/:id"'), /requirePermission\(user, "products:manage"\)/);
+    assert.match(adminBody('router.delete("/admin/products/:id"'), /deleteUnusedProduct/);
+    assert.match(adminBody('router.delete("/admin/products/:id"'), /PRODUCT_IN_USE/);
     assert.match(adminBody('router.get("/admin/products"'), /requirePermission\(user, "products:read"\)/);
-    assert.doesNotMatch(adminRoute, /router\.delete\("\/admin\/products/);
     assert.doesNotMatch(adminRoute + catalogRoute, /router\.(post|patch|put|delete)\("\/(admin|catalog)\/categor/);
     assert.doesNotMatch(adminRoute + catalogRoute, /multer|barcode/i);
   });
@@ -120,10 +122,12 @@ describe("Admin Phase 13.5 Catalog — table, status, price, inventory", () => {
     assert.match(page, /tabIndex=\{0\}/);
   });
 
-  it("no invented status, KPI, barcode, import/export or delete", () => {
-    assert.doesNotMatch(page, /ACTIVE|INACTIVE|ARCHIVED|StatCard|MetricStrip|barcode|shtrix|Import|Eksport|method:\s*"DELETE"|O‘chirish|Arxiv/);
+  it("no invented status, KPI, barcode, import/export; delete is the real unused-SKU API", () => {
+    assert.doesNotMatch(page, /ACTIVE|INACTIVE|ARCHIVED|StatCard|MetricStrip|barcode|shtrix|Import|Eksport|Arxiv/);
     assert.doesNotMatch(page, /oldPrice|discount|chegirma|margin|purchase/i);
     assert.match(page, /<StatusBadge tone="warn">Retsept<\/StatusBadge>/);
+    assert.match(page, /method: "DELETE"/);
+    assert.match(page, /title="Mahsulotni o‘chirish"/);
   });
 
   it("price is integer money via money(); no float math", () => {
@@ -164,6 +168,8 @@ describe("Admin Phase 13.5 Catalog — states, drawer, writes", () => {
     assert.match(page, /\{canManage \? \(\s*<button className="btn-primary cat-create"/);
     assert.match(page, /title="Mahsulotni qo‘shish"/);
     assert.match(page, /title="O‘zgarishlarni saqlash"/);
+    assert.match(page, /title="Mahsulotni o‘chirish"/);
+    assert.match(page, /method: "DELETE"/);
     assert.match(page, /for \(const c of pending\.changes\) payload\[c\.key\] = c\.value;/);
 
     const patchRoute = adminBody('router.patch("/admin/products/:id"');

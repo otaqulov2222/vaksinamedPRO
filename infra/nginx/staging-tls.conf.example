@@ -1,0 +1,65 @@
+# VaksinaMed staging TLS — nginx 1.24 (Ubuntu)
+# Observed live origin: http://77.83.206.192  (API :5000, admin /admin/, API /api/)
+# Copy to /etc/nginx/sites-available/vaksinamed after DNS + certbot.
+# Replace EXAMPLE_DOMAIN with the real hostname (e.g. staging.vaksinamed.uz).
+
+# HTTP → HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name EXAMPLE_DOMAIN;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name EXAMPLE_DOMAIN;
+
+    ssl_certificate     /etc/letsencrypt/live/EXAMPLE_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/EXAMPLE_DOMAIN/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # Admin SPA (vite base: /admin/)
+    location /admin/ {
+        alias /var/www/vaksinamed/admin/;
+        try_files $uri $uri/ /admin/index.html;
+    }
+
+    location /uploads/ {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 16m;
+    }
+
+    # Customer Expo web export. Adjust alias to the deployed dist path.
+    location / {
+        root /var/www/vaksinamed/app;
+        try_files $uri $uri/ /index.html;
+    }
+}

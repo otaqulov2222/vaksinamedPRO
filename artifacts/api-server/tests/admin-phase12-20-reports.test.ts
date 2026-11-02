@@ -17,7 +17,7 @@ describe("Admin Phase 12.20 — Reports snapshot console", () => {
   it("Reports uses dashboard API + Hali ulanmagan deep reports", () => {
     const page = readFileSync(path.join(adminWeb, "pages/ReportsPage.tsx"), "utf8");
     assert.match(page, /title="Hisobotlar"/);
-    assert.match(page, /\/api\/admin\/dashboard/);
+    assert.match(page, /\/api\/admin\/reports/);
     assert.match(page, /createdFrom|createdTo/);
     assert.match(page, /Hali ulanmagan|Tez orada|AVAILABLE|API_REQUIRED/);
     assert.match(page, /Ko‘rsatkich/);

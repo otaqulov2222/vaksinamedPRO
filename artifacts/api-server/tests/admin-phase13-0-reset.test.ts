@@ -55,6 +55,7 @@ describe("Admin Phase 13.0 reset — design system", () => {
 describe("Admin Phase 13.0 reset — shell", () => {
   it("login form starts empty with visible labels; auth request unchanged", () => {
     assert.doesNotMatch(app, /useState\("admin@vaksinamed\.uz"\)|useState\("vaksinamed"\)/);
+    assert.doesNotMatch(app, /Demo kirish|placeholder="vaksinamed"|toLowerCase\(\) === "admin"|toLowerCase\(\) === "kassa"/);
     assert.match(app, /const \[email, setEmail\] = useState\(""\);/);
     assert.match(app, /const \[password, setPassword\] = useState\(""\);/);
     assert.match(app, /className="login-field"/);

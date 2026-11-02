@@ -1,6 +1,7 @@
 /**
  * Admin Phase 13.12 — Hisobotlar period report console over the real dashboard aggregates.
- *   GET /admin/dashboard  (dashboard:read; resolveStaffBranchFilter; createdFrom/createdTo = Asia/Tashkent business days)
+ *   GET /admin/dashboard  (dashboard KPIs — still used by Dashboard)
+ *   GET /admin/reports    (Reports console: same filters + POS / product / export)
  *     kpis: revenue, orders, completed, delivering, reserved, pendingPayment, cancelled (order KPIs, filtered)
  *           customers, branches, cashback (global snapshots); inventory snapshot only with a branch scope.
  * Backend change: `pendingPayment` + `cancelled` FILTER counts in the existing order KPI query. No DB schema / migration change.
@@ -21,6 +22,8 @@ const page = read(path.join(adminWeb, "pages/ReportsPage.tsx"));
 const code = page.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const nav = read(path.join(adminWeb, "nav.ts"));
 const adminRoute = read(path.join(root, "src/routes/admin.ts"));
+const reportsRoute = read(path.join(root, "src/routes/adminReports.ts"));
+const reportsLib = read(path.join(root, "src/lib/adminReports.ts"));
 const rbac = read(path.join(root, "src/lib/rbac.ts"));
 const docs = read(path.join(repoRoot, "docs/ADMIN_IMPLEMENTATION_STATUS.md"));
 const css = read(path.join(adminWeb, "styles.css"));
@@ -117,11 +120,13 @@ describe("Admin Phase 13.12 Reports — page uses real server values only", () =
   it("single real endpoint; date + branch filters sent to the server", () => {
     const urls = [...code.matchAll(/request\(\s*`([^`]+)`/g)].map((m) => m[1]);
     assert.equal(urls.length, 1);
-    assert.match(urls[0], /^\/api\/admin\/dashboard\$\{/);
+    assert.match(urls[0], /^\/api\/admin\/reports\$\{/);
     assert.match(code, /if \(branchId\) qs\.set\("branchId", branchId\);/);
     assert.match(code, /if \(range\.from\) qs\.set\("createdFrom", range\.from\);/);
     assert.match(code, /if \(range\.to\) qs\.set\("createdTo", range\.to\);/);
     assert.doesNotMatch(code, /softRequest|\/api\/pos\/sales|\/api\/admin\/orders|\/api\/admin\/payments/);
+    assert.match(reportsRoute, /requirePermission\(user, "dashboard:read"\)/);
+    assert.match(reportsLib, /from\(posSales\)/);
   });
 
   it("every KPI key the page reads is returned by the server; breakdown keys are server KPIs", () => {
@@ -140,13 +145,14 @@ describe("Admin Phase 13.12 Reports — page uses real server values only", () =
     for (const key of inventoryRead) assert.ok(new RegExp(`\\b${key}\\b`).test(inventoryShape), `inventory.${key}`);
   });
 
-  it("no client-side financial math or invented KPI / comparison / chart / export", () => {
+  it("no client-side financial math or invented KPI / comparison / chart", () => {
     assert.doesNotMatch(code, /reduce\(|Math\.max\(0,|kpis\.\w+\s*[-+/*]\s*|\)\s*[-+]\s*Number\(kpis/);
     assert.doesNotMatch(code, /avgTicket|completionRate|O‘rtacha chek|Yakunlanish foizi|%\s*\{|toFixed|percent/i);
     assert.doesNotMatch(code, /↑|↓|oldingi (oy|davr)ga nisbatan|prevRevenue|delta/i);
     assert.doesNotMatch(code, /recharts|Chart\.js|<canvas|<svg|new Chart|bar-chart|sales-chart/i);
     assert.doesNotMatch(code, /Blob\(|download=|text\/csv|\.xlsx|window\.print/);
-    assert.match(code, /Export API mavjud emas/);
+    assert.match(code, /requestDownload/);
+    assert.match(code, /\/api\/admin\/reports\/export/);
     assert.match(code, /time-series/);
     assert.match(code, /Qaytarishlar ayirilmaydi/);
     assert.match(code, /money\(Number\(kpis\.revenue\)\)/);
@@ -228,10 +234,9 @@ describe("Admin Phase 13.12 Reports — design system and docs", () => {
 
   it("Phase 13.12 documented", () => {
     const section = between(docs, "## Phase 13.12 — Hisobotlar", "## Phase 13.11 — Yetkazib berish");
-    assert.match(section, /GET \/api\/admin\/dashboard/);
+    assert.match(section, /GET \/api\/admin\/reports/);
     assert.match(section, /dashboard:read/);
     assert.match(section, /pendingPayment/);
-    assert.match(section, /DB sxemasi va migratsiyalar o‘zgartirilmadi/);
-    assert.match(section, /Export API mavjud emas/);
+    assert.match(section, /CSV/);
   });
 });

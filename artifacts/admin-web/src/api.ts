@@ -25,6 +25,27 @@ export async function request(path: string, token: string | null, init: RequestI
   return data;
 }
 
+/** Download a server-produced file (CSV). Does not invent bytes in the browser. */
+export async function requestDownload(path: string, token: string | null, filename: string) {
+  const headers = new Headers();
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  const response = await fetch(`${API}${path}`, { headers });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const err = new Error((data as { message?: string }).message || `HTTP ${response.status}`) as ApiError;
+    err.status = response.status;
+    if ((data as { code?: string }).code) err.code = String((data as { code: string }).code);
+    throw err;
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function softRequest(path: string, token: string | null) {
   try {
     return await request(path, token);

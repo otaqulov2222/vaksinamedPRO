@@ -39,7 +39,7 @@ type Draft = {
   requiresPrescription: boolean;
 };
 type Change = { key: string; label: string; from: string; to: string; value: string | number | boolean };
-type Pending = { kind: "create" } | { kind: "edit"; changes: Change[] };
+type Pending = { kind: "create" } | { kind: "edit"; changes: Change[] } | { kind: "delete" };
 
 const EMPTY_FILTERS: Filters = { q: "", category: "", sort: "default" };
 const EMPTY_DRAFT: Draft = {
@@ -64,15 +64,24 @@ function statusOf(err: unknown) {
   return err && typeof err === "object" && "status" in err ? Number((err as { status?: number }).status) : 0;
 }
 
-function mutationError(err: unknown, kind: "create" | "edit"): string {
+function codeOf(err: unknown): string {
+  return err && typeof err === "object" && "code" in err ? String((err as { code?: string }).code || "") : "";
+}
+
+function mutationError(err: unknown, kind: "create" | "edit" | "delete"): string {
   const status = statusOf(err);
   if (status === 401) return "Sessiya tugagan. Qayta kiring.";
   if (status === 403) return "Bu amal uchun ruxsat yo‘q.";
   if (status === 404) return "Mahsulot topilmadi — ro‘yxat yangilandi.";
+  if (status === 409 && codeOf(err) === "PRODUCT_IN_USE") {
+    return "Bu mahsulot buyurtma yoki bronda ishlatilgan — o‘chirib bo‘lmaydi.";
+  }
   if (!status) return "Aloqa uzildi — natija noma’lum. Ro‘yxatni yangilab, SKU bo‘yicha tekshiring.";
-  return kind === "create"
-    ? "Mahsulot qo‘shilmadi. Bu SKU katalogda allaqachon bo‘lishi mumkin — tekshirib, qayta urinib ko‘ring."
-    : "O‘zgarishlar saqlanmadi. Qayta urinib ko‘ring.";
+  if (kind === "create") {
+    return "Mahsulot qo‘shilmadi. Bu SKU katalogda allaqachon bo‘lishi mumkin — tekshirib, qayta urinib ko‘ring.";
+  }
+  if (kind === "delete") return "Mahsulot o‘chirilmadi. Qayta urinib ko‘ring.";
+  return "O‘zgarishlar saqlanmadi. Qayta urinib ko‘ring.";
 }
 
 function parsePrice(raw: string): number | null {
@@ -416,7 +425,7 @@ export function CatalogPage(props: {
         }
         void loadPage({ offset: 0, filters: applied });
         void loadCategories();
-      } else if (selected) {
+      } else if (pending.kind === "edit" && selected) {
         const payload: Record<string, string | number | boolean> = {};
         for (const c of pending.changes) payload[c.key] = c.value;
         const data = await request(`/api/admin/products/${Number(selected.id)}`, props.token, {
@@ -429,10 +438,22 @@ export function CatalogPage(props: {
         setDrawerNotice({ tone: "ok", text: "O‘zgarishlar saqlandi." });
         void loadPage({ offset, filters: applied });
         if (payload.category !== undefined) void loadCategories();
+      } else if (pending.kind === "delete" && selected) {
+        await request(`/api/admin/products/${Number(selected.id)}`, props.token, { method: "DELETE" });
+        const sku = String(selected.sku || "");
+        setPending(null);
+        closeDrawer();
+        setNotice({ tone: "ok", text: sku ? `Mahsulot o‘chirildi (${sku}).` : "Mahsulot o‘chirildi." });
+        void loadPage({ offset, filters: applied });
+        void loadCategories();
       }
     } catch (err) {
       setPending(null);
-      setFormError(mutationError(err, pending.kind));
+      if (pending.kind === "delete") {
+        setDrawerNotice({ tone: "danger", text: mutationError(err, "delete") });
+      } else {
+        setFormError(mutationError(err, pending.kind));
+      }
       if (statusOf(err) === 404) void loadPage({ offset, filters: applied });
     } finally {
       setBusy(false);
@@ -688,6 +709,9 @@ export function CatalogPage(props: {
             <div className="cat-drawer-actions">
               <button className="btn-secondary" type="button" onClick={startEdit}>
                 Tahrirlash
+              </button>
+              <button className="btn-danger" type="button" onClick={() => setPending({ kind: "delete" })}>
+                O‘chirish
               </button>
             </div>
           ) : undefined
@@ -1080,6 +1104,24 @@ export function CatalogPage(props: {
               </dl>
             </div>
           ) : null
+        }
+      />
+
+      <ConfirmDialog
+        open={pending?.kind === "delete"}
+        title="Mahsulotni o‘chirish"
+        confirmLabel="O‘chirish"
+        danger
+        busy={busy}
+        onCancel={() => setPending(null)}
+        onConfirm={() => void confirmPending()}
+        description={
+          <div className="cat-confirm">
+            <p className="cat-note">{selected?.nameUz} · SKU {selected?.sku}</p>
+            <p className="cat-note">
+              Buyurtma yoki bronda ishlatilgan mahsulot o‘chirilmaydi. Savatcha va ombor qatorlari bilan birga o‘chadi.
+            </p>
+          </div>
         }
       />
     </div>

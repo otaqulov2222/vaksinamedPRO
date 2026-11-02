@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
-import { request, money, isHqRole, type AdminUser, type ApiError } from "../api";
+import { request, requestDownload, money, isHqRole, type AdminUser, type ApiError } from "../api";
 import {
   AdminPageHeader,
   FilterBar,
@@ -43,17 +43,9 @@ const BREAKDOWN: Array<{ key: string; label: string; tone: Tone; note: string }>
   { key: "cancelled", label: "Bekor qilingan", tone: "neutral", note: "Tushumga kirmaydi." },
 ];
 
-/** Reports the API does not provide — shown as unavailable, never approximated in the browser. */
+/** Reports the API still does not provide — shown as unavailable, never approximated in the browser. */
 const UNAVAILABLE: Array<{ title: string; detail: string }> = [
-  { title: "Kunlik grafik", detail: "Davr bo‘yicha kunlik qator (time-series) API’da yo‘q." },
-  { title: "Oldingi davr bilan taqqoslash", detail: "Taqqoslash qiymatlari API’da yo‘q." },
-  { title: "Filiallar kesimi", detail: "Filiallar bo‘yicha agregat API’da yo‘q — bitta filialni tanlab ko‘rish mumkin." },
-  { title: "To‘lovlar hisoboti", detail: "To‘lov holati va provayder bo‘yicha agregat API’da yo‘q." },
-  { title: "Kassa (POS) savdosi", detail: "POS sotuvlari agregati API’da yo‘q — kassa sotuvlari bu hisobotga kirmaydi." },
-  { title: "Cashback davr kesimi", detail: "Hisoblangan / ishlatilgan cashback davr bo‘yicha agregati API’da yo‘q." },
-  { title: "Yetkazib berish hisoboti", detail: "Yetkazish holati va kuryer bo‘yicha agregat API’da yo‘q." },
-  { title: "Mahsulot / kategoriya kesimi", detail: "Mahsulot bo‘yicha savdo agregati API’da yo‘q." },
-  { title: "Hisobotni eksport qilish", detail: "Export API mavjud emas." },
+  { title: "Oldingi davr bilan taqqoslash", detail: "Taqqoslash qiymatlari API’da yo‘q — brauzerda hisoblanmaydi." },
 ];
 
 function statusOf(err: unknown): number {
@@ -131,6 +123,8 @@ export function ReportsPage(props: {
   const [custom, setCustom] = useState<Range>({ from: "", to: "" });
   const [draft, setDraft] = useState<Range>({ from: "", to: "" });
   const [draftMsg, setDraftMsg] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportMsg, setExportMsg] = useState("");
   const loadSeq = useRef(0);
   const branchSelectRef = useRef<HTMLSelectElement>(null);
 
@@ -148,7 +142,7 @@ export function ReportsPage(props: {
     setLoading(true);
     setError(null);
     try {
-      const body = await request(`/api/admin/dashboard${qs.toString() ? `?${qs}` : ""}`, props.token);
+      const body = await request(`/api/admin/reports${qs.toString() ? `?${qs}` : ""}`, props.token);
       if (seq !== loadSeq.current) return;
       setData(body);
       setLoadedAt(new Date());
@@ -193,8 +187,42 @@ export function ReportsPage(props: {
     setBranchId("");
   }
 
+  async function downloadCsv() {
+    if (customPending || exportBusy) return;
+    setExportBusy(true);
+    setExportMsg("");
+    try {
+      const qs = new URLSearchParams();
+      if (branchId) qs.set("branchId", branchId);
+      if (range.from) qs.set("createdFrom", range.from);
+      if (range.to) qs.set("createdTo", range.to);
+      const from = range.from || "all";
+      const to = range.to || "all";
+      await requestDownload(
+        `/api/admin/reports/export${qs.toString() ? `?${qs}` : ""}`,
+        props.token,
+        `vaksinamed-hisobot-${from}-${to}.csv`,
+      );
+    } catch (err) {
+      const status = statusOf(err);
+      if (status === 401) setExportMsg("Sessiya tugagan. Qayta kiring.");
+      else if (status === 403) setExportMsg("Hisobotni yuklab olish uchun ruxsat yo‘q.");
+      else setExportMsg("CSV yuklab olinmadi. Qayta urinib ko‘ring.");
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   const kpis = data?.kpis;
   const inventory = data?.inventory;
+  const pos = data?.pos;
+  const productReport = data?.products;
+  const categoryReport = data?.categories;
+  const branchBreakdown = data?.branchBreakdown;
+  const paymentReport = data?.payments;
+  const cashbackPeriod = data?.cashbackPeriod;
+  const deliveryReport = data?.delivery;
+  const daily = data?.daily;
   const hasKpis = Boolean(kpis) && !error;
   const initialLoading = loading && !data && !error;
   const ordersTotal = hasKpis ? Number(kpis.orders) : NaN;
@@ -216,19 +244,29 @@ export function ReportsPage(props: {
           <span className="rp-meta">
             <span className="rp-chip">Davr bo‘yicha agregat · faqat ko‘rish</span>
             <span className="rp-chip">{isHq ? "Barcha filiallar yoki bitta filial" : "Faqat o‘z filialingiz"}</span>
-            <span className="rp-chip">Export API mavjud emas</span>
+            <span className="rp-chip">CSV serverdan</span>
           </span>
         }
         actions={
-          <button
-            className={`btn-secondary rp-refresh${loading ? " is-busy" : ""}`}
-            type="button"
-            disabled={loading || customPending}
-            onClick={() => void load()}
-          >
-            <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />
-            Yangilash
-          </button>
+          <>
+            <button
+              className={`btn-secondary rp-refresh${loading ? " is-busy" : ""}`}
+              type="button"
+              disabled={loading || customPending}
+              onClick={() => void load()}
+            >
+              <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />
+              Yangilash
+            </button>
+            <button
+              className="btn-secondary"
+              type="button"
+              disabled={loading || customPending || exportBusy}
+              onClick={() => void downloadCsv()}
+            >
+              Yuklab olish (CSV)
+            </button>
+          </>
         }
       />
 
@@ -335,7 +373,7 @@ export function ReportsPage(props: {
             <p className="rp-note">
               Tushum — davrda yaratilgan va hozir «Yakunlangan» holatdagi buyurtmalarning yakuniy summasi (cashback
               chegirmasidan keyin, yetkazish to‘lovi bilan). Qaytarishlar ayirilmaydi, to‘lov holati alohida hisobga
-              olinmaydi. Kassa (POS) sotuvlari kirmaydi.
+              olinmaydi. Kassa (POS) sotuvlari alohida bo‘limda.
             </p>
 
             <div className="rp-surface surface-table">
@@ -482,6 +520,251 @@ export function ReportsPage(props: {
               </div>
             )}
           </section>
+            {hasKpis && pos ? (
+              <section className="rp-section" aria-labelledby="rp-pos-title">
+                <div className="rp-section-head">
+                  <h2 className="rp-section-title" id="rp-pos-title">Kassa (POS) savdosi</h2>
+                  <span className="rp-section-scope">{period} · {branchName}</span>
+                </div>
+                <div className="rp-kpis" role="group" aria-label="Kassa ko‘rsatkichlari">
+                  <StatCard className="rp-kpi" label="Sotuvlar" value={count(pos.sales)} context="pos_sales qatorlari" />
+                  <StatCard className="rp-kpi" label="Summa" value={money(Number(pos.amount || 0))} context="Chek summasi" />
+                  <StatCard className="rp-kpi" label="To‘lov" value={money(Number(pos.payable || 0))} context="Cashbackdan keyin" />
+                  <StatCard className="rp-kpi" label="Cashback berildi" value={money(Number(pos.cashbackEarned || 0))} context="POS orqali" />
+                </div>
+                <p className="rp-note">Kassa savdosi summa asosida — mahsulot qatorlari yo‘q.</p>
+              </section>
+            ) : null}
+
+            {hasKpis && daily ? (
+              <section className="rp-section" aria-labelledby="rp-daily-title">
+                <div className="rp-section-head">
+                  <h2 className="rp-section-title" id="rp-daily-title">Kunlik qator</h2>
+                  <span className="rp-section-scope">{BUSINESS_TZ}</span>
+                </div>
+                {Array.isArray(daily.rows) && daily.rows.length ? (
+                  <div className="rp-surface surface-table">
+                    <DataTable>
+                      <thead>
+                        <tr>
+                          <th>Kun</th>
+                          <th className="num">Buyurtmalar</th>
+                          <th className="num">Buyurtma tushumi</th>
+                          <th className="num">POS</th>
+                          <th className="num">POS summa</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {daily.rows.map((row: any) => (
+                          <tr key={row.day} className="rp-row">
+                            <td>{displayYmd(String(row.day || ""))}</td>
+                            <td className="num">{count(row.orders)}</td>
+                            <td className="num">{money(Number(row.orderRevenue || 0))}</td>
+                            <td className="num">{count(row.posSales)}</td>
+                            <td className="num">{money(Number(row.posAmount || 0))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </DataTable>
+                  </div>
+                ) : (
+                  <p className="rp-note">{daily.note || "Kunlik qator (time-series) uchun davr tanlang (maks. 90 kun)."}</p>
+                )}
+              </section>
+            ) : null}
+
+            {hasKpis && productReport ? (
+              <section className="rp-section" aria-labelledby="rp-product-title">
+                <div className="rp-section-head">
+                  <h2 className="rp-section-title" id="rp-product-title">Mahsulot kesimi</h2>
+                  <span className="rp-section-scope">Yakunlangan buyurtmalar</span>
+                </div>
+                {Array.isArray(productReport.rows) && productReport.rows.length ? (
+                  <div className="rp-surface surface-table">
+                    <DataTable>
+                      <thead>
+                        <tr>
+                          <th>Mahsulot</th>
+                          <th>Kategoriya</th>
+                          <th className="num">Soni</th>
+                          <th className="num">Tushum</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {productReport.rows.map((row: any) => (
+                          <tr key={row.productId} className="rp-row">
+                            <td className="rp-stock-main">
+                              <span className="rp-stock-name">{row.title || "—"}</span>
+                              <span className="rp-stock-sku">{row.sku || "—"}</span>
+                            </td>
+                            <td className="rp-col-note">{row.category || "—"}</td>
+                            <td className="num">{count(row.quantity)}</td>
+                            <td className="num">{money(Number(row.revenue || 0))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="rp-total-row">
+                          <td>Jami (server)</td>
+                          <td className="rp-col-note">{count(productReport.totals?.skus)} SKU</td>
+                          <td className="num">{count(productReport.totals?.quantity)}</td>
+                          <td className="num">{money(Number(productReport.totals?.revenue || 0))}</td>
+                        </tr>
+                      </tfoot>
+                    </DataTable>
+                  </div>
+                ) : (
+                  <p className="rp-note">Bu davrda yakunlangan buyurtma mahsulotlari yo‘q.</p>
+                )}
+                <p className="rp-note">Faqat yakunlangan buyurtmalar. POS mahsulot kesimi yo‘q.</p>
+              </section>
+            ) : null}
+
+            {hasKpis && categoryReport && Array.isArray(categoryReport.rows) && categoryReport.rows.length ? (
+              <section className="rp-section" aria-labelledby="rp-cat-title">
+                <div className="rp-section-head">
+                  <h2 className="rp-section-title" id="rp-cat-title">Kategoriya kesimi</h2>
+                  <span className="rp-section-scope">Yakunlangan buyurtmalar</span>
+                </div>
+                <div className="rp-surface surface-table">
+                  <DataTable>
+                    <thead>
+                      <tr>
+                        <th>Kategoriya</th>
+                        <th className="num">Soni</th>
+                        <th className="num">Tushum</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {categoryReport.rows.map((row: any) => (
+                        <tr key={row.category} className="rp-row">
+                          <td>{row.category || "—"}</td>
+                          <td className="num">{count(row.quantity)}</td>
+                          <td className="num">{money(Number(row.revenue || 0))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </DataTable>
+                </div>
+              </section>
+            ) : null}
+
+            {hasKpis && branchBreakdown && Array.isArray(branchBreakdown.rows) && branchBreakdown.rows.length ? (
+              <section className="rp-section" aria-labelledby="rp-branch-title">
+                <div className="rp-section-head">
+                  <h2 className="rp-section-title" id="rp-branch-title">Filiallar kesimi</h2>
+                  <span className="rp-section-scope">{period}</span>
+                </div>
+                <div className="rp-surface surface-table">
+                  <DataTable>
+                    <thead>
+                      <tr>
+                        <th>Filial</th>
+                        <th className="num">Buyurtmalar</th>
+                        <th className="num">Tushum</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {branchBreakdown.rows.map((row: any) => (
+                        <tr key={row.branchId} className="rp-row">
+                          <td>{row.name || "—"}</td>
+                          <td className="num">{count(row.orders)}</td>
+                          <td className="num">{money(Number(row.revenue || 0))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </DataTable>
+                </div>
+              </section>
+            ) : null}
+
+            {hasKpis && paymentReport ? (
+              <section className="rp-section" aria-labelledby="rp-pay-title">
+                <div className="rp-section-head">
+                  <h2 className="rp-section-title" id="rp-pay-title">To‘lovlar hisoboti</h2>
+                  <span className="rp-section-scope">{period} · {branchName}</span>
+                </div>
+                <div className="rp-kpis rp-kpis-global">
+                  <StatCard className="rp-kpi" variant="secondary" label="Yozuvlar" value={count(paymentReport.totals?.count)} context="payments jadvali" />
+                  <StatCard className="rp-kpi" variant="secondary" label="Summa" value={money(Number(paymentReport.totals?.amount || 0))} context="Tanlangan davr" />
+                </div>
+                {Array.isArray(paymentReport.rows) && paymentReport.rows.length ? (
+                  <div className="rp-surface surface-table">
+                    <DataTable>
+                      <thead>
+                        <tr>
+                          <th>Holat</th>
+                          <th>Usul</th>
+                          <th className="num">Soni</th>
+                          <th className="num">Summa</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paymentReport.rows.map((row: any) => (
+                          <tr key={`${row.status}-${row.provider}`} className="rp-row">
+                            <td>{row.status || "—"}</td>
+                            <td>{row.provider || "—"}</td>
+                            <td className="num">{count(row.count)}</td>
+                            <td className="num">{money(Number(row.amount || 0))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </DataTable>
+                  </div>
+                ) : (
+                  <p className="rp-note">Bu davrda to‘lov yozuvi yo‘q.</p>
+                )}
+              </section>
+            ) : null}
+
+            {hasKpis && cashbackPeriod ? (
+              <section className="rp-section" aria-labelledby="rp-cb-title">
+                <div className="rp-section-head">
+                  <h2 className="rp-section-title" id="rp-cb-title">Cashback davr kesimi</h2>
+                  <span className="rp-section-scope">cashback_ledger · filial filtri yo‘q</span>
+                </div>
+                <div className="rp-kpis">
+                  <StatCard className="rp-kpi" label="Hisoblangan" value={money(Number(cashbackPeriod.earned || 0))} context="EARN" />
+                  <StatCard className="rp-kpi" label="Ishlatilgan" value={money(Number(cashbackPeriod.used || 0))} context="USE" />
+                  <StatCard className="rp-kpi" label="Qaytarilgan" value={money(Number(cashbackPeriod.reversed || 0))} context="REVERSAL" />
+                  <StatCard className="rp-kpi" label="Yozuvlar" value={count(cashbackPeriod.entries)} context="Ledger qatorlari" />
+                </div>
+                <p className="rp-note">Filial filtri ledgerda yo‘q — butun tarmoq.</p>
+              </section>
+            ) : null}
+
+            {hasKpis && deliveryReport ? (
+              <section className="rp-section" aria-labelledby="rp-del-title">
+                <div className="rp-section-head">
+                  <h2 className="rp-section-title" id="rp-del-title">Yetkazib berish hisoboti</h2>
+                  <span className="rp-section-scope">{period}</span>
+                </div>
+                {Array.isArray(deliveryReport.rows) && deliveryReport.rows.length ? (
+                  <div className="rp-surface surface-table">
+                    <DataTable>
+                      <thead>
+                        <tr>
+                          <th>Holat</th>
+                          <th className="num">Soni</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deliveryReport.rows.map((row: any) => (
+                          <tr key={row.status} className="rp-row">
+                            <td>{row.status || "—"}</td>
+                            <td className="num">{count(row.count)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </DataTable>
+                  </div>
+                ) : (
+                  <p className="rp-note">Bu davrda yetkazish yozuvi yo‘q.</p>
+                )}
+              </section>
+            ) : null}
+
+            {exportMsg ? <p className="rp-form-msg" role="alert">{exportMsg}</p> : null}
         </div>
       )}
 

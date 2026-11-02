@@ -204,17 +204,10 @@ export default function App() {
   async function login(event: FormEvent) {
     event.preventDefault();
     setError("");
-    const trimmed = email.trim();
-    const resolvedEmail =
-      trimmed.toLowerCase() === "admin"
-        ? "admin@vaksinamed.uz"
-        : trimmed.toLowerCase() === "kassa"
-        ? "kassa@vaksinamed.uz"
-        : trimmed;
     try {
       const data = await request("/api/admin/login", null, {
         method: "POST",
-        body: JSON.stringify({ email: resolvedEmail, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       localStorage.setItem("vm-admin-token", data.token);
       setReady(false);
@@ -260,7 +253,7 @@ export default function App() {
                 inputMode="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@vaksinamed.uz"
+                placeholder="Email"
                 autoComplete="username"
                 required
               />
@@ -272,7 +265,7 @@ export default function App() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="vaksinamed"
+                  placeholder="Parol"
                   autoComplete="current-password"
                   required
                 />
@@ -290,9 +283,6 @@ export default function App() {
                 </button>
               </div>
             </label>
-            <div style={{ fontSize: "12px", color: "var(--muted, #64748b)", marginTop: "2px", lineHeight: "1.4" }}>
-              💡 Demo kirish: <strong>admin@vaksinamed.uz</strong> (yoki <strong>admin</strong>) · Parol: <strong>vaksinamed</strong>
-            </div>
             {error ? <div className="login-error" role="alert">{error}</div> : null}
             <button className="btn-primary" type="submit">Kirish</button>
           </div>

@@ -63,12 +63,10 @@ describe("Admin Phase 13.3 Payments — status tone mapping (shared ui.tsx)", ()
 
 describe("Admin Phase 13.3 Payments — API contract unchanged", () => {
   it("calls only the existing payment endpoints", () => {
-    const paths = [...page.matchAll(/[`"](\/api\/[^`"]*)[`"]/g)].map((m) => m[1]);
-    assert.deepEqual([...new Set(paths)].sort(), [
-      "/api/admin/payments",
-      "/api/admin/payments/intents/${intentId}",
-      "/api/admin/payments/intents/${intentId}/refund",
-    ]);
+    assert.match(page, /\/api\/admin\/payments/);
+    assert.match(page, /\/api\/admin\/payments\/intents\/\$\{intentId\}/);
+    assert.match(page, /\/api\/admin\/payments\/intents\/\$\{intentId\}\/refund/);
+    assert.doesNotMatch(page, /\/api\/admin\/orders|\/api\/pos\/sales/);
     assert.match(adminRoute, /router\.get\("\/admin\/payments"/);
     assert.match(paymentsRoute, /router\.get\("\/admin\/payments\/intents\/:id"/);
     assert.match(paymentsRoute, /router\.post\("\/admin\/payments\/intents\/:id\/refund"/);
@@ -92,38 +90,39 @@ describe("Admin Phase 13.3 Payments — API contract unchanged", () => {
 });
 
 describe("Admin Phase 13.3 Payments — filters are honest", () => {
-  it("API has no filters, so status/method/branch refine the loaded list and say so", () => {
+  it("list is server-paginated and filtered", () => {
     const list = adminRoute.slice(adminRoute.indexOf('router.get("/admin/payments"'));
-    assert.doesNotMatch(list.slice(0, list.indexOf("});")), /req\.query/);
-    assert.match(page, /"\/api\/admin\/payments"/);
-    assert.doesNotMatch(page, /URLSearchParams|qs\.set\(/);
-    assert.match(page, /Filtrlar serverdan yuklangan so‘nggi yozuvlarga qo‘llanadi/);
-    assert.match(page, /const SERVER_ROW_CAP = 200;/);
-    assert.match(adminRoute, /orderBy\(desc\(payments\.id\)\)\.limit\(200\)/);
+    assert.match(list, /req\.query\.limit/);
+    assert.match(list, /req\.query\.status/);
+    assert.match(list, /req\.query\.provider/);
+    assert.match(list, /resolveStaffBranchFilter/);
+    assert.match(page, /URLSearchParams/);
+    assert.match(page, /qs\.set\("limit", String\(PAGE_SIZE\)\)/);
+    assert.match(page, /Filtrlar serverda qo‘llanadi/);
+    assert.match(adminRoute, /orderBy\(desc\(payments\.id\)\)\s*\.limit\(limit\)/);
+    assert.match(adminRoute, /ADMIN_PAYMENTS_MAX_LIMIT = 50/);
   });
 
   it("no invented search or date filters", () => {
     assert.doesNotMatch(page, /type="search"|type="date"|createdFrom|createdTo/);
   });
 
-  it("filter options come from loaded rows and use Uzbek labels", () => {
-    assert.match(page, /for \(const r of rows\) if \(r\.status\) set\.add/);
-    assert.match(page, /for \(const r of rows\) if \(r\.provider\) set\.add/);
+  it("filter options use known statuses / providers and Uzbek labels", () => {
+    assert.match(page, /const statusOptions = STATUS_ORDER;/);
+    assert.match(page, /const methodOptions = Object\.keys\(METHOD_LABELS\);/);
     assert.match(page, /\{paymentLabel\(s\)\}<\/option>/);
     assert.match(page, /\{methodLabel\(p\)\}<\/option>/);
     assert.doesNotMatch(page, /<option[^>]*>\{s\}<\/option>/);
   });
 
-  it("status strip counts only a complete loaded set; capped responses are not totalled", () => {
-    assert.match(page, /const healthComplete = rows\.length < SERVER_ROW_CAP;/);
+  it("status strip uses the server summary, not a capped page", () => {
+    assert.match(page, /const healthComplete = Boolean\(health\);/);
     assert.match(page, /\{healthComplete \? \(/);
-    assert.match(page, /umumiy holat bo‘yicha jami hisoblanmaydi/);
-    assert.match(page, /!listError && rows\.length > 0 \? \(/);
-    const fn = page.slice(page.indexOf("function paymentHealth"), page.indexOf("function Row("));
-    assert.match(fn, /paymentTone\(status\) === "ok"/);
-    assert.match(fn, /paymentTone\(status\) === "warn"/);
-    assert.doesNotMatch(fn, /refunded\.amount|refundedAmount/);
-    assert.match(page, /health\.currency \? formatAmount\(amount, health\.currency\) : null/);
+    assert.match(page, /function summaryHealth/);
+    assert.match(adminRoute, /paidCount:/);
+    assert.match(adminRoute, /pendingCount:/);
+    assert.doesNotMatch(page, /refunded\.amount|refundedAmount/);
+    assert.match(page, /health\?\.currency \? formatAmount\(amount, health\.currency\) : null/);
   });
 
   it("empty and filtered-empty copy are distinct", () => {

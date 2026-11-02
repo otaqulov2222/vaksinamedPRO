@@ -822,26 +822,27 @@ Next phase: Phase 13.14 (Settings).
 
 ## Phase 13.12 — Hisobotlar
 
-Read-only period report console over the only reporting endpoint, `GET /api/admin/dashboard`. Reports = period analysis (order KPIs for a chosen Asia/Tashkent date range and branch); Dashboard stays the operational overview. One additive backend change: `pendingPayment` and `cancelled` FILTER counts in the existing order KPI query, so the status breakdown partitions the server order total. No new endpoint, permission or query. DB sxemasi va migratsiyalar o‘zgartirilmadi; RBAC, order, cashback va auth logikasi o‘zgarmadi.
+Read-only period report console. Dashboard stays the operational overview (`GET /api/admin/dashboard`). Hisobotlar uses `GET /api/admin/reports` (`dashboard:read`) with the same Asia/Tashkent `createdFrom` / `createdTo` / `branchId` filters, plus POS, product, category, branch, payments, cashback ledger, delivery and daily (time-series table, max 90 days). CSV: `GET /api/admin/reports/export`. DB sxemasi va migratsiyalar o‘zgartirilmadi.
 
 | Area | Status | Source |
 | --- | --- | --- |
-| Endpoint | REAL | `GET /api/admin/dashboard` — `dashboard:read` (HQ only: super_admin; cashier 403, nav hidden), checked before DB access |
-| Filters | REAL | `branchId` (`resolveStaffBranchFilter`), `createdFrom` / `createdTo` `YYYY-MM-DD` → `tashkentBusinessDayUtcRange` (Asia/Tashkent business day, UTC bounds); malformed → 400 `INVALID_DATE_FILTER` |
-| Order KPIs (filtered) | REAL | one aggregate over `orders` (legacy `status`, dual-written by `deriveLegacyStatus`): `revenue` = sum `orders.total` where completed; `orders`, `completed`, `delivering` (awaiting_delivery + paid = open delivery orders), `reserved` (open pickup), `pendingPayment` (13.12), `cancelled` (13.12) |
-| Global KPIs | REAL (not filtered) | `customers` (customers table), `branches`, `cashback` = sum `cashback_accounts.balance` (`cashbackSource: "cashback_accounts"`); scopes reported as `global` |
-| Inventory snapshot | REAL (branch only) | `inventory` when a branch is selected: stock rows, zero-available count, 12 lowest-available items (current state, not period-based); no low-stock threshold (`inventoryThreshold: false`) |
-| Time-series / chart | MISSING (disclosed) | chart: time-series API yo‘q — no chart is drawn |
+| Endpoint | REAL | `GET /api/admin/reports` — `dashboard:read` (HQ only), checked before DB access |
+| Filters | REAL | `branchId` (`resolveStaffBranchFilter`), `createdFrom` / `createdTo` `YYYY-MM-DD` → `tashkentBusinessDayUtcRange`; malformed → 400 `INVALID_DATE_FILTER` |
+| Order KPIs (filtered) | REAL | `revenue`, `orders`, `completed`, `delivering`, `reserved`, `pendingPayment`, `cancelled` |
+| Global KPIs | REAL (not filtered) | `customers`, `branches`, `cashback` = sum `cashback_accounts.balance` |
+| Inventory snapshot | REAL (branch only) | stock rows, zero-available, 12 lowest-available; no threshold |
+| POS | REAL | `pos_sales` count / amount / payable / cashback |
+| Product / category | REAL | completed `order_items` (POS has no line items) |
+| Branch / payments / cashback period / delivery | REAL | server aggregates; cashback ledger is network-wide |
+| Time-series | REAL (table) | daily rows, max 90 days, Asia/Tashkent — no chart library |
 | Comparison with previous period | MISSING (disclosed) | not in the API — no ↑/↓ or % |
-| Per-branch, payments, POS, cashback period, delivery, product / category reports | MISSING (disclosed) | no aggregate endpoints |
-| Export | MISSING (disclosed) | Export API mavjud emas — no local CSV |
-| Detail / pagination | MISSING | no detail API → no drawer |
+| Export | REAL | `GET /api/admin/reports/export` CSV (UTF-8 BOM); UI downloads server bytes |
 
-UI (`ReportsPage.tsx`): header chips "Davr bo‘yicha agregat · faqat ko‘rish", scope ("Barcha filiallar yoki bitta filial" / "Faqat o‘z filialingiz"), "Export API mavjud emas", Yangilash. Period presets Bugun / Kecha / 7 kun / 30 kun (default) / Barcha davr / Maxsus — computed on the Asia/Tashkent calendar via `Intl`, sent to the server as `createdFrom` / `createdTo`; Maxsus sends nothing until both dates are applied and from ≤ to. Filial select for HQ only; no client-side filtering. Context line: period · branch · Asia/Tashkent · last update.
-- **Savdo va buyurtmalar:** Tushum (hero, `money()`), Buyurtmalar, Yakunlangan, Bekor qilingan. Revenue note: orders created in the period that are now completed, after cashback, incl. delivery fee; refunds are not subtracted; POS sales are not included. Status breakdown table (Yakunlangan, Ochiq — yetkazib berish, Ochiq — olib ketish, To‘lov kutilmoqda, Bekor qilingan) with "Jami buyurtmalar" = server `orders` (no client sum).
+UI (`ReportsPage.tsx`): header chips "Davr bo‘yicha agregat · faqat ko‘rish", scope ("Barcha filiallar yoki bitta filial" / "Faqat o‘z filialingiz"), "CSV serverdan", Yangilash + Yuklab olish (CSV). Period presets Bugun / Kecha / 7 kun / 30 kun (default) / Barcha davr / Maxsus — computed on the Asia/Tashkent calendar via `Intl`, sent to the server as `createdFrom` / `createdTo`; Maxsus sends nothing until both dates are applied and from ≤ to. Filial select for HQ only; no client-side filtering. Context line: period · branch · Asia/Tashkent · last update.
+- **Savdo va buyurtmalar:** Tushum (hero, `money()`), Buyurtmalar, Yakunlangan, Bekor qilingan. Revenue note: orders created in the period that are now completed, after cashback, incl. delivery fee; refunds are not subtracted. POS is a separate section. Status breakdown table (Yakunlangan, Ochiq — yetkazib berish, Ochiq — olib ketish, To‘lov kutilmoqda, Bekor qilingan) with "Jami buyurtmalar" = server `orders` (no client sum).
 - **Umumiy holat:** Mijozlar, Cashback majburiyati, Filiallar — labelled as not tied to the period/branch filter.
 - **Ombor holati:** branch only (stock rows, "Mavjud emas", lowest-available table); otherwise a "Filial tanlash" prompt.
-- **Hali ulanmagan hisobotlar:** honest list of the reports above that the API does not provide.
+- **Hali ulanmagan hisobotlar:** oldingi davr bilan taqqoslash — API yo‘q, brauzerda hisoblanmaydi.
 
 States: loading skeleton, empty ("Hozircha buyurtmalar yo‘q."), filter-empty ("Bu davr uchun ma’lumot yo‘q." + reset), custom pending, 401 / 403 / 404 / 400 (date) / 500 / network with fixed Uzbek copy (server `message` never rendered); retry only for 500 / network; stale responses dropped (`loadSeq`).
 
@@ -852,7 +853,7 @@ Security: no customer phones (server `includePhone: false`; page ignores `recent
 Browser QA: real dev DB, read-only (only `POST /api/admin/login`); isolated PGlite with real-API-created orders verified KPI values, breakdown sum and branch scoping.
 
 Remaining gaps (backend):
-- No time-series, comparison, per-branch, payments, POS, cashback-period, delivery or product aggregates; no export or detail API.
+- Comparison with previous period is still missing (disclosed).
 - Revenue is filtered by order creation date, not completion date; order KPIs rely on legacy `orders.status`.
 - `/admin/dashboard` still computes `recentOrders` with per-row `serializeOrder` (N+1) and scans all inventory rows of the branch, even though Reports does not use `recentOrders`.
 - `tashkentBusinessDayUtcRange` accepts overflowing calendar dates (`2026-02-30` → 2 March); the UI date input cannot produce them.
@@ -1013,12 +1014,13 @@ Tests: `artifacts/api-server/tests/admin-phase13-8-cashback.test.ts`.
 | Item | Status |
 |------|--------|
 | API audit | Read: `GET /api/catalog/products` (public; server-side `q` over nameUz / nameRu / manufacturer / sku, exact `category`, `sort` default / name / price_asc / price_desc, `limit` ≤ 50, `offset`, `total`, `hasMore`; optional `branchId` adds `availableQuantity`), `GET /api/catalog/categories` (distinct product categories). Admin: `GET /api/admin/products` (`products:read`, unbounded, no search — no longer used by Katalog), `POST /api/admin/products` and `PATCH /api/admin/products/:id` (`products:manage`, audited) |
-| Not available in API | Product status / activation, delete / archive, category management, images / media, barcode, import / export, admin-scoped paginated list, server validation of create / edit input |
+| Not available in API | Product status / activation, archive, category management, barcode, import / export, admin-scoped paginated list, server validation of create / edit input |
+| Delete | REAL | `DELETE /api/admin/products/:id` (`products:manage`); blocked with 409 `PRODUCT_IN_USE` when order or reservation rows exist; removes cart / stock / movement graph |
 | Controls | Search first (server-side, Enter / Qidirish, ≤80 chars, clearing reloads) · Kategoriya (from categories endpoint) · Saralash (server sort). The former client-only prescription filter was removed — the API cannot filter by it |
 | Table | Mahsulot (initial mark + name, SKU · manufacturer) → Kategoriya → Narx (integer `money()` + unit) → Retsept badge; branch staff also see a read-only "Filialda" available column for their own branch. 50 per page with server total; ≤900px category column hidden; ≤560px rows become cards |
 | Drawer | Mahsulot → Narx va tasnif → Ombor (relation only, link to Ombor) → collapsed Texnik ma’lumotlar (ID, created, app icon code) |
 | Create / edit | Only with `products:manage`; fields limited to what POST / PATCH accept; integer price validation; `ConfirmDialog` before write; edit sends only changed fields (fixes description being blanked by the old form, whose list DTO had no description). Create copy states the real backend side effect: every branch gets a starting physical quantity of 10 without an inventory movement |
-| Backend / API / data | **Unchanged** — no new endpoints, schema or inventory writers |
+| Backend / API / data | DELETE added for unused products only — no schema change, no inventory writer besides deleting leftover stock rows |
 
 ---
 
@@ -1045,16 +1047,16 @@ Tests: `artifacts/api-server/tests/admin-phase13-8-cashback.test.ts`.
 
 | Item | Status |
 |------|--------|
-| API audit | Same contract: `GET /api/admin/payments` (latest ≤200 legacy rows, branch-scoped, **no filters / pagination / dates**), `GET /api/admin/payments/intents/:id` (intent, attempts, capture, refunds, `refundableAmount`, `orderPaymentStatus`), `POST /api/admin/payments/intents/:id/refund {reason, amount?}` (`payments:manage`) |
-| Status strip | Jami yozuv · To‘langan (count + sum) · Kutilmoqda (count + sum) · Qaytarilgan (count, "shundan N qisman") · Boshqa (only if >0). Counted from the loaded rows **only when the response is below the 200-row cap** (complete set in the operator's scope); capped responses show "jami hisoblanmaydi". Sums only when all rows share one currency; refunded amounts are not in the list DTO, so that group is a count |
-| Table | Buyurtma #orderId (primary) · To‘lov #id (+ "tarixsiz yozuv") → Summa (right-aligned, strong) → Holat → Usul (Payme / Click marked as online PSP) → Filial; ≤1100px the branch moves under the identity, ≤560px rows stack as compact cards (no horizontal table scroll); row click / Enter / Space opens the drawer; client-side pages of 25 |
-| Filters | Holat / Usul / Filial (only when >1 branch loaded) — options come from loaded rows, applied client-side with an explicit note; no search / date filter (API has none) |
+| API audit | `GET /api/admin/payments?limit&offset&status&provider&branchId` (server pagination ≤50, branch-scoped, summary aggregates), `GET /api/admin/payments/intents/:id` (intent, attempts, capture, refunds, `refundableAmount`, `orderPaymentStatus`), `POST /api/admin/payments/intents/:id/refund {reason, amount?}` (`payments:manage`) |
+| Status strip | Jami yozuv · To‘langan (count + sum) · Kutilmoqda (count + sum) · Qaytarilgan (count, "shundan N qisman") · Boshqa (only if >0). Counts come from the **server `summary`** over the filtered set. Sums only when all matching rows share one currency; refunded amounts are not in the list DTO, so that group is a count |
+| Table | Buyurtma #orderId (primary) · To‘lov #id (+ "tarixsiz yozuv") → Summa (right-aligned, strong) → Holat → Usul (Payme / Click marked as online PSP) → Filial; ≤1100px the branch moves under the identity, ≤560px rows stack as compact cards (no horizontal table scroll); row click / Enter / Space opens the drawer; server pages of 25 |
+| Filters | Holat / Usul / Filial — sent to the server; options are known statuses / providers / HQ branches; no search / date filter |
 | Status tones | Shared `paymentTone`: PAID ok, PENDING family (incl. legacy `awaiting_pos`, `pending_keys`) warn, FAILED danger, REFUNDED **neutral** (was amber), PARTIALLY_REFUNDED **info** |
 | Drawer | Buyurtma → To‘lov → Urinishlar (compact list) → Qabul qilish → Qaytarish (refundable, refunded total, refund rows) → collapsed Texnik ma’lumotlar (intent / capture / refund ids, merchant, external ref) |
 | Refund | Danger button only when `payments:manage` + `refundableAmount > 0` + intent PAID / PARTIALLY_REFUNDED; `ConfirmDialog` with integer amount ≤ refundable (full = `{reason}`, partial adds `amount`); idempotent replay reported as such |
 | Provider refund | Not connected for Payme / Click — operator copy "Provayder orqali qaytarish hozircha ulanmagan", internal record only; cashback not auto-reversed |
 | States | Table skeleton, distinct empty / filtered-empty copy, Uzbek list / detail / refund errors (no raw server messages) |
-| Backend / API / data | **Unchanged** — no new endpoints, no fake data |
+| Backend / API / data | List gained server pagination + filters + summary; refund/intent contracts unchanged |
 
 ---
 

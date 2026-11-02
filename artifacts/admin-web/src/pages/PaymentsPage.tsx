@@ -14,14 +14,11 @@ import {
   ErrorState,
   LoadingBlock,
   paymentLabel,
-  paymentTone,
 } from "../ui";
 import { PAGE_DESCRIPTIONS } from "../nav";
 
 const PAGE_SIZE = 25;
 const TABLE_COLUMNS = 5;
-/** GET /api/admin/payments returns at most this many latest rows (no server filters / pagination). */
-const SERVER_ROW_CAP = 200;
 
 /** Real provider values from api-server paymentAdapters (PaymentProviderName). */
 const METHOD_LABELS: Record<string, string> = {
@@ -130,11 +127,6 @@ function formatDateTime(value: unknown): string {
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function statusRank(status: string): number {
-  const i = STATUS_ORDER.indexOf(status.toUpperCase());
-  return i < 0 ? STATUS_ORDER.length : i;
-}
-
 function refundExecutionLabel(execution: unknown): string | null {
   if (execution === "EXECUTED") return "Provayder orqali qaytarildi";
   if (execution === "CONTRACT_PENDING") return "Faqat ichki yozuv — provayder orqali qaytarilmagan";
@@ -196,38 +188,17 @@ type PaymentHealth = {
   currency: string | null;
 };
 
-/**
- * Status counts over the loaded rows. The list API has no aggregates, so this is only
- * shown when the response is below SERVER_ROW_CAP (the complete set in the operator's scope).
- * Refund amounts are not in the list DTO, so the refunded group is a count only.
- */
-function paymentHealth(rows: any[]): PaymentHealth {
-  const health: PaymentHealth = {
-    total: rows.length,
-    paid: { count: 0, amount: 0 },
-    pending: { count: 0, amount: 0 },
-    refunded: 0,
-    partiallyRefunded: 0,
-    other: 0,
-    currency: null,
+function summaryHealth(summary: any): PaymentHealth | null {
+  if (!summary || typeof summary !== "object") return null;
+  return {
+    total: Number(summary.total) || 0,
+    paid: { count: Number(summary.paid?.count) || 0, amount: Number(summary.paid?.amount) || 0 },
+    pending: { count: Number(summary.pending?.count) || 0, amount: Number(summary.pending?.amount) || 0 },
+    refunded: Number(summary.refunded) || 0,
+    partiallyRefunded: Number(summary.partiallyRefunded) || 0,
+    other: Number(summary.other) || 0,
+    currency: summary.currency ? String(summary.currency).toUpperCase() : null,
   };
-  const currencies = new Set<string>();
-  for (const r of rows) {
-    currencies.add(String(r.currency || "UZS").toUpperCase());
-    const status = String(r.status || "").toUpperCase();
-    const amount = Number(r.amount || 0);
-    if (status === "REFUNDED") health.refunded += 1;
-    else if (status === "PARTIALLY_REFUNDED") health.partiallyRefunded += 1;
-    else if (paymentTone(status) === "ok") {
-      health.paid.count += 1;
-      health.paid.amount += amount;
-    } else if (paymentTone(status) === "warn") {
-      health.pending.count += 1;
-      health.pending.amount += amount;
-    } else health.other += 1;
-  }
-  health.currency = currencies.size === 1 ? [...currencies][0] : null;
-  return health;
 }
 
 function Row(props: { label: string; children: ReactNode }) {
@@ -245,10 +216,14 @@ export function PaymentsPage(props: {
   branches?: any[];
 }) {
   const [rows, setRows] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<Notice | null>(null);
   const [filters, setFilters] = useState<PaymentFilters>(EMPTY_FILTERS);
   const [offset, setOffset] = useState(0);
+  const [openItemCache, setOpenItemCache] = useState<any | null>(null);
 
   const [openRowId, setOpenRowId] = useState<number | null>(null);
   const [snapshot, setSnapshot] = useState<any>(null);
@@ -273,12 +248,24 @@ export function PaymentsPage(props: {
     setLoading(true);
     setListError(null);
     try {
-      const data = await request("/api/admin/payments", props.token);
+      const qs = new URLSearchParams();
+      qs.set("limit", String(PAGE_SIZE));
+      qs.set("offset", String(offset));
+      if (filters.status) qs.set("status", filters.status);
+      if (filters.method) qs.set("provider", filters.method);
+      if (filters.branchId) qs.set("branchId", filters.branchId);
+      const data = await request(`/api/admin/payments?${qs}`, props.token);
       if (seq !== listSeq.current) return;
       setRows(Array.isArray(data?.payments) ? data.payments : []);
+      setTotal(Number(data?.pagination?.total) || 0);
+      setHasMore(Boolean(data?.pagination?.hasMore));
+      setSummary(data?.summary || null);
     } catch (err) {
       if (seq !== listSeq.current) return;
       setRows([]);
+      setTotal(0);
+      setHasMore(false);
+      setSummary(null);
       setListError(listErrorNotice(err));
     } finally {
       if (seq === listSeq.current) setLoading(false);
@@ -288,40 +275,15 @@ export function PaymentsPage(props: {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.token]);
+  }, [props.token, filters.status, filters.method, filters.branchId, offset]);
 
-  const statusOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of rows) if (r.status) set.add(String(r.status));
-    return Array.from(set).sort((a, b) => statusRank(a) - statusRank(b) || a.localeCompare(b));
-  }, [rows]);
-
-  const methodOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of rows) if (r.provider) set.add(String(r.provider));
-    return Array.from(set).sort((a, b) => methodLabel(a).localeCompare(methodLabel(b)));
-  }, [rows]);
-
-  const branchOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of rows) if (r.branchId != null) set.add(String(r.branchId));
-    return Array.from(set);
-  }, [rows]);
-
-  const filtered = useMemo(
-    () =>
-      rows.filter((item) => {
-        if (filters.status && String(item.status) !== filters.status) return false;
-        if (filters.method && String(item.provider) !== filters.method) return false;
-        if (filters.branchId && String(item.branchId) !== filters.branchId) return false;
-        return true;
-      }),
-    [rows, filters],
-  );
-  const pageRows = filtered.slice(offset, offset + PAGE_SIZE);
-  const health = useMemo(() => paymentHealth(rows), [rows]);
-  const healthComplete = rows.length < SERVER_ROW_CAP;
-  const healthMoney = (amount: number) => (health.currency ? formatAmount(amount, health.currency) : null);
+  const statusOptions = STATUS_ORDER;
+  const methodOptions = Object.keys(METHOD_LABELS);
+  const branchOptions = useMemo(() => branches.map((b) => String(b.id)), [branches]);
+  const pageRows = rows;
+  const health = useMemo(() => summaryHealth(summary), [summary]);
+  const healthComplete = Boolean(health);
+  const healthMoney = (amount: number) => (health?.currency ? formatAmount(amount, health.currency) : null);
 
   function branchName(id: unknown): string {
     if (id == null || id === "") return "—";
@@ -357,6 +319,7 @@ export function PaymentsPage(props: {
   function openRow(item: any) {
     const seq = ++detailSeq.current;
     setOpenRowId(item.id);
+    setOpenItemCache(item);
     setFeedback(null);
     setDetailError(null);
     if (snapshot && Number(snapshot.intent?.id) !== Number(item.paymentIntentId)) setSnapshot(null);
@@ -372,13 +335,16 @@ export function PaymentsPage(props: {
   function closeDrawer() {
     detailSeq.current += 1;
     setOpenRowId(null);
+    setOpenItemCache(null);
     setSnapshot(null);
     setDetailError(null);
     setDetailLoading(false);
     setFeedback(null);
   }
 
-  const openItem = openRowId != null ? rows.find((r) => r.id === openRowId) || null : null;
+  const openItem = openRowId != null
+    ? rows.find((r) => r.id === openRowId) || (openItemCache?.id === openRowId ? openItemCache : null)
+    : null;
   const intent = snapshot?.intent || null;
   const refundableAmount = Math.max(0, Number(snapshot?.refundableAmount || 0));
   const intentStatus = String(intent?.status || "").toUpperCase();
@@ -485,7 +451,7 @@ export function PaymentsPage(props: {
             </span>
           ))}
         </div>
-      ) : !listError && rows.length > 0 ? (
+      ) : !listError && health ? (
         <section className="payments-health" aria-label="To‘lovlar holati">
           {healthComplete ? (
             <>
@@ -519,11 +485,7 @@ export function PaymentsPage(props: {
                 </div>
               ) : null}
             </>
-          ) : (
-            <p className="payments-health-capped">
-              Server so‘nggi {SERVER_ROW_CAP} ta yozuvni qaytardi — umumiy holat bo‘yicha jami hisoblanmaydi.
-            </p>
-          )}
+          ) : null}
         </section>
       ) : null}
 
@@ -532,7 +494,6 @@ export function PaymentsPage(props: {
           <FilterField label="Holat">
             <select
               value={filters.status}
-              disabled={!rows.length}
               onChange={(e) => applyFilter({ status: e.target.value })}
             >
               <option value="">Barchasi</option>
@@ -544,7 +505,6 @@ export function PaymentsPage(props: {
           <FilterField label="Usul">
             <select
               value={filters.method}
-              disabled={!rows.length}
               onChange={(e) => applyFilter({ method: e.target.value })}
             >
               <option value="">Barchasi</option>
@@ -566,7 +526,7 @@ export function PaymentsPage(props: {
           <div className="payments-summary" aria-live="polite">
             {listError && !loading ? null : (
               <span className="payments-result-count">
-                {loading ? "Yuklanmoqda…" : `${filtered.length} ta to‘lov`}
+                {loading ? "Yuklanmoqda…" : `${total} ta to‘lov`}
               </span>
             )}
             {hasFilters ? (
@@ -577,7 +537,7 @@ export function PaymentsPage(props: {
           </div>
         </div>
         <p className="payments-controls-note">
-          Filtrlar serverdan yuklangan so‘nggi yozuvlarga qo‘llanadi (ko‘pi bilan {SERVER_ROW_CAP} ta).
+          Filtrlar serverda qo‘llanadi. Sahifada {PAGE_SIZE} tadan.
         </p>
       </section>
 
@@ -676,12 +636,12 @@ export function PaymentsPage(props: {
               )}
             </tbody>
           </DataTable>
-          {filtered.length > PAGE_SIZE ? (
+          {total > PAGE_SIZE ? (
             <PaginationBar
               offset={offset}
               limit={PAGE_SIZE}
-              total={filtered.length}
-              hasMore={offset + PAGE_SIZE < filtered.length}
+              total={total}
+              hasMore={hasMore}
               loading={loading}
               onPrev={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
               onNext={() => setOffset(offset + PAGE_SIZE)}
