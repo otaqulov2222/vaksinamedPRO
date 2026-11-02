@@ -207,7 +207,7 @@ describe("Admin Phase 13.5 Catalog — navigation, responsive, docs", () => {
   it("responsive CSS: secondary column hidden ≤900px, cards ≤560px, tokens only", () => {
     assert.ok(catCss.length > 1000);
     assert.match(catCss, /@media \(max-width: 900px\) \{[\s\S]*?td\.cat-cell-category \{ display: none; \}/);
-    assert.match(catCss, /@media \(max-width: 560px\) \{[\s\S]*?grid-template-areas: "product price" "product rx" "product stock";/);
+    assert.match(catCss, /@media \(max-width: 560px\) \{[\s\S]*?grid-template-areas: "product price" "product rx" "cat cat" "stock stock";/);
     assert.doesNotMatch(catCss, /#[0-9a-fA-F]{3,8}\b|rgba?\(|gradient/);
   });
 
