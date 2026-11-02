@@ -75,7 +75,7 @@ export function resolveReportFilters(
   };
 }
 
-function tashkentDayExpr(column: typeof orders.createdAt) {
+function tashkentDayExpr(column: typeof orders.createdAt | typeof posSales.createdAt) {
   return sql<string>`timezone('Asia/Tashkent', ${column})::date`;
 }
 

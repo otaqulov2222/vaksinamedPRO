@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { orderItems } from "./schema/commerce";
 import { products } from "./schema/catalog";
 import { reservationItems } from "./schema/inventory";
-import { deleteProductGraph } from "./productDelete";
+import { deleteProductGraph, type CatalogWriter } from "./productDelete";
 import { STAGING_CATALOG_PRODUCTS } from "./stagingCatalogSeed";
 
 export type JunkCleanupMode = "dry-run" | "apply";
@@ -72,20 +72,14 @@ export function junkCatalogReason(sku: string, nameUz: string): string | null {
   return null;
 }
 
-type DbLike = {
-  select: (...args: never[]) => any;
-  delete: (...args: never[]) => any;
-  transaction?: (fn: (tx: DbLike) => Promise<unknown>) => Promise<unknown>;
-};
-
-async function withTx<T>(db: DbLike, fn: (tx: DbLike) => Promise<T>): Promise<T> {
+async function withTx<T>(db: CatalogWriter, fn: (tx: CatalogWriter) => Promise<T>): Promise<T> {
   if (typeof db.transaction === "function") {
     return db.transaction(fn) as Promise<T>;
   }
   return fn(db);
 }
 
-export async function planJunkCatalogCleanup(db: DbLike): Promise<JunkCatalogCandidate[]> {
+export async function planJunkCatalogCleanup(db: CatalogWriter): Promise<JunkCatalogCandidate[]> {
   const rows = (await db.select().from(products)) as Array<{
     id: number;
     sku: string;
@@ -129,7 +123,7 @@ export async function planJunkCatalogCleanup(db: DbLike): Promise<JunkCatalogCan
 }
 
 export async function cleanupJunkCatalog(
-  db: DbLike,
+  db: CatalogWriter,
   mode: JunkCleanupMode = "dry-run",
 ): Promise<JunkCatalogCleanupResult> {
   assertJunkCatalogCleanupAllowed();
@@ -175,7 +169,7 @@ export async function runJunkCatalogCleanup(mode: JunkCleanupMode): Promise<Junk
   const pool = new pg.Pool({ connectionString: url, max: 1 });
   try {
     const database = drizzlePg(pool);
-    return await cleanupJunkCatalog(database as unknown as DbLike, mode);
+    return await cleanupJunkCatalog(database as unknown as CatalogWriter, mode);
   } finally {
     await pool.end();
   }

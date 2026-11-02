@@ -16,13 +16,14 @@ export type ProductDeleteResult =
   | { ok: true; id: number; sku: string }
   | { ok: false; code: "NOT_FOUND" | "PRODUCT_IN_USE"; blockedBy?: ProductDeleteBlockedBy };
 
-type DbLike = {
-  select: (...args: never[]) => any;
-  delete: (...args: never[]) => any;
-  transaction?: (fn: (tx: DbLike) => Promise<unknown>) => Promise<unknown>;
+/** Drizzle pg / PGlite instance or transaction. `any[]` keeps select/delete callable. */
+export type CatalogWriter = {
+  select: (...args: any[]) => any;
+  delete: (...args: any[]) => any;
+  transaction?: (fn: (tx: CatalogWriter) => Promise<unknown>) => Promise<unknown>;
 };
 
-async function withTx<T>(db: DbLike, fn: (tx: DbLike) => Promise<T>): Promise<T> {
+async function withTx<T>(db: CatalogWriter, fn: (tx: CatalogWriter) => Promise<T>): Promise<T> {
   if (typeof db.transaction === "function") {
     return db.transaction(fn) as Promise<T>;
   }
@@ -30,14 +31,14 @@ async function withTx<T>(db: DbLike, fn: (tx: DbLike) => Promise<T>): Promise<T>
 }
 
 /** Remove cart / stock / movement rows, then the product. Caller must have checked order/reservation refs. */
-export async function deleteProductGraph(db: DbLike, productId: number): Promise<void> {
+export async function deleteProductGraph(db: CatalogWriter, productId: number): Promise<void> {
   await db.delete(cartItems).where(eq(cartItems.productId, productId));
   await db.delete(inventoryMovements).where(eq(inventoryMovements.productId, productId));
   await db.delete(productStocks).where(eq(productStocks.productId, productId));
   await db.delete(products).where(eq(products.id, productId));
 }
 
-export async function inspectProductDelete(db: DbLike, productId: number): Promise<ProductDeleteInspect> {
+export async function inspectProductDelete(db: CatalogWriter, productId: number): Promise<ProductDeleteInspect> {
   const rows = (await db.select().from(products).where(eq(products.id, productId)).limit(1)) as Array<{
     id: number;
     sku: string;
@@ -71,7 +72,7 @@ export async function inspectProductDelete(db: DbLike, productId: number): Promi
  * Hard-delete a catalog product that has never been ordered or reserved.
  * Cart lines, stock rows and inventory movements are removed with the SKU.
  */
-export async function deleteUnusedProduct(db: DbLike, productId: number): Promise<ProductDeleteResult> {
+export async function deleteUnusedProduct(db: CatalogWriter, productId: number): Promise<ProductDeleteResult> {
   const inspect = await inspectProductDelete(db, productId);
   if (!inspect.found) return { ok: false, code: "NOT_FOUND" };
   if (inspect.blockedBy) {
