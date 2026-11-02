@@ -147,7 +147,7 @@ describe("Admin Phase 3 MEDIUM — audit coverage", () => {
     const idx = auth.indexOf('action: "admin.login"');
     assert.ok(idx > 0);
     const payloadLine = auth.slice(idx, idx + 160);
-    assert.match(payloadLine, /JSON\.stringify\(\{\s*adminId:\s*user\.id,\s*role:\s*normalized\s*\}\)/);
+    assert.match(payloadLine, /JSON\.stringify\(\{\s*adminId:\s*user\.id,\s*role:\s*user\.role/);
     assert.doesNotMatch(payloadLine, /password|passwordHash|Bearer|token/i);
   });
 
