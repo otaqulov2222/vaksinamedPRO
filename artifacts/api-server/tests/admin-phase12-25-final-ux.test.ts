@@ -70,7 +70,7 @@ describe("Admin Phase 12.25 — final UX consolidation", () => {
     assert.doesNotMatch(audit, /security score|Excel|CSV export|branchFilter|actorFilter/i);
 
     const reports = read("pages/ReportsPage.tsx");
-    assert.match(reports, /\/api\/admin\/dashboard|dashboard/);
+    assert.match(reports, /\/api\/admin\/reports/);
     assert.doesNotMatch(reports, /AOV|trend chart/i);
   });
 

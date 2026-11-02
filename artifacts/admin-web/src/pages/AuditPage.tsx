@@ -43,6 +43,7 @@ const ACTION_LABELS: Record<string, string> = {
   "branch.delete": "Filial o‘chirildi",
   "product.create": "Mahsulot yaratildi",
   "product.update": "Mahsulot o‘zgartirildi",
+  "product.delete": "Mahsulot o‘chirildi",
   "inventory.adjust": "Ombor qoldig‘i tuzatildi",
   "inventory.expire_due": "Muddati o‘tgan bronlar bo‘shatildi",
   "order.confirm_pos": "Buyurtma kassada tasdiqlandi",
