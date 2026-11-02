@@ -41,6 +41,8 @@ export const JOB_TYPES = {
   DELIVERY_PROVIDER_RETRY: "delivery_provider_retry",
   /** Read-only cashback ledger ↔ account integrity (never mutates money). */
   CASHBACK_INTEGRITY: "cashback_integrity",
+  /** FIFO 90-day grant expiry — writes EXPIRE ledger via cashbackFinance. */
+  CASHBACK_TTL_SWEEP: "cashback_ttl_sweep",
   MEDICATION_REMINDERS_SWEEP: "medication_reminders_sweep",
 } as const;
 
@@ -425,6 +427,10 @@ export async function processWorkerJob(job: typeof workerJobs.$inferSelect) {
       const { runCashbackIntegrityCheck } = await import("./cashbackIntegrity");
       return runCashbackIntegrityCheck(db, { emitAlerts: true });
     }
+    case JOB_TYPES.CASHBACK_TTL_SWEEP: {
+      const { expireDueCashbackGrants } = await import("./cashbackFinance");
+      return expireDueCashbackGrants(db);
+    }
     case JOB_TYPES.MEDICATION_REMINDERS_SWEEP:
       return runMedicationRemindersSweep();
     default:
@@ -586,6 +592,12 @@ export async function ensureSweepJobsEnqueued() {
     jobType: JOB_TYPES.MEDICATION_REMINDERS_SWEEP,
     entityKey: "sweep",
     idempotencyKey: `sweep:medication:${new Date().toISOString().slice(0, 16)}`,
+    payload: {},
+  });
+  await enqueueJob({
+    jobType: JOB_TYPES.CASHBACK_TTL_SWEEP,
+    entityKey: "sweep",
+    idempotencyKey: `sweep:cashback-ttl:${new Date().toISOString().slice(0, 13)}`,
     payload: {},
   });
 }

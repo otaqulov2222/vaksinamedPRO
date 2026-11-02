@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { date, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),
@@ -14,6 +14,7 @@ export const customers = pgTable("customers", {
   totalPurchases: integer("total_purchases").notNull().default(0),
   savedAmount: integer("saved_amount").notNull().default(0),
   redeemedRewards: text("redeemed_rewards").notNull().default("[]"),
+  birthDate: date("birth_date"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

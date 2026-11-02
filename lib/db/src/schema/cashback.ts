@@ -29,6 +29,20 @@ export const cashbackAccounts = pgTable("cashback_accounts", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const cashbackGrants = pgTable("cashback_grants", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull(),
+  customerId: integer("customer_id").notNull(),
+  originalAmount: integer("original_amount").notNull(),
+  unconsumedAmount: integer("unconsumed_amount").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  commercialTransactionId: integer("commercial_transaction_id"),
+  ledgerEntryId: integer("ledger_entry_id"),
+  status: text("status").notNull().default("ACTIVE"),
+  meta: text("meta").notNull().default("{}"),
+});
+
 export const cashbackLedger = pgTable("cashback_ledger", {
   id: serial("id").primaryKey(),
   accountId: integer("account_id").notNull(),
@@ -54,4 +68,5 @@ export const systemSettings = pgTable("system_settings", {
 
 export type CommercialTransaction = typeof commercialTransactions.$inferSelect;
 export type CashbackAccount = typeof cashbackAccounts.$inferSelect;
+export type CashbackGrant = typeof cashbackGrants.$inferSelect;
 export type CashbackLedgerEntry = typeof cashbackLedger.$inferSelect;

@@ -52,6 +52,7 @@ export default defineMessages({
     cashbackEntry_USE: 'Cashback ishlatildi',
     cashbackEntry_REVERSAL: 'Cashback qaytarildi',
     cashbackEntry_ADJUSTMENT: 'Cashback tuzatildi',
+    cashbackEntry_EXPIRE: 'Cashback muddati tugadi',
 
     cashbackSource_SYSTEM: 'Bonus',
     cashbackSource_POS: 'Kassa xaridi',
@@ -111,6 +112,7 @@ export default defineMessages({
     cashbackEntry_USE: 'Списан кэшбэк',
     cashbackEntry_REVERSAL: 'Кэшбэк отменён',
     cashbackEntry_ADJUSTMENT: 'Корректировка кэшбэка',
+    cashbackEntry_EXPIRE: 'Срок кэшбэка истёк',
 
     cashbackSource_SYSTEM: 'Бонус',
     cashbackSource_POS: 'Покупка на кассе',
@@ -170,6 +172,7 @@ export default defineMessages({
     cashbackEntry_USE: 'Cashback used',
     cashbackEntry_REVERSAL: 'Cashback reversed',
     cashbackEntry_ADJUSTMENT: 'Cashback adjusted',
+    cashbackEntry_EXPIRE: 'Cashback expired',
 
     cashbackSource_SYSTEM: 'Bonus',
     cashbackSource_POS: 'In-store purchase',

@@ -28,6 +28,8 @@ export function cashbackEntryLabel(t: TFunction, kindOrEntryType?: string | null
       return t('status.cashbackEntry_REVERSAL');
     case 'ADJUSTMENT':
       return t('status.cashbackEntry_ADJUSTMENT');
+    case 'EXPIRE':
+      return t('status.cashbackEntry_EXPIRE');
     default:
       return t('status.cashbackEntry_EARN');
   }

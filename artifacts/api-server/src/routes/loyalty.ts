@@ -3,8 +3,9 @@ import { eq } from "drizzle-orm";
 import { customers, db, rewards } from "@workspace/db";
 import { requireCustomer } from "../lib/auth";
 import { loyaltyCardNumber, publicQrCode } from "../lib/pos";
-import { earnCashback, useCashback, getAuthoritativeBalance } from "../lib/cashbackFinance";
+import { earnCashback, useCashback, getAuthoritativeBalance, getCashbackGrantSummary } from "../lib/cashbackFinance";
 import { getCustomerCashbackHistory } from "../lib/cashbackHistory";
+import { birthdayExtraBps, isBirthdayWindow, tierProgress } from "../lib/cashback";
 import { allowDemoCashbackSeed } from "../lib/securityEnv";
 import { rateLimit } from "../lib/rateLimit";
 
@@ -66,6 +67,8 @@ async function profileFor(telegramId: string) {
   const history = await getCustomerCashbackHistory(customer.id, { limit: 50, offset: 0 });
   const catalog = await db.select().from(rewards);
   const balance = await getAuthoritativeBalance(customer.id);
+  const grants = await getCashbackGrantSummary(customer.id);
+  const extraBps = birthdayExtraBps(customer.birthDate);
   return {
     telegramId: customer.telegramId,
     firstName: customer.firstName,
@@ -77,6 +80,11 @@ async function profileFor(telegramId: string) {
     purchasesCount: customer.purchasesCount,
     totalPurchases: customer.totalPurchases,
     savedAmount: customer.savedAmount,
+    birthDate: customer.birthDate ?? null,
+    birthdayActive: isBirthdayWindow(customer.birthDate),
+    birthdayExtraBps: extraBps,
+    tierProgress: tierProgress(customer.totalPurchases, customer.tier),
+    grants,
     qrCode: publicQrCode(customer.id),
     cardNumber: loyaltyCardNumber(customer.id),
     redeemedRewards: parseRewards(customer.redeemedRewards),
@@ -121,7 +129,7 @@ router.patch("/loyalty/profile", async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
     const body = req.body || {};
-    const patch: { language?: string; firstName?: string; lastName?: string } = {};
+    const patch: { language?: string; firstName?: string; lastName?: string; birthDate?: string | null } = {};
 
     if (body.language != null) {
       const language = String(body.language);
@@ -148,6 +156,20 @@ router.patch("/loyalty/profile", async (req, res, next) => {
         return res.status(400).json({ message: "Familiya juda uzun" });
       }
       patch.lastName = lastName;
+    }
+
+    if (body.birthDate !== undefined) {
+      const raw = body.birthDate == null || body.birthDate === "" ? null : String(body.birthDate).trim();
+      if (raw != null && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return res.status(400).json({ message: "Tug‘ilgan kun YYYY-MM-DD formatida bo‘lsin" });
+      }
+      if (raw) {
+        const dt = new Date(`${raw}T00:00:00Z`);
+        if (Number.isNaN(dt.getTime()) || dt.getUTCFullYear() < 1920 || dt > new Date()) {
+          return res.status(400).json({ message: "Tug‘ilgan kun noto‘g‘ri" });
+        }
+      }
+      patch.birthDate = raw;
     }
 
     // Phone is identity-controlled — never accept phone changes here.

@@ -989,6 +989,9 @@ router.get("/admin/customers/:id", async (req, res, next) => {
       purchasesCount: row.purchasesCount,
       cashbackBalance: acct?.balance ?? 0,
     });
+    const { getCashbackGrantSummary } = await import("../lib/cashbackFinance");
+    const { isBirthdayWindow, tierProgress } = await import("../lib/cashback");
+    const grants = await getCashbackGrantSummary(id);
     return res.json({
       customer: {
         ...listItem,
@@ -996,6 +999,10 @@ router.get("/admin/customers/:id", async (req, res, next) => {
         totalPurchases: row.totalPurchases,
         savedAmount: row.savedAmount,
         createdAt: row.createdAt,
+        birthDate: row.birthDate ?? null,
+        birthdayActive: isBirthdayWindow(row.birthDate),
+        tierProgress: tierProgress(row.totalPurchases, row.tier),
+        grants,
         cashbackSource: "cashback_accounts",
       },
     });

@@ -50,7 +50,19 @@ type AppContextValue = {
   loading: boolean;
   isAuthenticated: boolean;
   balance: number;
-  user: { name: string; phone: string; tier: string; purchases: number; total: number; saved: number; qrCode: string };
+  user: {
+    name: string;
+    phone: string;
+    tier: string;
+    purchases: number;
+    total: number;
+    saved: number;
+    qrCode: string;
+    birthDate: string | null;
+    birthdayActive: boolean;
+    birthdayExtraBps: number;
+    grants: { ttlDays: number; expiringAmount: number; nextExpiresAt: string | null } | null;
+  };
   transactions: Transaction[];
   rewards: Reward[];
   redeemedRewards: string[];
@@ -220,6 +232,18 @@ export function AppProvider({ children }: PropsWithChildren) {
         ? Math.max(0, Math.floor(Number(profile.savedAmount)))
         : 0,
       qrCode: profile?.qrCode ? String(profile.qrCode) : '',
+      birthDate: profile?.birthDate ? String(profile.birthDate).slice(0, 10) : null,
+      birthdayActive: Boolean(profile?.birthdayActive),
+      birthdayExtraBps: Number.isFinite(Number(profile?.birthdayExtraBps))
+        ? Math.max(0, Math.floor(Number(profile.birthdayExtraBps)))
+        : 0,
+      grants: profile?.grants && typeof profile.grants === 'object'
+        ? {
+            ttlDays: Math.max(0, Math.floor(Number(profile.grants.ttlDays) || 0)),
+            expiringAmount: Math.max(0, Math.floor(Number(profile.grants.expiringAmount) || 0)),
+            nextExpiresAt: profile.grants.nextExpiresAt ? String(profile.grants.nextExpiresAt) : null,
+          }
+        : null,
     },
     transactions: Array.isArray(profile?.transactions)
       ? profile.transactions.map((item: any) => {

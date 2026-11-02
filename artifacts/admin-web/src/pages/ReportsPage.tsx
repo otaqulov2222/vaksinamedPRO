@@ -726,6 +726,7 @@ export function ReportsPage(props: {
                 <div className="rp-kpis">
                   <StatCard className="rp-kpi" label="Hisoblangan" value={money(Number(cashbackPeriod.earned || 0))} context="EARN" />
                   <StatCard className="rp-kpi" label="Ishlatilgan" value={money(Number(cashbackPeriod.used || 0))} context="USE" />
+                  <StatCard className="rp-kpi" label="Muddati o‘tgan" value={money(Number(cashbackPeriod.expired || 0))} context="EXPIRE" />
                   <StatCard className="rp-kpi" label="Qaytarilgan" value={money(Number(cashbackPeriod.reversed || 0))} context="REVERSAL" />
                   <StatCard className="rp-kpi" label="Yozuvlar" value={count(cashbackPeriod.entries)} context="Ledger qatorlari" />
                 </div>

@@ -55,6 +55,8 @@ export default defineMessages({
 
     emptyTitle: 'Hali cashback yo‘q',
     emptyText: 'Yakunlangan xaridlar (ilova yoki kassa) cashbacki shu yerda ko‘rinadi. Namuna yozuvlar yo‘q.',
+    expiringSoon: '{amount} so‘m cashback yaqin {days} kunda yonadi',
+    birthdayActive: 'Tug‘ilgan kun: +{percent}% cashback',
   },
   ru: {
     introTitle: 'Единый баланс',
@@ -110,6 +112,8 @@ export default defineMessages({
 
     emptyTitle: 'Кэшбэка пока нет',
     emptyText: 'Здесь появится кэшбэк за завершённые покупки (в приложении или на кассе). Демо-записей нет.',
+    expiringSoon: '{amount} сум кэшбэка сгорит в ближайшие {days} дней',
+    birthdayActive: 'День рождения: +{percent}% кэшбэк',
   },
   en: {
     introTitle: 'One balance',
@@ -165,5 +169,7 @@ export default defineMessages({
 
     emptyTitle: 'No cashback yet',
     emptyText: 'Cashback from completed purchases (in the app or in store) will appear here. No sample entries.',
+    expiringSoon: '{amount} cashback expires within {days} days',
+    birthdayActive: 'Birthday: +{percent}% cashback',
   },
 });

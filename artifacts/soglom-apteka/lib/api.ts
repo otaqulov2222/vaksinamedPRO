@@ -149,7 +149,7 @@ export const api = {
   /** Revokes the current session server-side. Local cleanup is owned by performLogout. */
   revokeSession: () => request<{ ok: boolean; revoked: boolean }>('/api/auth/logout', { method: 'POST' }),
   profile: () => request<any>('/api/loyalty/profile'),
-  updateProfile: (body: { firstName?: string; lastName?: string; language?: string }) =>
+  updateProfile: (body: { firstName?: string; lastName?: string; language?: string; birthDate?: string | null }) =>
     request<any>('/api/loyalty/profile', { method: 'PATCH', body: JSON.stringify(body) }),
   changePassword: (body: { currentPassword?: string; newPassword: string }) =>
     request<{ ok: boolean; message: string }>('/api/auth/change-password', {
@@ -299,6 +299,8 @@ export const api = {
   cart: () => request<any>('/api/cart'),
   setCartBranch: (branchId: number) => request<any>('/api/cart/branch', { method: 'POST', body: JSON.stringify({ branchId }) }),
   addToCart: (productId: number, quantity = 1) => request<any>('/api/cart/items', { method: 'POST', body: JSON.stringify({ productId, quantity }) }),
+  repeatOrder: (orderId: number) =>
+    request<any>('/api/cart/repeat', { method: 'POST', body: JSON.stringify({ orderId }) }),
   updateCartItem: (id: number, quantity: number) => request<any>(`/api/cart/items/${id}`, { method: 'PATCH', body: JSON.stringify({ quantity }) }),
   removeCartItem: (id: number) => request<any>(`/api/cart/items/${id}`, { method: 'DELETE' }),
   orders: () => request<{ orders: any[] }>('/api/orders'),

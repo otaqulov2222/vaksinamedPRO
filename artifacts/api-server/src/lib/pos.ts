@@ -6,6 +6,7 @@ import {
   MIN_PURCHASE_UZS,
   computeCashback,
   cashbackRateBps,
+  birthdayExtraBps,
   rateLabel,
   nextTier,
 } from "./cashback";
@@ -179,7 +180,8 @@ export async function resolveCustomerFromScan(raw: string) {
 }
 
 function customerPosView(customer: typeof customers.$inferSelect, authoritativeBalance?: number) {
-  const bps = cashbackRateBps(customer.tier);
+  const extra = birthdayExtraBps(customer.birthDate);
+  const bps = cashbackRateBps(customer.tier) + extra;
   return {
     id: customer.id,
     firstName: customer.firstName,
@@ -212,6 +214,9 @@ export function computePosPreview(input: {
     balance: input.balance,
     tier: input.tier || (input.rateBps >= 700 ? "Platinum" : input.rateBps >= 500 ? "Gold" : "Silver"),
     maxSpendRatio: input.maxSpendRatio,
+    extraBps: input.rateBps != null
+      ? Math.max(0, input.rateBps - cashbackRateBps(input.tier || (input.rateBps >= 700 ? "Platinum" : input.rateBps >= 500 ? "Gold" : "Silver")))
+      : 0,
   });
   return {
     amount: calc.goodsAmount,

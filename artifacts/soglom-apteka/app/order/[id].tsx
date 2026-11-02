@@ -92,7 +92,7 @@ export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { refresh, t, fmt } = useApp();
+  const { refresh, t, fmt, syncCartCount } = useApp();
   const narrow = width < 390;
   const contentWidth = Math.min(width, 440);
 
@@ -101,6 +101,7 @@ export default function OrderScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [repeating, setRepeating] = useState(false);
   const [msLeft, setMsLeft] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -223,6 +224,23 @@ export default function OrderScreen() {
   const goBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)/purchases');
+  };
+
+  const onRepeat = async () => {
+    if (!order?.id || repeating) return;
+    setRepeating(true);
+    try {
+      const payload = await api.repeatOrder(order.id);
+      const count = Array.isArray(payload?.items) ? payload.items.length : 0;
+      const subtotal = Number(payload?.subtotal);
+      syncCartCount(count, Number.isFinite(subtotal) ? subtotal : undefined);
+      notify(t('orders.repeatSuccess'), t('orders.repeatOrder'));
+      router.push('/cart');
+    } catch (e) {
+      notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'orders.repeatFailed' }));
+    } finally {
+      setRepeating(false);
+    }
   };
 
   const onCancel = async () => {
@@ -732,6 +750,23 @@ export default function OrderScreen() {
         ) : null}
 
         {/* Actions */}
+        {Array.isArray(order.items) && order.items.length > 0 ? (
+          <Pressable
+            style={[styles.primaryBtn, repeating && { opacity: 0.55 }]}
+            disabled={repeating}
+            onPress={() => void onRepeat()}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: repeating }}
+            accessibilityLabel={t('orders.repeatOrderA11y')}
+          >
+            {repeating ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.primaryBtnText}>{t('orders.repeatOrder')}</Text>
+            )}
+          </Pressable>
+        ) : null}
+
         {order.canCancel ? (
           <Pressable
             style={[styles.cancelBtn, cancelling && { opacity: 0.55 }]}

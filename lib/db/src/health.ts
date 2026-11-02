@@ -82,6 +82,7 @@ export const P6_CASHBACK_TABLES = [
   "commercial_transactions",
   "cashback_accounts",
   "cashback_ledger",
+  "cashback_grants",
   "system_settings",
 ] as const;
 

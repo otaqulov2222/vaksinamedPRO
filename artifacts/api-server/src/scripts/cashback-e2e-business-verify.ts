@@ -483,7 +483,7 @@ async function main() {
   const ledgerSum = await database.execute(sql`
     SELECT
       COALESCE(SUM(CASE WHEN entry_type IN ('EARN','ADJUSTMENT') THEN amount
-                        WHEN entry_type = 'USE' THEN -amount
+                        WHEN entry_type IN ('USE','EXPIRE') THEN -amount
                         WHEN entry_type = 'REVERSAL' THEN
                           CASE WHEN meta::jsonb->>'reverses' = 'USE' THEN amount ELSE -amount END
                         ELSE 0 END), 0)::int AS net
@@ -874,7 +874,7 @@ async function main() {
   let expectedNet = 0;
   for (const e of allLedger) {
     if (e.entryType === "EARN" || e.entryType === "ADJUSTMENT") expectedNet += e.amount;
-    else if (e.entryType === "USE") expectedNet -= e.amount;
+    else if (e.entryType === "USE" || e.entryType === "EXPIRE") expectedNet -= e.amount;
     else if (e.entryType === "REVERSAL") {
       let meta: { reverses?: string } = {};
       try {

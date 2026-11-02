@@ -27,6 +27,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import {
   cashbackAccounts,
+  cashbackGrants,
   cashbackLedger,
   commercialTransactions,
   customers,
@@ -37,7 +38,14 @@ import {
   type CashbackLedgerEntry,
   type CommercialTransaction,
 } from "@workspace/db";
-import { clampCashbackSpend, DEFAULT_MAX_SPEND_RATIO, normalizeSpendRatio } from "./cashback";
+import {
+  CASHBACK_TTL_DAYS,
+  GRANT_EXPIRING_SOON_DAYS,
+  clampCashbackSpend,
+  DEFAULT_MAX_SPEND_RATIO,
+  grantExpiryDate,
+  normalizeSpendRatio,
+} from "./cashback";
 import { emitAlert, ALERT } from "./alerts";
 
 type DbLike = typeof db;
@@ -205,6 +213,136 @@ async function mirrorLegacyBalance(tx: DbLike, customerId: number, balance: numb
     .where(eq(customers.id, customerId));
 }
 
+async function ensureGrantForEarnEntry(
+  tx: DbLike,
+  entry: CashbackLedgerEntry,
+): Promise<void> {
+  if (entry.entryType !== "EARN" && entry.entryType !== "ADJUSTMENT") return;
+  const existing = await tx
+    .select({ id: cashbackGrants.id })
+    .from(cashbackGrants)
+    .where(eq(cashbackGrants.ledgerEntryId, entry.id))
+    .limit(1);
+  if (existing[0]) return;
+  try {
+    await tx.insert(cashbackGrants).values({
+      accountId: entry.accountId,
+      customerId: entry.customerId,
+      originalAmount: entry.amount,
+      unconsumedAmount: entry.amount,
+      expiresAt: grantExpiryDate(entry.createdAt || new Date()),
+      commercialTransactionId: entry.commercialTransactionId,
+      ledgerEntryId: entry.id,
+      status: "ACTIVE",
+      meta: JSON.stringify({ ttlDays: CASHBACK_TTL_DAYS }),
+    });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+  }
+}
+
+async function consumeGrantsFifo(tx: DbLike, account: CashbackAccount, amount: number): Promise<void> {
+  const spend = Math.floor(Number(amount) || 0);
+  if (spend <= 0) return;
+
+  const locked = await tx.execute(sql`
+    SELECT id, unconsumed_amount
+    FROM cashback_grants
+    WHERE account_id = ${account.id}
+      AND unconsumed_amount > 0
+      AND status = 'ACTIVE'
+      AND (expires_at IS NULL OR expires_at > now())
+    ORDER BY expires_at ASC NULLS LAST, id ASC
+    FOR UPDATE
+  `);
+
+  let remaining = spend;
+  for (const row of rowsOf(locked)) {
+    if (remaining <= 0) break;
+    const unconsumed = Math.max(0, Math.floor(Number(row.unconsumed_amount) || 0));
+    const take = Math.min(unconsumed, remaining);
+    const next = unconsumed - take;
+    await tx.execute(sql`
+      UPDATE cashback_grants
+      SET unconsumed_amount = ${next},
+          status = ${next === 0 ? "EXHAUSTED" : "ACTIVE"}
+      WHERE id = ${Number(row.id)}
+    `);
+    remaining -= take;
+  }
+
+  if (remaining > 0) {
+    const inserted = await tx.execute(sql`
+      INSERT INTO cashback_grants (
+        account_id, customer_id, original_amount, unconsumed_amount, expires_at, status, meta
+      ) VALUES (
+        ${account.id}, ${account.customerId}, ${remaining}, ${remaining}, NULL, 'ACTIVE',
+        '{"legacy_strategy":"gap_cover"}'
+      )
+      RETURNING id
+    `);
+    const gid = Number(rowsOf(inserted)[0]?.id);
+    if (Number.isFinite(gid) && gid > 0) {
+      await tx.execute(sql`
+        UPDATE cashback_grants SET unconsumed_amount = 0, status = 'EXHAUSTED' WHERE id = ${gid}
+      `);
+    }
+  }
+}
+
+async function restoreGrantOnUseReversal(
+  tx: DbLike,
+  account: CashbackAccount,
+  amount: number,
+  useEntryId: number,
+): Promise<void> {
+  const restore = Math.floor(Number(amount) || 0);
+  if (restore <= 0) return;
+  await tx.insert(cashbackGrants).values({
+    accountId: account.id,
+    customerId: account.customerId,
+    originalAmount: restore,
+    unconsumedAmount: restore,
+    expiresAt: grantExpiryDate(),
+    status: "ACTIVE",
+    meta: JSON.stringify({ reversedUseEntryId: useEntryId, ttlDays: CASHBACK_TTL_DAYS }),
+  });
+}
+
+async function reduceGrantOnEarnReversal(
+  tx: DbLike,
+  account: CashbackAccount,
+  original: CashbackLedgerEntry,
+  amount: number,
+): Promise<void> {
+  const takeTotal = Math.floor(Number(amount) || 0);
+  if (takeTotal <= 0) return;
+  const found = await tx.execute(sql`
+    SELECT id, unconsumed_amount
+    FROM cashback_grants
+    WHERE ledger_entry_id = ${original.id}
+    FOR UPDATE
+  `);
+  const row = rowsOf(found)[0];
+  if (!row) {
+    await consumeGrantsFifo(tx, account, takeTotal);
+    return;
+  }
+  const unconsumed = Math.max(0, Math.floor(Number(row.unconsumed_amount) || 0));
+  const take = Math.min(unconsumed, takeTotal);
+  const next = unconsumed - take;
+  const full = next === 0;
+  await tx.execute(sql`
+    UPDATE cashback_grants
+    SET unconsumed_amount = ${next},
+        status = ${full ? "REVERSED" : "ACTIVE"}
+    WHERE id = ${Number(row.id)}
+  `);
+  if (takeTotal > take) {
+    await consumeGrantsFifo(tx, account, takeTotal - take);
+  }
+}
+
 export type EarnCashbackInput = {
   customerId: number;
   amount: number;
@@ -260,6 +398,7 @@ export async function earnCashback(
       .limit(1);
     if (existing[0]) {
       const locked = await lockAccount(tx, account.id);
+      await ensureGrantForEarnEntry(tx, existing[0]);
       return { account: locked, entry: existing[0], commercial, idempotent: true };
     }
 
@@ -306,6 +445,7 @@ export async function earnCashback(
           source: "unique_race",
         });
         const again = await lockAccount(tx, account.id);
+        await ensureGrantForEarnEntry(tx, raced[0]);
         return { account: again, entry: raced[0], commercial, idempotent: true };
       }
       emitAlert(ALERT.CASHBACK_OPERATION_FAILURE, {
@@ -323,6 +463,7 @@ export async function earnCashback(
       .where(eq(cashbackAccounts.id, locked.id))
       .returning();
 
+    await ensureGrantForEarnEntry(tx, entry);
     await mirrorLegacyBalance(tx, input.customerId, nextBalance);
 
     if (input.orderId) {
@@ -436,6 +577,7 @@ export async function useCashback(
       throw badRequest("Cashback balansi yetarli emas", 400, "INSUFFICIENT_CASHBACK");
     }
     const nextBalance = locked.balance - amount;
+    await consumeGrantsFifo(tx, locked, amount);
     const idemKey = input.idempotencyKey?.trim() || `use:commercial:${commercial.id}`;
 
     let entry: CashbackLedgerEntry;
@@ -568,6 +710,14 @@ export async function reverseCashbackEntry(
       nextBalance = locked.balance - reverseAmount;
     } else if (original.entryType === "USE") {
       nextBalance = locked.balance + reverseAmount;
+    } else if (original.entryType === "EXPIRE") {
+      throw badRequest("EXPIRE yozuvini reverse qilib bo‘lmaydi", 409);
+    }
+
+    if (original.entryType === "EARN" || original.entryType === "ADJUSTMENT") {
+      await reduceGrantOnEarnReversal(tx, locked, original, reverseAmount);
+    } else if (original.entryType === "USE") {
+      await restoreGrantOnUseReversal(tx, locked, reverseAmount, original.id);
     }
 
     let entry: CashbackLedgerEntry;
@@ -663,7 +813,7 @@ export async function inspectCashbackIntegrity(executor: DbLike = db): Promise<{
       SELECT COALESCE(SUM(
         CASE
           WHEN entry_type IN ('EARN', 'ADJUSTMENT') THEN amount
-          WHEN entry_type = 'USE' THEN -amount
+          WHEN entry_type IN ('USE', 'EXPIRE') THEN -amount
           WHEN entry_type = 'REVERSAL' THEN
             CASE
               WHEN EXISTS (
@@ -742,6 +892,131 @@ export async function reconcileDuplicateEarn(
     }
     return { reversedEntryIds };
   });
+}
+
+export async function expireDueCashbackGrants(
+  executor: DbLike = db,
+  opts: { limit?: number } = {},
+): Promise<{ accounts: number; grants: number; amount: number }> {
+  const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
+  const due = await executor.execute(sql`
+    SELECT DISTINCT account_id
+    FROM cashback_grants
+    WHERE status = 'ACTIVE'
+      AND unconsumed_amount > 0
+      AND expires_at IS NOT NULL
+      AND expires_at <= now()
+    ORDER BY account_id ASC
+    LIMIT ${limit}
+  `);
+  const accountIds = rowsOf(due)
+    .map((r) => Number(r.account_id))
+    .filter((id) => Number.isFinite(id) && id > 0);
+
+  let grants = 0;
+  let amount = 0;
+  for (const accountId of accountIds) {
+    const result = await expireAccountGrants(accountId, executor);
+    grants += result.grants;
+    amount += result.amount;
+  }
+  return { accounts: accountIds.length, grants, amount };
+}
+
+async function expireAccountGrants(
+  accountId: number,
+  executor: DbLike,
+): Promise<{ grants: number; amount: number }> {
+  return withTx(executor, false, async (tx) => {
+    const locked = await lockAccount(tx, accountId);
+    const due = await tx.execute(sql`
+      SELECT id, unconsumed_amount
+      FROM cashback_grants
+      WHERE account_id = ${accountId}
+        AND status = 'ACTIVE'
+        AND unconsumed_amount > 0
+        AND expires_at IS NOT NULL
+        AND expires_at <= now()
+      FOR UPDATE
+    `);
+    const rows = rowsOf(due);
+    let total = 0;
+    let count = 0;
+    for (const row of rows) {
+      const grantId = Number(row.id);
+      const unconsumed = Math.max(0, Math.floor(Number(row.unconsumed_amount) || 0));
+      if (!Number.isFinite(grantId) || unconsumed <= 0) continue;
+      await tx.execute(sql`
+        UPDATE cashback_grants
+        SET unconsumed_amount = 0, status = 'EXPIRED'
+        WHERE id = ${grantId}
+      `);
+      try {
+        await tx.insert(cashbackLedger).values({
+          accountId: locked.id,
+          customerId: locked.customerId,
+          entryType: "EXPIRE",
+          amount: unconsumed,
+          actor: "worker:expiration",
+          reason: "ttl_90_days_expired",
+          idempotencyKey: `expire:grant:${grantId}`,
+          meta: JSON.stringify({ grantId, ttlDays: CASHBACK_TTL_DAYS }),
+        });
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+        continue;
+      }
+      total += unconsumed;
+      count += 1;
+    }
+    if (total > 0) {
+      const nextBalance = Math.max(0, locked.balance - total);
+      await tx
+        .update(cashbackAccounts)
+        .set({ balance: nextBalance, updatedAt: new Date() })
+        .where(eq(cashbackAccounts.id, locked.id));
+      await mirrorLegacyBalance(tx, locked.customerId, nextBalance);
+    }
+    return { grants: count, amount: total };
+  });
+}
+
+export async function getCashbackGrantSummary(
+  customerId: number,
+  executor: DbLike = db,
+): Promise<{
+  ttlDays: number;
+  activeAmount: number;
+  expiringAmount: number;
+  nextExpiresAt: string | null;
+}> {
+  const account = await ensureCashbackAccount(customerId, executor);
+  const soon = new Date(Date.now() + GRANT_EXPIRING_SOON_DAYS * 24 * 60 * 60 * 1000);
+  const rows = await executor.execute(sql`
+    SELECT
+      COALESCE(SUM(CASE
+        WHEN status = 'ACTIVE' AND unconsumed_amount > 0
+          AND (expires_at IS NULL OR expires_at > now())
+        THEN unconsumed_amount ELSE 0 END), 0)::int AS active,
+      COALESCE(SUM(CASE
+        WHEN status = 'ACTIVE' AND unconsumed_amount > 0
+          AND expires_at IS NOT NULL AND expires_at > now() AND expires_at <= ${soon}
+        THEN unconsumed_amount ELSE 0 END), 0)::int AS expiring,
+      MIN(CASE
+        WHEN status = 'ACTIVE' AND unconsumed_amount > 0
+          AND expires_at IS NOT NULL AND expires_at > now()
+        THEN expires_at ELSE NULL END) AS next_expires
+    FROM cashback_grants
+    WHERE account_id = ${account.id}
+  `);
+  const row = rowsOf(rows)[0];
+  const next = row?.next_expires;
+  return {
+    ttlDays: CASHBACK_TTL_DAYS,
+    activeAmount: Number(row?.active || 0),
+    expiringAmount: Number(row?.expiring || 0),
+    nextExpiresAt: next ? new Date(String(next)).toISOString() : null,
+  };
 }
 
 /** P6.8 — authoritative balance (cashback_accounts); falls back to ensuring account. */

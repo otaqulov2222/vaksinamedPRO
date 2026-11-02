@@ -19,6 +19,7 @@ import {
 } from "@workspace/db";
 import { requireAdmin, requireCustomer } from "../lib/auth";
 import { DELIVERY_FEE, RESERVE_HOURS, formatDate, orderCode, computeCashback } from "../lib/money";
+import { birthdayExtraBps } from "../lib/cashback";
 import { createBranchPayment } from "../lib/payments";
 import { confirmFomSale } from "../lib/fom";
 import { cartPayload } from "./cart";
@@ -480,6 +481,7 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
       }
 
       const balance = await getAuthoritativeBalance(customer.id, tx as unknown as typeof db);
+      const extraBps = birthdayExtraBps(customer.birthDate);
       const calc = computeCashback({
         goodsAmount: subtotal,
         cashbackToUse: useCashback ? balance : 0,
@@ -487,6 +489,7 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
         tier: customer.tier,
         deliveryFee,
         maxSpendRatio,
+        extraBps,
       });
       let cashbackUsed = useCashback ? calc.cashbackUsed : 0;
       let cashbackEarned = calc.cashbackEarned;
@@ -617,6 +620,7 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
             tier: customer.tier,
             deliveryFee,
             maxSpendRatio,
+            extraBps,
           });
           cashbackUsed = actualUsed;
           cashbackEarned = recalc.cashbackEarned;

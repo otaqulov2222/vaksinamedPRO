@@ -10,6 +10,11 @@
  */
 
 export const CASHBACK_TTL_DAYS = 90;
+export const WELCOME_BONUS_UZS = 5_000;
+export const BIRTHDAY_WINDOW_DAYS = 7;
+/** Extra basis points during birthday window (500 = +5%). */
+export const BIRTHDAY_EXTRA_BPS = 500;
+export const GRANT_EXPIRING_SOON_DAYS = 30;
 export const MIN_PURCHASE_UZS = 1_000;
 /** Default production spend cap — overridable via system_settings `cashback.max_spend_ratio`. */
 export const DEFAULT_MAX_SPEND_RATIO = 0.3;
@@ -75,10 +80,12 @@ export function computeCashback(input: {
   tier: string;
   deliveryFee?: number;
   maxSpendRatio?: number;
+  extraBps?: number;
 }) {
   const goodsAmount = Math.max(0, Math.floor(Number(input.goodsAmount) || 0));
   const deliveryFee = Math.max(0, Math.floor(Number(input.deliveryFee) || 0));
-  const bps = cashbackRateBps(input.tier);
+  const extra = Math.max(0, Math.floor(Number(input.extraBps) || 0));
+  const bps = cashbackRateBps(input.tier) + extra;
 
   if (goodsAmount < MIN_PURCHASE_UZS) {
     throw Object.assign(
@@ -151,6 +158,12 @@ export function publicCashbackRules(maxSpendRatio: number = DEFAULT_MAX_SPEND_RA
   return {
     title: "Vaksina Med — Universal Cashback",
     ttlDays: CASHBACK_TTL_DAYS,
+    ttlEnforced: true,
+    fifo: true,
+    welcomeBonus: WELCOME_BONUS_UZS,
+    birthdayWindowDays: BIRTHDAY_WINDOW_DAYS,
+    birthdayExtraBps: BIRTHDAY_EXTRA_BPS,
+    birthdayExtraPercent: Math.round(BIRTHDAY_EXTRA_BPS / 100),
     minPurchase: MIN_PURCHASE_UZS,
     maxSpendRatio: ratio,
     maxSpendPercent: Math.round(ratio * 100),
@@ -193,4 +206,63 @@ export function nextTier(totalPurchases: number, current: string) {
   if (totalPurchases >= 1_000_000) return "Gold";
   if (totalPurchases >= 200_000) return "Silver";
   return current || "Silver";
+}
+
+const TIER_THRESHOLDS: Array<{ tier: CashbackTier; fromTotal: number }> = [
+  { tier: "Silver", fromTotal: 200_000 },
+  { tier: "Gold", fromTotal: 1_000_000 },
+  { tier: "Platinum", fromTotal: 5_000_000 },
+];
+
+export function tierProgress(totalPurchases: number, current: string) {
+  const spent = Math.max(0, Math.floor(Number(totalPurchases) || 0));
+  const currentTier = nextTier(spent, current);
+  const next = TIER_THRESHOLDS.find((t) => spent < t.fromTotal) || null;
+  const remaining = next ? Math.max(0, next.fromTotal - spent) : 0;
+  const progress = next ? Math.min(1, Math.max(0, spent / Math.max(1, next.fromTotal))) : 1;
+  return {
+    current: currentTier,
+    next: next?.tier ?? null,
+    nextFromTotal: next?.fromTotal ?? null,
+    remaining,
+    progress,
+    totalPurchases: spent,
+  };
+}
+
+function parseBirthDate(raw: string | Date | null | undefined): { month: number; day: number } | null {
+  if (raw == null) return null;
+  if (raw instanceof Date) {
+    if (Number.isNaN(raw.getTime())) return null;
+    return { month: raw.getUTCMonth(), day: raw.getUTCDate() };
+  }
+  const s = String(raw).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return null;
+  const month = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  if (!Number.isFinite(month) || !Number.isFinite(day) || month < 0 || month > 11 || day < 1 || day > 31) {
+    return null;
+  }
+  return { month, day };
+}
+
+export function isBirthdayWindow(birthDate: string | Date | null | undefined, now = new Date()): boolean {
+  const parsed = parseBirthDate(birthDate);
+  if (!parsed) return false;
+  const startThis = new Date(now.getFullYear(), parsed.month, parsed.day);
+  const startLast = new Date(now.getFullYear() - 1, parsed.month, parsed.day);
+  const endThis = new Date(startThis);
+  endThis.setDate(endThis.getDate() + BIRTHDAY_WINDOW_DAYS);
+  const endLast = new Date(startLast);
+  endLast.setDate(endLast.getDate() + BIRTHDAY_WINDOW_DAYS);
+  return (now >= startThis && now < endThis) || (now >= startLast && now < endLast);
+}
+
+export function birthdayExtraBps(birthDate: string | Date | null | undefined, now = new Date()): number {
+  return isBirthdayWindow(birthDate, now) ? BIRTHDAY_EXTRA_BPS : 0;
+}
+
+export function grantExpiryDate(from = new Date()): Date {
+  return new Date(from.getTime() + CASHBACK_TTL_DAYS * 24 * 60 * 60 * 1000);
 }

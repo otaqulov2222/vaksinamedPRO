@@ -92,13 +92,10 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
     }
   });
 
-  it("ttlDays is declared but not enforced by any server code — the page must say so", () => {
-    for (const { f, src } of serverSources) {
-      if (f === "cashback.ts") continue;
-      assert.doesNotMatch(src, /CASHBACK_TTL_DAYS|ttlDays/, f);
-    }
-    assert.match(code, /Serverda qo‘llanmaydi/);
-    assert.match(code, /Muddati o‘tgan cashbackni hisobdan chiqaradigan server jarayoni hozircha yo‘q\./);
+  it("ttlDays is enforced via FIFO grants; settings page reflects server ttlEnforced", () => {
+    assert.match(finance, /expireDueCashbackGrants|cashbackGrants|ttl_90_days_expired/);
+    assert.match(code, /ttlEnforced/);
+    assert.match(code, /FIFO qo‘llanadi/);
   });
 
   it("branches: branches:read before DB; merchant secrets are masked to booleans / •••• in the DTO", () => {

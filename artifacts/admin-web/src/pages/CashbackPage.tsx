@@ -483,10 +483,14 @@ export function CashbackPage(props: { token: string }) {
                   <li>Qaytarish asl yozuvni o‘chirmaydi — alohida qaytarish yozuvi qo‘shiladi.</li>
                 </ul>
                 <div className="cb-caveats">
-                  <div className="cb-caveats-title">Tizimda qo‘llanmaydi</div>
+                  <div className="cb-caveats-title">{rules.ttlEnforced ? "Muddat" : "Tizimda qo‘llanmaydi"}</div>
                   <ul className="cb-rule-list">
                     {rules.ttlDays != null ? (
-                      <li>Qoidalarda {rules.ttlDays} kunlik muddat e’lon qilingan — muddat o‘tishi amalga oshirilmagan.</li>
+                      <li>
+                        {rules.ttlEnforced
+                          ? `FIFO: yangi cashback ${rules.ttlDays} kundan keyin yoniydi (eski qoldiq grandfathered).`
+                          : `Qoidalarda ${rules.ttlDays} kunlik muddat e’lon qilingan — muddat o‘tishi amalga oshirilmagan.`}
+                      </li>
                     ) : null}
                     <li>Daraja avtomatik faqat kassa (POS) sotuvida yangilanadi; ilova buyurtmasi darajani o‘zgartirmaydi.</li>
                   </ul>

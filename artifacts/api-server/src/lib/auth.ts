@@ -21,8 +21,9 @@ import { recordAuthEvent } from "./authEvents";
 import { normalizeIp } from "./requestTelemetry";
 import { normalizeAdminRole } from "./securityEnv";
 import { earnCashback } from "./cashbackFinance";
+import { WELCOME_BONUS_UZS } from "./cashback";
 
-const WELCOME_CASHBACK = 5000;
+const WELCOME_CASHBACK = WELCOME_BONUS_UZS;
 const SECRET = requireConfiguredSecret("ADMIN_SECRET", "vaksinamed-admin-secret");
 const CUSTOMER_SECRET = requireConfiguredSecret("CUSTOMER_SECRET", "vaksinamed-customer-secret");
 

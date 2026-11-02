@@ -16,6 +16,7 @@ describe("P6.1–P6.4 cashback foundation + earn safety", () => {
   let useCashback: typeof import("../../../artifacts/api-server/src/lib/cashbackFinance").useCashback;
   let reverseCashbackEntry: typeof import("../../../artifacts/api-server/src/lib/cashbackFinance").reverseCashbackEntry;
   let inspectCashbackIntegrity: typeof import("../../../artifacts/api-server/src/lib/cashbackFinance").inspectCashbackIntegrity;
+  let expireDueCashbackGrants: typeof import("../../../artifacts/api-server/src/lib/cashbackFinance").expireDueCashbackGrants;
   let customerId: number;
 
   before(async () => {
@@ -30,6 +31,7 @@ describe("P6.1–P6.4 cashback foundation + earn safety", () => {
     useCashback = finance.useCashback;
     reverseCashbackEntry = finance.reverseCashbackEntry;
     inspectCashbackIntegrity = finance.inspectCashbackIntegrity;
+    expireDueCashbackGrants = finance.expireDueCashbackGrants;
 
     const inserted = await database.insert(schema.customers).values({
       telegramId: "p6-cashback",
@@ -287,5 +289,115 @@ describe("P6.1–P6.4 cashback foundation + earn safety", () => {
     assert.equal(first.idempotent, false);
     assert.equal(second.idempotent, true);
     assert.equal(first.entry.id, second.entry.id);
+  });
+
+  it("13. EARN creates a 90-day FIFO grant", async () => {
+    const result = await earnCashback(
+      {
+        customerId,
+        amount: 400,
+        commercial: { sourceType: "ORDER", sourceKey: "order:fifo-earn", customerId, orderId: 9101 },
+        actor: "test",
+        reason: "fifo_earn",
+        orderId: 9101,
+        idempotencyKey: "earn:order:9101",
+      },
+      database as never,
+    );
+    const grants = await database.select().from(schema.cashbackGrants);
+    const grant = grants.find((g) => g.ledgerEntryId === result.entry.id);
+    assert.ok(grant);
+    assert.equal(grant!.unconsumedAmount, 400);
+    assert.equal(grant!.status, "ACTIVE");
+    assert.ok(grant!.expiresAt);
+    const ttlMs = grant!.expiresAt!.getTime() - grant!.createdAt.getTime();
+    assert.ok(ttlMs > 89 * 24 * 3600 * 1000 && ttlMs < 91 * 24 * 3600 * 1000);
+  });
+
+  it("14. USE consumes earliest-expiring grant first", async () => {
+    const soonEarn = await earnCashback(
+      {
+        customerId,
+        amount: 300,
+        commercial: { sourceType: "ORDER", sourceKey: "order:fifo-soon", customerId, orderId: 9102 },
+        actor: "test",
+        reason: "fifo_soon",
+        orderId: 9102,
+        idempotencyKey: "earn:order:9102",
+      },
+      database as never,
+    );
+    const laterEarn = await earnCashback(
+      {
+        customerId,
+        amount: 700,
+        commercial: { sourceType: "ORDER", sourceKey: "order:fifo-later", customerId, orderId: 9103 },
+        actor: "test",
+        reason: "fifo_later",
+        orderId: 9103,
+        idempotencyKey: "earn:order:9103",
+      },
+      database as never,
+    );
+    const soon = new Date(Date.now() + 2 * 24 * 3600 * 1000);
+    const later = new Date(Date.now() + 80 * 24 * 3600 * 1000);
+    await client.query(`UPDATE cashback_grants SET expires_at = $1 WHERE ledger_entry_id = $2`, [
+      soon.toISOString(),
+      soonEarn.entry.id,
+    ]);
+    await client.query(`UPDATE cashback_grants SET expires_at = $1 WHERE ledger_entry_id = $2`, [
+      later.toISOString(),
+      laterEarn.entry.id,
+    ]);
+
+    await useCashback(
+      {
+        customerId,
+        amount: 250,
+        commercial: { sourceType: "ORDER", sourceKey: "order:fifo-use", customerId, orderId: 9104 },
+        actor: "test",
+        reason: "fifo_use",
+        orderId: 9104,
+        idempotencyKey: "use:order:9104",
+      },
+      database as never,
+    );
+
+    const soonGrant = await database.select().from(schema.cashbackGrants);
+    const soonRow = soonGrant.find((g) => g.ledgerEntryId === soonEarn.entry.id);
+    const laterRow = soonGrant.find((g) => g.ledgerEntryId === laterEarn.entry.id);
+    assert.equal(soonRow?.unconsumedAmount, 50);
+    assert.equal(soonRow?.status, "ACTIVE");
+    assert.equal(laterRow?.unconsumedAmount, 700);
+  });
+
+  it("15. expiration sweep writes EXPIRE and is idempotent", async () => {
+    const earned = await earnCashback(
+      {
+        customerId,
+        amount: 120,
+        commercial: { sourceType: "ORDER", sourceKey: "order:fifo-expire", customerId, orderId: 9105 },
+        actor: "test",
+        reason: "fifo_expire",
+        orderId: 9105,
+        idempotencyKey: "earn:order:9105",
+      },
+      database as never,
+    );
+    await client.query(`UPDATE cashback_grants SET expires_at = $1 WHERE ledger_entry_id = $2`, [
+      new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+      earned.entry.id,
+    ]);
+
+    const first = await expireDueCashbackGrants(database as never);
+    assert.ok(first.amount >= 120);
+    const second = await expireDueCashbackGrants(database as never);
+    assert.equal(second.amount, 0);
+    const report = await inspectCashbackIntegrity(database as never);
+    assert.equal(report.accountLedgerMismatches.length, 0);
+    const expiredGrant = (await database.select().from(schema.cashbackGrants))
+      .find((g) => g.ledgerEntryId === earned.entry.id);
+    assert.equal(expiredGrant?.status, "EXPIRED");
+    assert.equal(expiredGrant?.unconsumedAmount, 0);
   });
 });

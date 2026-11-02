@@ -35,6 +35,7 @@ type Rules = {
   maxSpendPercent?: number;
   minPurchase?: number;
   ttlDays?: number;
+  ttlEnforced?: boolean;
   deliveryFee?: number;
   tiers?: Array<{ tier?: string; rate?: string; fromTotal?: number }>;
   earnWhen?: string[];
@@ -548,10 +549,20 @@ function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: stri
       <SettingRow
         icon={<Clock size={15} aria-hidden="true" />}
         title="Cashback amal qilish muddati"
-        source="Server kodi · o‘zgarmas qiymat"
-        desc="Muddati o‘tgan cashbackni hisobdan chiqaradigan server jarayoni hozircha yo‘q."
+        source="Server kodi · FIFO grant + worker"
+        desc={
+          r.ttlEnforced
+            ? "Yangi hisoblangan cashback muddati o‘tgach EXPIRE yozuvi bilan hisobdan chiqadi. Oldingi qoldiq grandfathered."
+            : "Muddati o‘tgan cashbackni hisobdan chiqaradigan server jarayoni hozircha yo‘q."
+        }
         value={ttlDays != null ? `${ttlDays} kun` : null}
-        status={ttlDays != null ? { tone: "warn", label: "Serverda qo‘llanmaydi" } : undefined}
+        status={
+          ttlDays != null
+            ? r.ttlEnforced
+              ? { tone: "ok", label: "FIFO qo‘llanadi" }
+              : { tone: "warn", label: "Serverda qo‘llanmaydi" }
+            : undefined
+        }
       />
     </>
   );

@@ -371,6 +371,7 @@ export function entryTone(entryType: string): BadgeTone {
   if (t === "EARN") return "ok";
   if (t === "USE") return "info";
   if (t === "REVERSAL") return "warn";
+  if (t === "EXPIRE") return "warn";
   return "neutral";
 }
 
@@ -431,6 +432,7 @@ export function entryTypeLabel(entryType: string): string {
     USE: "Ishlatilgan",
     REVERSAL: "Qaytarilgan",
     ADJUSTMENT: "Tuzatish",
+    EXPIRE: "Muddati tugagan",
   };
   return map[t] || (entryType ? String(entryType) : "—");
 }

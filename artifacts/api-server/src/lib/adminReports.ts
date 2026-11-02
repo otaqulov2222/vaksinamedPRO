@@ -222,6 +222,7 @@ export async function loadAdminReport(filters: AdminReportFilters) {
       entries: count(),
       earned: sql<number>`coalesce(sum(${cashbackLedger.amount}) filter (where ${cashbackLedger.entryType} = 'EARN'), 0)`.mapWith(Number),
       used: sql<number>`coalesce(sum(${cashbackLedger.amount}) filter (where ${cashbackLedger.entryType} = 'USE'), 0)`.mapWith(Number),
+      expired: sql<number>`coalesce(sum(${cashbackLedger.amount}) filter (where ${cashbackLedger.entryType} = 'EXPIRE'), 0)`.mapWith(Number),
       reversed: sql<number>`coalesce(sum(${cashbackLedger.amount}) filter (where ${cashbackLedger.entryType} = 'REVERSAL'), 0)`.mapWith(Number),
     })
     .from(cashbackLedger)
@@ -435,6 +436,7 @@ export async function loadAdminReport(filters: AdminReportFilters) {
       entries: Number(cashbackPeriod?.entries || 0),
       earned: Number(cashbackPeriod?.earned || 0),
       used: Number(cashbackPeriod?.used || 0),
+      expired: Number(cashbackPeriod?.expired || 0),
       reversed: Number(cashbackPeriod?.reversed || 0),
       source: "cashback_ledger" as const,
       note: "Filial filtri ledgerda yo‘q — butun tarmoq.",

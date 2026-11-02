@@ -60,6 +60,19 @@ describe("P1 migration artifacts", () => {
     assert.doesNotMatch(sql, /DROP TABLE|TRUNCATE/i);
   });
 
+  it("0020 FIFO grants add EXPIRE ledger type, grants table, and birth_date", () => {
+    const sql = readFileSync(path.join(getMigrationsFolder(), "0020_cashback_fifo_loyalty.sql"), "utf8");
+    assert.match(sql, /cashback_grants/);
+    assert.match(sql, /EXPIRE/);
+    assert.match(sql, /birth_date/);
+    assert.match(sql, /variant_a_grandfathered/);
+    assert.doesNotMatch(sql, /DROP TABLE|TRUNCATE/i);
+    const journal = JSON.parse(
+      readFileSync(path.join(getMigrationsFolder(), "meta", "_journal.json"), "utf8"),
+    );
+    assert.equal(journal.entries[20].tag, "0020_cashback_fifo_loyalty");
+  });
+
   it("P7 payment migration is additive with integer money + capture uniqueness", () => {
     const sql = readFileSync(path.join(getMigrationsFolder(), "0007_payment_foundation.sql"), "utf8");
     assert.match(sql, /payment_intents/);

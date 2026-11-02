@@ -57,8 +57,10 @@ export default function EditProfileScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [initialFirst, setInitialFirst] = useState('');
   const [initialLast, setInitialLast] = useState('');
+  const [initialBirthDate, setInitialBirthDate] = useState('');
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -83,7 +85,10 @@ export default function EditProfileScreen() {
   const [otpResetting, setOtpResetting] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
 
-  const dirty = firstName.trim() !== initialFirst || lastName.trim() !== initialLast;
+  const dirty =
+    firstName.trim() !== initialFirst ||
+    lastName.trim() !== initialLast ||
+    birthDate.trim() !== initialBirthDate;
   const allowLeaveRef = useRef(false);
   const tRef = useRef(t);
   tRef.current = t;
@@ -104,6 +109,9 @@ export default function EditProfileScreen() {
         setInitialFirst(fn.trim());
         setInitialLast(ln.trim());
         setPhone(String(data.phone || ''));
+        const bd = data.birthDate ? String(data.birthDate).slice(0, 10) : '';
+        setBirthDate(bd);
+        setInitialBirthDate(bd);
       })
       .catch((err: Error & { status?: number }) => {
         if (err.status === 401 || err.status === 403) {
@@ -166,10 +174,12 @@ export default function EditProfileScreen() {
       await api.updateProfile({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        birthDate: birthDate.trim() || null,
       });
       await refresh();
       setInitialFirst(firstName.trim());
       setInitialLast(lastName.trim());
+      setInitialBirthDate(birthDate.trim());
       setSuccess(true);
       allowLeaveRef.current = true;
       setTimeout(() => {
@@ -347,6 +357,23 @@ export default function EditProfileScreen() {
               <Feather name="lock" size={16} color={MUTED} />
             </View>
             <Text style={styles.hint}>{t('profile.editPhoneHint')}</Text>
+
+            <Text style={[styles.label, { marginTop: 14 }]}>{t('profile.editBirthDate')}</Text>
+            <TextInput
+              value={birthDate}
+              onChangeText={(v) => {
+                setBirthDate(v);
+                setSuccess(false);
+                setSaveError(null);
+              }}
+              placeholder={t('profile.editBirthDatePlaceholder')}
+              placeholderTextColor={MUTED}
+              style={styles.input}
+              autoCapitalize="none"
+              editable={!saving}
+              maxLength={10}
+            />
+            <Text style={styles.hint}>{t('profile.editBirthDateHint')}</Text>
 
             {saveError ? (
               <View style={styles.errorBox}>

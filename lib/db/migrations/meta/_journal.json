@@ -141,6 +141,13 @@
       "when": 1760000000000,
       "tag": "0019_product_image_url",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1762100000000,
+      "tag": "0020_cashback_fifo_loyalty",
+      "breakpoints": true
     }
   ]
 }

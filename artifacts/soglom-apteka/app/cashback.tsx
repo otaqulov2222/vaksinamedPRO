@@ -274,6 +274,20 @@ export default function CashbackScreen() {
             {currencyAfter.trim() ? <Text style={styles.currency}>{currencyAfter.trim()}</Text> : null}
           </View>
 
+          {user.birthdayActive ? (
+            <Text style={styles.heroNote}>
+              {t('cashback.birthdayActive', { percent: Math.round((user.birthdayExtraBps || 0) / 100) })}
+            </Text>
+          ) : null}
+          {user.grants && user.grants.expiringAmount > 0 ? (
+            <Text style={styles.heroNote}>
+              {t('cashback.expiringSoon', {
+                amount: fmt.money(user.grants.expiringAmount),
+                days: 30,
+              })}
+            </Text>
+          ) : null}
+
           <View style={styles.heroDivider} />
 
           {/* TAP TO DISCLOSE FULL TIER SYSTEM */}
@@ -740,6 +754,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     lineHeight: 26,
     color: MUTED,
+  },
+  heroNote: {
+    marginTop: 10,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#B45309',
   },
   heroDivider: {
     height: 1,

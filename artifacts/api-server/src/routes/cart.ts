@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, eq } from "drizzle-orm";
-import { branches, cartItems, carts, db, productStocks, products } from "@workspace/db";
+import { branches, cartItems, carts, db, orderItems, orders, productStocks, products } from "@workspace/db";
 import { requireCustomer } from "../lib/auth";
 
 const router = Router();
@@ -18,7 +18,7 @@ function availableFromStock(stock: typeof productStocks.$inferSelect | undefined
   return Math.max(0, Number(stock.physicalQuantity) - Number(stock.reservedQuantity));
 }
 
-async function cartPayload(customerId: number) {
+export async function cartPayload(customerId: number) {
   const cart = await getOrCreateCart(customerId);
   const items = await db.select().from(cartItems).where(eq(cartItems.cartId, cart.id));
   const detailed = [];
@@ -217,5 +217,59 @@ router.delete("/cart/items/:id", async (req, res, next) => {
   }
 });
 
+/** Copy a previous order's live catalog SKUs into the cart (current prices, not historical). */
+router.post("/cart/repeat", async (req, res, next) => {
+  try {
+    const customer = await requireCustomer(req);
+    const orderId = Number(req.body?.orderId ?? req.body?.id);
+    if (!Number.isFinite(orderId) || orderId <= 0) {
+      return res.status(400).json({ message: "Buyurtma identifikatori noto‘g‘ri", code: "INVALID_ORDER" });
+    }
+    const order = (await db.select().from(orders).where(eq(orders.id, orderId)).limit(1))[0];
+    if (!order || order.customerId !== customer.id) {
+      return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
+    }
+
+    const lines = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
+    const cart = await getOrCreateCart(customer.id);
+    if (order.branchId) {
+      const branch = (await db.select().from(branches).where(eq(branches.id, order.branchId)).limit(1))[0];
+      if (branch) {
+        await db.update(carts).set({ branchId: branch.id, updatedAt: new Date() }).where(eq(carts.id, cart.id));
+      }
+    }
+
+    const added: Array<{ productId: number; quantity: number }> = [];
+    const skipped: Array<{ productId: number; reason: string }> = [];
+
+    for (const line of lines) {
+      const product = (await db.select().from(products).where(eq(products.id, line.productId)).limit(1))[0];
+      if (!product) {
+        skipped.push({ productId: line.productId, reason: "PRODUCT_REMOVED" });
+        continue;
+      }
+      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
+      const existing = await db.select().from(cartItems).where(and(
+        eq(cartItems.cartId, cart.id),
+        eq(cartItems.productId, product.id),
+      )).limit(1);
+      if (existing[0]) {
+        await db.update(cartItems).set({ quantity: existing[0].quantity + qty }).where(eq(cartItems.id, existing[0].id));
+      } else {
+        await db.insert(cartItems).values({ cartId: cart.id, productId: product.id, quantity: qty });
+      }
+      added.push({ productId: product.id, quantity: qty });
+    }
+
+    const payload = await cartPayload(customer.id);
+    return res.json({
+      ...payload,
+      repeat: { orderId: order.id, added: added.length, skipped },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 export default router;
-export { cartPayload, getOrCreateCart };
+export { getOrCreateCart };

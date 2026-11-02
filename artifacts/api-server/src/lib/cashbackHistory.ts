@@ -110,6 +110,7 @@ export function sourceLabelFor(
     return "FOM_POS";
   }
   if (et === "USE") return "Cashback ishlatildi";
+  if (et === "EXPIRE") return "Cashback muddati tugadi";
   if (et === "REVERSAL") return "Cashback bekor qilindi";
   return "Cashback";
 }
@@ -121,6 +122,7 @@ function titleFor(
 ): string {
   const et = String(entryType || "").toUpperCase();
   if (et === "USE") return "Cashback ishlatildi";
+  if (et === "EXPIRE") return "Cashback muddati tugadi";
   if (et === "REVERSAL") return "Cashback bekor qilindi";
   if (sourceType === "SYSTEM") return "Bonus";
   return sourceLabel;
@@ -128,7 +130,7 @@ function titleFor(
 
 function kindFor(entryType: string): "earn" | "use" | "void" {
   const et = String(entryType || "").toUpperCase();
-  if (et === "USE") return "use";
+  if (et === "USE" || et === "EXPIRE") return "use";
   if (et === "REVERSAL") return "void";
   return "earn";
 }
@@ -137,7 +139,7 @@ function signedCashback(entryType: string, amount: number, meta: Record<string, 
   const abs = Math.abs(Math.floor(Number(amount) || 0));
   const et = String(entryType || "").toUpperCase();
   if (et === "EARN" || et === "ADJUSTMENT") return abs;
-  if (et === "USE") return -abs;
+  if (et === "USE" || et === "EXPIRE") return -abs;
   if (et === "REVERSAL") {
     const reverses = String(meta.reverses || "").toUpperCase();
     // Reversing EARN removes credit → negative display; reversing USE restores → positive.
