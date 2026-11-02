@@ -359,6 +359,14 @@ export function PosTerminal({ token, branches, defaultBranchId, operatorName, re
                     setQr(e.target.value);
                     if (scanError) setScanError("");
                   }}
+                  onPaste={(e) => {
+                    const text = e.clipboardData?.getData("text")?.trim();
+                    if (text) {
+                      e.preventDefault();
+                      setQr(text);
+                      if (scanError) setScanError("");
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Escape" && qr) {
                       e.preventDefault();

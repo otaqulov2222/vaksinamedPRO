@@ -106,14 +106,38 @@ export default function OrderScreen() {
 
   const onCopyCode = async () => {
     if (!order?.code) return;
+    const textToCopy = String(order.code);
+    let ok = false;
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(String(order.code));
+      if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(textToCopy);
+        ok = true;
       }
+    } catch {}
+
+    if (!ok && typeof document !== 'undefined') {
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = textToCopy;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '-9999px';
+        textArea.setAttribute('readonly', '');
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, 99999);
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (successful) ok = true;
+      } catch (err) {
+        // copy fallback failed
+      }
+    }
+
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // noop
     }
   };
 
@@ -384,7 +408,7 @@ export default function OrderScreen() {
                   <MaterialCommunityIcons name="shield-check-outline" size={12} color="#FFFFFF" />
                   <Text style={styles.ticketKickerText}>{t('orders.qrScanTitle')}</Text>
                 </View>
-                <Text style={styles.ticketCodeHero} numberOfLines={1}>
+                <Text style={styles.ticketCodeHero} numberOfLines={1} selectable>
                   {String(order.code || order.qrPayload)}
                 </Text>
               </View>
@@ -421,7 +445,7 @@ export default function OrderScreen() {
 
               {/* Formatted Code & Copy Button */}
               <View style={styles.ticketCodeRow}>
-                <Text style={styles.ticketCodeValue} numberOfLines={1}>
+                <Text style={styles.ticketCodeValue} numberOfLines={1} selectable>
                   {String(order.code || order.qrPayload)}
                 </Text>
                 <Pressable
