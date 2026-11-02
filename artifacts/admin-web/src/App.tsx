@@ -52,6 +52,23 @@ function initials(name: string): string {
   return (parts.slice(0, 2).map((p) => p[0]).join("") || "VM").toUpperCase();
 }
 
+function stampMobileTableLabels(root: ParentNode = document) {
+  root.querySelectorAll("table.table").forEach((table) => {
+    const headers = Array.from(table.querySelectorAll("thead th")).map((th) => {
+      const sr = th.querySelector(".sr-only");
+      return ((sr?.textContent || th.textContent || "").replace(/\s+/g, " ").trim());
+    });
+    table.querySelectorAll("tbody tr").forEach((tr) => {
+      Array.from(tr.children).forEach((cell, i) => {
+        if (!(cell instanceof HTMLElement)) return;
+        if (cell.hasAttribute("colspan")) return;
+        const label = headers[i] || "";
+        if (label && cell.dataset.label !== label) cell.dataset.label = label;
+      });
+    });
+  });
+}
+
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("vm-admin-token"));
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -96,6 +113,35 @@ export default function App() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [datePickerOpen]);
+
+  useEffect(() => {
+    document.body.classList.toggle("admin-nav-lock", mobileNavOpen);
+    return () => document.body.classList.remove("admin-nav-lock");
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    let frame = 0;
+    function run() {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => stampMobileTableLabels());
+    }
+    run();
+    const mo = new MutationObserver(run);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      mo.disconnect();
+    };
+  }, [tab, token]);
 
   const { topbarWeekday, topbarDay } = useMemo(() => {
     if (activePreset === "yesterday") {
@@ -373,6 +419,16 @@ export default function App() {
 
       <div className="main-wrap">
         <header className="topbar">
+          <button
+            type="button"
+            className="topbar-menu"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Bo‘limlar menyusi"
+            aria-expanded={mobileNavOpen}
+            title="Bo‘limlar"
+          >
+            <Menu size={20} strokeWidth={2} aria-hidden="true" />
+          </button>
           <nav className="breadcrumb" aria-label="Joylashuv">
             {crumbGroup ? (
               <>
