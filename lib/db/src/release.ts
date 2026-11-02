@@ -18,6 +18,7 @@ import {
   P6_CASHBACK_TABLES,
   P7_PAYMENT_TABLES,
   P8_P10_TABLES,
+  P21_ADMIN_WEBAUTHN_TABLES,
   listAppliedMigrationHashes,
   listPublicTables,
 } from "./health";
@@ -29,6 +30,7 @@ export const CRITICAL_TABLES = [
   ...P6_CASHBACK_TABLES,
   ...P7_PAYMENT_TABLES,
   ...P8_P10_TABLES,
+  ...P21_ADMIN_WEBAUTHN_TABLES,
 ] as const;
 
 type Executor = Parameters<typeof listPublicTables>[0];

@@ -73,6 +73,18 @@ describe("P1 migration artifacts", () => {
     assert.equal(journal.entries[20].tag, "0020_cashback_fifo_loyalty");
   });
 
+  it("0021 admin Face ID tickets and credentials are additive", () => {
+    const sql = readFileSync(path.join(getMigrationsFolder(), "0021_admin_webauthn.sql"), "utf8");
+    assert.match(sql, /admin_webauthn_credentials/);
+    assert.match(sql, /admin_login_challenges/);
+    assert.match(sql, /purpose IN \('enroll', 'assert', 'face'\)/);
+    assert.doesNotMatch(sql, /DROP TABLE|TRUNCATE/i);
+    const journal = JSON.parse(
+      readFileSync(path.join(getMigrationsFolder(), "meta", "_journal.json"), "utf8"),
+    );
+    assert.equal(journal.entries[21].tag, "0021_admin_webauthn");
+  });
+
   it("P7 payment migration is additive with integer money + capture uniqueness", () => {
     const sql = readFileSync(path.join(getMigrationsFolder(), "0007_payment_foundation.sql"), "utf8");
     assert.match(sql, /payment_intents/);

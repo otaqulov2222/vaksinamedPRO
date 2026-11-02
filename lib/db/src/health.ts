@@ -70,6 +70,12 @@ export const P3_AUTH_TABLES = [
   "auth_events",
 ] as const;
 
+/** Admin Face ID / WebAuthn second factor (0021_admin_webauthn). */
+export const P21_ADMIN_WEBAUTHN_TABLES = [
+  "admin_webauthn_credentials",
+  "admin_login_challenges",
+] as const;
+
 /** P4.1 inventory foundation tables (0002_inventory_foundation). */
 export const P4_INVENTORY_TABLES = [
   "reservations",

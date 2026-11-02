@@ -22,4 +22,33 @@ export const auditLog = pgTable("audit_log", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const adminWebauthnCredentials = pgTable("admin_webauthn_credentials", {
+  id: serial("id").primaryKey(),
+  adminUserId: integer("admin_user_id").notNull(),
+  credentialId: text("credential_id").notNull().unique(),
+  publicKey: text("public_key").notNull(),
+  signCount: integer("sign_count").notNull().default(0),
+  transports: text("transports").notNull().default("[]"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+});
+
+export const adminLoginChallenges = pgTable("admin_login_challenges", {
+  id: serial("id").primaryKey(),
+  publicId: text("public_id").notNull().unique(),
+  tokenHash: text("token_hash").notNull().unique(),
+  adminUserId: integer("admin_user_id").notNull(),
+  purpose: text("purpose").notNull(),
+  challenge: text("challenge").notNull(),
+  origin: text("origin").notNull().default(""),
+  rpId: text("rp_id").notNull().default(""),
+  ip: text("ip").notNull().default(""),
+  userAgent: text("user_agent").notNull().default(""),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export type AdminUser = typeof adminUsers.$inferSelect;
+export type AdminWebauthnCredential = typeof adminWebauthnCredentials.$inferSelect;
+export type AdminLoginChallenge = typeof adminLoginChallenges.$inferSelect;

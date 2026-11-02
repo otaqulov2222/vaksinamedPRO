@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Eye, EyeOff, Menu, Moon, Sun, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Calendar, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, Menu, Moon, Sun, X } from "lucide-react";
 import { request, softRequest, money, type AdminUser } from "./api";
+import { LoginScreen } from "./LoginScreen";
 import {
   NAV,
   NAV_GROUPS,
@@ -60,10 +61,6 @@ export default function App() {
   const [focusOrderId, setFocusOrderId] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
   const [bootError, setBootError] = useState("");
-  const [error, setError] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("vm-admin-sidebar") === "1",
   );
@@ -201,23 +198,13 @@ export default function App() {
     });
   }
 
-  async function login(event: FormEvent) {
-    event.preventDefault();
-    setError("");
-    try {
-      const data = await request("/api/admin/login", null, {
-        method: "POST",
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-      localStorage.setItem("vm-admin-token", data.token);
-      setReady(false);
-      setUser(null);
-      setPermissions([]);
-      setTab("dashboard");
-      setToken(data.token);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Kirish xatosi");
-    }
+  function completeLogin(nextToken: string) {
+    localStorage.setItem("vm-admin-token", nextToken);
+    setReady(false);
+    setUser(null);
+    setPermissions([]);
+    setTab("dashboard");
+    setToken(nextToken);
   }
 
   async function logout() {
@@ -236,59 +223,7 @@ export default function App() {
   }
 
   if (!token) {
-    return (
-      <div className="login-wrap">
-        <form className="login-card" onSubmit={login}>
-          <div className="brand">
-            <span className="brand-mark">VM</span>
-            <span className="brand-text">VAKSINA MED</span>
-          </div>
-          <h1>Admin panel</h1>
-          <p className="muted">Boshqaruv konsoliga kirish</p>
-          <div className="login-form">
-            <label className="login-field">
-              <span>Email yoki login</span>
-              <input
-                type="text"
-                inputMode="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
-                autoComplete="username"
-                required
-              />
-            </label>
-            <label className="login-field">
-              <span>Parol</span>
-              <div className="login-password-wrap">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Parol"
-                  autoComplete="current-password"
-                  required
-                />
-                <button
-                  type="button"
-                  className="login-password-toggle"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setShowPassword((prev) => !prev);
-                  }}
-                  title={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}
-                  aria-label={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </label>
-            {error ? <div className="login-error" role="alert">{error}</div> : null}
-            <button className="btn-primary" type="submit">Kirish</button>
-          </div>
-        </form>
-      </div>
-    );
+    return <LoginScreen onAuthenticated={completeLogin} />;
   }
 
   if (!ready || !user) {

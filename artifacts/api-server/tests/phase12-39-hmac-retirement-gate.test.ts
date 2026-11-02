@@ -68,8 +68,9 @@ describe("Phase 12.39 — HMAC legacy retirement operational gate", () => {
     assert.doesNotMatch(adminApi, /createHmac|ADMIN_SECRET|signAdmin/);
 
     const adminApp = readFileSync(path.join(repo, "artifacts/admin-web/src/App.tsx"), "utf8");
+    const adminLogin = readFileSync(path.join(repo, "artifacts/admin-web/src/LoginScreen.tsx"), "utf8");
     assert.match(adminApp, /vm-admin-token/);
-    assert.match(adminApp, /\/api\/admin\/login/);
+    assert.match(adminLogin, /\/api\/admin\/login/);
     assert.match(adminApp, /\/api\/admin\/logout/);
   });
 

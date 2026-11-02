@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual, randomInt, createHash } from "node:crypto";
 import type { Request } from "express";
 import { eq, sql } from "drizzle-orm";
-import { adminUsers, customers, db, hashPassword, verifyPassword, auditLog } from "@workspace/db";
+import { adminUsers, customers, db, hashPassword, verifyPassword, auditLog, type AdminUser } from "@workspace/db";
 import { otpSmsText, sendSms } from "./sms";
 import {
   allowLegacyHmacTokens,
@@ -10,6 +10,7 @@ import {
   allowTelegramAutoProvision,
   allowTelegramHeaderAuth,
   allowDemoCashbackSeed,
+  flagEnabled,
   getStagingTestOtpCode,
   isHqAdminRole,
   isProductionLike,
@@ -22,6 +23,13 @@ import { normalizeIp } from "./requestTelemetry";
 import { normalizeAdminRole } from "./securityEnv";
 import { earnCashback } from "./cashbackFinance";
 import { WELCOME_BONUS_UZS } from "./cashback";
+import {
+  confirmFacePresence,
+  createPendingAdminLogin,
+  verifyWebauthnAndBind,
+  type PendingLogin,
+  type WebauthnAssertionBody,
+} from "./adminWebauthn";
 
 const WELCOME_CASHBACK = WELCOME_BONUS_UZS;
 const SECRET = requireConfiguredSecret("ADMIN_SECRET", "vaksinamed-admin-secret");
@@ -511,7 +519,40 @@ export async function requireHqAdmin(req: Request) {
   return user;
 }
 
-export async function loginAdmin(email: string, password: string, req?: Request) {
+function publicAdminUser(user: { id: number; email: string; name: string; role: string; branchId: number | null }) {
+  return { id: user.id, email: user.email, name: user.name, role: user.role, branchId: user.branchId };
+}
+
+async function finalizeAdminLogin(user: AdminUser, req?: Request, meta: Record<string, unknown> = {}) {
+  await recordAuthEvent({
+    actorType: "admin",
+    actorId: user.id,
+    eventType: "login.success",
+    success: true,
+    meta: { role: user.role, ...meta },
+  });
+  try {
+    await db.insert(auditLog).values({
+      actor: user.email,
+      action: "admin.login",
+      entity: "admin_user",
+      payload: JSON.stringify({ adminId: user.id, role: user.role, ...meta }),
+    });
+  } catch {
+    // audit must not block login
+  }
+  return { user, token: await issueAdminSession(user.id, req) };
+}
+
+/** Staging/production require Face ID after the password. Tests may force the same path. */
+export function adminBiometricRequired(): boolean {
+  return isProductionLike() || flagEnabled("ADMIN_WEBAUTHN_FORCE");
+}
+
+export async function loginAdmin(email: string, password: string, req?: Request): Promise<
+  | { user: AdminUser; token: string; pending?: undefined }
+  | { user: AdminUser; pending: PendingLogin; token?: undefined }
+> {
   const rows = await db.select().from(adminUsers).where(eq(adminUsers.email, email.trim().toLowerCase())).limit(1);
   const user = rows[0];
   if (!user || !verifyPassword(password, user.passwordHash)) {
@@ -539,22 +580,61 @@ export async function loginAdmin(email: string, password: string, req?: Request)
     await db.update(adminUsers).set({ role: normalized }).where(eq(adminUsers.id, user.id));
     user.role = normalized;
   }
+
+  if (!adminBiometricRequired()) {
+    return finalizeAdminLogin(user, req, { factor: "primary" });
+  }
+
+  const pending = await createPendingAdminLogin({
+    adminUserId: user.id,
+    email: user.email,
+    name: user.name,
+    req,
+  });
   await recordAuthEvent({
     actorType: "admin",
     actorId: user.id,
-    eventType: "login.success",
+    eventType: "login.password_ok",
     success: true,
-    meta: { role: normalized },
+    meta: { role: normalized, purpose: pending.purpose },
   });
-  try {
-    await db.insert(auditLog).values({
-      actor: user.email,
-      action: "admin.login",
-      entity: "admin_user",
-      payload: JSON.stringify({ adminId: user.id, role: normalized }),
-    });
-  } catch {
-    // audit must not block login
+  return {
+    user,
+    pending,
+  };
+}
+
+export async function completeAdminBiometricLogin(
+  ticket: string,
+  body: { method?: string } & WebauthnAssertionBody,
+  req?: Request,
+) {
+  const method = String(body.method || "webauthn").toLowerCase();
+  const bound =
+    method === "face"
+      ? await confirmFacePresence(ticket)
+      : await verifyWebauthnAndBind(ticket, body);
+  const rows = await db.select().from(adminUsers).where(eq(adminUsers.id, bound.adminUserId)).limit(1);
+  const user = rows[0];
+  if (!user || user.status !== ADMIN_ACTIVE_STATUS) {
+    throw Object.assign(new Error("Hisob faol emas. Bosh administratorga murojaat qiling."), { status: 403, code: "ADMIN_DISABLED" });
   }
-  return { user, token: await issueAdminSession(user.id, req) };
+  return finalizeAdminLogin(user, req, {
+    factor: method === "face" ? "face" : "webauthn",
+    enrolled: "enrolled" in bound ? bound.enrolled : false,
+  });
+}
+
+export function pendingLoginResponse(pending: PendingLogin, user: { id: number; email: string; name: string; role: string; branchId: number | null }) {
+  return {
+    status: pending.purpose === "assert" ? "WEBAUTHN_REQUIRED" : "WEBAUTHN_ENROLL",
+    ticket: pending.ticket,
+    user: publicAdminUser(user),
+    webauthn: {
+      rpId: pending.rpId || null,
+      origin: pending.origin || null,
+      creation: pending.creation || null,
+      request: pending.request || null,
+    },
+  };
 }

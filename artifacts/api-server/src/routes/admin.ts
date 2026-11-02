@@ -27,7 +27,7 @@ import {
   rewards,
   staffRatings,
 } from "@workspace/db";
-import { loginAdmin, requireAdmin } from "../lib/auth";
+import { completeAdminBiometricLogin, loginAdmin, pendingLoginResponse, requireAdmin } from "../lib/auth";
 import { serializeOrder } from "./orders";
 import { rateLimit } from "../lib/rateLimit";
 import { isHqAdminRole, toAdminCustomerListItem } from "../lib/securityEnv";
@@ -72,7 +72,25 @@ router.post("/admin/login", adminLoginLimiter, async (req, res, next) => {
     const email = String(req.body.email || "").toLowerCase();
     const password = String(req.body.password || "");
     const result = await loginAdmin(email, password, req);
+    if ("pending" in result && result.pending) {
+      return res.json(pendingLoginResponse(result.pending, result.user));
+    }
     return res.json({
+      status: "OK",
+      token: result.token,
+      user: { id: result.user.id, email: result.user.email, name: result.user.name, role: result.user.role, branchId: result.user.branchId },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/admin/login/biometric", adminLoginLimiter, async (req, res, next) => {
+  try {
+    const ticket = String(req.body?.ticket || "");
+    const result = await completeAdminBiometricLogin(ticket, req.body || {}, req);
+    return res.json({
+      status: "OK",
       token: result.token,
       user: { id: result.user.id, email: result.user.email, name: result.user.name, role: result.user.role, branchId: result.user.branchId },
     });

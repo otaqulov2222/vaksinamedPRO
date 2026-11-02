@@ -13,6 +13,7 @@ const adminWeb = path.resolve(root, "../admin-web/src");
 const docs = path.resolve(root, "../../docs");
 const dash = readFileSync(path.join(adminWeb, "pages/DashboardPage.tsx"), "utf8");
 const app = readFileSync(path.join(adminWeb, "App.tsx"), "utf8");
+const loginScreen = readFileSync(path.join(adminWeb, "LoginScreen.tsx"), "utf8");
 const css = readFileSync(path.join(adminWeb, "styles.css"), "utf8");
 const rootBlock = css.slice(0, css.indexOf("\n}"));
 const dashBlock = css.slice(css.indexOf("Dashboard — Phase 13.0 reset"), css.indexOf("Responsive — shell"));
@@ -56,10 +57,15 @@ describe("Admin Phase 13.0 reset — shell", () => {
   it("login form starts empty with visible labels; auth request unchanged", () => {
     assert.doesNotMatch(app, /useState\("admin@vaksinamed\.uz"\)|useState\("vaksinamed"\)/);
     assert.doesNotMatch(app, /Demo kirish|placeholder="vaksinamed"|toLowerCase\(\) === "admin"|toLowerCase\(\) === "kassa"/);
-    assert.match(app, /const \[email, setEmail\] = useState\(""\);/);
-    assert.match(app, /const \[password, setPassword\] = useState\(""\);/);
-    assert.match(app, /className="login-field"/);
-    assert.match(app, /className="login-error" role="alert"/);
+    assert.doesNotMatch(loginScreen, /useState\("admin@vaksinamed\.uz"\)|useState\("vaksinamed"\)/);
+    assert.doesNotMatch(loginScreen, /Demo kirish|placeholder="vaksinamed"|toLowerCase\(\) === "admin"|toLowerCase\(\) === "kassa"/);
+    assert.match(loginScreen, /const \[email, setEmail\] = useState\(""\);/);
+    assert.match(loginScreen, /const \[password, setPassword\] = useState\(""\);/);
+    assert.match(loginScreen, /className="login-field"/);
+    assert.match(loginScreen, /className="login-error" role="alert"/);
+    assert.match(loginScreen, /\/api\/admin\/login/);
+    assert.match(loginScreen, /\/api\/admin\/login\/biometric/);
+    assert.match(app, /LoginScreen/);
   });
 
   it("sidebar head carries brand + operator identity; logout is a separate footer action", () => {
