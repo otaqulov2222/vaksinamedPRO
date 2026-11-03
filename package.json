@@ -12,6 +12,7 @@
     "db:migrate": "pnpm --filter @workspace/db run migrate",
     "db:migrate:status": "pnpm --filter @workspace/db run migrate:status",
     "db:seed:staging-catalog": "pnpm --filter @workspace/db run seed:staging-catalog",
+    "db:sync:official-branches": "pnpm --filter @workspace/db run sync:official-branches",
     "db:cleanup:junk-catalog": "pnpm --filter @workspace/db run cleanup:junk-catalog",
     "admin:set-password": "pnpm --filter @workspace/db run set-admin-password",
     "backup:drill": "pnpm --filter @workspace/db exec tsx src/scripts/restore-drill.ts",

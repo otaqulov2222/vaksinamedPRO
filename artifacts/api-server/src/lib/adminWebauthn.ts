@@ -143,7 +143,7 @@ export async function deleteWebauthnCredentials(adminUserId: number): Promise<nu
   const removed = await db
     .delete(adminWebauthnCredentials)
     .where(eq(adminWebauthnCredentials.adminUserId, adminUserId))
-    .returning({ id: adminWebauthnCredentials.id });
+    .returning();
   return removed.length;
 }
 

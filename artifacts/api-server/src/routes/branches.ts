@@ -32,7 +32,18 @@ router.get("/branches", async (req, res, next) => {
     }).map((item) => serializeBranch(item, origin));
     filtered.sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
     const regions = [...new Set(rows.map((item) => item.region))].sort();
-    return res.json({ branches: filtered, total: filtered.length, regions, network: { claimed: "137+", regions: "9+", founded: 2015, certifications: ["GDP", "GPP"] } });
+    return res.json({
+      branches: filtered,
+      total: filtered.length,
+      regions,
+      network: {
+        claimed: "138+",
+        regions: "9+",
+        founded: 2015,
+        certifications: ["GDP", "GPP"],
+        officialCatalog: rows.length,
+      },
+    });
   } catch (error) {
     return next(error);
   }

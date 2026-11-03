@@ -13,6 +13,7 @@
     "migrate": "tsx src/scripts/migrate.ts",
     "migrate:status": "tsx src/scripts/migrate-status.ts",
     "seed:staging-catalog": "tsx src/scripts/seed-staging-catalog.ts",
+    "sync:official-branches": "tsx src/scripts/sync-official-branches.ts",
     "cleanup:junk-catalog": "tsx src/scripts/cleanup-junk-catalog.ts",
     "set-admin-password": "tsx src/scripts/set-admin-password.ts",
     "push": "node ./scripts/push-guard.mjs",

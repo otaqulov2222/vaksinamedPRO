@@ -125,7 +125,13 @@ export default function BranchesScreen() {
       .then((data) => {
         const list = data.branches || [];
         setBranches(list);
-        setNetworkTotal(data.total || list.length || 0);
+        const official =
+          Number(data.network?.officialCatalog) ||
+          Number(String(data.network?.claimed || '').replace(/\D+/g, '')) ||
+          Number(data.total) ||
+          list.length ||
+          0;
+        setNetworkTotal(official);
         if (Array.isArray(data.regions) && data.regions.length) setRegions(data.regions);
         setSelectedId((prev) => {
           if (prev != null && list.some((b: any) => Number(b.id) === Number(prev))) return prev;
@@ -264,7 +270,7 @@ export default function BranchesScreen() {
             {t('branches.navBranchesTitle')}
           </Text>
           <Text style={styles.headerSub} numberOfLines={1}>
-            {t('branches.navBranchesSub')}
+            {t('branches.navBranchesSub', { count: Math.max(networkTotal, branches.length) || 138 })}
           </Text>
         </View>
       </View>

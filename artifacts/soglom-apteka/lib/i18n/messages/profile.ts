@@ -99,7 +99,7 @@ export default defineMessages({
     notifCashbackEarnedTitle: 'Cashback hisobingizga tushdi',
     notifCashbackEarnedBody: '+{amount} cashback hisobingizga muvaffaqiyatli o‘tkazildi.',
     notifPromoWelcomeTitle: 'Xush kelibsiz va 24/7 xizmat!',
-    notifPromoWelcomeBody: '121 ta filialimiz kechu-kunduz sizning xizmatingizda.',
+    notifPromoWelcomeBody: '138+ filialimiz kechu-kunduz sizning xizmatingizda.',
     notifEmptyFilterTitle: 'Bu toifada xabarlar yo‘q',
     notifEmptyFilterBody: 'Boshqa bo‘limni tanlab ko‘ring.',
 
@@ -268,7 +268,7 @@ export default defineMessages({
     notifCashbackEarnedTitle: 'Кэшбэк начислен',
     notifCashbackEarnedBody: '+{amount} кэшбэка успешно зачислено на ваш счёт.',
     notifPromoWelcomeTitle: 'Добро пожаловать и сервис 24/7!',
-    notifPromoWelcomeBody: '121 филиал круглосуточно к вашим услугам.',
+    notifPromoWelcomeBody: '138+ филиалов круглосуточно к вашим услугам.',
     notifEmptyFilterTitle: 'В этой категории нет уведомлений',
     notifEmptyFilterBody: 'Попробуйте выбрать другой раздел.',
 
@@ -437,7 +437,7 @@ export default defineMessages({
     notifCashbackEarnedTitle: 'Cashback credited',
     notifCashbackEarnedBody: '+{amount} cashback successfully credited to your account.',
     notifPromoWelcomeTitle: 'Welcome & 24/7 service!',
-    notifPromoWelcomeBody: '121 branches are at your service 24/7.',
+    notifPromoWelcomeBody: '138+ branches are at your service 24/7.',
     notifEmptyFilterTitle: 'No notifications in this category',
     notifEmptyFilterBody: 'Try picking another tab.',
 
