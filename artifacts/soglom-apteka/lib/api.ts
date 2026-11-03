@@ -311,6 +311,19 @@ export const api = {
   orders: () => request<{ orders: any[] }>('/api/orders'),
   order: (id: number) => request<any>(`/api/orders/${id}`),
   orderPayment: (orderId: number) => request<any>(`/api/orders/${orderId}/payment`),
+  paymentMethods: (branchId?: number | null) => {
+    const q = branchId != null && Number.isFinite(Number(branchId)) ? `?branchId=${Number(branchId)}` : '';
+    return request<{
+      methods: Array<{
+        id: string;
+        available: boolean;
+        online?: boolean;
+        apiEnabled?: boolean;
+        configured?: boolean;
+      }>;
+      notes?: Record<string, string>;
+    }>(`/api/payments/methods${q}`, undefined, false);
+  },
   checkout: (body: Record<string, unknown>, opts?: { idempotencyKey?: string }) => {
     const key = opts?.idempotencyKey || newIdempotencyKey('checkout');
     return request<any>('/api/orders', {

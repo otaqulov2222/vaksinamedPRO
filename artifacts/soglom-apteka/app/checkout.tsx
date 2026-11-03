@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -84,6 +84,7 @@ export default function CheckoutScreen() {
   const [useCashback, setUseCashback] = useState(false);
   const [cart, setCart] = useState<any>(null);
   const [rules, setRules] = useState<any>(null);
+  const [paymentAvailability, setPaymentAvailability] = useState<Record<string, { available: boolean; apiEnabled?: boolean; configured?: boolean }>>({});
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -154,6 +155,36 @@ export default function CheckoutScreen() {
     }, [loadCheckout]),
   );
 
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const data = await api.paymentMethods(branchId);
+        if (!alive) return;
+        const map: Record<string, { available: boolean; apiEnabled?: boolean; configured?: boolean }> = {};
+        for (const m of data.methods || []) {
+          map[m.id] = {
+            available: Boolean(m.available),
+            apiEnabled: m.apiEnabled,
+            configured: m.configured,
+          };
+        }
+        setPaymentAvailability(map);
+        setPaymentMethod((prev) => {
+          if (prev === 'pay_at_branch') return prev;
+          if (map[prev]?.available) return prev;
+          return 'pay_at_branch';
+        });
+      } catch {
+        if (!alive) return;
+        setPaymentAvailability({});
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [branchId]);
+
   const openBranches = () => {
     router.push({ pathname: '/branches', params: { from: 'checkout' } });
   };
@@ -189,6 +220,14 @@ export default function CheckoutScreen() {
 
   const stockIssues = items.filter((item: any) => Boolean(item.stockInsufficient));
 
+  const onlineHint = (id: 'payme' | 'click') => {
+    const meta = paymentAvailability[id];
+    if (!meta) return t(`cart.checkout${id === 'payme' ? 'Payme' : 'Click'}Desc`);
+    if (meta.available) return t(`cart.checkout${id === 'payme' ? 'Payme' : 'Click'}Desc`);
+    if (meta.apiEnabled === false) return t('cart.checkoutOnlineApiOff');
+    return t('cart.checkoutOnlineNeedsKeys');
+  };
+
   const paymentOptions: Array<{
     value: string;
     label: string;
@@ -196,6 +235,7 @@ export default function CheckoutScreen() {
     icon: string;
     iconColor: string;
     iconBg: string;
+    disabled?: boolean;
   }> = [
     {
       value: 'pay_at_branch',
@@ -208,18 +248,20 @@ export default function CheckoutScreen() {
     {
       value: 'payme',
       label: paymentMethodLabel(t, 'payme'),
-      desc: t('cart.checkoutPaymeDesc'),
+      desc: onlineHint('payme'),
       icon: 'credit-card-outline',
       iconColor: PAYME_COLOR,
       iconBg: '#E0F7F6',
+      disabled: paymentAvailability.payme ? !paymentAvailability.payme.available : false,
     },
     {
       value: 'click',
       label: paymentMethodLabel(t, 'click'),
-      desc: t('cart.checkoutClickDesc'),
+      desc: onlineHint('click'),
       icon: 'cellphone-check',
       iconColor: CLICK_COLOR,
       iconBg: '#EBF3FF',
+      disabled: paymentAvailability.click ? !paymentAvailability.click.available : false,
     },
   ];
 
@@ -300,9 +342,13 @@ export default function CheckoutScreen() {
       }
       await refresh();
       idempotencyRef.current = null;
-      const checkoutUrl = result.payment?.checkoutUrl;
+      const checkoutUrl = result.payment?.checkoutUrl as string | undefined;
       if (checkoutUrl && (paymentMethod === 'payme' || paymentMethod === 'click')) {
-        await Linking.openURL(`${API_URL}${checkoutUrl}`);
+        const absolute =
+          /^https?:\/\//i.test(checkoutUrl)
+            ? checkoutUrl
+            : `${API_URL}${checkoutUrl.startsWith('/') ? '' : '/'}${checkoutUrl}`;
+        await Linking.openURL(absolute);
       }
       router.replace(`/order/${orderId}`);
     } catch (error) {
@@ -612,13 +658,21 @@ export default function CheckoutScreen() {
           <View style={styles.paymentCardsWrap}>
             {paymentOptions.map((opt) => {
               const selected = paymentMethod === opt.value;
+              const disabled = Boolean(opt.disabled);
               return (
                 <Pressable
                   key={opt.value}
-                  onPress={() => setPaymentMethod(opt.value)}
-                  style={[styles.paymentCard, selected && styles.paymentCardSelected]}
+                  onPress={() => {
+                    if (disabled) return;
+                    setPaymentMethod(opt.value);
+                  }}
+                  style={[
+                    styles.paymentCard,
+                    selected && styles.paymentCardSelected,
+                    disabled && styles.paymentCardDisabled,
+                  ]}
                   accessibilityRole="button"
-                  accessibilityState={{ selected }}
+                  accessibilityState={{ selected, disabled }}
                   accessibilityLabel={`${opt.label}. ${opt.desc}`}
                 >
                   <View style={[styles.paymentIconBox, { backgroundColor: opt.iconBg }]}>
@@ -1165,6 +1219,9 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: { boxShadow: '0 2px 10px rgba(106, 34, 214, 0.08)' } as any,
     }),
+  },
+  paymentCardDisabled: {
+    opacity: 0.55,
   },
   paymentIconBox: {
     width: 40,

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import { db, orders, payments } from "@workspace/db";
+import { db, branches, orders, payments } from "@workspace/db";
 import { markPaymentPaid } from "../lib/payments";
 import { serializeOrder } from "./orders";
 import { requireAdmin, requireCustomer } from "../lib/auth";
@@ -17,7 +17,9 @@ import {
 import { getPaymentAdapter } from "../lib/paymentAdapters";
 import { handlePaymeMerchantRpc } from "../lib/paymeMerchantApi";
 import { handleClickMerchantRequest } from "../lib/clickMerchantApi";
-import { CLICK_ACTION } from "../lib/clickContract";
+import { CLICK_ACTION, isClickMerchantApiEnabled } from "../lib/clickContract";
+import { isPaymeMerchantApiEnabled } from "../lib/paymeContract";
+import { resolvePaymentMerchantConfig } from "../lib/branchPaymentMerchant";
 import {
   serializePaymentAttemptPublic,
   serializePaymentCapturePublic,
@@ -26,6 +28,70 @@ import {
 } from "../lib/paymentSerializers";
 
 const router = Router();
+
+/**
+ * Public payment method availability for checkout UI.
+ * Does not expose secrets. Online methods require both API flags and branch merchant config.
+ */
+router.get("/payments/methods", async (req, res, next) => {
+  try {
+    const paymeApi = isPaymeMerchantApiEnabled();
+    const clickApi = isClickMerchantApiEnabled();
+    const branchId = Number(req.query.branchId);
+    let paymeConfigured = false;
+    let clickConfigured = false;
+
+    if (Number.isFinite(branchId) && branchId > 0) {
+      const row = (await db.select({ id: branches.id }).from(branches).where(eq(branches.id, branchId)).limit(1))[0];
+      if (row) {
+        try {
+          const payme = await resolvePaymentMerchantConfig({
+            branchId,
+            provider: "payme",
+            expectedBranchId: branchId,
+            requireConfigured: false,
+          });
+          paymeConfigured = payme.configured;
+        } catch {
+          paymeConfigured = false;
+        }
+        try {
+          const click = await resolvePaymentMerchantConfig({
+            branchId,
+            provider: "click",
+            expectedBranchId: branchId,
+            requireConfigured: false,
+          });
+          clickConfigured = click.configured;
+        } catch {
+          clickConfigured = false;
+        }
+      }
+    }
+
+    return res.json({
+      methods: [
+        { id: "pay_at_branch", available: true, online: false },
+        { id: "payme", available: paymeApi && paymeConfigured, online: true, apiEnabled: paymeApi, configured: paymeConfigured },
+        { id: "click", available: clickApi && clickConfigured, online: true, apiEnabled: clickApi, configured: clickConfigured },
+      ],
+      notes: {
+        payme: paymeApi
+          ? paymeConfigured
+            ? "ready"
+            : "merchant_keys_missing"
+          : "api_disabled",
+        click: clickApi
+          ? clickConfigured
+            ? "ready"
+            : "merchant_keys_missing"
+          : "api_disabled",
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 function snapshotBody(snap: Awaited<ReturnType<typeof getPaymentSnapshot>>) {
   return {

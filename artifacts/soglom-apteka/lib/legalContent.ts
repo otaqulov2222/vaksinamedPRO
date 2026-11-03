@@ -25,7 +25,7 @@ const privacy: Record<Language, LegalDoc> = {
       },
       {
         heading: '4. Kimga uzatiladi',
-        body: 'SMS (OTP) provayderi, hosting/infratuzilma xizmatlari va qonun talab qilganda vakolatli organlar. Onlayn to‘lov (Payme/Click) hozircha yoqilmagan — kartani to‘g‘ridan-to‘g‘ri ilova orqali qabul qilmaymiz.',
+        body: 'SMS (OTP) provayderi, hosting/infratuzilma, onlayn to‘lov uchun Payme/Click (filial merchant sozlamalari orqali) va qonun talab qilganda vakolatli organlar. Karta ma’lumotlari bizning serverimizda saqlanmaydi — to‘lov Payme/Click sahifasida amalga oshadi.',
       },
       {
         heading: '5. Saqlash muddati',
@@ -59,7 +59,7 @@ const privacy: Record<Language, LegalDoc> = {
       },
       {
         heading: '4. Передача',
-        body: 'Провайдер SMS (OTP), хостинг и инфраструктура, а также госорганы по закону. Онлайн-оплата Payme/Click пока не включена — карта напрямую в приложении не принимается.',
+        body: 'Провайдер SMS (OTP), хостинг/инфраструктура, Payme/Click для онлайн-оплаты (по настройкам филиала) и госорганы по закону. Данные карты на наших серверах не хранятся — оплата на стороне Payme/Click.',
       },
       {
         heading: '5. Срок хранения',
@@ -93,7 +93,7 @@ const privacy: Record<Language, LegalDoc> = {
       },
       {
         heading: '4. Sharing',
-        body: 'SMS (OTP) provider, hosting/infrastructure vendors, and authorities when required by law. Online Payme/Click payments are not enabled yet — we do not take card details directly in the app.',
+        body: 'SMS (OTP) provider, hosting/infrastructure, Payme/Click for online payments (via branch merchant settings), and authorities when required by law. We do not store card data on our servers — payment happens on Payme/Click.',
       },
       {
         heading: '5. Retention',
@@ -126,7 +126,7 @@ const terms: Record<Language, LegalDoc> = {
       },
       {
         heading: '3. Buyurtma va to‘lov',
-        body: 'Ilovada bron qilingan buyurtma odatda tanlangan filialda olinadi. Hozircha onlayn Payme/Click to‘lovi yoqilmagan; to‘lov filialda (naqd yoki terminal) amalga oshiriladi.',
+        body: 'Ilovada bron qilingan buyurtma odatda tanlangan filialda olinadi. To‘lov: filialda (naqd/terminal) yoki Payme/Click onlayn (filialda merchant kalitlari sozlangan bo‘lsa).',
       },
       {
         heading: '4. Cashback',
@@ -156,7 +156,7 @@ const terms: Record<Language, LegalDoc> = {
       },
       {
         heading: '3. Заказ и оплата',
-        body: 'Забронированный заказ обычно получают в выбранном филиале. Онлайн Payme/Click пока не включены; оплата — в аптеке (наличные или терминал).',
+        body: 'Забронированный заказ обычно получают в выбранном филиале. Оплата: в аптеке (наличные/терминал) или онлайн через Payme/Click при настроенных merchant-ключах филиала.',
       },
       {
         heading: '4. Кэшбэк',
@@ -186,7 +186,7 @@ const terms: Record<Language, LegalDoc> = {
       },
       {
         heading: '3. Orders & payment',
-        body: 'Held orders are typically picked up at the selected branch. Online Payme/Click is not enabled yet; pay in store (cash or terminal).',
+        body: 'Held orders are typically picked up at the selected branch. Pay in store (cash/terminal) or online via Payme/Click when the branch has merchant keys configured.',
       },
       {
         heading: '4. Cashback',

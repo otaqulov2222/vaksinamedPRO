@@ -1,6 +1,6 @@
 # Play Market / App Store — Vaksina Med release checklist
 
-Ilova kodida bajarilganlar: Privacy/Terms sahifalari, hisobni o‘chirish API+UI, to‘lov matnlari (Payme hali yoqilmagan), kamera/GPS permission matnlari.
+Ilova kodida bajarilganlar: Privacy/Terms sahifalari, hisobni o‘chirish API+UI, Payme/Click checkout + `/payments/methods` (filial merchant kalitlari kerak), kamera/GPS permission matnlari.
 
 ## Hali operator tomonidan kerak
 
@@ -10,7 +10,7 @@ Ilova kodida bajarilganlar: Privacy/Terms sahifalari, hisobni o‘chirish API+UI
 4. Store listing: 6.5–6.7" screenshotlar (kamida 2–8), qisqa/uzun tavsif UZ+RU (+EN ixtiyoriy), yosh reytingi.
 5. Google **Data safety** va Apple **App Privacy** formalari (telefon, buyurtma, joylashuv, surat).
 6. Ichki test: `eas build --profile preview` (APK) → keyin `production` AAB/IPA.
-7. Payme/Click live yoqilganda: matnlarni yangilab, merchant shartnomasi + sandbox/prod kalitlar.
+7. Payme/Click: `PAYME_MERCHANT_API_ENABLED=1` / `CLICK_MERCHANT_API_ENABLED=1` + test checkout URL; Admin→Filiallar merchant kalitlari; `PAYME_LIVE`/`CLICK_LIVE` faqat prod host uchun.
 
 ## Submit oldidan smoke
 
@@ -18,4 +18,4 @@ Ilova kodida bajarilganlar: Privacy/Terms sahifalari, hisobni o‘chirish API+UI
 - [ ] Ro‘yxatdan o‘tish → Privacy/Terms linklari ishlaydi
 - [ ] Profil → Hisobni o‘chirish → qayta login bo‘lmaydi
 - [ ] Joylashuv / kamera ruxsat dialoglari to‘g‘ri matn bilan
-- [ ] Checkout/help onlayn to‘lovni va’da qilmaydi (Payme o‘chiq bo‘lsa)
+- [ ] Checkout Payme/Click faqat `available` bo‘lganda tanlanadi; kalit yo‘q bo‘lsa hint ko‘rsatadi

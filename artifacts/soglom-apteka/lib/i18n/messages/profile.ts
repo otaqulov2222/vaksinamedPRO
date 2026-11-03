@@ -115,7 +115,7 @@ export default defineMessages({
     helpDeliveryCta: 'Dorixonalarni ko‘rish',
     helpPaymentTitle: 'To‘lov',
     helpPaymentBody:
-      'Buyurtmani tanlangan dorixona filialida qabul qilishda naqd pul yoki bank kartasi (terminal) orqali to‘laysiz. Onlayn Payme/Click to‘lovi hozircha yoqilmagan.',
+      'Buyurtmani filialda (naqd yoki terminal) to‘lashingiz yoki Payme / Click orqali onlayn to‘lashingiz mumkin (filialda merchant kalitlari sozlangan bo‘lsa).',
     helpPaymentCta: 'Rasmiylashtirish',
     helpCashbackBody:
       'Cashback balansi, daraja va tarixni Cashback bo‘limida ko‘ring. Bitta balans — yakunlangan xaridlardan (ilova yoki kassa); to‘lov usuli emas.',
@@ -294,7 +294,7 @@ export default defineMessages({
     helpDeliveryCta: 'Посмотреть аптеки',
     helpPaymentTitle: 'Оплата',
     helpPaymentBody:
-      'Оплатите заказ при получении в выбранной аптеке наличными или банковской картой (терминал). Онлайн Payme/Click пока не включены.',
+      'Оплатите заказ в аптеке (наличные или терминал) или онлайн через Payme / Click, если для филиала настроены merchant-ключи.',
     helpPaymentCta: 'Перейти к оформлению',
     helpCashbackBody:
       'Баланс кэшбэка, уровень и историю смотрите в разделе «Кэшбэк». Баланс единый — за завершённые покупки (в приложении или на кассе); это не способ оплаты.',
@@ -473,7 +473,7 @@ export default defineMessages({
     helpDeliveryCta: 'View pharmacies',
     helpPaymentTitle: 'Payment',
     helpPaymentBody:
-      'Pay for your order at the selected pharmacy on pickup (cash or card terminal). Online Payme/Click is not enabled yet.',
+      'Pay at the pharmacy (cash or terminal) or online via Payme / Click when the branch has merchant keys configured.',
     helpPaymentCta: 'Go to checkout',
     helpCashbackBody:
       'See your cashback balance, tier and history in the Cashback section. There is one balance, earned from completed purchases (in the app or in store); it is not a payment method.',
