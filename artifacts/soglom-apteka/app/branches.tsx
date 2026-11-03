@@ -44,6 +44,9 @@ function formatDistance(t: TFunction, km: number | null | undefined) {
 
 type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable';
 
+/** Default bottom list size when browsing nearby (map still shows the full set). */
+const NEARBY_LIST_LIMIT = 20;
+
 export default function BranchesScreen() {
   const params = useLocalSearchParams<{ from?: string; productId?: string }>();
   const from = String(params.from || '').toLowerCase();
@@ -58,6 +61,8 @@ export default function BranchesScreen() {
   const [networkTotal, setNetworkTotal] = useState(0);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [locStatus, setLocStatus] = useState<LocStatus>('pending');
+  const [detectedRegion, setDetectedRegion] = useState('');
+  const [showAllBranches, setShowAllBranches] = useState(false);
   const [only24h, setOnly24h] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [route, setRoute] = useState<RouteInfo | null>(null);
@@ -66,6 +71,7 @@ export default function BranchesScreen() {
   const [loadError, setLoadError] = useState<{ err: unknown } | null>(null);
   const [picking, setPicking] = useState(false);
   const pickingRef = useRef(false);
+  const detectedRegionDoneRef = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -89,6 +95,18 @@ export default function BranchesScreen() {
     // Only trust the is24h flag — "08:00 - 24:00" is NOT 24/7.
     return branches.filter((b) => Boolean(b.is24h));
   }, [branches, only24h]);
+
+  /** Full filtered set for map/chips; list may show a nearby preview only. */
+  const browseExpanded = Boolean(
+    showAllBranches || debouncedQuery || region || only24h,
+  );
+
+  const listBranches = useMemo(() => {
+    if (browseExpanded) return displayedBranches;
+    return displayedBranches.slice(0, NEARBY_LIST_LIMIT);
+  }, [browseExpanded, displayedBranches]);
+
+  const hiddenListCount = Math.max(0, displayedBranches.length - listBranches.length);
 
   useEffect(() => {
     let alive = true;
@@ -115,6 +133,19 @@ export default function BranchesScreen() {
       alive = false;
     };
   }, []);
+
+  // Infer viloyat/hudud from the nearest branch once GPS + catalog are ready.
+  useEffect(() => {
+    if (detectedRegionDoneRef.current) return;
+    if (locStatus !== 'granted' || !userLocation || !branches.length) return;
+    const nearest = [...branches]
+      .filter((b) => hasValidCoords(b) && Number.isFinite(Number(b.distanceKm)))
+      .sort((a, b) => Number(a.distanceKm) - Number(b.distanceKm))[0] || branches[0];
+    const area = String(nearest?.region || nearest?.district || nearest?.city || '').trim();
+    if (!area) return;
+    detectedRegionDoneRef.current = true;
+    setDetectedRegion(area);
+  }, [branches, locStatus, userLocation]);
 
   const loadBranches = useCallback(() => {
     setLoading(true);
@@ -342,9 +373,29 @@ export default function BranchesScreen() {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        <Pressable onPress={() => setRegion('')} style={[styles.chip, !region && styles.chipOn]}>
-          <Text style={[styles.chipText, !region && styles.chipTextOn]}>
-            {t('branches.allRegions', { count: displayedBranches.length })}
+        <Pressable
+          onPress={() => {
+            setRegion('');
+            setShowAllBranches(false);
+          }}
+          style={[styles.chip, !region && !showAllBranches && styles.chipOn]}
+        >
+          <Text style={[styles.chipText, !region && !showAllBranches && styles.chipTextOn]}>
+            {t('branches.nearbyChip', {
+              count: Math.min(NEARBY_LIST_LIMIT, displayedBranches.length || NEARBY_LIST_LIMIT),
+            })}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            setRegion('');
+            setShowAllBranches(true);
+          }}
+          style={[styles.chip, !region && showAllBranches && styles.chipOn]}
+        >
+          <Text style={[styles.chipText, !region && showAllBranches && styles.chipTextOn]}>
+            {t('branches.allRegions', { count: networkTotal || displayedBranches.length })}
           </Text>
         </Pressable>
 
@@ -369,7 +420,14 @@ export default function BranchesScreen() {
         {regions.map((item) => {
           const on = region === item;
           return (
-            <Pressable key={item} onPress={() => setRegion(on ? '' : item)} style={[styles.chip, on && styles.chipOn]}>
+            <Pressable
+              key={item}
+              onPress={() => {
+                setShowAllBranches(false);
+                setRegion(on ? '' : item);
+              }}
+              style={[styles.chip, on && styles.chipOn]}
+            >
               <Text style={[styles.chipText, on && styles.chipTextOn]}>{item}</Text>
             </Pressable>
           );
@@ -404,7 +462,16 @@ export default function BranchesScreen() {
             <Feather name="map-pin" size={18} color="#5C328E" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.hintTitle}>{t('branches.networkSummary', { count: displayedBranches.length })}</Text>
+            <Text style={styles.hintTitle}>
+              {browseExpanded
+                ? t('branches.networkSummary', { count: displayedBranches.length })
+                : detectedRegion
+                  ? t('branches.nearbyInRegion', {
+                      count: listBranches.length,
+                      region: detectedRegion,
+                    })
+                  : t('branches.nearbySummary', { count: listBranches.length })}
+            </Text>
             <Text style={styles.hintText}>{t('branches.tapBranchHint')}</Text>
           </View>
         </View>
@@ -483,9 +550,13 @@ export default function BranchesScreen() {
         </View>
       ) : null}
 
-      <Text style={styles.listHeading}>{t('branches.listHeading')}</Text>
+      <Text style={styles.listHeading}>
+        {browseExpanded
+          ? t('branches.listHeadingAll', { count: displayedBranches.length })
+          : t('branches.listHeadingNearby', { count: listBranches.length })}
+      </Text>
 
-      {displayedBranches.map((branch, index) => {
+      {listBranches.map((branch, index) => {
         const active = Number(branch.id) === Number(selected?.id);
         const open24 = Boolean(branch.is24h);
         const dist = formatDistance(t, branch.distanceKm);
@@ -536,6 +607,30 @@ export default function BranchesScreen() {
           </View>
         );
       })}
+
+      {hiddenListCount > 0 ? (
+        <Pressable
+          onPress={() => setShowAllBranches(true)}
+          style={styles.showAllBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('branches.showAllA11y', { count: displayedBranches.length })}
+        >
+          <Text style={styles.showAllBtnText}>
+            {t('branches.showAllBranches', { count: displayedBranches.length })}
+          </Text>
+          <Feather name="chevron-down" size={16} color="#5C328E" />
+        </Pressable>
+      ) : null}
+
+      {browseExpanded && !debouncedQuery && !region && !only24h && showAllBranches ? (
+        <Pressable
+          onPress={() => setShowAllBranches(false)}
+          style={styles.showNearbyBtn}
+          accessibilityRole="button"
+        >
+          <Text style={styles.showNearbyBtnText}>{t('branches.backToNearby')}</Text>
+        </Pressable>
+      ) : null}
       </ScrollView>
     </View>
   );
@@ -748,6 +843,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#2A104E',
     marginTop: 4,
+  },
+  showAllBtn: {
+    marginTop: 4,
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(92,50,142,0.18)',
+    backgroundColor: '#F8F4FD',
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  showAllBtnText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    color: '#5C328E',
+  },
+  showNearbyBtn: {
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  showNearbyBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#64748B',
+    textDecorationLine: 'underline',
   },
   row: {
     flexDirection: 'row',
