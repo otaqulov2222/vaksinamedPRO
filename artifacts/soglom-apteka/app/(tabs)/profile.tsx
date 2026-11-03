@@ -313,144 +313,156 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.menu}>
-          <MenuRow
-            icon="wallet"
-            accent
-            title={t('common.navCashback')}
-            value={summary.balance}
-            a11y={t('profile.cashbackA11y', { balance: summary.balance })}
-            onPress={onCashback}
-            testID="profile-cashback"
-            iconBg="#FEF3C7"
-            iconColor="#B45309"
-          />
-          <MenuRow
-            icon="shopping-bag"
-            title={t('common.navOrders')}
-            a11y={t('profile.ordersA11y')}
-            onPress={() => router.push('/(tabs)/purchases')}
-            testID="profile-orders"
-            iconBg="#EDE9FE"
-            iconColor="#6D28D9"
-          />
-          <MenuRow
-            icon="map-pin"
-            title={t('common.navBranches')}
-            a11y={t('profile.branchesA11y')}
-            onPress={() => router.push('/branches')}
-            testID="profile-branches"
-            iconBg="#D1FAE5"
-            iconColor="#047857"
-          />
-          <MenuRow
-            icon="home"
-            title={t('common.navAddresses')}
-            a11y={t('profile.addressesDesc')}
-            onPress={() => router.push('/addresses')}
-            testID="profile-addresses"
-            iconBg="#E0E7FF"
-            iconColor="#4338CA"
-          />
-          <MenuRow
-            icon="bell"
-            title={t('common.navNotifications')}
-            a11y={t('profile.notificationsA11y')}
-            onPress={onNotifications}
-            testID="profile-notifications"
-            iconBg="#E0F2FE"
-            iconColor="#0369A1"
-          />
-          <MenuRow
-            icon="smartphone"
-            title={t('profile.devicesTitle')}
-            a11y={t('profile.devicesDesc')}
-            onPress={() => router.push('/devices')}
-            testID="profile-devices"
-            iconBg="#F1F5F9"
-            iconColor="#475569"
-          />
-          <MenuRow
-            icon="headphones"
-            title={t('common.navHelp')}
-            a11y={t('profile.helpA11y')}
-            onPress={() => router.push('/help')}
-            testID="profile-help"
-            iconBg="#F3E8FF"
-            iconColor="#7E22CE"
-          />
-          <MenuRow
-            icon="star"
-            title={t('common.navRating')}
-            a11y={t('common.navRating')}
-            onPress={() => router.push('/rating')}
-            testID="profile-rating"
-            iconBg="#FEF9C3"
-            iconColor="#B45309"
-          />
-          <MenuRow
-            icon="info"
-            title={t('common.navAbout')}
-            a11y={t('common.navAbout')}
-            onPress={() => router.push('/about')}
-            testID="profile-about"
-            iconBg="#F1F5F9"
-            iconColor="#475569"
-          />
-          <MenuRow
-            icon="globe"
-            title={t('common.appLanguage')}
-            subtitle={languageMeta.nativeName}
-            a11y={t('common.currentLanguageA11y', { name: languageMeta.nativeName })}
-            onPress={() => setLanguageSheetOpen(true)}
-            testID="profile-language"
-            iconBg="#EEF2FF"
-            iconColor="#4338CA"
-            showChevron={false}
-          />
-          <MenuRow
-            icon="shield"
-            title={t('profile.legalPrivacy')}
-            a11y={t('profile.legalPrivacy')}
-            onPress={() => router.push('/privacy')}
-            testID="profile-privacy"
-            iconBg="#EEF2FF"
-            iconColor="#4338CA"
-          />
-          <MenuRow
-            icon="file-text"
-            title={t('profile.legalTerms')}
-            a11y={t('profile.legalTerms')}
-            onPress={() => router.push('/terms')}
-            testID="profile-terms"
-            iconBg="#F8FAFC"
-            iconColor="#334155"
-            last
-          />
-        </View>
+        {/*
+          Grouped settings (iOS Settings / Telegram / Slack):
+          related rows in inset cards, 10px between groups — no floating “island” logout.
+        */}
+        <View style={styles.menuStack}>
+          <View style={styles.menuGroup}>
+            <MenuRow
+              icon="wallet"
+              accent
+              title={t('common.navCashback')}
+              value={summary.balance}
+              a11y={t('profile.cashbackA11y', { balance: summary.balance })}
+              onPress={onCashback}
+              testID="profile-cashback"
+              iconBg="#FEF3C7"
+              iconColor="#B45309"
+            />
+            <MenuRow
+              icon="shopping-bag"
+              title={t('common.navOrders')}
+              a11y={t('profile.ordersA11y')}
+              onPress={() => router.push('/(tabs)/purchases')}
+              testID="profile-orders"
+              iconBg="#EDE9FE"
+              iconColor="#6D28D9"
+            />
+            <MenuRow
+              icon="map-pin"
+              title={t('common.navBranches')}
+              a11y={t('profile.branchesA11y')}
+              onPress={() => router.push('/branches')}
+              testID="profile-branches"
+              iconBg="#D1FAE5"
+              iconColor="#047857"
+            />
+            <MenuRow
+              icon="home"
+              title={t('common.navAddresses')}
+              a11y={t('profile.addressesDesc')}
+              onPress={() => router.push('/addresses')}
+              testID="profile-addresses"
+              iconBg="#E0E7FF"
+              iconColor="#4338CA"
+              last
+            />
+          </View>
 
-        <View style={styles.accountFooter}>
-          <Pressable
-            onPress={() => {
-              if (loggingOut || deletingAccount) return;
-              setLogoutSheetOpen(true);
-            }}
-            disabled={loggingOut || deletingAccount}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.logoutA11y')}
-            accessibilityState={{ disabled: loggingOut || deletingAccount, busy: loggingOut }}
-            testID="profile-logout"
-            style={({ pressed }) => [styles.logout, (pressed || loggingOut) && styles.logoutPressed]}
-          >
-            <View style={styles.logoutIcon} importantForAccessibility="no-hide-descendants">
-              <Feather name="log-out" size={16} color={DANGER} />
-            </View>
-            <Text style={styles.logoutText} numberOfLines={1}>
-              {loggingOut ? t('common.loggingOut') : t('common.logout')}
-            </Text>
-          </Pressable>
+          <View style={styles.menuGroup}>
+            <MenuRow
+              icon="bell"
+              title={t('common.navNotifications')}
+              a11y={t('profile.notificationsA11y')}
+              onPress={onNotifications}
+              testID="profile-notifications"
+              iconBg="#E0F2FE"
+              iconColor="#0369A1"
+            />
+            <MenuRow
+              icon="smartphone"
+              title={t('profile.devicesTitle')}
+              a11y={t('profile.devicesDesc')}
+              onPress={() => router.push('/devices')}
+              testID="profile-devices"
+              iconBg="#F1F5F9"
+              iconColor="#475569"
+            />
+            <MenuRow
+              icon="globe"
+              title={t('common.appLanguage')}
+              subtitle={languageMeta.nativeName}
+              a11y={t('common.currentLanguageA11y', { name: languageMeta.nativeName })}
+              onPress={() => setLanguageSheetOpen(true)}
+              testID="profile-language"
+              iconBg="#EEF2FF"
+              iconColor="#4338CA"
+              showChevron={false}
+              last
+            />
+          </View>
 
-          <View style={styles.accountFooterMeta}>
+          <View style={styles.menuGroup}>
+            <MenuRow
+              icon="headphones"
+              title={t('common.navHelp')}
+              a11y={t('profile.helpA11y')}
+              onPress={() => router.push('/help')}
+              testID="profile-help"
+              iconBg="#F3E8FF"
+              iconColor="#7E22CE"
+            />
+            <MenuRow
+              icon="star"
+              title={t('common.navRating')}
+              a11y={t('common.navRating')}
+              onPress={() => router.push('/rating')}
+              testID="profile-rating"
+              iconBg="#FEF9C3"
+              iconColor="#B45309"
+            />
+            <MenuRow
+              icon="info"
+              title={t('common.navAbout')}
+              a11y={t('common.navAbout')}
+              onPress={() => router.push('/about')}
+              testID="profile-about"
+              iconBg="#F1F5F9"
+              iconColor="#475569"
+              last
+            />
+          </View>
+
+          <View style={styles.menuGroup}>
+            <MenuRow
+              icon="shield"
+              title={t('profile.legalPrivacy')}
+              a11y={t('profile.legalPrivacy')}
+              onPress={() => router.push('/privacy')}
+              testID="profile-privacy"
+              iconBg="#EEF2FF"
+              iconColor="#4338CA"
+            />
+            <MenuRow
+              icon="file-text"
+              title={t('profile.legalTerms')}
+              a11y={t('profile.legalTerms')}
+              onPress={() => router.push('/terms')}
+              testID="profile-terms"
+              iconBg="#F8FAFC"
+              iconColor="#334155"
+              last
+            />
+          </View>
+
+          <View style={styles.menuGroup}>
+            <Pressable
+              onPress={() => {
+                if (loggingOut || deletingAccount) return;
+                setLogoutSheetOpen(true);
+              }}
+              disabled={loggingOut || deletingAccount}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.logoutA11y')}
+              accessibilityState={{ disabled: loggingOut || deletingAccount, busy: loggingOut }}
+              testID="profile-logout"
+              style={({ pressed }) => [styles.dangerRow, pressed && styles.dangerRowPressed]}
+            >
+              <Text style={styles.dangerRowText} numberOfLines={1}>
+                {loggingOut ? t('common.loggingOut') : t('common.logout')}
+              </Text>
+            </Pressable>
             <Pressable
               onPress={() => {
                 if (deletingAccount || loggingOut) return;
@@ -461,22 +473,20 @@ export default function ProfileScreen() {
               accessibilityLabel={t('profile.deleteAccountA11y')}
               accessibilityState={{ disabled: deletingAccount || loggingOut, busy: deletingAccount }}
               testID="profile-delete-account"
-              style={({ pressed }) => [styles.deleteAccount, pressed && styles.deleteAccountPressed]}
-              hitSlop={8}
+              style={({ pressed }) => [styles.dangerRow, styles.dangerRowBorder, pressed && styles.dangerRowPressed]}
             >
-              <Text style={styles.deleteAccountText} numberOfLines={1}>
+              <Text style={styles.dangerRowMuted} numberOfLines={1}>
                 {t('profile.deleteAccount')}
               </Text>
             </Pressable>
-
-            <View style={styles.versionRule} />
-            <Text style={styles.versionFooter} accessibilityRole="text">
-              {t('profile.profileVersionFooter', {
-                version: Constants.expoConfig?.version || Constants.nativeAppVersion || '1.0.0',
-              })}
-            </Text>
           </View>
         </View>
+
+        <Text style={styles.versionFooter} accessibilityRole="text">
+          {t('profile.profileVersionFooter', {
+            version: Constants.expoConfig?.version || Constants.nativeAppVersion || '1.0.0',
+          })}
+        </Text>
       </ScrollView>
 
       <LanguagePickerSheet visible={languageSheetOpen} onClose={() => setLanguageSheetOpen(false)} />
@@ -568,27 +578,14 @@ const styles = StyleSheet.create({
   skelBar: { height: 12, borderRadius: 6, backgroundColor: '#E8E4F2' },
   skelName: { width: '72%', height: 16 },
   skelPhone: { width: '48%' },
-  accountFooter: {
-    marginTop: 18,
-    gap: 14,
-  },
-  accountFooterMeta: {
-    alignItems: 'center',
-    gap: 12,
-    paddingBottom: 6,
-  },
-  versionRule: {
-    width: 28,
-    height: 1,
-    borderRadius: 1,
-    backgroundColor: 'rgba(148,163,184,0.45)',
-  },
   versionFooter: {
+    marginTop: 14,
+    marginBottom: 4,
     textAlign: 'center',
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11.5,
-    lineHeight: 15,
-    letterSpacing: 0.2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 0.15,
     color: MUTED,
   },
 
@@ -656,11 +653,14 @@ const styles = StyleSheet.create({
   editPressed: { backgroundColor: PURPLE_LIGHT },
   editText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 13.5, lineHeight: 17, color: DEEP },
 
-  menu: {
+  menuStack: {
     marginTop: 14,
-    borderRadius: 22,
+    gap: 10,
+  },
+  menuGroup: {
+    borderRadius: 16,
     backgroundColor: SURFACE,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#EFEBF6',
     overflow: 'hidden',
     boxShadow: SHADOW_GROUP,
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  divider: { borderBottomWidth: 1, borderBottomColor: DIVIDER },
+  divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: DIVIDER },
   rowTextStack: { flex: 1, minWidth: 0, paddingVertical: 4 },
   rowTitle: { flex: 1, minWidth: 0, fontFamily: 'Inter_500Medium', fontSize: 14.5, lineHeight: 19, color: INK, letterSpacing: -0.1 },
   rowTitleStacked: { fontFamily: 'Inter_500Medium', fontSize: 14.5, lineHeight: 19, color: INK, letterSpacing: -0.1 },
@@ -699,48 +699,31 @@ const styles = StyleSheet.create({
     color: '#B45309',
   },
 
-  logout: {
-    minHeight: 52,
-    flexDirection: 'row',
+  /** iOS Settings / Slack: centered destructive row inside a group — not a floating CTA. */
+  dangerRow: {
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: SURFACE,
-    borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.16)',
   },
-  logoutPressed: { backgroundColor: '#FFF5F5', borderColor: 'rgba(220,38,38,0.28)' },
-  logoutIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#FEF2F2',
-    alignItems: 'center',
-    justifyContent: 'center',
+  dangerRowBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: DIVIDER,
   },
-  logoutText: {
+  dangerRowPressed: { backgroundColor: '#FFF5F5' },
+  dangerRowText: {
     fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
+    lineHeight: 21,
+    letterSpacing: -0.2,
+    color: DANGER,
+  },
+  dangerRowMuted: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 15,
     lineHeight: 20,
     letterSpacing: -0.1,
-    color: DANGER,
-  },
-  deleteAccount: {
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  deleteAccountPressed: { opacity: 0.55 },
-  deleteAccountText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13.5,
-    lineHeight: 18,
-    letterSpacing: -0.05,
-    color: 'rgba(185,28,28,0.88)',
+    color: '#B91C1C',
   },
 });
