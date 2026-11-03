@@ -32,9 +32,6 @@ const HAIRLINE = 'rgba(75,36,138,0.07)';
 const DIVIDER = '#F1EFF6';
 const EDIT_BG = '#F6F2FC';
 const EDIT_EDGE = '#E8E1F5';
-const DANGER_EDGE = 'rgba(220,38,38,0.12)';
-const DANGER_TINT = '#FEE2E2';
-
 const SHADOW_CONTROL = '0px 2px 8px rgba(75,36,138,0.06), 0px 1px 2px rgba(23,22,44,0.04)';
 const SHADOW_GROUP = '0px 4px 20px rgba(53,23,101,0.05), 0px 1px 3px rgba(23,22,44,0.03)';
 const SHADOW_VIP = '0px 8px 24px rgba(75,36,138,0.08), 0px 1px 3px rgba(23,22,44,0.04)';
@@ -432,48 +429,54 @@ export default function ProfileScreen() {
           />
         </View>
 
-        <Pressable
-          onPress={() => {
-            if (loggingOut || deletingAccount) return;
-            setLogoutSheetOpen(true);
-          }}
-          disabled={loggingOut || deletingAccount}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.logoutA11y')}
-          accessibilityState={{ disabled: loggingOut || deletingAccount, busy: loggingOut }}
-          testID="profile-logout"
-          style={({ pressed }) => [styles.logout, (pressed || loggingOut) && styles.logoutPressed]}
-        >
-          <View style={styles.logoutIcon} importantForAccessibility="no-hide-descendants">
-            <Feather name="log-out" size={18} color={DANGER} />
+        <View style={styles.accountFooter}>
+          <Pressable
+            onPress={() => {
+              if (loggingOut || deletingAccount) return;
+              setLogoutSheetOpen(true);
+            }}
+            disabled={loggingOut || deletingAccount}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.logoutA11y')}
+            accessibilityState={{ disabled: loggingOut || deletingAccount, busy: loggingOut }}
+            testID="profile-logout"
+            style={({ pressed }) => [styles.logout, (pressed || loggingOut) && styles.logoutPressed]}
+          >
+            <View style={styles.logoutIcon} importantForAccessibility="no-hide-descendants">
+              <Feather name="log-out" size={16} color={DANGER} />
+            </View>
+            <Text style={styles.logoutText} numberOfLines={1}>
+              {loggingOut ? t('common.loggingOut') : t('common.logout')}
+            </Text>
+          </Pressable>
+
+          <View style={styles.accountFooterMeta}>
+            <Pressable
+              onPress={() => {
+                if (deletingAccount || loggingOut) return;
+                setDeleteSheetOpen(true);
+              }}
+              disabled={deletingAccount || loggingOut}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.deleteAccountA11y')}
+              accessibilityState={{ disabled: deletingAccount || loggingOut, busy: deletingAccount }}
+              testID="profile-delete-account"
+              style={({ pressed }) => [styles.deleteAccount, pressed && styles.deleteAccountPressed]}
+              hitSlop={8}
+            >
+              <Text style={styles.deleteAccountText} numberOfLines={1}>
+                {t('profile.deleteAccount')}
+              </Text>
+            </Pressable>
+
+            <View style={styles.versionRule} />
+            <Text style={styles.versionFooter} accessibilityRole="text">
+              {t('profile.profileVersionFooter', {
+                version: Constants.expoConfig?.version || Constants.nativeAppVersion || '1.0.0',
+              })}
+            </Text>
           </View>
-          <Text style={styles.logoutText} numberOfLines={1}>
-            {loggingOut ? t('common.loggingOut') : t('common.logout')}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => {
-            if (deletingAccount || loggingOut) return;
-            setDeleteSheetOpen(true);
-          }}
-          disabled={deletingAccount || loggingOut}
-          accessibilityRole="button"
-          accessibilityLabel={t('profile.deleteAccountA11y')}
-          accessibilityState={{ disabled: deletingAccount || loggingOut, busy: deletingAccount }}
-          testID="profile-delete-account"
-          style={({ pressed }) => [styles.deleteAccount, pressed && styles.deleteAccountPressed]}
-        >
-          <Text style={styles.deleteAccountText} numberOfLines={1}>
-            {t('profile.deleteAccount')}
-          </Text>
-        </Pressable>
-
-        <Text style={styles.versionFooter} accessibilityRole="text">
-          {t('profile.profileVersionFooter', {
-            version: Constants.expoConfig?.version || Constants.nativeAppVersion || '1.0.0',
-          })}
-        </Text>
+        </View>
       </ScrollView>
 
       <LanguagePickerSheet visible={languageSheetOpen} onClose={() => setLanguageSheetOpen(false)} />
@@ -565,13 +568,27 @@ const styles = StyleSheet.create({
   skelBar: { height: 12, borderRadius: 6, backgroundColor: '#E8E4F2' },
   skelName: { width: '72%', height: 16 },
   skelPhone: { width: '48%' },
+  accountFooter: {
+    marginTop: 18,
+    gap: 14,
+  },
+  accountFooterMeta: {
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 6,
+  },
+  versionRule: {
+    width: 28,
+    height: 1,
+    borderRadius: 1,
+    backgroundColor: 'rgba(148,163,184,0.45)',
+  },
   versionFooter: {
-    marginTop: 16,
-    marginBottom: 8,
     textAlign: 'center',
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11.5,
+    lineHeight: 15,
+    letterSpacing: 0.2,
     color: MUTED,
   },
 
@@ -683,35 +700,47 @@ const styles = StyleSheet.create({
   },
 
   logout: {
-    marginTop: 14,
-    minHeight: 48,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: SURFACE,
-    borderWidth: 1.2,
-    borderColor: DANGER_EDGE,
-    boxShadow: SHADOW_CONTROL,
-  },
-  logoutPressed: { backgroundColor: '#FEF2F2' },
-  logoutIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: DANGER_TINT, alignItems: 'center', justifyContent: 'center' },
-  logoutText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14.5, lineHeight: 19, color: DANGER },
-  deleteAccount: {
-    marginTop: 4,
-    minHeight: 48,
-    alignItems: 'flex-start',
     justifyContent: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: SURFACE,
+    borderWidth: 1,
+    borderColor: 'rgba(220,38,38,0.16)',
   },
-  deleteAccountPressed: { opacity: 0.7 },
-  deleteAccountText: {
-    fontFamily: 'Inter_500Medium',
+  logoutPressed: { backgroundColor: '#FFF5F5', borderColor: 'rgba(220,38,38,0.28)' },
+  logoutIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutText: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
     lineHeight: 20,
+    letterSpacing: -0.1,
     color: DANGER,
+  },
+  deleteAccount: {
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  deleteAccountPressed: { opacity: 0.55 },
+  deleteAccountText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13.5,
+    lineHeight: 18,
+    letterSpacing: -0.05,
+    color: 'rgba(185,28,28,0.88)',
   },
 });
