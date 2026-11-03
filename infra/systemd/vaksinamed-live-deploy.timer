@@ -1,0 +1,12 @@
+[Unit]
+Description=Check GitHub main every minute and auto-deploy live VPS
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Persistent=true
+Unit=vaksinamed-live-deploy.service
+
+[Install]
+WantedBy=timers.target

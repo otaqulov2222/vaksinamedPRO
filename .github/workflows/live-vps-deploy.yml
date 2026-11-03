@@ -1,0 +1,76 @@
+name: Live VPS Deploy
+
+# Backup path: if LIVE_VPS_SSH_KEY is configured, GitHub also pushes the release.
+# Primary path on the Eskiz VPS is the systemd timer that pulls origin/main itself.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "artifacts/soglom-apteka/**"
+      - "artifacts/api-server/**"
+      - "artifacts/admin-web/**"
+      - "lib/**"
+      - "infra/scripts/deploy-live-vps.sh"
+      - "pnpm-lock.yaml"
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  notice-if-unconfigured:
+    name: Deploy credentials check
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.LIVE_VPS_SSH_KEY }}
+          HOST: ${{ secrets.LIVE_VPS_HOST }}
+        run: |
+          if [ -n "$KEY" ] && [ -n "$HOST" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "LIVE_VPS SSH secrets present — will deploy."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Live VPS SSH optional::LIVE_VPS_SSH_KEY / LIVE_VPS_HOST not set. Primary auto-deploy is the VPS systemd timer (git pull). This job is a backup only."
+          fi
+
+  deploy:
+    name: SSH deploy to live VPS
+    needs: notice-if-unconfigured
+    if: needs.notice-if-unconfigured.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure SSH
+        env:
+          KEY: ${{ secrets.LIVE_VPS_SSH_KEY }}
+          HOST: ${{ secrets.LIVE_VPS_HOST }}
+          USER: ${{ secrets.LIVE_VPS_SSH_USER || 'root' }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/live_vps
+          chmod 600 ~/.ssh/live_vps
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+          echo "HOST=$HOST" >> "$GITHUB_ENV"
+          echo "USER=$USER" >> "$GITHUB_ENV"
+
+      - name: Trigger remote deploy script
+        run: |
+          ssh -i ~/.ssh/live_vps -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "${USER}@${HOST}" \
+            'bash -lc "/usr/local/bin/vaksinamed-live-deploy.sh"'
+
+      - name: Verify live web entry
+        run: |
+          set -e
+          HTML="$(curl -fsS --max-time 20 https://77-83-206-192.sslip.io/)"
+          echo "$HTML" | grep -q 'entry-'
+          echo "Live index OK"

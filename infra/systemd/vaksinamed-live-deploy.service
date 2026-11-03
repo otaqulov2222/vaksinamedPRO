@@ -1,0 +1,16 @@
+[Unit]
+Description=VaksinaMed pull origin/main and rebuild live web+API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/var/www/vaksinamed
+Environment=VAKSINAMED_ROOT=/var/www/vaksinamed
+Environment=EXPO_PUBLIC_API_URL=https://77-83-206-192.sslip.io
+ExecStart=/usr/local/bin/vaksinamed-live-deploy.sh
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

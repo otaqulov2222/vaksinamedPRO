@@ -24,7 +24,8 @@
     "dev:api": "pnpm --filter @workspace/api-server run dev",
     "dev:admin": "pnpm --filter @workspace/admin-web run dev",
     "dev:app": "pnpm --filter @workspace/soglom-apteka run dev:web",
-    "build:app:web": "pnpm --filter @workspace/soglom-apteka run build:web"
+    "build:app:web": "pnpm --filter @workspace/soglom-apteka run build:web",
+    "deploy:live": "pwsh -File scripts/deploy-live.ps1"
   },
   "private": true,
   "dependencies": {
