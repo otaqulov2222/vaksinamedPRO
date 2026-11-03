@@ -12,7 +12,9 @@
       "bundleIdentifier": "uz.vaksinamed.app",
       "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Eng yaqin Vaksina Med filialini topish uchun joylashuvingiz kerak."
+        "NSLocationWhenInUseUsageDescription": "Eng yaqin Vaksina Med filialini topish uchun joylashuvingiz kerak.",
+        "NSCameraUsageDescription": "Retsept rasmini yuklash uchun kameraga ruxsat kerak.",
+        "NSPhotoLibraryUsageDescription": "Retsept rasmini galereyadan tanlash uchun ruxsat kerak."
       }
     },
     "android": {
@@ -22,7 +24,12 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#5C328E"
       },
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png",
@@ -45,6 +52,13 @@
         {
           "locationWhenInUsePermission": "Eng yaqin Vaksina Med filialini va yo‘lni ko‘rsatish uchun joylashuvingiz kerak."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Retsept rasmini yuklash uchun kameraga ruxsat kerak.",
+          "photosPermission": "Retsept rasmini galereyadan tanlash uchun ruxsat kerak."
+        }
       ]
     ],
     "experiments": {
@@ -56,7 +70,9 @@
         "projectId": "vaksina-med-loyalty"
       },
       "telegramMiniApp": true,
-      "storeReady": true
+      "storeReady": false,
+      "privacyPolicyUrl": "https://77-83-206-192.sslip.io/privacy",
+      "termsOfUseUrl": "https://77-83-206-192.sslip.io/terms"
     }
   }
 }

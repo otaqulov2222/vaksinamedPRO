@@ -9,7 +9,7 @@ import { LanguageBadge } from '@/components/LanguageBadge';
 import { CrownIcon, WalletIcon } from '@/components/LineIcons';
 import type { Language } from '@/lib/languages';
 import { api } from '@/lib/api';
-import { confirmAction } from '@/lib/dialogs';
+import { confirmAction, notify } from '@/lib/dialogs';
 import { buildProfileSummary, EMPTY_VALUE, matchTierRate } from '@/lib/profileSummary';
 
 // Brand palette; refined luxury pharmacy tones
@@ -96,6 +96,7 @@ export default function ProfileScreen() {
   const { user, language, balance, logout, refresh, loading, isAuthenticated, t, fmt } = useApp();
   const [tierRate, setTierRate] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -140,7 +141,7 @@ export default function ProfileScreen() {
   const onNotifications = () => router.push('/notifications');
 
   const onLogout = async () => {
-    if (loggingOut) return;
+    if (loggingOut || deletingAccount) return;
     const ok = await confirmAction({
       title: t('common.logoutTitle'),
       message: t('common.logoutConfirm'),
@@ -157,6 +158,30 @@ export default function ProfileScreen() {
     }
     if (router.canDismiss()) router.dismissAll();
     router.replace('/welcome');
+  };
+
+  const onDeleteAccount = async () => {
+    if (deletingAccount || loggingOut) return;
+    const ok = await confirmAction({
+      title: t('profile.deleteAccountConfirmTitle'),
+      message: t('profile.deleteAccountConfirmBody'),
+      confirmText: t('profile.deleteAccount'),
+      cancelText: t('common.cancel'),
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeletingAccount(true);
+    try {
+      await api.deleteAccount();
+      await logout();
+      notify(t('profile.deleteAccountDone'));
+      if (router.canDismiss()) router.dismissAll();
+      router.replace('/welcome');
+    } catch {
+      notify(t('profile.deleteAccountFailed'));
+    } finally {
+      setDeletingAccount(false);
+    }
   };
 
   const bottomPad = 20;
@@ -318,16 +343,34 @@ export default function ProfileScreen() {
             testID="profile-about"
             iconBg="#F1F5F9"
             iconColor="#475569"
+          />
+          <MenuRow
+            icon="shield"
+            title={t('profile.legalPrivacy')}
+            a11y={t('profile.legalPrivacy')}
+            onPress={() => router.push('/privacy')}
+            testID="profile-privacy"
+            iconBg="#EEF2FF"
+            iconColor="#4338CA"
+          />
+          <MenuRow
+            icon="file-text"
+            title={t('profile.legalTerms')}
+            a11y={t('profile.legalTerms')}
+            onPress={() => router.push('/terms')}
+            testID="profile-terms"
+            iconBg="#F8FAFC"
+            iconColor="#334155"
             last
           />
         </View>
 
         <Pressable
           onPress={() => void onLogout()}
-          disabled={loggingOut}
+          disabled={loggingOut || deletingAccount}
           accessibilityRole="button"
           accessibilityLabel={t('common.logoutA11y')}
-          accessibilityState={{ disabled: loggingOut, busy: loggingOut }}
+          accessibilityState={{ disabled: loggingOut || deletingAccount, busy: loggingOut }}
           testID="profile-logout"
           style={({ pressed }) => [styles.logout, (pressed || loggingOut) && styles.logoutPressed]}
         >
@@ -336,6 +379,20 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.logoutText} numberOfLines={1}>
             {loggingOut ? t('common.loggingOut') : t('common.logout')}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => void onDeleteAccount()}
+          disabled={deletingAccount || loggingOut}
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.deleteAccountA11y')}
+          accessibilityState={{ disabled: deletingAccount || loggingOut, busy: deletingAccount }}
+          testID="profile-delete-account"
+          style={({ pressed }) => [styles.deleteAccount, (pressed || deletingAccount) && styles.logoutPressed]}
+        >
+          <Text style={styles.deleteAccountText} numberOfLines={1}>
+            {deletingAccount ? t('common.loading') : t('profile.deleteAccount')}
           </Text>
         </Pressable>
       </ScrollView>
@@ -497,4 +554,17 @@ const styles = StyleSheet.create({
   logoutPressed: { backgroundColor: '#FEF2F2' },
   logoutIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: DANGER_TINT, alignItems: 'center', justifyContent: 'center' },
   logoutText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14.5, lineHeight: 19, color: DANGER },
+  deleteAccount: {
+    marginTop: 8,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  deleteAccountText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: '#94A3B8',
+    textDecorationLine: 'underline',
+  },
 });

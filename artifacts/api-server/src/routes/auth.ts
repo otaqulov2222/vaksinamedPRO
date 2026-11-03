@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   loginCustomer,
   registerCustomer,
@@ -11,7 +11,7 @@ import {
   normalizePhone,
   issueCustomerSession,
 } from "../lib/auth";
-import { customers, db, hashPassword, verifyPassword } from "@workspace/db";
+import { authSessions, customers, db, hashPassword, verifyPassword } from "@workspace/db";
 import { rateLimit } from "../lib/rateLimit";
 import { loyaltyCardNumber, publicQrCode } from "../lib/pos";
 import { revokeSessionFromToken } from "../lib/sessions";
@@ -212,6 +212,58 @@ router.post("/auth/logout", async (req, res, next) => {
     res.json({ ok: true, revoked: result.revoked });
   } catch (error) {
     next(error);
+  }
+});
+
+/**
+ * Store requirement (Apple/Google): authenticated users must be able to delete their account.
+ * Soft-anonymizes PII and revokes sessions; financial ledger rows may remain for legal retention.
+ */
+router.post("/auth/delete-account", authLimiter, async (req, res, next) => {
+  try {
+    const user = await requireCustomer(req);
+    const confirm = String(req.body?.confirm || "").trim().toUpperCase();
+    if (confirm !== "DELETE") {
+      return res.status(400).json({
+        message: "Hisobni o‘chirish uchun confirm=DELETE yuboring",
+        code: "DELETE_CONFIRM_REQUIRED",
+      });
+    }
+
+    const stamp = Date.now();
+    await db
+      .update(customers)
+      .set({
+        firstName: "Deleted",
+        lastName: "User",
+        phone: `deleted_${user.id}_${stamp}`,
+        telegramId: `deleted_${user.id}_${stamp}`,
+        passwordHash: "",
+        birthDate: null,
+      })
+      .where(eq(customers.id, user.id));
+
+    await db
+      .update(authSessions)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(authSessions.actorType, "customer"),
+          eq(authSessions.actorId, user.id),
+          isNull(authSessions.revokedAt),
+        ),
+      );
+
+    await recordAuthEvent({
+      actorType: "customer",
+      actorId: user.id,
+      eventType: "account.delete",
+      success: true,
+    });
+
+    return res.json({ ok: true, deleted: true });
+  } catch (error) {
+    return next(error);
   }
 });
 

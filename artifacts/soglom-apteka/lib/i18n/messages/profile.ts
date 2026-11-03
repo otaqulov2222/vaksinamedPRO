@@ -115,7 +115,7 @@ export default defineMessages({
     helpDeliveryCta: 'Dorixonalarni ko‘rish',
     helpPaymentTitle: 'To‘lov',
     helpPaymentBody:
-      'Buyurtmani dorixona filialida qabul qilishda (naqd pul yoki bank kartasi orqali) to‘lashingiz yoki Payme orqali onlayn to‘lov qilishingiz mumkin.',
+      'Buyurtmani tanlangan dorixona filialida qabul qilishda naqd pul yoki bank kartasi (terminal) orqali to‘laysiz. Onlayn Payme/Click to‘lovi hozircha yoqilmagan.',
     helpPaymentCta: 'Rasmiylashtirish',
     helpCashbackBody:
       'Cashback balansi, daraja va tarixni Cashback bo‘limida ko‘ring. Bitta balans — yakunlangan xaridlardan (ilova yoki kassa); to‘lov usuli emas.',
@@ -136,7 +136,17 @@ export default defineMessages({
     aboutVersion: 'Versiya',
     aboutBuild: 'Yig‘ma',
     aboutApp: 'Ilova',
-    aboutLegalNote: 'Maxfiylik siyosati va foydalanish shartlari havolalari hozircha ilovada joylashtirilmagan.',
+    aboutLegalNote: 'Maxfiylik siyosati va foydalanish shartlarini quyidagi havolalardan o‘qing.',
+    legalPrivacy: 'Maxfiylik siyosati',
+    legalTerms: 'Foydalanish shartlari',
+    legalUpdated: 'Yangilangan: {date}',
+    deleteAccount: 'Hisobni o‘chirish',
+    deleteAccountA11y: 'Hisobni butunlay o‘chirish',
+    deleteAccountConfirmTitle: 'Hisobni o‘chirish',
+    deleteAccountConfirmBody:
+      'Hisobingiz o‘chiriladi: telefon va ism anonimlashtiriladi, sessiyalar yopiladi. Buyurtma/cashback tarixining qonuniy nusxalari saqlanishi mumkin. Davom etasizmi?',
+    deleteAccountDone: 'Hisob o‘chirildi',
+    deleteAccountFailed: 'Hisobni o‘chirib bo‘lmadi. Qayta urinib ko‘ring.',
     profileVersionFooter: 'VaksinaMed PRO • v{version}',
 
     notFoundMessage: 'Bu sahifa topilmadi',
@@ -284,7 +294,7 @@ export default defineMessages({
     helpDeliveryCta: 'Посмотреть аптеки',
     helpPaymentTitle: 'Оплата',
     helpPaymentBody:
-      'Вы можете оплатить заказ при получении в аптеке (наличными или банковской картой) или онлайн через Payme.',
+      'Оплатите заказ при получении в выбранной аптеке наличными или банковской картой (терминал). Онлайн Payme/Click пока не включены.',
     helpPaymentCta: 'Перейти к оформлению',
     helpCashbackBody:
       'Баланс кэшбэка, уровень и историю смотрите в разделе «Кэшбэк». Баланс единый — за завершённые покупки (в приложении или на кассе); это не способ оплаты.',
@@ -305,7 +315,17 @@ export default defineMessages({
     aboutVersion: 'Версия',
     aboutBuild: 'Сборка',
     aboutApp: 'Приложение',
-    aboutLegalNote: 'Ссылки на политику конфиденциальности и условия использования пока не добавлены в приложение.',
+    aboutLegalNote: 'Политика конфиденциальности и условия использования доступны по ссылкам ниже.',
+    legalPrivacy: 'Политика конфиденциальности',
+    legalTerms: 'Условия использования',
+    legalUpdated: 'Обновлено: {date}',
+    deleteAccount: 'Удалить аккаунт',
+    deleteAccountA11y: 'Полностью удалить аккаунт',
+    deleteAccountConfirmTitle: 'Удаление аккаунта',
+    deleteAccountConfirmBody:
+      'Аккаунт будет удалён: телефон и имя обезличатся, сессии закроются. Часть истории заказов/кэшбэка может храниться по закону. Продолжить?',
+    deleteAccountDone: 'Аккаунт удалён',
+    deleteAccountFailed: 'Не удалось удалить аккаунт. Попробуйте ещё раз.',
     profileVersionFooter: 'VaksinaMed PRO • v{version}',
 
     notFoundMessage: 'Эта страница не найдена',
@@ -453,7 +473,7 @@ export default defineMessages({
     helpDeliveryCta: 'View pharmacies',
     helpPaymentTitle: 'Payment',
     helpPaymentBody:
-      'You can pay for your order at the pharmacy upon pickup (in cash or by bank card) or online via Payme.',
+      'Pay for your order at the selected pharmacy on pickup (cash or card terminal). Online Payme/Click is not enabled yet.',
     helpPaymentCta: 'Go to checkout',
     helpCashbackBody:
       'See your cashback balance, tier and history in the Cashback section. There is one balance, earned from completed purchases (in the app or in store); it is not a payment method.',
@@ -474,7 +494,17 @@ export default defineMessages({
     aboutVersion: 'Version',
     aboutBuild: 'Build',
     aboutApp: 'App',
-    aboutLegalNote: 'Links to the privacy policy and terms of use are not yet available in the app.',
+    aboutLegalNote: 'Read the privacy policy and terms of use using the links below.',
+    legalPrivacy: 'Privacy policy',
+    legalTerms: 'Terms of use',
+    legalUpdated: 'Updated: {date}',
+    deleteAccount: 'Delete account',
+    deleteAccountA11y: 'Permanently delete account',
+    deleteAccountConfirmTitle: 'Delete account',
+    deleteAccountConfirmBody:
+      'Your account will be deleted: phone and name are anonymized and sessions closed. Some order/cashback records may be retained by law. Continue?',
+    deleteAccountDone: 'Account deleted',
+    deleteAccountFailed: 'Could not delete the account. Please try again.',
     profileVersionFooter: 'VaksinaMed PRO • v{version}',
 
     notFoundMessage: 'This page could not be found',

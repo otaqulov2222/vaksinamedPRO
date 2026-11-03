@@ -342,8 +342,17 @@ export default function RegisterScreen() {
             />
           </View>
 
-          {/* No privacy/terms URLs configured in the app — text only, no fake links */}
-          <Text style={styles.legal}>{t('auth.registerLegal')}</Text>
+          <Text style={styles.legal}>
+            {t('auth.registerLegal')}
+            <Text style={styles.legalLink} onPress={() => router.push('/privacy')}>
+              {t('auth.registerLegalPrivacy')}
+            </Text>
+            {t('auth.registerLegalAnd')}
+            <Text style={styles.legalLink} onPress={() => router.push('/terms')}>
+              {t('auth.registerLegalTerms')}
+            </Text>
+            {t('auth.registerLegalSuffix')}
+          </Text>
         </Animated.View>
       </KeyboardAwareScrollViewCompat>
     </View>
@@ -406,6 +415,11 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
     color: C.secondary,
+  },
+  legalLink: {
+    fontFamily: 'Inter_600SemiBold',
+    color: C.primary,
+    textDecorationLine: 'underline',
   },
   passwordFieldWrap: {
     position: 'relative',

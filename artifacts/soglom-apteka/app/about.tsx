@@ -1,7 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 
@@ -86,6 +87,28 @@ export default function AboutScreen() {
         </View>
 
         <Text style={styles.footerNote}>{t('profile.aboutLegalNote')}</Text>
+        <View style={styles.legalLinks}>
+          <Pressable
+            onPress={() => router.push('/privacy')}
+            style={styles.legalLink}
+            accessibilityRole="link"
+            accessibilityLabel={t('profile.legalPrivacy')}
+          >
+            <Feather name="shield" size={16} color={PURPLE} />
+            <Text style={styles.legalLinkText}>{t('profile.legalPrivacy')}</Text>
+            <Feather name="chevron-right" size={16} color={MUTED} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/terms')}
+            style={styles.legalLink}
+            accessibilityRole="link"
+            accessibilityLabel={t('profile.legalTerms')}
+          >
+            <Feather name="file-text" size={16} color={PURPLE} />
+            <Text style={styles.legalLinkText}>{t('profile.legalTerms')}</Text>
+            <Feather name="chevron-right" size={16} color={MUTED} />
+          </Pressable>
+        </View>
       </ScrollView>
     </View>
   );
@@ -181,5 +204,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 17,
     paddingHorizontal: 8,
+  },
+  legalLinks: {
+    backgroundColor: CARD,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    overflow: 'hidden',
+  },
+  legalLink: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+  },
+  legalLinkText: {
+    flex: 1,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
   },
 });

@@ -148,6 +148,11 @@ export const api = {
   me: () => request<any>('/api/auth/me'),
   /** Revokes the current session server-side. Local cleanup is owned by performLogout. */
   revokeSession: () => request<{ ok: boolean; revoked: boolean }>('/api/auth/logout', { method: 'POST' }),
+  deleteAccount: () =>
+    request<{ ok: boolean; deleted: boolean }>('/api/auth/delete-account', {
+      method: 'POST',
+      body: JSON.stringify({ confirm: 'DELETE' }),
+    }),
   profile: () => request<any>('/api/loyalty/profile'),
   updateProfile: (body: { firstName?: string; lastName?: string; language?: string; birthDate?: string | null }) =>
     request<any>('/api/loyalty/profile', { method: 'PATCH', body: JSON.stringify(body) }),
