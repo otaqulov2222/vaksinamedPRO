@@ -30,4 +30,16 @@ describe("Official Vaksina Med branches catalog", () => {
     assert.ok(mapped.every((b) => /^VM-\d{3}$/.test(b.code)));
     assert.ok(mapped.some((b) => /ВОДИЛ|VODIL/i.test(b.name)));
   });
+
+  it("marks only the official 24/7 pharmacies (7)", () => {
+    const marked = raw.filter((b) => Boolean((b as { is24?: boolean }).is24));
+    assert.equal(marked.length, 7);
+    assert.deepEqual(
+      marked.map((b) => String(b.code)).sort((a, b) => Number(a) - Number(b)),
+      ["9", "10", "14", "27", "51", "96", "103"],
+    );
+    const mapped = buildOfficialBranches().filter((b) => b.is24h);
+    assert.equal(mapped.length, 7);
+    assert.ok(mapped.every((b) => /24\s*\/\s*7/i.test(b.hours)));
+  });
 });

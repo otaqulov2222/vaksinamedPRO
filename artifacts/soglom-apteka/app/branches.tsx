@@ -86,7 +86,8 @@ export default function BranchesScreen() {
 
   const displayedBranches = useMemo(() => {
     if (!only24h) return branches;
-    return branches.filter((b) => b.is24h || String(b.hours || '').includes('24'));
+    // Only trust the is24h flag — "08:00 - 24:00" is NOT 24/7.
+    return branches.filter((b) => Boolean(b.is24h));
   }, [branches, only24h]);
 
   useEffect(() => {
@@ -125,13 +126,15 @@ export default function BranchesScreen() {
       .then((data) => {
         const list = data.branches || [];
         setBranches(list);
-        const official =
+        // Prefer site marketing claim (138+) over raw DB catalog size (137 active rows).
+        const claimed =
+          Number(String(data.network?.claimed || '').replace(/\D+/g, '')) || 138;
+        const catalog =
           Number(data.network?.officialCatalog) ||
-          Number(String(data.network?.claimed || '').replace(/\D+/g, '')) ||
           Number(data.total) ||
           list.length ||
           0;
-        setNetworkTotal(official);
+        setNetworkTotal(Math.max(claimed, catalog, 138));
         if (Array.isArray(data.regions) && data.regions.length) setRegions(data.regions);
         setSelectedId((prev) => {
           if (prev != null && list.some((b: any) => Number(b.id) === Number(prev))) return prev;
@@ -484,7 +487,7 @@ export default function BranchesScreen() {
 
       {displayedBranches.map((branch, index) => {
         const active = Number(branch.id) === Number(selected?.id);
-        const open24 = branch.is24h || String(branch.hours || '').includes('24');
+        const open24 = Boolean(branch.is24h);
         const dist = formatDistance(t, branch.distanceKm);
         const name = shortName(branch.name);
         return (
