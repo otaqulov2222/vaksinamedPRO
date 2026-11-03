@@ -5,9 +5,10 @@ import React, { useCallback, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { LanguageBadge } from '@/components/LanguageBadge';
+import { ConfirmActionSheet } from '@/components/ConfirmActionSheet';
+import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
 import { CrownIcon, WalletIcon } from '@/components/LineIcons';
-import type { Language } from '@/lib/languages';
+import { getLanguageMeta } from '@/lib/languages';
 import { api } from '@/lib/api';
 import { confirmAction, notify } from '@/lib/dialogs';
 import { buildProfileSummary, EMPTY_VALUE, matchTierRate } from '@/lib/profileSummary';
@@ -41,6 +42,7 @@ type IconName = React.ComponentProps<typeof Feather>['name'];
 function MenuRow({
   icon,
   title,
+  subtitle,
   value,
   a11y,
   onPress,
@@ -49,9 +51,11 @@ function MenuRow({
   last,
   iconBg,
   iconColor,
+  showChevron = true,
 }: {
   icon: IconName | 'wallet';
   title: string;
+  subtitle?: string;
   value?: string;
   a11y: string;
   onPress: () => void;
@@ -60,6 +64,7 @@ function MenuRow({
   last?: boolean;
   iconBg?: string;
   iconColor?: string;
+  showChevron?: boolean;
 }) {
   const resolvedColor = iconColor || (accent ? '#B45309' : PRIMARY);
   const resolvedBg = iconBg || (accent ? '#FEF3C7' : PURPLE_LIGHT);
@@ -75,9 +80,20 @@ function MenuRow({
         {icon === 'wallet' ? <WalletIcon size={18} color={resolvedColor} strokeWidth={2.2} /> : <Feather name={icon} size={18} color={resolvedColor} />}
       </View>
       <View style={[styles.rowBody, !last && styles.divider]}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
-          {title}
-        </Text>
+        {subtitle ? (
+          <View style={styles.rowTextStack}>
+            <Text style={styles.rowTitleStacked} numberOfLines={1}>
+              {title}
+            </Text>
+            <Text style={styles.rowSubtitle} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.rowTitle} numberOfLines={1}>
+            {title}
+          </Text>
+        )}
         {value && value !== EMPTY_VALUE ? (
           <View style={accent ? styles.rowPillBadge : undefined}>
             <Text style={accent ? styles.rowPillText : styles.rowValue} numberOfLines={1}>
@@ -85,7 +101,9 @@ function MenuRow({
             </Text>
           </View>
         ) : null}
-        <Feather name="chevron-right" size={16} color={MUTED} importantForAccessibility="no" />
+        {showChevron ? (
+          <Feather name="chevron-right" size={16} color={MUTED} importantForAccessibility="no" />
+        ) : null}
       </View>
     </Pressable>
   );
@@ -97,6 +115,8 @@ export default function ProfileScreen() {
   const [tierRate, setTierRate] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
+  const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -160,19 +180,12 @@ export default function ProfileScreen() {
     router.replace('/welcome');
   };
 
-  const onDeleteAccount = async () => {
+  const onDeleteAccountConfirm = async () => {
     if (deletingAccount || loggingOut) return;
-    const ok = await confirmAction({
-      title: t('profile.deleteAccountConfirmTitle'),
-      message: t('profile.deleteAccountConfirmBody'),
-      confirmText: t('profile.deleteAccount'),
-      cancelText: t('common.cancel'),
-      destructive: true,
-    });
-    if (!ok) return;
     setDeletingAccount(true);
     try {
       await api.deleteAccount();
+      setDeleteSheetOpen(false);
       await logout();
       notify(t('profile.deleteAccountDone'));
       if (router.canDismiss()) router.dismissAll();
@@ -183,6 +196,8 @@ export default function ProfileScreen() {
       setDeletingAccount(false);
     }
   };
+
+  const languageMeta = getLanguageMeta(language);
 
   const bottomPad = 20;
   const topPad = Platform.OS === 'web' ? 12 : Math.max(insets.top, 8) + 4;
@@ -206,7 +221,6 @@ export default function ProfileScreen() {
             {t('common.navProfile')}
           </Text>
           <View style={styles.topActions}>
-            <LanguageBadge language={language as Language} onPress={() => router.push('/language')} />
             <Pressable
               onPress={onNotifications}
               hitSlop={4}
@@ -345,6 +359,17 @@ export default function ProfileScreen() {
             iconColor="#475569"
           />
           <MenuRow
+            icon="globe"
+            title={t('common.appLanguage')}
+            subtitle={languageMeta.nativeName}
+            a11y={t('common.currentLanguageA11y', { name: languageMeta.nativeName })}
+            onPress={() => setLanguageSheetOpen(true)}
+            testID="profile-language"
+            iconBg="#EEF2FF"
+            iconColor="#4338CA"
+            showChevron={false}
+          />
+          <MenuRow
             icon="shield"
             title={t('profile.legalPrivacy')}
             a11y={t('profile.legalPrivacy')}
@@ -383,19 +408,38 @@ export default function ProfileScreen() {
         </Pressable>
 
         <Pressable
-          onPress={() => void onDeleteAccount()}
+          onPress={() => {
+            if (deletingAccount || loggingOut) return;
+            setDeleteSheetOpen(true);
+          }}
           disabled={deletingAccount || loggingOut}
           accessibilityRole="button"
           accessibilityLabel={t('profile.deleteAccountA11y')}
           accessibilityState={{ disabled: deletingAccount || loggingOut, busy: deletingAccount }}
           testID="profile-delete-account"
-          style={({ pressed }) => [styles.deleteAccount, (pressed || deletingAccount) && styles.logoutPressed]}
+          style={({ pressed }) => [styles.deleteAccount, pressed && styles.deleteAccountPressed]}
         >
           <Text style={styles.deleteAccountText} numberOfLines={1}>
-            {deletingAccount ? t('common.loading') : t('profile.deleteAccount')}
+            {t('profile.deleteAccount')}
           </Text>
         </Pressable>
       </ScrollView>
+
+      <LanguagePickerSheet visible={languageSheetOpen} onClose={() => setLanguageSheetOpen(false)} />
+      <ConfirmActionSheet
+        visible={deleteSheetOpen}
+        onClose={() => {
+          if (!deletingAccount) setDeleteSheetOpen(false);
+        }}
+        title={t('profile.deleteAccountConfirmTitle')}
+        message={t('profile.deleteAccountConfirmBody')}
+        confirmText={t('profile.deleteAccount')}
+        cancelText={t('common.cancel')}
+        destructive
+        busy={deletingAccount}
+        onConfirm={() => void onDeleteAccountConfirm()}
+        testID="profile-delete-sheet"
+      />
     </View>
   );
 }
@@ -520,7 +564,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   divider: { borderBottomWidth: 1, borderBottomColor: DIVIDER },
+  rowTextStack: { flex: 1, minWidth: 0, paddingVertical: 4 },
   rowTitle: { flex: 1, minWidth: 0, fontFamily: 'Inter_500Medium', fontSize: 14.5, lineHeight: 19, color: INK, letterSpacing: -0.1 },
+  rowTitleStacked: { fontFamily: 'Inter_500Medium', fontSize: 14.5, lineHeight: 19, color: INK, letterSpacing: -0.1 },
+  rowSubtitle: { marginTop: 2, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 17, color: SECONDARY },
   rowValue: { flexShrink: 0, fontFamily: 'Inter_600SemiBold', fontSize: 13.5, lineHeight: 17, color: SECONDARY },
   rowPillBadge: {
     paddingHorizontal: 8,
@@ -555,16 +602,18 @@ const styles = StyleSheet.create({
   logoutIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: DANGER_TINT, alignItems: 'center', justifyContent: 'center' },
   logoutText: { flexShrink: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14.5, lineHeight: 19, color: DANGER },
   deleteAccount: {
-    marginTop: 8,
-    minHeight: 44,
-    alignItems: 'center',
+    marginTop: 4,
+    minHeight: 48,
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
   },
+  deleteAccountPressed: { opacity: 0.7 },
   deleteAccountText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: '#94A3B8',
-    textDecorationLine: 'underline',
+    fontSize: 15,
+    lineHeight: 20,
+    color: DANGER,
   },
 });

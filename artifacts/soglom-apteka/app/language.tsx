@@ -1,125 +1,34 @@
-import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
 import { useApp } from '@/context/AppContext';
-import { LanguageFlag } from '@/components/LanguageFlag';
-import { Screen } from '@/components/AppUI';
-import { useColors } from '@/hooks/useColors';
-import { LANGUAGES, type Language } from '@/lib/languages';
 
+/**
+ * Deep-link / legacy route: open the universal language bottom sheet,
+ * then return to the previous screen (profile or welcome).
+ */
 export default function LanguageScreen() {
-  const colors = useColors();
-  const { t, language, setLanguage, isAuthenticated } = useApp();
+  const { isAuthenticated } = useApp();
+  const [open, setOpen] = useState(true);
 
-  const onSelect = (value: Language) => {
-    setLanguage(value);
-    // Preserve Profile / Welcome (or prior stack parent). Never jump to Home.
+  useEffect(() => {
+    setOpen(true);
+  }, []);
+
+  const close = () => {
+    setOpen(false);
     if (router.canGoBack()) router.back();
     else router.replace(isAuthenticated ? '/(tabs)/profile' : '/welcome');
   };
 
   return (
-    <Screen>
-      <View style={[styles.hero, { backgroundColor: colors.secondary }]}>
-        <Text style={[styles.title, { color: colors.foreground }]} accessibilityRole="header">
-          {t('common.chooseLanguage')}
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{t('common.languageSubtitle')}</Text>
-      </View>
-
-      <View style={styles.options}>
-        {LANGUAGES.map((option) => {
-          const selected = language === option.code;
-          return (
-            <Pressable
-              key={option.code}
-              onPress={() => onSelect(option.code)}
-              style={[
-                styles.option,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: selected ? colors.primary : colors.border,
-                },
-              ]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected, checked: selected }}
-              accessibilityLabel={
-                selected
-                  ? t('common.languageOptionSelectedA11y', { name: option.nativeName })
-                  : t('common.languageOptionA11y', { name: option.nativeName })
-              }
-              testID={`language-option-${option.code}`}
-            >
-              <LanguageFlag language={option.code} size={22} />
-              <View style={styles.optionText}>
-                <Text style={[styles.optionTitle, { color: colors.foreground }]} numberOfLines={1}>
-                  {option.nativeName}
-                </Text>
-                <Text style={[styles.optionSubtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-                  {option.shortCode} · {t(option.nameKey)}
-                </Text>
-              </View>
-              {selected ? (
-                <View style={[styles.check, { backgroundColor: colors.primary }]}>
-                  <Feather name="check" size={15} color="#fff" />
-                </View>
-              ) : (
-                <View style={[styles.empty, { borderColor: colors.border }]} />
-              )}
-            </Pressable>
-          );
-        })}
-      </View>
-    </Screen>
+    <View style={styles.root}>
+      <LanguagePickerSheet visible={open} onClose={close} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: {
-    borderRadius: 22,
-    padding: 22,
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  title: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 19,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 8,
-    textAlign: 'center',
-    paddingHorizontal: 8,
-  },
-  options: { gap: 10 },
-  option: {
-    borderWidth: 1.5,
-    borderRadius: 18,
-    minHeight: 72,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  optionText: { flex: 1, minWidth: 0 },
-  optionTitle: { fontFamily: 'Inter_700Bold', fontSize: 15 },
-  optionSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 3 },
-  check: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  empty: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1.5,
-  },
+  root: { flex: 1, backgroundColor: 'transparent' },
 });

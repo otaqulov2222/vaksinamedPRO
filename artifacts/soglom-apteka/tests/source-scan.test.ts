@@ -226,11 +226,13 @@ describe('profile screen entry points', () => {
   const profile = read('app/(tabs)/profile.tsx');
   const count = (re: RegExp) => (profile.match(re) ?? []).length;
 
-  it('language is reachable only from the header badge', () => {
-    assert.equal(count(/router\.push\('\/language'\)/g), 1);
-    assert.equal(count(/<LanguageBadge\b/g), 1);
-    assert.match(profile, /<LanguageBadge language=\{language as Language\}[^>]*onPress=\{\(\) => router\.push\('\/language'\)\} \/>/);
-    assert.doesNotMatch(profile, /title=\{t\('common\.navLanguage'\)\}/);
+  it('language opens from the profile menu via bottom sheet', () => {
+    assert.equal(count(/router\.push\('\/language'\)/g), 0);
+    assert.equal(count(/<LanguageBadge\b/g), 0);
+    assert.equal(count(/<LanguagePickerSheet\b/g), 1);
+    assert.match(profile, /testID="profile-language"/);
+    assert.match(profile, /title=\{t\('common\.appLanguage'\)\}/);
+    assert.match(profile, /setLanguageSheetOpen\(true\)/);
   });
 
   it('profile edit is reachable only from the identity link', () => {
