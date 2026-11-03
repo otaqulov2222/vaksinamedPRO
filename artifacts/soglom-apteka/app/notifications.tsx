@@ -540,67 +540,84 @@ export default function NotificationsScreen() {
             />
           }
         >
-          {/* Push Notification Card */}
-          {pushStatus !== 'unsupported' ? (
-            <View style={styles.pushCard}>
-              <View style={styles.pushCardLeft}>
-                <View
-                  style={[
-                    styles.pushIconWrap,
-                    pushStatus === 'granted' && { backgroundColor: '#ECFDF5' },
-                    pushStatus === 'denied' && { backgroundColor: '#FEF3C7' },
-                  ]}
-                >
-                  <Feather
-                    name={pushStatus === 'granted' ? 'bell' : pushStatus === 'denied' ? 'bell-off' : 'bell'}
-                    size={20}
-                    color={pushStatus === 'granted' ? GREEN : pushStatus === 'denied' ? AMBER : PURPLE}
-                  />
-                </View>
-                <View style={styles.pushTextWrap}>
-                  <Text style={styles.pushTitle}>
-                    {pushStatus === 'granted'
-                      ? t('profile.pushEnabledStatus')
-                      : t('profile.pushPermissionTitle')}
-                  </Text>
-                  <Text style={styles.pushSubtitle}>
-                    {pushStatus === 'denied'
-                      ? t('profile.pushDeniedNote')
-                      : t('profile.pushPermissionDesc')}
-                  </Text>
-                </View>
+          {/* Push Notification Card — always visible so iPhone Safari is not a silent blank */}
+          <View style={styles.pushCard}>
+            <View style={styles.pushCardLeft}>
+              <View
+                style={[
+                  styles.pushIconWrap,
+                  pushStatus === 'granted' && { backgroundColor: '#ECFDF5' },
+                  pushStatus === 'denied' && { backgroundColor: '#FEF3C7' },
+                  pushStatus === 'unsupported' && { backgroundColor: '#F1F5F9' },
+                ]}
+              >
+                <Feather
+                  name={
+                    pushStatus === 'granted'
+                      ? 'bell'
+                      : pushStatus === 'denied' || pushStatus === 'unsupported'
+                        ? 'bell-off'
+                        : 'bell'
+                  }
+                  size={20}
+                  color={
+                    pushStatus === 'granted'
+                      ? GREEN
+                      : pushStatus === 'denied'
+                        ? AMBER
+                        : pushStatus === 'unsupported'
+                          ? MUTED
+                          : PURPLE
+                  }
+                />
               </View>
-              {pushStatus === 'default' ? (
-                <Pressable
-                  onPress={handleEnablePush}
-                  disabled={pushActionLoading}
-                  style={({ pressed }) => [styles.pushActionBtn, pressed && { opacity: 0.85 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('profile.pushEnableBtn')}
-                >
-                  {pushActionLoading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.pushActionBtnText}>{t('profile.pushEnableBtn')}</Text>
-                  )}
-                </Pressable>
-              ) : pushStatus === 'granted' ? (
-                <Pressable
-                  onPress={handleTestPush}
-                  disabled={pushActionLoading}
-                  style={({ pressed }) => [styles.pushTestBtn, pressed && { opacity: 0.85 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('profile.pushTestBtn')}
-                >
-                  {pushActionLoading ? (
-                    <ActivityIndicator size="small" color={PURPLE} />
-                  ) : (
-                    <Text style={styles.pushTestBtnText}>{t('profile.pushTestBtn')}</Text>
-                  )}
-                </Pressable>
-              ) : null}
+              <View style={styles.pushTextWrap}>
+                <Text style={styles.pushTitle}>
+                  {pushStatus === 'granted'
+                    ? t('profile.pushEnabledStatus')
+                    : pushStatus === 'unsupported'
+                      ? t('profile.pushUnsupportedTitle')
+                      : t('profile.pushPermissionTitle')}
+                </Text>
+                <Text style={styles.pushSubtitle}>
+                  {pushStatus === 'denied'
+                    ? t('profile.pushDeniedNote')
+                    : pushStatus === 'unsupported'
+                      ? t('profile.pushUnsupportedBody')
+                      : t('profile.pushPermissionDesc')}
+                </Text>
+              </View>
             </View>
-          ) : null}
+            {pushStatus === 'default' ? (
+              <Pressable
+                onPress={handleEnablePush}
+                disabled={pushActionLoading}
+                style={({ pressed }) => [styles.pushActionBtn, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.pushEnableBtn')}
+              >
+                {pushActionLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.pushActionBtnText}>{t('profile.pushEnableBtn')}</Text>
+                )}
+              </Pressable>
+            ) : pushStatus === 'granted' ? (
+              <Pressable
+                onPress={handleTestPush}
+                disabled={pushActionLoading}
+                style={({ pressed }) => [styles.pushTestBtn, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.pushTestBtn')}
+              >
+                {pushActionLoading ? (
+                  <ActivityIndicator size="small" color={PURPLE} />
+                ) : (
+                  <Text style={styles.pushTestBtnText}>{t('profile.pushTestBtn')}</Text>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
 
           {filteredNotifications.length === 0 ? (
             <View style={styles.emptyState}>

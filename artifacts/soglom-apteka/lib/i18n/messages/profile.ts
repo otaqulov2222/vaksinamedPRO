@@ -180,6 +180,9 @@ export default defineMessages({
     pushTestSent: 'Sinov bildirishnomasi yuborildi!',
     pushTestFailed: 'Sinov bildirishnomasini yuborib bo‘lmadi. Qayta urinib ko‘ring.',
     pushDeniedNote: 'Brauzer sozlamalarida bildirishnomalar bloklangan. Sozlamalardan ruxsat bering.',
+    pushUnsupportedTitle: 'Push bu brauzerda ishlamaydi',
+    pushUnsupportedBody:
+      'iPhone Safari (oddiy veb) da push cheklangan. Chrome (Android) yoki kompyuter HTTPS orqali yoqing. To‘liq iOS push keyinroq native ilovada bo‘ladi.',
     editBirthDateInvalid: 'Tug‘ilgan kun YYYY-MM-DD formatida bo‘lishi kerak.',
     devicesTitle: 'Qurilmalar',
     devicesDesc: 'Bildirishnoma yoqilgan qurilmalar',
@@ -371,6 +374,9 @@ export default defineMessages({
     pushTestSent: 'Тестовое уведомление отправлено!',
     pushTestFailed: 'Не удалось отправить тестовое уведомление. Попробуйте ещё раз.',
     pushDeniedNote: 'Уведомления заблокированы в настройках браузера. Разрешите их в настройках сайта.',
+    pushUnsupportedTitle: 'Push в этом браузере недоступен',
+    pushUnsupportedBody:
+      'В обычном Safari на iPhone web-push ограничен. Включите в Chrome (Android) или на компьютере по HTTPS. Полный iOS push будет в нативном приложении.',
     editBirthDateInvalid: 'Дата рождения должна быть в формате YYYY-MM-DD.',
     devicesTitle: 'Устройства',
     devicesDesc: 'Устройства с включёнными уведомлениями',
@@ -562,6 +568,9 @@ export default defineMessages({
     pushTestSent: 'Test notification sent!',
     pushTestFailed: 'Could not send the test notification. Please try again.',
     pushDeniedNote: 'Notifications are blocked in browser settings. Please allow them in site settings.',
+    pushUnsupportedTitle: 'Push is not available in this browser',
+    pushUnsupportedBody:
+      'iPhone Safari (regular web) has limited web push. Enable it in Chrome (Android) or on desktop via HTTPS. Full iOS push comes with the native app.',
     editBirthDateInvalid: 'Birth date must be in YYYY-MM-DD format.',
     devicesTitle: 'Devices',
     devicesDesc: 'Devices with notifications enabled',

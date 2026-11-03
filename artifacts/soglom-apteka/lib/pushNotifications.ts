@@ -9,7 +9,10 @@ export type PushPermissionState = 'default' | 'granted' | 'denied' | 'unsupporte
 
 export function isNotificationSupported(): boolean {
   if (Platform.OS === 'web') {
-    return typeof window !== 'undefined' && Boolean((window as any).Notification);
+    if (typeof window === 'undefined') return false;
+    // Push/Notification API requires a secure context (HTTPS or localhost).
+    if (typeof window.isSecureContext === 'boolean' && !window.isSecureContext) return false;
+    return typeof (window as any).Notification === 'function';
   }
   // Native: expo-notifications path
   return true;
