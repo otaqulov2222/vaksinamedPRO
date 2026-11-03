@@ -177,6 +177,40 @@ describe("Admin WebAuthn / Face ID login", () => {
     assert.equal(me.status, 401);
   });
 
+  it("resetWebauthn after password clears old keys and returns enroll without a session", async () => {
+    await db.delete(adminWebauthnCredentials);
+    const { publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const spki = toBase64Url(publicKey.export({ type: "spki", format: "der" }) as Buffer);
+    const enrollLogin = await call("POST", "/api/admin/login", { email: "hq@webauthn.local", password: PW });
+    assert.equal(enrollLogin.body.status, "WEBAUTHN_ENROLL");
+    const cd = clientData("webauthn.create", enrollLogin.body.webauthn.creation.challenge);
+    const enrolled = await call("POST", "/api/admin/login/biometric", {
+      ticket: enrollLogin.body.ticket,
+      method: "webauthn",
+      id: toBase64Url(Buffer.from("cred-reset")),
+      clientDataJSON: cd,
+      authenticatorData: authData(1),
+      publicKey: spki,
+      transports: ["internal"],
+    });
+    assert.equal(enrolled.status, 200, enrolled.text);
+    assert.equal((await db.select().from(adminWebauthnCredentials)).length, 1);
+
+    const required = await call("POST", "/api/admin/login", { email: "hq@webauthn.local", password: PW });
+    assert.equal(required.body.status, "WEBAUTHN_REQUIRED");
+
+    const reset = await call("POST", "/api/admin/login", {
+      email: "hq@webauthn.local",
+      password: PW,
+      resetWebauthn: true,
+    });
+    assert.equal(reset.status, 200, reset.text);
+    assert.equal(reset.body.status, "WEBAUTHN_ENROLL");
+    assert.equal(reset.body.token, undefined);
+    assert.ok(reset.body.webauthn.creation.challenge);
+    assert.equal((await db.select().from(adminWebauthnCredentials)).length, 0);
+  });
+
   it("ES256 helper verifies a platform-style signature", () => {
     const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
     const data = Buffer.from("vaksinamed-face");
@@ -201,8 +235,11 @@ describe("Admin Face ID source contracts", () => {
     assert.match(auth, /createPendingAdminLogin/);
     assert.match(webauthn, /authenticatorAttachment: "platform"/);
     assert.match(ui, /navigator\.credentials/);
+    assert.match(ui, /resetWebauthn/);
+    assert.match(ui, /Bu kompyuterda yangi Face ID bog‘lash/);
     assert.doesNotMatch(ui, /admin@vaksinamed\.uz|kassa@vaksinamed/);
     assert.doesNotMatch(ui, /method:\s*"face"|presenceConfirmed|Kameradan yuzni|login-hero/);
     assert.doesNotMatch(auth, /confirmFacePresence/);
+    assert.match(auth, /deleteWebauthnCredentials/);
   });
 });

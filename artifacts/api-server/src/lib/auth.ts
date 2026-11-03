@@ -25,6 +25,7 @@ import { earnCashback } from "./cashbackFinance";
 import { WELCOME_BONUS_UZS } from "./cashback";
 import {
   createPendingAdminLogin,
+  deleteWebauthnCredentials,
   verifyWebauthnAndBind,
   type PendingLogin,
   type WebauthnAssertionBody,
@@ -548,7 +549,12 @@ export function adminBiometricRequired(): boolean {
   return isProductionLike() || flagEnabled("ADMIN_WEBAUTHN_FORCE");
 }
 
-export async function loginAdmin(email: string, password: string, req?: Request): Promise<
+export async function loginAdmin(
+  email: string,
+  password: string,
+  req?: Request,
+  options?: { resetWebauthn?: boolean },
+): Promise<
   | { user: AdminUser; token: string; pending?: undefined }
   | { user: AdminUser; pending: PendingLogin; token?: undefined }
 > {
@@ -584,6 +590,11 @@ export async function loginAdmin(email: string, password: string, req?: Request)
     return finalizeAdminLogin(user, req, { factor: "primary" });
   }
 
+  let resetCount = 0;
+  if (options?.resetWebauthn) {
+    resetCount = await deleteWebauthnCredentials(user.id);
+  }
+
   const pending = await createPendingAdminLogin({
     adminUserId: user.id,
     email: user.email,
@@ -595,7 +606,11 @@ export async function loginAdmin(email: string, password: string, req?: Request)
     actorId: user.id,
     eventType: "login.password_ok",
     success: true,
-    meta: { role: normalized, purpose: pending.purpose },
+    meta: {
+      role: normalized,
+      purpose: pending.purpose,
+      ...(resetCount ? { webauthnReset: resetCount } : {}),
+    },
   });
   return {
     user,

@@ -138,6 +138,15 @@ export async function listWebauthnCredentials(adminUserId: number) {
     .where(eq(adminWebauthnCredentials.adminUserId, adminUserId));
 }
 
+/** Clears enrolled Face ID / passkeys so the next login can enroll on this device. Requires a fresh password check. */
+export async function deleteWebauthnCredentials(adminUserId: number): Promise<number> {
+  const removed = await db
+    .delete(adminWebauthnCredentials)
+    .where(eq(adminWebauthnCredentials.adminUserId, adminUserId))
+    .returning({ id: adminWebauthnCredentials.id });
+  return removed.length;
+}
+
 export async function createPendingAdminLogin(input: {
   adminUserId: number;
   email: string;

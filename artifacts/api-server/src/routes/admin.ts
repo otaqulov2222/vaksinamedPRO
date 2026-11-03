@@ -71,7 +71,8 @@ router.post("/admin/login", adminLoginLimiter, async (req, res, next) => {
   try {
     const email = String(req.body.email || "").toLowerCase();
     const password = String(req.body.password || "");
-    const result = await loginAdmin(email, password, req);
+    const resetWebauthn = Boolean(req.body?.resetWebauthn);
+    const result = await loginAdmin(email, password, req, { resetWebauthn });
     if ("pending" in result && result.pending) {
       return res.json(pendingLoginResponse(result.pending, result.user));
     }

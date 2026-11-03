@@ -125,6 +125,26 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
     }
   }
 
+  async function reenrollOnThisDevice() {
+    setError("");
+    setBusy(true);
+    try {
+      const data = await request("/api/admin/login", null, {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), password, resetWebauthn: true }),
+      });
+      if (data.ticket && data.status === "WEBAUTHN_ENROLL") {
+        setPending(data as PendingLogin);
+        return;
+      }
+      throw new Error("Qayta bog‘lash uchun yangi Face ID kaliti ochilmadi");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Qayta bog‘lash xatosi");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function completeBiometric(body: Record<string, unknown>) {
     if (!pending) return;
     const data = await request("/api/admin/login/biometric", null, {
@@ -260,11 +280,25 @@ export function LoginScreen({ onAuthenticated }: { onAuthenticated: (token: stri
               <ScanFace size={42} strokeWidth={1.6} aria-hidden="true" />
             </div>
             <p className="login-face-user">{pending.user.name}</p>
-            <p className="login-face-hint">Faqat shu qurilmadagi Face ID / Windows Hello</p>
+            <p className="login-face-hint">
+              {pending.status === "WEBAUTHN_ENROLL"
+                ? "Shu kompyuterda Windows Hello / Face ID ni bog‘lang (Edge tavsiya etiladi)"
+                : "Faqat oldin bog‘langan Face ID / Windows Hello"}
+            </p>
             {error ? <div className="login-error" role="alert">{error}</div> : null}
             <button className="btn-primary" type="button" disabled={busy} onClick={() => void runWebauthn()}>
-              {busy ? "Kutilmoqda…" : "Face ID bilan tasdiqlash"}
+              {busy ? "Kutilmoqda…" : pending.status === "WEBAUTHN_ENROLL" ? "Windows Hello bilan bog‘lash" : "Face ID bilan tasdiqlash"}
             </button>
+            {pending.status === "WEBAUTHN_REQUIRED" ? (
+              <button
+                className="login-text-btn"
+                type="button"
+                disabled={busy || !password}
+                onClick={() => void reenrollOnThisDevice()}
+              >
+                Bu kompyuterda yangi Face ID bog‘lash
+              </button>
+            ) : null}
             <button
               className="login-text-btn"
               type="button"
