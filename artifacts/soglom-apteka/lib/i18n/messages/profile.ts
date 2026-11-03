@@ -147,7 +147,7 @@ export default defineMessages({
       'Hisobingiz o‘chiriladi: telefon va ism anonimlashtiriladi, sessiyalar yopiladi. Buyurtma/cashback tarixining qonuniy nusxalari saqlanishi mumkin. Davom etasizmi?',
     deleteAccountDone: 'Hisob o‘chirildi',
     deleteAccountFailed: 'Hisobni o‘chirib bo‘lmadi. Qayta urinib ko‘ring.',
-    profileVersionFooter: 'VaksinaMed PRO • v{version}',
+    profileVersionFooter: 'Vaksinameduz MCHJ talqin {version}',
 
     notFoundMessage: 'Bu sahifa topilmadi',
     notFoundHome: 'Bosh sahifaga qaytish',
@@ -338,7 +338,7 @@ export default defineMessages({
       'Аккаунт будет удалён: телефон и имя обезличатся, сессии закроются. Часть истории заказов/кэшбэка может храниться по закону. Продолжить?',
     deleteAccountDone: 'Аккаунт удалён',
     deleteAccountFailed: 'Не удалось удалить аккаунт. Попробуйте ещё раз.',
-    profileVersionFooter: 'VaksinaMed PRO • v{version}',
+    profileVersionFooter: 'Vaksinameduz MCHJ talqin {version}',
 
     notFoundMessage: 'Эта страница не найдена',
     notFoundHome: 'Вернуться на главную',
@@ -529,7 +529,7 @@ export default defineMessages({
       'Your account will be deleted: phone and name are anonymized and sessions closed. Some order/cashback records may be retained by law. Continue?',
     deleteAccountDone: 'Account deleted',
     deleteAccountFailed: 'Could not delete the account. Please try again.',
-    profileVersionFooter: 'VaksinaMed PRO • v{version}',
+    profileVersionFooter: 'Vaksinameduz MCHJ talqin {version}',
 
     notFoundMessage: 'This page could not be found',
     notFoundHome: 'Back to Home',
