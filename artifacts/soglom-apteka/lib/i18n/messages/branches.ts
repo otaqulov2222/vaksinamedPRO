@@ -57,7 +57,7 @@ export default defineMessages({
     callBranch: 'Qo‘ng‘iroq',
     selectedBranchBadge: 'Tanlangan filial',
     navBranchesTitle: 'Dorixonalar',
-    navBranchesSub: '{count}+ filial tarmog‘i',
+    navBranchesSub: '{count} ta filial tarmog‘i',
   },
   ru: {
     heroTitle: 'Каждая аптека — на своём месте',
@@ -115,7 +115,7 @@ export default defineMessages({
     callBranch: 'Позвонить',
     selectedBranchBadge: 'Выбранный филиал',
     navBranchesTitle: 'Аптеки',
-    navBranchesSub: 'Сеть из {count}+ аптек',
+    navBranchesSub: 'Сеть из {count} аптек',
   },
   en: {
     heroTitle: 'Every pharmacy, right on the map',
@@ -173,6 +173,6 @@ export default defineMessages({
     callBranch: 'Call',
     selectedBranchBadge: 'Selected pharmacy',
     navBranchesTitle: 'Pharmacies',
-    navBranchesSub: 'Network of {count}+ branches',
+    navBranchesSub: 'Network of {count} branches',
   },
 });

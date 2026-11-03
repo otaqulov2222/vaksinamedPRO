@@ -157,15 +157,13 @@ export default function BranchesScreen() {
       .then((data) => {
         const list = data.branches || [];
         setBranches(list);
-        // Prefer site marketing claim (138+) over raw DB catalog size (137 active rows).
-        const claimed =
-          Number(String(data.network?.claimed || '').replace(/\D+/g, '')) || 138;
+        // Honest catalog size only — no marketing "138+" inflation.
         const catalog =
           Number(data.network?.officialCatalog) ||
           Number(data.total) ||
           list.length ||
           0;
-        setNetworkTotal(Math.max(claimed, catalog, 138));
+        setNetworkTotal(catalog);
         if (Array.isArray(data.regions) && data.regions.length) setRegions(data.regions);
         setSelectedId((prev) => {
           if (prev != null && list.some((b: any) => Number(b.id) === Number(prev))) return prev;
@@ -304,7 +302,7 @@ export default function BranchesScreen() {
             {t('branches.navBranchesTitle')}
           </Text>
           <Text style={styles.headerSub} numberOfLines={1}>
-            {t('branches.navBranchesSub', { count: Math.max(networkTotal, branches.length) || 138 })}
+            {t('branches.navBranchesSub', { count: networkTotal || branches.length })}
           </Text>
         </View>
       </View>

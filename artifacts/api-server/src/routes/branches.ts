@@ -37,8 +37,8 @@ router.get("/branches", async (req, res, next) => {
       total: filtered.length,
       regions,
       network: {
-        claimed: "138+",
-        regions: "9+",
+        claimed: String(rows.length),
+        regions: String([...new Set(rows.map((item) => item.region))].length),
         founded: 2015,
         certifications: ["GDP", "GPP"],
         officialCatalog: rows.length,
