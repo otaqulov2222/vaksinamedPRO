@@ -165,6 +165,12 @@ export function AppProvider({ children }: PropsWithChildren) {
 
   const logout = useCallback(async () => {
     sessionEpochRef.current += 1;
+    try {
+      const { unregisterCurrentPushToken } = await import('@/lib/pushNotifications');
+      await unregisterCurrentPushToken();
+    } catch {
+      // push cleanup is best-effort
+    }
     await performLogout({
       revoke: () => api.revokeSession(),
       clearToken: () => setAuthToken(null),

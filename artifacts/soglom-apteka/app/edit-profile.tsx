@@ -16,10 +16,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
-import { confirmAction } from '@/lib/dialogs';
+import { confirmAction, notify } from '@/lib/dialogs';
 import { localizeError } from '@/lib/i18n/errors';
 
-const PURPLE = '#6A22D6';
+const PURPLE = '#4B248A';
 const PURPLE_DEEP = '#1A1040';
 const PURPLE_LIGHT = '#F3E8FF';
 const MUTED = '#8B93A7';
@@ -152,6 +152,20 @@ export default function EditProfileScreen() {
     if (fn.length < 2) return t('profile.editTooShortFirst');
     if (fn.length > 80) return t('profile.editTooLongFirst');
     if (lastName.trim().length > 80) return t('profile.editTooLongLast');
+    const bd = birthDate.trim();
+    if (bd) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(bd)) return t('profile.editBirthDateInvalid');
+      const [y, m, d] = bd.split('-').map((x) => Number(x));
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      const ok =
+        Number.isFinite(y) &&
+        y >= 1900 &&
+        y <= new Date().getFullYear() &&
+        dt.getUTCFullYear() === y &&
+        dt.getUTCMonth() === m - 1 &&
+        dt.getUTCDate() === d;
+      if (!ok) return t('profile.editBirthDateInvalid');
+    }
     return null;
   };
 
@@ -241,6 +255,7 @@ export default function EditProfileScreen() {
     try {
       await api.requestOtp(phone, 'login');
       setOtpSent(true);
+      notify(t('profile.editOtpSent'));
     } catch (err: any) {
       setOtpError(err?.message || t('profile.editSaveFailed'));
     } finally {

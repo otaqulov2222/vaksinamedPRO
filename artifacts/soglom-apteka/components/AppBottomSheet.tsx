@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { tr } from '@/lib/i18n';
 
 const SCRIM = 'rgba(23, 22, 44, 0.45)';
 const SURFACE = '#FFFFFF';
@@ -43,7 +44,7 @@ export function AppBottomSheet({ visible, onClose, children, testID }: Props) {
           style={styles.scrim}
           onPress={onClose}
           accessibilityRole="button"
-          accessibilityLabel="Close"
+          accessibilityLabel={tr('common.close')}
         />
         <View style={[styles.sheet, { maxHeight: maxH, paddingBottom: bottomPad }]}>
           <View style={styles.handleWrap} importantForAccessibility="no">

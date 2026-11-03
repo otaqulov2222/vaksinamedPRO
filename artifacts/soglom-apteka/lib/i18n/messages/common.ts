@@ -56,6 +56,7 @@ export default defineMessages({
     navCashback: 'Cashback',
     navSettings: 'Sozlamalar',
     navAddresses: 'Manzillarim',
+    navDevices: 'Qurilmalar',
 
     currency: 'so‘m',
     unitPiece: 'dona',
@@ -149,6 +150,7 @@ export default defineMessages({
     navCashback: 'Кэшбэк',
     navSettings: 'Настройки',
     navAddresses: 'Мои адреса',
+    navDevices: 'Устройства',
 
     currency: 'сум',
     unitPiece: 'шт.',
@@ -242,6 +244,7 @@ export default defineMessages({
     navCashback: 'Cashback',
     navSettings: 'Settings',
     navAddresses: 'My addresses',
+    navDevices: 'Devices',
 
     currency: 'UZS',
     unitPiece: 'pcs',

@@ -10,7 +10,7 @@ import { describe, it } from 'node:test';
 
 const ROOT = join(__dirname, '..');
 const SCAN_DIRS = ['app', 'components', 'context', 'hooks', 'constants', 'lib'];
-const EXCLUDE = [`lib${sep}i18n${sep}`];
+const EXCLUDE = [`lib${sep}i18n${sep}`, `lib${sep}legalContent.ts`];
 
 type Finding = { file: string; line: number; kind: string; text: string };
 
@@ -188,11 +188,13 @@ describe('auth logout paths', () => {
     const api = read('lib/api.ts');
     const layout = read('app/_layout.tsx');
 
-    // Profile button -> cross-platform confirm -> context logout -> navigation reset to welcome.
-    assert.match(profile, /confirmAction\(/);
+    // Profile button -> ConfirmActionSheet -> context logout -> navigation reset to welcome.
+    assert.match(profile, /<ConfirmActionSheet\b/);
+    assert.match(profile, /testID="profile-logout-sheet"/);
     assert.match(profile, /await logout\(\)/);
     assert.match(profile, /router\.replace\('\/welcome'\)/);
     assert.doesNotMatch(profile, /Alert\.alert/);
+    assert.doesNotMatch(profile, /confirmAction\(/);
 
     // Context logout uses the pure teardown with the real backend endpoint.
     assert.match(ctx, /performLogout\(/);
@@ -250,6 +252,8 @@ describe('profile screen entry points', () => {
       '/notifications': 1,
       '/help': 1,
       '/branches': 1,
+      '/addresses': 1,
+      '/devices': 1,
       '/rating': 1,
       '/about': 1,
     };
@@ -257,7 +261,16 @@ describe('profile screen entry points', () => {
       assert.equal(profile.split(`'${route}'`).length - 1, expected, route);
     }
     assert.doesNotMatch(profile, /router\.push\('\/qr'\)|'\/\(tabs\)\/qr'/, 'QR stays in the tab bar only');
-    for (const id of ['profile-cashback', 'profile-tier', 'profile-orders', 'profile-branches', 'profile-bell', 'profile-logout']) {
+    for (const id of [
+      'profile-cashback',
+      'profile-tier',
+      'profile-orders',
+      'profile-branches',
+      'profile-addresses',
+      'profile-devices',
+      'profile-bell',
+      'profile-logout',
+    ]) {
       assert.equal(count(new RegExp(`testID="${id}"`, 'g')), 1, id);
     }
     assert.equal(count(/onPress=\{onCashback\}/g), 1, 'cashback menu row');
@@ -271,7 +284,9 @@ describe('profile screen entry points', () => {
       'profile-cashback',
       'profile-orders',
       'profile-branches',
+      'profile-addresses',
       'profile-notifications',
+      'profile-devices',
       'profile-help',
       'profile-rating',
       'profile-about',
@@ -302,7 +317,23 @@ describe('profile screen entry points', () => {
   });
 
   it('logout keeps the shared flow', () => {
-    assert.equal(count(/const onLogout = async/g), 1);
-    assert.match(profile, /onPress=\{\(\) => void onLogout\(\)\}/);
+    assert.equal(count(/const onLogoutConfirm = async/g), 1);
+    assert.match(profile, /setLogoutSheetOpen\(true\)/);
+    assert.match(profile, /onConfirm=\{\(\) => void onLogoutConfirm\(\)\}/);
+  });
+
+  it('addresses and devices screens are wired', () => {
+    const layout = read('app/_layout.tsx');
+    assert.match(layout, /name="addresses"/);
+    assert.match(layout, /name="devices"/);
+    assert.match(layout, /t\('common\.navAddresses'\)/);
+    assert.match(layout, /t\('common\.navDevices'\)/);
+    const addresses = read('app/addresses.tsx');
+    const devices = read('app/devices.tsx');
+    assert.match(addresses, /api\.getAddresses\(/);
+    assert.match(addresses, /api\.createAddress\(/);
+    assert.match(devices, /api\.getDevices\(/);
+    assert.match(devices, /#4B248A/);
+    assert.match(addresses, /#4B248A/);
   });
 });

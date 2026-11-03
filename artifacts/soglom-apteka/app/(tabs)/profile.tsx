@@ -1,8 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
+import Constants from 'expo-constants';
 import React, { useCallback, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { ConfirmActionSheet } from '@/components/ConfirmActionSheet';
@@ -10,7 +11,8 @@ import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
 import { CrownIcon, WalletIcon } from '@/components/LineIcons';
 import { getLanguageMeta } from '@/lib/languages';
 import { api } from '@/lib/api';
-import { confirmAction, notify } from '@/lib/dialogs';
+import { notify } from '@/lib/dialogs';
+import { getCachedUnreadCount } from '@/lib/pushNotifications';
 import { buildProfileSummary, EMPTY_VALUE, matchTierRate } from '@/lib/profileSummary';
 
 // Brand palette; refined luxury pharmacy tones
@@ -117,11 +119,15 @@ export default function ProfileScreen() {
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
   const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
+  const [logoutSheetOpen, setLogoutSheetOpen] = useState(false);
+  const [profileRefreshing, setProfileRefreshing] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       let alive = true;
       void (async () => {
+        setProfileRefreshing(true);
         try {
           await refresh();
         } catch {
@@ -134,6 +140,13 @@ export default function ProfileScreen() {
         } catch {
           if (alive) setTierRate(null);
         }
+        try {
+          const n = await getCachedUnreadCount();
+          if (alive) setUnreadCount(n);
+        } catch {
+          if (alive) setUnreadCount(0);
+        }
+        if (alive) setProfileRefreshing(false);
       })();
       return () => {
         alive = false;
@@ -160,24 +173,17 @@ export default function ProfileScreen() {
   const onTier = () => router.push({ pathname: '/cashback', params: { focus: 'tier' } });
   const onNotifications = () => router.push('/notifications');
 
-  const onLogout = async () => {
+  const onLogoutConfirm = async () => {
     if (loggingOut || deletingAccount) return;
-    const ok = await confirmAction({
-      title: t('common.logoutTitle'),
-      message: t('common.logoutConfirm'),
-      confirmText: t('common.logout'),
-      cancelText: t('common.cancel'),
-      destructive: true,
-    });
-    if (!ok) return;
     setLoggingOut(true);
     try {
       await logout();
+      setLogoutSheetOpen(false);
+      if (router.canDismiss()) router.dismissAll();
+      router.replace('/welcome');
     } finally {
       setLoggingOut(false);
     }
-    if (router.canDismiss()) router.dismissAll();
-    router.replace('/welcome');
   };
 
   const onDeleteAccountConfirm = async () => {
@@ -230,6 +236,11 @@ export default function ProfileScreen() {
               style={({ pressed }) => [styles.bell, pressed && styles.controlPressed]}
             >
               <Feather name="bell" size={18} color={PRIMARY} />
+              {unreadCount > 0 ? (
+                <View style={styles.bellBadge} accessibilityElementsHidden>
+                  <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : String(unreadCount)}</Text>
+                </View>
+              ) : null}
             </Pressable>
           </View>
         </View>
@@ -238,16 +249,29 @@ export default function ProfileScreen() {
           <View style={styles.identity}>
             <View style={styles.avatar} accessible accessibilityRole="image" accessibilityLabel={t('profile.avatarA11y')}>
               <LinearGradient colors={[PRIMARY, DEEP]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatarFill}>
-                <Text style={styles.avatarLetter}>{summary.initial}</Text>
+                {profileRefreshing && !ready ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.avatarLetter}>{summary.initial}</Text>
+                )}
               </LinearGradient>
             </View>
             <View style={styles.identityText}>
-              <Text style={styles.name} numberOfLines={2}>
-                {summary.displayName}
-              </Text>
-              <Text style={styles.phone} numberOfLines={1}>
-                {summary.phone}
-              </Text>
+              {profileRefreshing && !ready ? (
+                <View style={styles.identitySkeleton} accessibilityLabel={t('common.loading')}>
+                  <View style={[styles.skelBar, styles.skelName]} />
+                  <View style={[styles.skelBar, styles.skelPhone]} />
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.name} numberOfLines={2}>
+                    {summary.displayName}
+                  </Text>
+                  <Text style={styles.phone} numberOfLines={1}>
+                    {summary.phone}
+                  </Text>
+                </>
+              )}
             </View>
           </View>
 
@@ -323,13 +347,31 @@ export default function ProfileScreen() {
             iconColor="#047857"
           />
           <MenuRow
+            icon="home"
+            title={t('common.navAddresses')}
+            a11y={t('profile.addressesDesc')}
+            onPress={() => router.push('/addresses')}
+            testID="profile-addresses"
+            iconBg="#E0E7FF"
+            iconColor="#4338CA"
+          />
+          <MenuRow
             icon="bell"
             title={t('common.navNotifications')}
-            a11y={t('common.navNotifications')}
+            a11y={t('profile.notificationsA11y')}
             onPress={onNotifications}
             testID="profile-notifications"
             iconBg="#E0F2FE"
             iconColor="#0369A1"
+          />
+          <MenuRow
+            icon="smartphone"
+            title={t('profile.devicesTitle')}
+            a11y={t('profile.devicesDesc')}
+            onPress={() => router.push('/devices')}
+            testID="profile-devices"
+            iconBg="#F1F5F9"
+            iconColor="#475569"
           />
           <MenuRow
             icon="headphones"
@@ -391,7 +433,10 @@ export default function ProfileScreen() {
         </View>
 
         <Pressable
-          onPress={() => void onLogout()}
+          onPress={() => {
+            if (loggingOut || deletingAccount) return;
+            setLogoutSheetOpen(true);
+          }}
           disabled={loggingOut || deletingAccount}
           accessibilityRole="button"
           accessibilityLabel={t('common.logoutA11y')}
@@ -423,9 +468,29 @@ export default function ProfileScreen() {
             {t('profile.deleteAccount')}
           </Text>
         </Pressable>
+
+        <Text style={styles.versionFooter} accessibilityRole="text">
+          {t('profile.profileVersionFooter', {
+            version: Constants.expoConfig?.version || Constants.nativeAppVersion || '1.0.0',
+          })}
+        </Text>
       </ScrollView>
 
       <LanguagePickerSheet visible={languageSheetOpen} onClose={() => setLanguageSheetOpen(false)} />
+      <ConfirmActionSheet
+        visible={logoutSheetOpen}
+        onClose={() => {
+          if (!loggingOut) setLogoutSheetOpen(false);
+        }}
+        title={t('common.logoutTitle')}
+        message={t('common.logoutConfirm')}
+        confirmText={t('common.logout')}
+        cancelText={t('common.cancel')}
+        destructive
+        busy={loggingOut}
+        onConfirm={() => void onLogoutConfirm()}
+        testID="profile-logout-sheet"
+      />
       <ConfirmActionSheet
         visible={deleteSheetOpen}
         onClose={() => {
@@ -475,6 +540,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: SHADOW_CONTROL,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: DANGER,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: SURFACE,
+  },
+  bellBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    lineHeight: 12,
+    color: '#FFFFFF',
+  },
+  identitySkeleton: { gap: 8, paddingTop: 2 },
+  skelBar: { height: 12, borderRadius: 6, backgroundColor: '#E8E4F2' },
+  skelName: { width: '72%', height: 16 },
+  skelPhone: { width: '48%' },
+  versionFooter: {
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: MUTED,
   },
 
   identityCard: {

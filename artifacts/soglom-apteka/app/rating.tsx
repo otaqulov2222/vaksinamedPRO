@@ -17,7 +17,7 @@ import { api } from '@/lib/api';
 import type { TranslationKey } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
 
-const PURPLE = '#6A22D6';
+const PURPLE = '#4B248A';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
 const BG = '#F7F8FC';
@@ -195,7 +195,7 @@ export default function RatingScreen() {
           onPress={handleBack}
           style={styles.backBtn}
           accessibilityRole="button"
-          accessibilityLabel={t('orders.backToOrdersA11y')}
+          accessibilityLabel={t('common.back')}
         >
           <Feather name="arrow-left" size={20} color={PURPLE_DEEP} />
         </Pressable>

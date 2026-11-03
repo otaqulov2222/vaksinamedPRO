@@ -18,11 +18,12 @@ import { api } from '@/lib/api';
 import {
   getNotificationPermission,
   requestPushPermissionAndRegister,
+  setCachedUnreadCount,
   showLocalPushNotification,
   type PushPermissionState,
 } from '@/lib/pushNotifications';
 
-const PURPLE = '#6A22D6';
+const PURPLE = '#4B248A';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#6B7280';
 const BG = '#F8F9FD';
@@ -102,9 +103,11 @@ export default function NotificationsScreen() {
       if (res.success) {
         showLocalPushNotification(res.title, res.body);
         showToast(t('profile.pushTestSent'));
+      } else {
+        showToast(t('profile.pushTestFailed'));
       }
     } catch {
-      showToast(t('profile.pushTestSent'));
+      showToast(t('profile.pushTestFailed'));
     } finally {
       setPushActionLoading(false);
     }
@@ -371,22 +374,6 @@ export default function NotificationsScreen() {
       }
     }
 
-    // 5. System Welcome / 24h Promo notification
-    const welcomeId = 'promo-welcome-2026';
-    pushIfNotCleared({
-      id: welcomeId,
-      category: 'promos',
-      title: t('profile.notifPromoWelcomeTitle'),
-      codeBadge: '24/7',
-      body: t('profile.notifPromoWelcomeBody'),
-      rawTime: '2026-10-23T12:00:00.000Z',
-      icon: 'gift-outline',
-      iconColor: PURPLE,
-      iconBg: '#F3E8FF',
-      route: '/branches',
-      isRead: readIds.has(welcomeId),
-    });
-
     return list;
   }, [orders, refillAlerts, reminderDoses, cashbackRows, readIds, clearedIds, t, fmt, mealRelationLabel]);
 
@@ -398,6 +385,10 @@ export default function NotificationsScreen() {
   const unreadCount = useMemo(() => {
     return notifications.filter((n) => !n.isRead).length;
   }, [notifications]);
+
+  useEffect(() => {
+    void setCachedUnreadCount(unreadCount);
+  }, [unreadCount]);
 
   const countFor = useCallback(
     (cat: NotifCategory) => {
@@ -465,7 +456,7 @@ export default function NotificationsScreen() {
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
           style={styles.backBtn}
           accessibilityRole="button"
-          accessibilityLabel={t('orders.backToOrdersA11y')}
+          accessibilityLabel={t('common.back')}
         >
           <Feather name="arrow-left" size={20} color={PURPLE_DEEP} />
         </Pressable>
@@ -616,8 +607,16 @@ export default function NotificationsScreen() {
               <View style={styles.emptyIconWrap}>
                 <Feather name="bell-off" size={32} color={MUTED} />
               </View>
-              <Text style={styles.emptyTitle}>{t('profile.notifEmptyFilterTitle')}</Text>
-              <Text style={styles.emptySubtitle}>{t('profile.notifEmptyFilterBody')}</Text>
+              <Text style={styles.emptyTitle}>
+                {notifications.length === 0
+                  ? t('profile.notifEmptyTitle')
+                  : t('profile.notifEmptyFilterTitle')}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {notifications.length === 0
+                  ? t('profile.notifEmptyBody')
+                  : t('profile.notifEmptyFilterBody')}
+              </Text>
             </View>
           ) : (
             filteredNotifications.map((item) => (

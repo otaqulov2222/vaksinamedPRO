@@ -59,6 +59,14 @@
           "cameraPermission": "Retsept rasmini yuklash uchun kameraga ruxsat kerak.",
           "photosPermission": "Retsept rasmini galereyadan tanlash uchun ruxsat kerak."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#4B248A",
+          "defaultChannel": "default"
+        }
       ]
     ],
     "experiments": {

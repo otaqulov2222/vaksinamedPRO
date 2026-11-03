@@ -11,7 +11,7 @@ import {
   normalizePhone,
   issueCustomerSession,
 } from "../lib/auth";
-import { authSessions, customers, db, hashPassword, verifyPassword } from "@workspace/db";
+import { authSessions, customerDevices, customers, db, hashPassword, verifyPassword } from "@workspace/db";
 import { rateLimit } from "../lib/rateLimit";
 import { loyaltyCardNumber, publicQrCode } from "../lib/pos";
 import { revokeSessionFromToken } from "../lib/sessions";
@@ -253,6 +253,12 @@ router.post("/auth/delete-account", authLimiter, async (req, res, next) => {
           isNull(authSessions.revokedAt),
         ),
       );
+
+    // Deactivate push devices so deleted accounts stop receiving notifications.
+    await db
+      .update(customerDevices)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(customerDevices.customerId, user.id));
 
     await recordAuthEvent({
       actorType: "customer",
