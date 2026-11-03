@@ -80,7 +80,7 @@ function ensureLeafletAssets() {
         width: 36px !important; height: 36px !important; line-height: 36px !important;
         color: #5C328E !important; font-weight: 700 !important; background: #fff !important;
       }
-      .leaflet-control-attribution { font-size: 9px !important; background: rgba(255,255,255,.75) !important; }
+      .leaflet-control-attribution { display: none !important; }
       .leaflet-popup-content-wrapper {
         border-radius: 16px !important;
         box-shadow: 0 10px 28px rgba(42, 16, 78, 0.22) !important;
@@ -195,7 +195,7 @@ export default function BranchMap({
 
       const map = L.map(containerRef.current, {
         zoomControl: false,
-        attributionControl: true,
+        attributionControl: false,
         dragging: true,
         touchZoom: true,
         doubleClickZoom: true,
@@ -214,7 +214,7 @@ export default function BranchMap({
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', // i18n-ignore: map data licence attribution
+        attribution: '',
       }).addTo(map);
 
       mapRef.current = map;
