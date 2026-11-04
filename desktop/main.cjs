@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, session } = require('electron');
 const path = require('path');
 
 /** Live staging customer app — same as phone HTTPS. */
@@ -21,7 +21,10 @@ function createWindow() {
     },
   });
 
-  win.loadURL(START_URL);
+  // Always revalidate HTML so deploys show up without reinstalling the shell.
+  win.loadURL(START_URL, {
+    extraHeaders: 'Cache-Control: no-cache\nPragma: no-cache\n',
+  });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -29,7 +32,13 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  try {
+    await session.defaultSession.clearCache();
+  } catch {
+    // Non-fatal: still open the window.
+  }
+
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
