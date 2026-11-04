@@ -15,6 +15,7 @@ import {
   getOrderStatusNotificationContent,
   getMedicationReminderNotificationContent,
 } from "../src/lib/pushNotifications";
+import { setWebPushTestSendOverride } from "../src/lib/webPush";
 import { runMedicationRemindersSweep } from "../src/lib/workers";
 
 describe("Phase 18: Push Notifications & Device Management", () => {
@@ -45,6 +46,7 @@ describe("Phase 18: Push Notifications & Device Management", () => {
   });
 
   after(async () => {
+    setWebPushTestSendOverride(null);
     await client.close();
   });
 
@@ -123,7 +125,7 @@ describe("Phase 18: Push Notifications & Device Management", () => {
       assert.equal(outcome.sent, 0);
     });
 
-    it("successfully registers device token and dispatches to it", async () => {
+    it("does not fake-deliver bare web tokens without Push subscription", async () => {
       const token = "web_push_token_test_12345";
       await testDb.insert(customerDevices).values({
         customerId: testCustomerId,
@@ -139,16 +141,53 @@ describe("Phase 18: Push Notifications & Device Management", () => {
       }, testDb);
 
       assert.equal(outcome.devices, 1);
+      assert.equal(outcome.sent, 0);
+      assert.equal(outcome.results[0].status, "failed");
+      assert.equal(outcome.results[0].reason, "web_subscription_missing");
+    });
+
+    it("delivers when Web Push subscription fields are present", async () => {
+      setWebPushTestSendOverride(async () => ({ ok: true }));
+
+      const token = "webpush:https://push.example.test/termiz-device";
+      await testDb.insert(customerDevices).values({
+        customerId: testCustomerId,
+        token,
+        platform: "web",
+        endpoint: "https://push.example.test/termiz-device",
+        p256dhKey: "BFakeP256dhKeyForUnitTestOnly0123456789abcd",
+        authKey: "fakeAuthKeyForUnitTest",
+        isActive: true,
+      });
+
+      const outcome = await sendCustomerPushNotification(
+        testCustomerId,
+        {
+          title: "Dori eslatmasi",
+          body: "Iltimos dori ichishni unutmang",
+          data: { type: "medication_reminder" },
+        },
+        testDb,
+      );
+
+      assert.equal(outcome.devices, 2);
       assert.equal(outcome.sent, 1);
-      assert.equal(outcome.results[0].status, "delivered");
+      assert.ok(outcome.results.some((r) => r.status === "delivered"));
+      assert.ok(outcome.results.some((r) => r.status === "failed"));
+      setWebPushTestSendOverride(null);
     });
 
     it("does not dispatch to deactivated devices", async () => {
+      setWebPushTestSendOverride(async () => ({ ok: true }));
+
       const inactiveToken = "token_deactivated_999";
       await testDb.insert(customerDevices).values({
         customerId: testCustomerId,
         token: inactiveToken,
         platform: "web",
+        endpoint: "https://push.example.test/inactive",
+        p256dhKey: "BFakeP256dhKeyForUnitTestOnly0123456789abcd",
+        authKey: "fakeAuthKeyForUnitTest",
         isActive: false,
       });
 
@@ -157,9 +196,10 @@ describe("Phase 18: Push Notifications & Device Management", () => {
         body: "Matn",
       }, testDb);
 
-      // Only the 1 active device from previous test should receive it
-      assert.equal(outcome.devices, 1);
+      // Active: bare web (fail) + subscribed web (deliver). Inactive ignored.
+      assert.equal(outcome.devices, 2);
       assert.equal(outcome.sent, 1);
+      setWebPushTestSendOverride(null);
     });
   });
 
@@ -190,10 +230,13 @@ describe("Phase 18: Push Notifications & Device Management", () => {
         })
         .returning();
 
+      setWebPushTestSendOverride(async () => ({ ok: true }));
       const sweep = await runMedicationRemindersSweep({ now }, testDb);
       assert.ok(sweep.scanned >= 1);
       assert.ok(sweep.due >= 1);
-      assert.equal(sweep.sent, 1); // Dispatched to our active device
+      assert.equal(sweep.sent, 1); // Subscribed web device receives it
+      setWebPushTestSendOverride(null);
     });
   });
 });
+

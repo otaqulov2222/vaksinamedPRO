@@ -26,10 +26,28 @@ export function isWebPushConfigured(): boolean {
   return Boolean((process.env.VAPID_PUBLIC_KEY || "").trim() && (process.env.VAPID_PRIVATE_KEY || "").trim());
 }
 
+/** Test-only hook — production never sets this. */
+let testSendOverride:
+  | ((
+      subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+      payload: PushNotificationPayload,
+    ) => Promise<{ ok: boolean; reason?: string; statusCode?: number }>)
+  | null = null;
+
+export function setWebPushTestSendOverride(
+  fn: typeof testSendOverride,
+): void {
+  testSendOverride = fn;
+}
+
 export async function sendWebPushNotification(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   payload: PushNotificationPayload,
 ): Promise<{ ok: boolean; reason?: string; statusCode?: number }> {
+  if (testSendOverride) {
+    return testSendOverride(subscription, payload);
+  }
+
   if (!ensureWebPushConfigured()) {
     return { ok: false, reason: "vapid_not_configured" };
   }
