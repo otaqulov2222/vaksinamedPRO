@@ -18,6 +18,16 @@ export function isNotificationSupported(): boolean {
   return true;
 }
 
+function isWebPushSubscribeSupported(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  if (!isNotificationSupported()) return false;
+  return (
+    'serviceWorker' in navigator &&
+    'PushManager' in window &&
+    typeof (window as any).PushManager === 'function'
+  );
+}
+
 export function getNotificationPermission(): PushPermissionState {
   if (Platform.OS === 'web') {
     if (!isNotificationSupported()) return 'unsupported';
@@ -42,18 +52,89 @@ export async function clearStoredPushToken(): Promise<void> {
   }
 }
 
-export async function getOrGenerateDeviceToken(): Promise<string> {
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) {
+    output[i] = raw.charCodeAt(i);
+  }
+  return output;
+}
+
+async function ensurePushServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!isWebPushSubscribeSupported()) return null;
   try {
-    let token = await AsyncStorage.getItem(DEVICE_PUSH_TOKEN_KEY);
-    if (!token) {
-      const randomPart = Math.random().toString(36).substring(2, 15);
-      const timePart = Date.now().toString(36);
-      token = `web_${Platform.OS}_${timePart}_${randomPart}`;
-      await AsyncStorage.setItem(DEVICE_PUSH_TOKEN_KEY, token);
-    }
-    return token;
+    const existing = await navigator.serviceWorker.getRegistration('/');
+    if (existing) return existing;
+    return await navigator.serviceWorker.register('/sw.js', { scope: '/' });
   } catch {
-    return `fallback_dev_${Date.now()}`;
+    return null;
+  }
+}
+
+async function subscribeWebPushAndRegister(): Promise<{
+  granted: boolean;
+  status: PushPermissionState;
+}> {
+  if (!isNotificationSupported()) {
+    return { granted: false, status: 'unsupported' };
+  }
+
+  if (!isWebPushSubscribeSupported()) {
+    // Notification API exists (e.g. some Safari) but PushManager/SW does not — be honest.
+    return { granted: false, status: 'unsupported' };
+  }
+
+  try {
+    const permission = await window.Notification.requestPermission();
+    const status = permission as PushPermissionState;
+    if (permission !== 'granted') {
+      return { granted: false, status };
+    }
+
+    const vapid = await api.getVapidPublicKey();
+    if (!vapid.configured || !vapid.publicKey) {
+      return { granted: false, status: 'unsupported' };
+    }
+
+    const registration = await ensurePushServiceWorker();
+    if (!registration) {
+      return { granted: false, status: 'unsupported' };
+    }
+
+    await navigator.serviceWorker.ready;
+
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapid.publicKey) as BufferSource,
+      });
+    }
+
+    const json = subscription.toJSON();
+    const endpoint = json.endpoint || subscription.endpoint;
+    const p256dh = json.keys?.p256dh;
+    const auth = json.keys?.auth;
+    if (!endpoint || !p256dh || !auth) {
+      return { granted: false, status: 'unsupported' };
+    }
+
+    const token = `webpush:${endpoint}`;
+    await AsyncStorage.setItem(DEVICE_PUSH_TOKEN_KEY, token);
+    await api.registerPushToken({
+      token,
+      platform: 'web',
+      endpoint,
+      keys: { p256dh, auth },
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+    });
+
+    return { granted: true, status: 'granted' };
+  } catch {
+    return { granted: false, status: getNotificationPermission() === 'granted' ? 'unsupported' : getNotificationPermission() };
   }
 }
 
@@ -99,29 +180,7 @@ export async function requestPushPermissionAndRegister(): Promise<{
   if (Platform.OS !== 'web') {
     return registerNativeExpoPush();
   }
-
-  if (!isNotificationSupported()) {
-    return { granted: false, status: 'unsupported' };
-  }
-
-  try {
-    const permission = await window.Notification.requestPermission();
-    const status = permission as PushPermissionState;
-
-    if (permission === 'granted') {
-      const token = await getOrGenerateDeviceToken();
-      await api.registerPushToken({
-        token,
-        platform: 'web',
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-      });
-      return { granted: true, status };
-    }
-
-    return { granted: false, status };
-  } catch {
-    return { granted: false, status: getNotificationPermission() };
-  }
+  return subscribeWebPushAndRegister();
 }
 
 /** Best-effort: deactivate current device token on server and clear local storage. */
@@ -132,6 +191,15 @@ export async function unregisterCurrentPushToken(): Promise<void> {
     await api.unregisterPushToken(token);
   } catch {
     // offline / already deleted
+  }
+  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration('/');
+      const sub = await reg?.pushManager.getSubscription();
+      await sub?.unsubscribe();
+    } catch {
+      // ignore
+    }
   }
   await clearStoredPushToken();
 }

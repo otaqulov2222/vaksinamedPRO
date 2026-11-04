@@ -4,10 +4,30 @@ import { customerDevices, customers, db } from "@workspace/db";
 import { requireCustomer } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { sendCustomerPushNotification } from "../lib/pushNotifications";
+import { getVapidPublicKey, isWebPushConfigured } from "../lib/webPush";
 
 export const devicesRouter = Router();
 
 const ALLOWED_PLATFORMS = ["web", "android", "ios"] as const;
+
+/**
+ * GET /api/customer/devices/vapid-public-key
+ * Public VAPID key for browser PushManager.subscribe (no auth).
+ */
+devicesRouter.get(
+  ["/customer/devices/vapid-public-key", "/api/customer/devices/vapid-public-key"],
+  (_req: Request, res: Response) => {
+    const publicKey = getVapidPublicKey();
+    if (!publicKey || !isWebPushConfigured()) {
+      return res.status(503).json({
+        code: "VAPID_NOT_CONFIGURED",
+        message: "Web Push server kalitlari sozlanmagan",
+        configured: false,
+      });
+    }
+    return res.status(200).json({ configured: true, publicKey });
+  },
+);
 
 /**
  * POST /api/customer/devices/push-token

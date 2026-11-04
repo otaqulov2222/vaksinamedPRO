@@ -518,6 +518,19 @@ export const api = {
     }),
   deleteAddress: (id: number) =>
     request<{ success: boolean }>(`/api/customer/addresses/${id}`, { method: 'DELETE' }),
+  getVapidPublicKey: async () => {
+    try {
+      return await request<{ configured: boolean; publicKey?: string }>(
+        '/api/customer/devices/vapid-public-key',
+        { method: 'GET' },
+        false,
+      );
+    } catch (err) {
+      const status = (err as ApiError)?.status;
+      if (status === 503 || status === 404) return { configured: false as const };
+      throw err;
+    }
+  },
   registerPushToken: (body: {
     token: string;
     platform?: 'web' | 'android' | 'ios';

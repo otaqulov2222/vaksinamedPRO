@@ -946,8 +946,8 @@ export function BranchesPage(props: {
             <DrawerSection title="To‘lov kabineti">
               <p className="bs-note bs-note-top">
                 {creating
-                  ? "Ixtiyoriy. Kalitlar shifrlangan holda saqlanadi va keyin ko‘rsatilmaydi."
-                  : "Kalit maydoni bo‘sh qolsa, saqlangan kalit o‘zgarmaydi. Kalitlar shifrlangan holda saqlanadi."}
+                  ? "Ixtiyoriy. Staging uchun Payme/Click sandbox merchant ID + kalit kerak (test.paycom.uz / Click shop). Kalitlar shifrlangan holda saqlanadi va keyin ko‘rsatilmaydi."
+                  : "Kalit maydoni bo‘sh qolsa, saqlangan kalit o‘zgarmaydi. Online Payme/Click faqat filialda merchant ID + kalit saqlangandan keyin yoqiladi. Staging: sandbox kabinet kalitlari."}
               </p>
               <div className="bs-form-grid">
                 <label className="filter-field">

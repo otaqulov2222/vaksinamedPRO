@@ -100,14 +100,40 @@ async function dispatchToSingleDevice(
       return await sendExpoPushMessage(token, payload);
     }
 
-    // 2. Web push / standard browser notification token
-    // For web clients with registered tokens, standard delivery receipt is recorded
-    return { ok: true };
+    // 2. Real Web Push (VAPID) — requires endpoint + keys from PushManager.subscribe
+    const endpoint = (device.endpoint || "").trim();
+    const p256dh = (device.p256dhKey || "").trim();
+    const auth = (device.authKey || "").trim();
+    if (endpoint && p256dh && auth) {
+      const { sendWebPushNotification } = await import("./webPush");
+      const result = await sendWebPushNotification(
+        { endpoint, keys: { p256dh, auth } },
+        payload,
+      );
+      if (!result.ok && (result.statusCode === 404 || result.statusCode === 410)) {
+        // Subscription gone — deactivate device so we stop claiming delivery.
+        void executorDeactivateDevice(device.id);
+      }
+      return result;
+    }
+
+    // Legacy synthetic web_* tokens without a Push subscription must not fake success.
+    return { ok: false, reason: "web_subscription_missing" };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     logger.warn({ deviceId: device.id, reason }, "Single device push dispatch failed");
     return { ok: false, reason };
   }
+}
+
+function executorDeactivateDevice(deviceId: number): void {
+  void db
+    .update(customerDevices)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(customerDevices.id, deviceId))
+    .catch((err) => {
+      logger.warn({ err, deviceId }, "Failed to deactivate stale web push device");
+    });
 }
 
 async function sendExpoPushMessage(
