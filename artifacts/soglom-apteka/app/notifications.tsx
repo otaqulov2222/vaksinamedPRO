@@ -19,7 +19,6 @@ import {
   getNotificationPermission,
   requestPushPermissionAndRegister,
   setCachedUnreadCount,
-  showLocalPushNotification,
   type PushPermissionState,
 } from '@/lib/pushNotifications';
 
@@ -28,7 +27,6 @@ const PURPLE_DEEP = '#1A1040';
 const MUTED = '#6B7280';
 const BG = '#F8F9FD';
 const CARD = '#FFFFFF';
-const BORDER = '#EEF0F6';
 const GREEN = '#059669';
 const AMBER = '#D97706';
 const BLUE = '#2563EB';
@@ -37,7 +35,7 @@ const ROSE = '#E11D48';
 const READ_STORAGE_KEY = 'vaksinamed_read_notifs';
 const CLEARED_STORAGE_KEY = 'vaksinamed_cleared_notifs';
 
-type NotifCategory = 'all' | 'orders' | 'reminders' | 'cashback' | 'promos';
+type NotifCategory = 'all' | 'orders' | 'reminders' | 'cashback';
 
 interface NotificationItem {
   id: string;
@@ -91,23 +89,6 @@ export default function NotificationsScreen() {
       }
     } catch {
       showToast(t('profile.pushDeniedNote'));
-    } finally {
-      setPushActionLoading(false);
-    }
-  };
-
-  const handleTestPush = async () => {
-    setPushActionLoading(true);
-    try {
-      const res = await api.sendTestPushNotification();
-      if (res.success) {
-        showLocalPushNotification(res.title, res.body);
-        showToast(t('profile.pushTestSent'));
-      } else {
-        showToast(t('profile.pushTestFailed'));
-      }
-    } catch {
-      showToast(t('profile.pushTestFailed'));
     } finally {
       setPushActionLoading(false);
     }
@@ -443,7 +424,6 @@ export default function NotificationsScreen() {
     { key: 'orders', labelKey: 'profile.notifTabOrders' },
     { key: 'reminders', labelKey: 'profile.notifTabReminders' },
     { key: 'cashback', labelKey: 'profile.notifTabCashback' },
-    { key: 'promos', labelKey: 'profile.notifTabPromos' },
   ];
 
   return (
@@ -540,89 +520,62 @@ export default function NotificationsScreen() {
             />
           }
         >
-          {/* Push Notification Card — always visible so iPhone Safari is not a silent blank */}
-          <View style={styles.pushCard}>
-            <View style={styles.pushCardLeft}>
-              <View
-                style={[
-                  styles.pushIconWrap,
-                  pushStatus === 'granted' && { backgroundColor: '#ECFDF5' },
-                  pushStatus === 'denied' && { backgroundColor: '#FEF3C7' },
-                  pushStatus === 'unsupported' && { backgroundColor: '#F1F5F9' },
-                ]}
-              >
-                <Feather
-                  name={
-                    pushStatus === 'granted'
-                      ? 'bell'
-                      : pushStatus === 'denied' || pushStatus === 'unsupported'
-                        ? 'bell-off'
-                        : 'bell'
-                  }
-                  size={20}
-                  color={
-                    pushStatus === 'granted'
-                      ? GREEN
-                      : pushStatus === 'denied'
-                        ? AMBER
-                        : pushStatus === 'unsupported'
-                          ? MUTED
-                          : PURPLE
-                  }
-                />
-              </View>
-              <View style={styles.pushTextWrap}>
-                <Text style={styles.pushTitle}>
-                  {pushStatus === 'granted'
-                    ? t('profile.pushEnabledStatus')
-                    : pushStatus === 'unsupported'
+          {/* Push: only when user still needs to act — no “Sinab ko‘rish” demo */}
+          {pushStatus !== 'granted' ? (
+            <View style={styles.pushCard}>
+              <View style={styles.pushCardLeft}>
+                <View
+                  style={[
+                    styles.pushIconWrap,
+                    pushStatus === 'denied' && { backgroundColor: '#FEF3C7' },
+                    pushStatus === 'unsupported' && { backgroundColor: '#F1F5F9' },
+                  ]}
+                >
+                  <Feather
+                    name={pushStatus === 'default' ? 'bell' : 'bell-off'}
+                    size={20}
+                    color={
+                      pushStatus === 'denied' ? AMBER : pushStatus === 'unsupported' ? MUTED : PURPLE
+                    }
+                  />
+                </View>
+                <View style={styles.pushTextWrap}>
+                  <Text style={styles.pushTitle}>
+                    {pushStatus === 'unsupported'
                       ? t('profile.pushUnsupportedTitle')
                       : t('profile.pushPermissionTitle')}
-                </Text>
-                <Text style={styles.pushSubtitle}>
-                  {pushStatus === 'denied'
-                    ? t('profile.pushDeniedNote')
-                    : pushStatus === 'unsupported'
-                      ? t('profile.pushUnsupportedBody')
-                      : t('profile.pushPermissionDesc')}
-                </Text>
+                  </Text>
+                  <Text style={styles.pushSubtitle}>
+                    {pushStatus === 'denied'
+                      ? t('profile.pushDeniedNote')
+                      : pushStatus === 'unsupported'
+                        ? t('profile.pushUnsupportedBody')
+                        : t('profile.pushPermissionDesc')}
+                  </Text>
+                </View>
               </View>
+              {pushStatus === 'default' ? (
+                <Pressable
+                  onPress={handleEnablePush}
+                  disabled={pushActionLoading}
+                  style={({ pressed }) => [styles.pushActionBtn, pressed && { opacity: 0.85 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('profile.pushEnableBtn')}
+                >
+                  {pushActionLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.pushActionBtnText}>{t('profile.pushEnableBtn')}</Text>
+                  )}
+                </Pressable>
+              ) : null}
             </View>
-            {pushStatus === 'default' ? (
-              <Pressable
-                onPress={handleEnablePush}
-                disabled={pushActionLoading}
-                style={({ pressed }) => [styles.pushActionBtn, pressed && { opacity: 0.85 }]}
-                accessibilityRole="button"
-                accessibilityLabel={t('profile.pushEnableBtn')}
-              >
-                {pushActionLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.pushActionBtnText}>{t('profile.pushEnableBtn')}</Text>
-                )}
-              </Pressable>
-            ) : pushStatus === 'granted' ? (
-              <Pressable
-                onPress={handleTestPush}
-                disabled={pushActionLoading}
-                style={({ pressed }) => [styles.pushTestBtn, pressed && { opacity: 0.85 }]}
-                accessibilityRole="button"
-                accessibilityLabel={t('profile.pushTestBtn')}
-              >
-                {pushActionLoading ? (
-                  <ActivityIndicator size="small" color={PURPLE} />
-                ) : (
-                  <Text style={styles.pushTestBtnText}>{t('profile.pushTestBtn')}</Text>
-                )}
-              </Pressable>
-            ) : null}
-          </View>
+          ) : null}
 
           {filteredNotifications.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconWrap}>
-                <Feather name="bell-off" size={32} color={MUTED} />
+                <Feather name="bell-off" size={28} color={MUTED} />
               </View>
               <Text style={styles.emptyTitle}>
                 {notifications.length === 0
@@ -647,7 +600,6 @@ export default function NotificationsScreen() {
                 ]}
                 accessibilityRole="button"
               >
-                {/* Accent strip on left for unread */}
                 {!item.isRead ? <View style={styles.unreadLeftBar} /> : null}
 
                 <View style={[styles.notifIconWrap, { backgroundColor: item.iconBg }]}>
@@ -659,12 +611,9 @@ export default function NotificationsScreen() {
                 </View>
 
                 <View style={styles.notifCopy}>
-                  {/* Top row: Title + Time / Dot */}
                   <View style={styles.notifTopRow}>
                     <View style={styles.titleWrap}>
-                      <Text style={styles.notifTitle}>
-                        {item.title}
-                      </Text>
+                      <Text style={styles.notifTitle}>{item.title}</Text>
                       {item.codeBadge ? (
                         <View style={styles.codePill}>
                           <Text style={styles.codePillText}>{item.codeBadge}</Text>
@@ -678,7 +627,6 @@ export default function NotificationsScreen() {
                     </View>
                   </View>
 
-                  {/* Body description */}
                   <Text style={styles.notifBody} numberOfLines={3}>
                     {item.body}
                   </Text>
@@ -688,48 +636,6 @@ export default function NotificationsScreen() {
               </Pressable>
             ))
           )}
-
-          {/* Quick Shortcuts Section */}
-          <View style={styles.shortcutsCard}>
-            <Text style={styles.shortcutsTitle}>{t('profile.notifNowTitle')}</Text>
-
-            <Pressable
-              style={styles.shortcutRow}
-              onPress={() => router.push('/(tabs)/purchases')}
-            >
-              <View style={[styles.shortcutIcon, { backgroundColor: '#F3E8FF' }]}>
-                <MaterialCommunityIcons name="package-variant" size={18} color={PURPLE} />
-              </View>
-              <Text style={styles.shortcutText}>{t('profile.notifLinkOrders')}</Text>
-              <Feather name="chevron-right" size={16} color="#CBD5E1" />
-            </Pressable>
-
-            <View style={styles.divider} />
-
-            <Pressable
-              style={styles.shortcutRow}
-              onPress={() => router.push('/reminders')}
-            >
-              <View style={[styles.shortcutIcon, { backgroundColor: '#DBEAFE' }]}>
-                <MaterialCommunityIcons name="pill" size={18} color={BLUE} />
-              </View>
-              <Text style={styles.shortcutText}>{t('reminders.title')}</Text>
-              <Feather name="chevron-right" size={16} color="#CBD5E1" />
-            </Pressable>
-
-            <View style={styles.divider} />
-
-            <Pressable
-              style={styles.shortcutRow}
-              onPress={() => router.push('/cashback')}
-            >
-              <View style={[styles.shortcutIcon, { backgroundColor: '#FEF3C7' }]}>
-                <MaterialCommunityIcons name="wallet-outline" size={18} color="#D97706" />
-              </View>
-              <Text style={styles.shortcutText}>{t('profile.notifLinkCashback')}</Text>
-              <Feather name="chevron-right" size={16} color="#CBD5E1" />
-            </Pressable>
-          </View>
         </ScrollView>
       )}
 
@@ -1206,82 +1112,38 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   emptyState: {
-    backgroundColor: CARD,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 24,
+    paddingVertical: 48,
+    paddingHorizontal: 28,
     alignItems: 'center',
     gap: 8,
-    marginVertical: 12,
   },
   emptyIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#F3E8FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   emptyTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+    fontSize: 16,
     color: PURPLE_DEEP,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 12.5,
+    fontSize: 13,
     color: MUTED,
     textAlign: 'center',
-    lineHeight: 17,
-  },
-  shortcutsCard: {
-    backgroundColor: CARD,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#ECE7F6',
-    padding: 14,
-    marginTop: 8,
-    gap: 4,
-  },
-  shortcutsTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 13,
-    color: PURPLE_DEEP,
-    marginBottom: 6,
-    paddingHorizontal: 4,
-  },
-  shortcutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    gap: 12,
-  },
-  shortcutIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shortcutText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    color: PURPLE_DEEP,
-    flex: 1,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#F0F0F5',
+    lineHeight: 19,
+    maxWidth: 280,
   },
   pushCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 14,
-    marginBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1330,20 +1192,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
     color: '#FFFFFF',
-  },
-  pushTestBtn: {
-    backgroundColor: '#F3E8FF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E9D5FF',
-  },
-  pushTestBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    color: PURPLE,
   },
 });

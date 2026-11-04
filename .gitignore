@@ -76,3 +76,8 @@ artifacts/soglom-apteka/static-build/
 # scratch directory & archives
 scratch/
 
+
+# Desktop Electron build output
+desktop/release/
+desktop/node_modules/
+

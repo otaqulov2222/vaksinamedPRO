@@ -1,0 +1,53 @@
+{
+  "name": "vaksinamed-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VaksinaMed Windows desktop shell (Electron)",
+  "main": "main.cjs",
+  "author": "Vaksinameduz MCHJ",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis portable"
+  },
+  "build": {
+    "appId": "uz.vaksinamed.desktop",
+    "productName": "VaksinaMed",
+    "copyright": "Copyright © Vaksinameduz MCHJ",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VaksinaMed"
+    },
+    "portable": {
+      "artifactName": "VaksinaMed-Portable-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  }
+}

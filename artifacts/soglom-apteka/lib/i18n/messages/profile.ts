@@ -62,7 +62,7 @@ export default defineMessages({
 
     notifEmptyTitle: 'Bildirishnomalar hozircha yo‘q',
     notifEmptyBody:
-      'Buyurtmalaringiz holati, keshbek va yangi aksiyalar haqidagi barcha muhim xabarnomalar shu yerda ko‘rsatiladi.',
+      'Buyurtma holati, dori eslatmalari va keshbek bo‘yicha yangilanishlar shu yerda paydo bo‘ladi.',
     notifExpectTitle: 'Kutilayotgan yangiliklar',
     notifExpectBody:
       'Buyurtmalar, chegirmalar va yangi aksiyalar bo‘yicha bildirishnomalar.',
@@ -173,9 +173,9 @@ export default defineMessages({
     addressAddedSuccess: 'Manzil muvaffaqiyatli saqlandi',
     addressDeletedSuccess: 'Manzil o‘chirildi',
     pushPermissionTitle: 'Push-bildirishnomalar',
-    pushPermissionDesc: 'Buyurtma holati o‘zgarganda va dori ichish vaqti kelganda darhol xabardor bo‘ling.',
+    pushPermissionDesc: 'Buyurtma holati va dori eslatmalari uchun brauzer bildirishnomalarini yoqing.',
     pushEnableBtn: 'Yoqish',
-    pushEnabledStatus: 'Bildirishnomalar faol',
+    pushEnabledStatus: 'Bildirishnomalar yoqildi',
     pushTestBtn: 'Sinab ko‘rish',
     pushTestSent: 'Sinov bildirishnomasi yuborildi!',
     pushTestFailed: 'Sinov bildirishnomasini yuborib bo‘lmadi. Qayta urinib ko‘ring.',
@@ -256,7 +256,7 @@ export default defineMessages({
 
     notifEmptyTitle: 'Уведомлений пока нет',
     notifEmptyBody:
-      'Здесь будут появляться важные сообщения о статусе ваших заказов, начислении кэшбэка и новых акциях.',
+      'Здесь появятся обновления по статусу заказов, напоминаниям о лекарствах и кэшбэку.',
     notifExpectTitle: 'Ожидаемые обновления',
     notifExpectBody:
       'Уведомления о заказах, скидках и новых промо-акциях.',
@@ -367,7 +367,7 @@ export default defineMessages({
     addressAddedSuccess: 'Адрес успешно сохранён',
     addressDeletedSuccess: 'Адрес удалён',
     pushPermissionTitle: 'Push-уведомления',
-    pushPermissionDesc: 'Мгновенные уведомления об изменении статуса заказа и времени приема лекарств.',
+    pushPermissionDesc: 'Включите уведомления браузера для статуса заказов и напоминаний о лекарствах.',
     pushEnableBtn: 'Включить',
     pushEnabledStatus: 'Уведомления включены',
     pushTestBtn: 'Проверить',
@@ -450,7 +450,7 @@ export default defineMessages({
 
     notifEmptyTitle: 'No notifications yet',
     notifEmptyBody:
-      'Important updates regarding your orders, cashback rewards, and new promotions will appear here.',
+      'Order status updates, medicine reminders, and cashback activity will show up here.',
     notifExpectTitle: 'Coming updates',
     notifExpectBody:
       'Notifications about orders, discounts, and new promotions.',
@@ -561,9 +561,9 @@ export default defineMessages({
     addressAddedSuccess: 'Address saved successfully',
     addressDeletedSuccess: 'Address deleted',
     pushPermissionTitle: 'Push Notifications',
-    pushPermissionDesc: 'Get instant notifications for order updates and medication reminders.',
+    pushPermissionDesc: 'Enable browser notifications for order updates and medicine reminders.',
     pushEnableBtn: 'Enable',
-    pushEnabledStatus: 'Notifications active',
+    pushEnabledStatus: 'Notifications enabled',
     pushTestBtn: 'Test',
     pushTestSent: 'Test notification sent!',
     pushTestFailed: 'Could not send the test notification. Please try again.',
