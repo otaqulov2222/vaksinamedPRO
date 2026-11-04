@@ -31,18 +31,25 @@ git fetch --prune origin main
 
 LOCAL="$(git rev-parse HEAD)"
 REMOTE="$(git rev-parse origin/main)"
+DEPLOYED_MARKER="$ROOT/.last-live-deploy-commit"
+LAST_DEPLOYED="$(cat "$DEPLOYED_MARKER" 2>/dev/null || true)"
 
-if [[ "$LOCAL" == "$REMOTE" ]]; then
-  log "already on origin/main ($LOCAL) — nothing to do"
+# Skip only when git AND a successful prior rebuild already match origin/main.
+# (Previously HEAD could match while dist stayed stale — UI never updated.)
+if [[ "$LOCAL" == "$REMOTE" && "$LAST_DEPLOYED" == "$REMOTE" ]]; then
+  log "already deployed origin/main ($LOCAL) — nothing to do"
   exit 0
 fi
 
-log "updating $LOCAL → $REMOTE"
-
-# Source of truth is GitHub. Preserve only untracked env files.
-# Discard dirty tracked files left from manual SCP experiments.
-git reset --hard origin/main
-git clean -fd --exclude=.env --exclude='**/.env' --exclude=uploads --exclude='artifacts/soglom-apteka/dist'
+if [[ "$LOCAL" != "$REMOTE" ]]; then
+  log "updating $LOCAL → $REMOTE"
+  # Source of truth is GitHub. Preserve only untracked env files.
+  # Discard dirty tracked files left from manual SCP experiments.
+  git reset --hard origin/main
+  git clean -fd --exclude=.env --exclude='**/.env' --exclude=uploads --exclude='artifacts/soglom-apteka/dist' --exclude=.last-live-deploy-commit
+else
+  log "git already on origin/main ($REMOTE) but dist not marked deployed — rebuilding"
+fi
 
 # Install if lockfile / package graph changed (ignore broken Windows-only preinstall issues)
 if command -v pnpm >/dev/null 2>&1; then
@@ -75,5 +82,6 @@ if systemctl is-enabled vaksinamed-worker >/dev/null 2>&1; then
 fi
 
 ENTRY="$(grep -oE 'entry-[a-f0-9]+\.js' "$ROOT/artifacts/soglom-apteka/dist/index.html" | head -1 || true)"
+git rev-parse HEAD > "$DEPLOYED_MARKER"
 log "SUCCESS deployed $(git rev-parse --short HEAD) web=${ENTRY:-unknown}"
 logger -t "$LOG_TAG" "deployed $(git rev-parse --short HEAD) entry=${ENTRY:-unknown}"
