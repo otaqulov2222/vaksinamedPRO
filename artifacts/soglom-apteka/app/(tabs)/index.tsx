@@ -284,15 +284,6 @@ export default function HomeScreen() {
           underlineColorAndroid="transparent"
           accessibilityLabel={t('home.searchA11y')}
         />
-        <Pressable
-          onPress={() => router.push('/qr')}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.navMyQr')}
-          style={({ pressed }) => [styles.searchQrBtn, pressed && styles.pressed]}
-        >
-          <MaterialCommunityIcons name="qrcode" size={22} color={PURPLE} />
-        </Pressable>
       </View>
 
       {/* HERO 3D BANNER — Apple Store widescreen artwork with crisp vector typography */}
@@ -604,14 +595,6 @@ const styles = StyleSheet.create({
     color: PURPLE_DEEP,
     paddingVertical: 0,
     outlineStyle: 'none' as any,
-  },
-  searchQrBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8F5FC',
   },
 
   heroWrap: {

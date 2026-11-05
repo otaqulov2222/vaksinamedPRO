@@ -220,9 +220,8 @@ export default function CashbackScreen() {
         <Text style={[styles.barTitle, !scrolled && styles.barTitleHidden]} numberOfLines={1} importantForAccessibility="no" aria-hidden>
           {t('common.navCashback')}
         </Text>
-        <Pressable onPress={goQr} style={styles.navBtn} hitSlop={6} accessibilityRole="button" accessibilityLabel={t('common.navMyQr')}>
-          <QrIcon size={20} color={PRIMARY} strokeWidth={1.9} />
-        </Pressable>
+        {/* Spacer mirrors back button width so the title stays centered. QR lives in the tab bar. */}
+        <View style={styles.navBtn} importantForAccessibility="no" accessibilityElementsHidden />
       </View>
 
       <ScrollView
