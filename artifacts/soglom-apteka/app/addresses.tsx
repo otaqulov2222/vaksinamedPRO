@@ -182,10 +182,6 @@ export default function AddressesScreen() {
           <Feather name="plus" size={18} color="#FFFFFF" />
           <Text style={styles.addBtnText}>{t('profile.addAddress')}</Text>
         </Pressable>
-
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))} style={styles.backLink}>
-          <Text style={styles.backLinkText}>{t('common.back')}</Text>
-        </Pressable>
       </ScrollView>
 
       <DeliveryMapPickerModal
@@ -233,6 +229,4 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addBtnText: { fontFamily: 'Inter_700Bold', fontSize: 15, color: '#FFFFFF' },
-  backLink: { alignItems: 'center', paddingVertical: 12 },
-  backLinkText: { fontFamily: 'Inter_500Medium', fontSize: 14, color: MUTED },
 });
