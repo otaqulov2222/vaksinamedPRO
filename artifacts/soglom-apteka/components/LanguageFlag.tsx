@@ -1,58 +1,108 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import type { Language } from '@/lib/languages';
 
 type Props = {
   language: Language;
-  /** Flag height in px; width is ~1.45× height. */
+  /** Flag height in px; width is ~1.6× height (readable canton for UZ symbols). */
   size?: number;
 };
 
 /**
  * Drawable language flags (no emoji).
  * Windows/web often render 🇺🇿 as the letters "UZ", which collides with shortCode "UZ".
+ * Uzbekistan includes crescent + 12 stars — state emblem details must stay intact.
  */
 export function LanguageFlag({ language, size = 16 }: Props) {
-  const w = Math.round(size * 1.45);
   const h = Math.round(size);
+  const w = Math.round(size * 1.6);
 
   return (
     <View
-      style={[styles.frame, { width: w, height: h, borderRadius: Math.max(2, Math.round(size * 0.18)) }]}
+      style={[styles.frame, { width: w, height: h, borderRadius: Math.max(2, Math.round(size * 0.14)) }]}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      {FLAGS[language] ?? <EnFlag />}
+      {language === 'uz' ? <UzFlag w={w} h={h} /> : null}
+      {language === 'ru' ? <RuFlag w={w} h={h} /> : null}
+      {language === 'en' ? <EnFlag /> : null}
     </View>
   );
 }
 
-const FLAGS: Record<Language, React.ReactElement> = {
-  uz: <UzFlag />,
-  ru: <RuFlag />,
-  en: <EnFlag />,
-};
+/** Official UZ layout: blue / white / green, red fimbriations, crescent + 12 stars (3·4·5). */
+function UzFlag({ w, h }: { w: number; h: number }) {
+  const band = h / 3;
+  const red = Math.max(1, Math.round(h * 0.04));
+  const cantonH = band;
+  // Crescent in the blue band, left side (hoist).
+  const cy = cantonH * 0.5;
+  const cx = w * 0.16;
+  const rOuter = Math.max(2.2, cantonH * 0.28);
+  const rInner = rOuter * 0.72;
+  const innerCx = cx + rOuter * 0.32;
 
-function UzFlag() {
-  // Uzbekistan: sky blue / white / green with thin red fimbriations.
+  // 12 five-pointed stars: rows of 3, 4, 5 to the right of the crescent.
+  const starR = Math.max(0.85, Math.min(2.2, cantonH * 0.085));
+  const starCols = [3, 4, 5] as const;
+  const starOriginX = cx + rOuter * 1.15;
+  const starGapX = Math.max(starR * 2.35, w * 0.055);
+  const starGapY = Math.max(starR * 2.1, cantonH * 0.22);
+  const starTop = cy - starGapY;
+
+  const stars: { x: number; y: number }[] = [];
+  starCols.forEach((count, row) => {
+    const y = starTop + row * starGapY;
+    const rowWidth = (count - 1) * starGapX;
+    const startX = starOriginX + (starCols[2] - 1) * starGapX * 0.5 - rowWidth * 0.5;
+    for (let i = 0; i < count; i++) {
+      stars.push({ x: startX + i * starGapX, y });
+    }
+  });
+
   return (
-    <View style={styles.fill}>
-      <View style={{ flex: 1, backgroundColor: '#0099B5' }} />
-      <View style={styles.fimbriation} />
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }} />
-      <View style={styles.fimbriation} />
-      <View style={{ flex: 1, backgroundColor: '#1EB53A' }} />
-    </View>
+    <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      <Rect x={0} y={0} width={w} height={band} fill="#0099B5" />
+      <Rect x={0} y={band} width={w} height={band} fill="#FFFFFF" />
+      <Rect x={0} y={band * 2} width={w} height={band} fill="#1EB53A" />
+      <Rect x={0} y={band - red / 2} width={w} height={red} fill="#CE1126" />
+      <Rect x={0} y={band * 2 - red / 2} width={w} height={red} fill="#CE1126" />
+
+      {/* Crescent: white disc minus offset disc (opens toward stars / fly). */}
+      <Circle cx={cx} cy={cy} r={rOuter} fill="#FFFFFF" />
+      <Circle cx={innerCx} cy={cy} r={rInner} fill="#0099B5" />
+
+      {stars.map((s, i) => (
+        <Path key={i} d={starPath(s.x, s.y, starR)} fill="#FFFFFF" />
+      ))}
+    </Svg>
   );
 }
 
-function RuFlag() {
+function starPath(cx: number, cy: number, r: number) {
+  const points: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const outer = ((-90 + i * 72) * Math.PI) / 180;
+    const inner = ((-90 + i * 72 + 36) * Math.PI) / 180;
+    const ox = cx + r * Math.cos(outer);
+    const oy = cy + r * Math.sin(outer);
+    const ix = cx + r * 0.4 * Math.cos(inner);
+    const iy = cy + r * 0.4 * Math.sin(inner);
+    points.push(`${i === 0 ? 'M' : 'L'}${ox.toFixed(2)} ${oy.toFixed(2)}`);
+    points.push(`L${ix.toFixed(2)} ${iy.toFixed(2)}`);
+  }
+  return `${points.join(' ')} Z`;
+}
+
+function RuFlag({ w, h }: { w: number; h: number }) {
+  const band = h / 3;
   return (
-    <View style={styles.fill}>
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }} />
-      <View style={{ flex: 1, backgroundColor: '#0039A6' }} />
-      <View style={{ flex: 1, backgroundColor: '#D52B1E' }} />
-    </View>
+    <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      <Rect x={0} y={0} width={w} height={band} fill="#FFFFFF" />
+      <Rect x={0} y={band} width={w} height={band} fill="#0039A6" />
+      <Rect x={0} y={band * 2} width={w} height={band} fill="#D52B1E" />
+    </Svg>
   );
 }
 
@@ -80,7 +130,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEF0F6',
   },
   fill: { flex: 1, width: '100%', height: '100%' },
-  fimbriation: { height: 1, backgroundColor: '#CE1126' },
   ukDiagWhiteA: {
     position: 'absolute',
     width: '140%',

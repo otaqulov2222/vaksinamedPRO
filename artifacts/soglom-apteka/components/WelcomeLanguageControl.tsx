@@ -26,7 +26,7 @@ export function WelcomeLanguageControl({ language, onPress }: Props) {
       testID="welcome-language"
     >
       <View style={styles.flag}>
-        <LanguageFlag language={language} size={24} />
+        <LanguageFlag language={language} size={28} />
       </View>
     </Pressable>
   );
