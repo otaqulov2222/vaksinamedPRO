@@ -77,13 +77,14 @@ export function useEntryAnimation(distance = 10) {
 }
 
 /*
- * Backdrop: 390×844, slice-scaled. Brand lockup lives ~y 180–480 — keep that band free of
- * high-contrast shapes and never put a soft disc behind the logo (reads as a glow).
- * Hero is bold edge geometry; quiet is the same language at lower intensity for forms.
+ * Backdrop: 390×844, slice-scaled. Brand lockup ~y 180–480 stays clear — no soft disc
+ * behind the logo, no yellow blur “spots” (those read as defects).
+ * Hero: layered planes + precision orbits + one sharp brand-yellow stroke.
+ * Quiet: same language, lower intensity for forms.
  */
-const BACKDROP_BASE = '#F7F4FC';
-const BACKDROP_MID = '#EDE6F8';
-const BACKDROP_DEPTH = '#E2D8F2';
+const BACKDROP_BASE = '#F6F3FB';
+const BACKDROP_MID = '#EBE4F6';
+const BACKDROP_DEPTH = '#DDD3EF';
 const LAVENDER = '#B9A3E3';
 const LAVENDER_DEEP = '#8B6BC4';
 
@@ -105,69 +106,67 @@ const crossPath = (cx: number, cy: number, arm: number, half: number) =>
   `M${cx - half} ${cy - arm} H${cx + half} V${cy - half} H${cx + arm} V${cy + half} H${cx + half} V${cy + arm} ` +
   `H${cx - half} V${cy + half} H${cx - arm} V${cy - half} H${cx - half} Z`;
 
-/** Top-left atmosphere + open rings echoing the brand symbol. */
-const TL = { x: -90, y: -110 };
+const TL = { x: -70, y: -80 };
 const TOP_RING = [
-  arcPath(TL.x, TL.y, 280, 12, 78),
-  arcPath(TL.x, TL.y, 310, 8, 42),
-  arcPath(TL.x, TL.y, 310, 48, 88),
-  arcPath(TL.x, TL.y, 348, 18, 70),
+  arcPath(TL.x, TL.y, 260, 8, 82),
+  arcPath(TL.x, TL.y, 300, 14, 55),
+  arcPath(TL.x, TL.y, 300, 62, 95),
+  arcPath(TL.x, TL.y, 340, 22, 78),
 ];
-/** Bottom-left sweep: filled band + measurement rings + yellow accent. */
-const BL = { x: -40, y: 920 };
-const BAND_INNER = 220;
-const BAND_OUTER = 400;
-const LOW_BAND = bandPath(BL.x, BL.y, BAND_INNER, BAND_OUTER, -108, 18);
-const LOW_BAND_EDGE = arcPath(BL.x, BL.y, BAND_OUTER, -108, 18);
+const BL = { x: -20, y: 900 };
+const BAND_INNER = 200;
+const BAND_OUTER = 380;
+const LOW_BAND = bandPath(BL.x, BL.y, BAND_INNER, BAND_OUTER, -112, 22);
+const LOW_BAND_EDGE = arcPath(BL.x, BL.y, BAND_OUTER, -112, 22);
 const LOW_RING = [
-  arcPath(BL.x, BL.y, 430, -108, -58),
-  arcPath(BL.x, BL.y, 430, -50, 18),
-  arcPath(BL.x, BL.y, 460, -95, -70),
-  arcPath(BL.x, BL.y, 460, -62, 12),
+  arcPath(BL.x, BL.y, 420, -112, -55),
+  arcPath(BL.x, BL.y, 420, -48, 22),
+  arcPath(BL.x, BL.y, 455, -100, -68),
+  arcPath(BL.x, BL.y, 455, -58, 16),
 ];
-const LIGHT_MARKER = arcPath(BL.x, BL.y, 430, -84, -72);
-const LIGHT_SOURCE = { x: 96, y: 548 };
-/** Top-right secondary orbit (hero only). */
-const TR = { x: 420, y: 40 };
+/** Sharp brand accent on the orbit — a stroke, never a soft yellow blob. */
+const YELLOW_ACCENT = arcPath(BL.x, BL.y, 420, -78, -68);
+const TR = { x: 430, y: 20 };
 const TOP_RIGHT_RING = [
-  arcPath(TR.x, TR.y, 160, 110, 200),
-  arcPath(TR.x, TR.y, 190, 100, 175),
-  arcPath(TR.x, TR.y, 190, 185, 220),
+  arcPath(TR.x, TR.y, 150, 115, 205),
+  arcPath(TR.x, TR.y, 185, 105, 170),
+  arcPath(TR.x, TR.y, 185, 180, 225),
 ];
-/** Bottom-right protection form. */
-const SHIELD = shieldPath(348, 500, 96, 230);
-const SHIELD_INNER = shieldPath(348, 524, 74, 180);
-const SHIELD_CROSS = crossPath(348, 600, 22, 7);
+const SHIELD = shieldPath(340, 530, 88, 210);
+const SHIELD_INNER = shieldPath(340, 552, 68, 166);
+const SHIELD_CROSS = crossPath(340, 620, 20, 6);
+/** Diagonal glass plane behind CTAs (hero). */
+const GLASS_PLANE = 'M-40 620 L260 480 L320 520 L20 700 Z';
+const GLASS_PLANE_EDGE = 'M-40 620 L260 480';
 
 /**
  * Brand environment for auth surfaces.
- * Hero: strong edge composition for Welcome. Quiet: softer for login/register forms.
  */
 export function AuthBackdrop({ variant = 'hero' }: { variant?: 'hero' | 'quiet' }) {
   const hero = variant === 'hero';
-  const k = hero ? 1 : 0.45;
+  const k = hero ? 1 : 0.42;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Svg width="100%" height="100%" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice">
         <Defs>
-          <LinearGradient id={`base-${variant}`} x1="0" y1="0" x2="0.35" y2="1">
-            <Stop offset="0" stopColor={hero ? '#EFE8FA' : BACKDROP_BASE} />
-            <Stop offset="0.45" stopColor={BACKDROP_BASE} />
+          <LinearGradient id={`base-${variant}`} x1="0.15" y1="0" x2="0.85" y2="1">
+            <Stop offset="0" stopColor={hero ? '#E8E0F6' : BACKDROP_BASE} />
+            <Stop offset="0.4" stopColor={BACKDROP_BASE} />
             <Stop offset="1" stopColor={hero ? BACKDROP_DEPTH : BACKDROP_MID} />
           </LinearGradient>
-          <LinearGradient id={`wash-${variant}`} x1="1" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={C.primary} stopOpacity={hero ? 0.1 : 0.04} />
-            <Stop offset="0.55" stopColor={LAVENDER} stopOpacity={0} />
-            <Stop offset="1" stopColor={C.yellow} stopOpacity={hero ? 0.06 : 0.02} />
+          <LinearGradient id={`wash-${variant}`} x1="1" y1="0" x2="0" y2="0.9">
+            <Stop offset="0" stopColor={C.primary} stopOpacity={hero ? 0.14 : 0.05} />
+            <Stop offset="0.5" stopColor={LAVENDER} stopOpacity={0} />
+            <Stop offset="1" stopColor={C.deep} stopOpacity={hero ? 0.06 : 0.02} />
           </LinearGradient>
           <RadialGradient id={`field-${variant}`} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0.35" stopColor={LAVENDER_DEEP} stopOpacity={0.22 * k} />
-            <Stop offset="0.7" stopColor={LAVENDER} stopOpacity={0.28 * k} />
+            <Stop offset="0.3" stopColor={LAVENDER_DEEP} stopOpacity={0.26 * k} />
+            <Stop offset="0.75" stopColor={LAVENDER} stopOpacity={0.22 * k} />
             <Stop offset="1" stopColor={LAVENDER} stopOpacity={0} />
           </RadialGradient>
           <RadialGradient id={`corner-${variant}`} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0.2" stopColor={C.primary} stopOpacity={0.18 * k} />
-            <Stop offset="0.75" stopColor={LAVENDER} stopOpacity={0.12 * k} />
+            <Stop offset="0.15" stopColor={C.primary} stopOpacity={0.2 * k} />
+            <Stop offset="0.7" stopColor={LAVENDER} stopOpacity={0.12 * k} />
             <Stop offset="1" stopColor={LAVENDER} stopOpacity={0} />
           </RadialGradient>
           <RadialGradient
@@ -180,48 +179,46 @@ export function AuthBackdrop({ variant = 'hero' }: { variant?: 'hero' | 'quiet' 
             gradientUnits="userSpaceOnUse"
           >
             <Stop offset={BAND_INNER / BAND_OUTER} stopColor={LAVENDER} stopOpacity={0} />
-            <Stop offset="0.88" stopColor={LAVENDER} stopOpacity={0.42 * k} />
-            <Stop offset="1" stopColor={C.primary} stopOpacity={0.22 * k} />
+            <Stop offset="0.9" stopColor={LAVENDER} stopOpacity={0.38 * k} />
+            <Stop offset="1" stopColor={C.primary} stopOpacity={0.2 * k} />
           </RadialGradient>
           <RadialGradient id={`depth-${variant}`} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0.4" stopColor={LAVENDER_DEEP} stopOpacity={0.16 * k} />
-            <Stop offset="0.85" stopColor={LAVENDER} stopOpacity={0.1 * k} />
+            <Stop offset="0.35" stopColor={LAVENDER_DEEP} stopOpacity={0.14 * k} />
+            <Stop offset="0.85" stopColor={LAVENDER} stopOpacity={0.08 * k} />
             <Stop offset="1" stopColor={LAVENDER} stopOpacity={0} />
           </RadialGradient>
-          <RadialGradient id={`light-${variant}`} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0" stopColor={C.yellow} stopOpacity={hero ? 0.45 : 0.18} />
-            <Stop offset="0.55" stopColor={C.yellow} stopOpacity={0.12} />
-            <Stop offset="1" stopColor={C.yellow} stopOpacity={0} />
-          </RadialGradient>
+          <LinearGradient id={`plane-${variant}`} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={C.surface} stopOpacity={0.55} />
+            <Stop offset="1" stopColor={LAVENDER} stopOpacity={0.18} />
+          </LinearGradient>
           <LinearGradient id={`glass-${variant}`} x1="0" y1="0" x2="0.85" y2="1">
-            <Stop offset="0" stopColor={C.surface} stopOpacity={0.78} />
-            <Stop offset="0.55" stopColor={LAVENDER} stopOpacity={0.28} />
-            <Stop offset="1" stopColor={C.primary} stopOpacity={0.12} />
+            <Stop offset="0" stopColor={C.surface} stopOpacity={0.72} />
+            <Stop offset="0.55" stopColor={LAVENDER} stopOpacity={0.22} />
+            <Stop offset="1" stopColor={C.primary} stopOpacity={0.1} />
           </LinearGradient>
           <LinearGradient id={`glassEdge-${variant}`} x1="0" y1="0" x2="0.8" y2="1">
-            <Stop offset="0" stopColor={C.primary} stopOpacity={0.12} />
-            <Stop offset="1" stopColor={C.primary} stopOpacity={0.32} />
+            <Stop offset="0" stopColor={C.primary} stopOpacity={0.1} />
+            <Stop offset="1" stopColor={C.primary} stopOpacity={0.28} />
           </LinearGradient>
         </Defs>
 
-        {/* Depth 1: tonal field — corners carry color; center stays open for the logo. */}
         <Rect x="0" y="0" width="390" height="844" fill={`url(#base-${variant})`} />
         <Rect x="0" y="0" width="390" height="844" fill={`url(#wash-${variant})`} />
-        <Circle cx={TL.x} cy={TL.y} r={300} fill={`url(#field-${variant})`} />
-        {hero ? <Circle cx={TR.x} cy={TR.y} r={200} fill={`url(#corner-${variant})`} /> : null}
-        <Ellipse cx={20} cy={780} rx={260} ry={200} fill={`url(#depth-${variant})`} />
+        <Circle cx={TL.x} cy={TL.y} r={290} fill={`url(#field-${variant})`} />
+        {hero ? <Circle cx={TR.x} cy={TR.y} r={190} fill={`url(#corner-${variant})`} /> : null}
+        <Ellipse cx={10} cy={800} rx={240} ry={190} fill={`url(#depth-${variant})`} />
 
-        {/* Depth 2: filled sweep + open brand rings */}
         <Path d={LOW_BAND} fill={`url(#band-${variant})`} />
         <Path d={LOW_BAND_EDGE} fill="none" stroke={C.surface} strokeOpacity={0.95} strokeWidth={1.5} />
+
         {TOP_RING.map((d, i) => (
           <Path
             key={`tr-${i}`}
             d={d}
             fill="none"
             stroke={i === 0 ? LAVENDER_DEEP : C.primary}
-            strokeOpacity={(i === 0 ? 0.28 : 0.2) * k}
-            strokeWidth={i === 2 ? 1.5 : 1.25}
+            strokeOpacity={(i === 0 ? 0.32 : 0.2) * k}
+            strokeWidth={i === 3 ? 1.6 : 1.2}
             strokeLinecap="round"
           />
         ))}
@@ -231,8 +228,8 @@ export function AuthBackdrop({ variant = 'hero' }: { variant?: 'hero' | 'quiet' 
             d={d}
             fill="none"
             stroke={C.primary}
-            strokeOpacity={(0.18 + (i % 2) * 0.08) * k}
-            strokeWidth={1.25}
+            strokeOpacity={(0.16 + (i % 2) * 0.1) * k}
+            strokeWidth={1.2}
             strokeLinecap="round"
           />
         ))}
@@ -245,18 +242,22 @@ export function AuthBackdrop({ variant = 'hero' }: { variant?: 'hero' | 'quiet' 
                 d={d}
                 fill="none"
                 stroke={C.primary}
-                strokeOpacity={0.22}
-                strokeWidth={1.2}
+                strokeOpacity={0.2}
+                strokeWidth={1.15}
                 strokeLinecap="round"
               />
             ))}
 
-            <Circle cx={LIGHT_SOURCE.x} cy={LIGHT_SOURCE.y} r={36} fill={`url(#light-${variant})`} />
-            <Path d={LIGHT_MARKER} fill="none" stroke={C.yellow} strokeOpacity={0.95} strokeWidth={2.25} strokeLinecap="round" />
+            {/* Diagonal glass plane — structure, not decoration blob */}
+            <Path d={GLASS_PLANE} fill={`url(#plane-${variant})`} />
+            <Path d={GLASS_PLANE_EDGE} fill="none" stroke={C.surface} strokeOpacity={0.9} strokeWidth={1.25} />
 
-            <Path d={SHIELD} fill={`url(#glass-${variant})`} stroke={`url(#glassEdge-${variant})`} strokeWidth={1.25} />
-            <Path d={SHIELD_INNER} fill="none" stroke={C.surface} strokeOpacity={0.9} strokeWidth={1.1} />
-            <Path d={SHIELD_CROSS} fill="none" stroke={C.primary} strokeOpacity={0.22} strokeWidth={1.25} strokeLinejoin="round" />
+            {/* One crisp yellow accent on the orbit (replaces old soft yellow spot). */}
+            <Path d={YELLOW_ACCENT} fill="none" stroke={C.yellow} strokeOpacity={0.95} strokeWidth={2.5} strokeLinecap="round" />
+
+            <Path d={SHIELD} fill={`url(#glass-${variant})`} stroke={`url(#glassEdge-${variant})`} strokeWidth={1.2} />
+            <Path d={SHIELD_INNER} fill="none" stroke={C.surface} strokeOpacity={0.88} strokeWidth={1} />
+            <Path d={SHIELD_CROSS} fill="none" stroke={C.primary} strokeOpacity={0.2} strokeWidth={1.2} strokeLinejoin="round" />
           </>
         ) : null}
       </Svg>
