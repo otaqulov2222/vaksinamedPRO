@@ -4,8 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { LanguageBadge } from '@/components/LanguageBadge';
-import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
+import { WelcomeLanguageControl } from '@/components/WelcomeLanguageControl';
 import {
   AUTH_COLORS as C,
   AuthBackdrop,
@@ -20,7 +19,7 @@ import {
 import type { Language } from '@/lib/languages';
 
 const MAX_WIDTH = 440;
-const TAGLINE_HEIGHT = 32;
+const TAGLINE_HEIGHT = 36;
 
 /** The full brand reveal plays once per app session; later visits use the short entry. */
 let revealedThisSession = false;
@@ -30,9 +29,8 @@ const at = (delay: number, anim: Animated.CompositeAnimation) => Animated.sequen
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
-  const { t, language } = useApp();
+  const { t, language, setLanguage } = useApp();
   const { height: winH } = useWindowDimensions();
-  const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
 
   const cold = useRef(!revealedThisSession).current;
   // The native splash already shows the symbol centred on the same background, so the reveal continues from it.
@@ -145,7 +143,10 @@ export default function WelcomeScreen() {
 
       <View style={styles.frame}>
         <Animated.View style={[styles.topBar, { top: topPad, opacity: v.topOpacity }]}>
-          <LanguageBadge language={language as Language} onPress={() => setLanguageSheetOpen(true)} />
+          <WelcomeLanguageControl
+            language={language as Language}
+            onChange={(code) => setLanguage(code)}
+          />
         </Animated.View>
 
         <Animated.View
@@ -155,6 +156,7 @@ export default function WelcomeScreen() {
           accessibilityLabel={t('common.appName')}
           testID="welcome-brand"
         >
+          {/* Brand mark + wordmark are fixed assets — never swap by language. */}
           <Animated.View style={{ opacity: v.symbolOpacity, transform: [{ scale: v.symbolScale }] }}>
             <Image source={BRAND_SYMBOL} style={{ width: symbolW, height: symbolH }} contentFit="contain" transition={0} />
           </Animated.View>
@@ -193,8 +195,6 @@ export default function WelcomeScreen() {
       {revealing ? (
         <Pressable style={StyleSheet.absoluteFill} onPress={settle} accessible={false} importantForAccessibility="no" />
       ) : null}
-
-      <LanguagePickerSheet visible={languageSheetOpen} onClose={() => setLanguageSheetOpen(false)} />
     </View>
   );
 }
@@ -202,13 +202,13 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.soft, overflow: 'hidden' },
   frame: { flex: 1, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
-  topBar: { position: 'absolute', right: 24 },
+  topBar: { position: 'absolute', right: 20 },
   group: { position: 'absolute', left: 24, right: 24, alignItems: 'center' },
   tagline: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 10.5,
     lineHeight: TAGLINE_HEIGHT / 2,
-    letterSpacing: 2,
+    letterSpacing: 1.4,
     textAlign: 'center',
     color: 'rgba(75,36,138,0.62)',
   },
