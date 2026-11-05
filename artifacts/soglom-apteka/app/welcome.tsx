@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
+import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
 import { WelcomeLanguageControl } from '@/components/WelcomeLanguageControl';
 import {
   AUTH_COLORS as C,
@@ -29,8 +30,9 @@ const at = (delay: number, anim: Animated.CompositeAnimation) => Animated.sequen
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
-  const { t, language, setLanguage } = useApp();
+  const { t, language } = useApp();
   const { height: winH } = useWindowDimensions();
+  const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
 
   const cold = useRef(!revealedThisSession).current;
   // The native splash already shows the symbol centred on the same background, so the reveal continues from it.
@@ -145,7 +147,7 @@ export default function WelcomeScreen() {
         <Animated.View style={[styles.topBar, { top: topPad, opacity: v.topOpacity }]}>
           <WelcomeLanguageControl
             language={language as Language}
-            onChange={(code) => setLanguage(code)}
+            onPress={() => setLanguageSheetOpen(true)}
           />
         </Animated.View>
 
@@ -195,6 +197,8 @@ export default function WelcomeScreen() {
       {revealing ? (
         <Pressable style={StyleSheet.absoluteFill} onPress={settle} accessible={false} importantForAccessibility="no" />
       ) : null}
+
+      <LanguagePickerSheet visible={languageSheetOpen} onClose={() => setLanguageSheetOpen(false)} />
     </View>
   );
 }
