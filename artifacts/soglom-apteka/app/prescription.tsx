@@ -30,6 +30,41 @@ const CARD_BG = '#FFFFFF';
 const BG = '#F8F9FD';
 const KEY_ENTER = 'Enter'; // i18n-ignore
 
+type ChatLang = 'uz' | 'ru' | 'en';
+
+/** Detect mid-chat "speak Uzbek/Russian/English" requests (typos like gapr OK). */
+function detectChatLanguageSwitch(text: string): ChatLang | null {
+  const q = text.trim();
+  if (!q) return null;
+  const isSwitch =
+    /(?:tilida|speak|язык|language|по-узбек|по-русск|по-англ|o['`ʼ]?zbekcha|ruscha|inglizcha).{0,30}(?:gap\w*|javob|speak|ответь|пиши|yoz|please)|(?:gap\w*|javob|speak|ответь).{0,20}(?:o['`ʼ]?zbek|uzbek|rus|russian|ingliz|english|узбек|русск|англ)/i.test(
+      q,
+    );
+  if (!isSwitch) return null;
+  if (
+    /(?:o['`ʼ]?zbek|uzbek|узбек).{0,24}(?:til|язык|language|cha)|(?:tilida|на узбекском|in uzbek|по-узбекски).{0,24}(?:gap\w*|javob|speak)|speak\s*uzbek|o['`ʼ]?zbekcha\s*(?:gap\w*|javob)/i.test(
+      q,
+    )
+  ) {
+    return 'uz';
+  }
+  if (
+    /(?:rus(?:cha|til)?|русск|russian).{0,24}(?:til|язык|language)|(?:tilida|на русском|in russian|по-русски).{0,24}(?:gap\w*|javob|speak)|speak\s*russian/i.test(
+      q,
+    )
+  ) {
+    return 'ru';
+  }
+  if (
+    /(?:ingliz|english|англ).{0,24}(?:til|язык|language)|(?:tilida|in english|на английском|по-английски).{0,24}(?:gap\w*|javob|speak)|speak\s*english/i.test(
+      q,
+    )
+  ) {
+    return 'en';
+  }
+  return null;
+}
+
 export interface ChatProductItem {
   id: number;
   sku: string;
@@ -89,7 +124,7 @@ function renderFormattedMessageText(text: string, isUser: boolean) {
 
 export default function PrescriptionScreen() {
   const insets = useSafeAreaInsets();
-  const { t, fmt, language, refresh } = useApp();
+  const { t, fmt, language, setLanguage, refresh } = useApp();
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -226,10 +261,16 @@ export default function PrescriptionScreen() {
     scrollToBottom();
 
     try {
+      const switched = detectChatLanguageSwitch(trimmed);
+      const requestLanguage: ChatLang = switched || language;
+      if (switched && switched !== language) {
+        setLanguage(switched);
+      }
+
       const res = await api.aiPrescriptionChat({
         message: trimmed,
         image: imagePayload,
-        language,
+        language: requestLanguage,
       });
 
       const assistantMsg: ChatMessage = {

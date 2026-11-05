@@ -233,16 +233,93 @@ export function isExplicitMedicinePurchaseRequest(query: string): boolean {
   );
 }
 
+/** If the user asks mid-chat to switch language, honour that over the app locale. */
+export function detectReplyLanguage(
+  message: string,
+  fallback: "uz" | "ru" | "en" = "uz",
+): "uz" | "ru" | "en" {
+  const q = normalizeQuery(message);
+  // "gap" / "gapr" / "gapir" typos + common switch phrases
+  if (
+    /(?:o['`ʼ]?zbek|uzbek|узбек).{0,24}(?:til|язык|language|cha)|(?:tilida|на узбекском|in uzbek|по-узбекски).{0,24}(?:gap\w*|javob|speak|ответь|пиши|yoz)|speak\s*uzbek|javob.*o['`ʼ]?zbek|o['`ʼ]?zbekcha\s*(?:gap\w*|javob|yoz)/i.test(
+      q,
+    )
+  ) {
+    return "uz";
+  }
+  if (
+    /(?:rus(?:cha|til)?|русск|russian).{0,24}(?:til|язык|language|gap\w*|javob|speak|ответь|пиши|yoz)|(?:tilida|на русском|in russian|по-русски).{0,24}(?:gap\w*|javob|speak|ответь|пиши|yoz)|speak\s*russian|javob.*rus|ruscha\s*(?:gap\w*|javob|yoz)/i.test(
+      q,
+    )
+  ) {
+    return "ru";
+  }
+  if (
+    /(?:ingliz|english|англ).{0,24}(?:til|язык|language|gap\w*|javob|speak|ответь|пиши|yoz)|(?:tilida|in english|на английском|по-английски).{0,24}(?:gap\w*|javob|speak|ответь|пиши|yoz)|speak\s*english|javob.*ingliz|inglizcha\s*(?:gap\w*|javob|yoz)/i.test(
+      q,
+    )
+  ) {
+    return "en";
+  }
+  return fallback;
+}
+
+/** True when the message is primarily asking the assistant to switch reply language. */
+export function isLanguageSwitchRequest(message: string): boolean {
+  const q = normalizeQuery(message);
+  return /(?:tilida|speak|язык|language|по-узбек|по-русск|по-англ|o['`ʼ]?zbekcha|ruscha|inglizcha).{0,30}(?:gap\w*|javob|speak|ответь|пиши|yoz|please)|(?:gap\w*|javob|speak|ответь).{0,20}(?:o['`ʼ]?zbek|uzbek|rus|russian|ingliz|english|узбек|русск|англ)/i.test(
+    q,
+  );
+}
+
 export function handleAiMedicalChat(params: {
   message?: string;
   image?: string;
   language?: "uz" | "ru" | "en";
   candidates: CatalogProductCandidate[];
 }): AiChatResponse {
-  const lang = params.language || "uz";
+  const appLang = params.language || "uz";
   const userText = String(params.message || "").trim();
   const qNorm = normalizeQuery(userText);
   const hasImage = Boolean(params.image && params.image.trim().length > 0);
+
+  // 0.-1 LANGUAGE SWITCH INTENT (e.g. "ozbek tilida gapr", "speak English")
+  const switchedLang = detectReplyLanguage(userText, appLang);
+  if (!hasImage && isLanguageSwitchRequest(userText)) {
+    let reply = "";
+    if (switchedLang === "ru") {
+      reply =
+        "Хорошо — дальше отвечаю на русском 🩺.\n\nЯ медицинский ИИ-консультант VaksinaMed. Опишите симптомы, лекарство или пришлите фото рецепта — помогу с дозировкой и наличием в аптеках.\n\n⚠️ Рекомендации информационные; перед приёмом препаратов проконсультируйтесь с врачом.";
+    } else if (switchedLang === "en") {
+      reply =
+        "Sure — I will continue in English 🩺.\n\nI am the VaksinaMed Medical AI Consultant. Tell me your symptoms, a medicine name, or send a prescription photo and I will help with guidance and stock.\n\n⚠️ Advice is informational only; consult a doctor before taking medicines.";
+    } else {
+      reply =
+        "Xo‘p — bundan keyin o‘zbekcha javob beraman 🩺.\n\nMen VaksinaMed sun‘iy intellekt tibbiy maslahatchisiman. Alomatlaringizni, dori nomini yozing yoki retsept suratini yuboring — doza va dorixonadagi mavjudlik bo‘yicha yordam beraman.\n\n⚠️ Maslahatlar tavsiyaviy; dori qabul qilishdan oldin shifokor bilan maslahatlashing.";
+    }
+    return {
+      success: true,
+      reply,
+      isMedical: true,
+      isPrescription: false,
+      matchedProducts: [],
+      quickSuggestions: [
+        switchedLang === "ru"
+          ? "Сфотографировать рецепт"
+          : switchedLang === "en"
+            ? "Scan prescription"
+            : "Retseptni rasmga olish",
+        switchedLang === "ru"
+          ? "Симптомы простуды"
+          : switchedLang === "en"
+            ? "Cold symptoms"
+            : "Shamollash alomatlari",
+        switchedLang === "ru" ? "Головная боль" : switchedLang === "en" ? "Headache" : "Bosh og‘rig‘i",
+      ],
+    };
+  }
+
+  const lang = switchedLang;
 
   // 0. MATH CALCULATION INTENT (e.g. 2*2, 2*2 nechi buladi)
   if (!hasImage && userText.length >= 2) {
