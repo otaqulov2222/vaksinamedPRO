@@ -180,14 +180,11 @@ export function AuthBackdrop({ variant = 'hero' }: { variant?: 'hero' | 'quiet' 
           </LinearGradient>
         </Defs>
 
-        {/* Depth 1: base light */}
+        {/* Depth 1: base light — no soft disc under the logo (that read as a glow). */}
         <Rect x="0" y="0" width="390" height="844" fill={`url(#base-${variant})`} />
         <Circle cx={TL.x} cy={TL.y} r={330} fill={`url(#field-${variant})`} />
         {hero ? (
-          <>
-            <Ellipse cx={195} cy={380} rx={300} ry={300} fill={`url(#depth-${variant})`} />
-            <Ellipse cx={195} cy={360} rx={235} ry={215} fill={`url(#calm-${variant})`} />
-          </>
+          <Ellipse cx={40} cy={720} rx={220} ry={180} fill={`url(#depth-${variant})`} />
         ) : null}
 
         {/* Depth 2: translucent curves and precision rings */}
