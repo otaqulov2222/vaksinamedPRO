@@ -424,28 +424,7 @@ export default function ProfileScreen() {
             />
           </View>
 
-          <View style={styles.menuGroup}>
-            <MenuRow
-              icon="shield"
-              title={t('profile.legalPrivacy')}
-              a11y={t('profile.legalPrivacy')}
-              onPress={() => router.push('/privacy')}
-              testID="profile-privacy"
-              iconBg="#EEF2FF"
-              iconColor="#4338CA"
-            />
-            <MenuRow
-              icon="file-text"
-              title={t('profile.legalTerms')}
-              a11y={t('profile.legalTerms')}
-              onPress={() => router.push('/terms')}
-              testID="profile-terms"
-              iconBg="#F8FAFC"
-              iconColor="#334155"
-              last
-            />
-          </View>
-
+          {/* Legal docs live only under Ilova haqida — avoid profile duplicate. */}
           <View style={styles.menuGroup}>
             <Pressable
               onPress={() => {
