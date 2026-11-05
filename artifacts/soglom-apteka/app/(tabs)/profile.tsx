@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { ConfirmActionSheet } from '@/components/ConfirmActionSheet';
 import { LanguagePickerSheet } from '@/components/LanguagePickerSheet';
-import { CrownIcon, WalletIcon } from '@/components/LineIcons';
+import { CrownIcon, ProfileMenuIcon, type ProfileMenuIconName } from '@/components/LineIcons';
 import { getLanguageMeta } from '@/lib/languages';
 import { api } from '@/lib/api';
 import { notify } from '@/lib/dialogs';
@@ -36,8 +36,6 @@ const SHADOW_CONTROL = '0px 2px 8px rgba(75,36,138,0.06), 0px 1px 2px rgba(23,22
 const SHADOW_GROUP = '0px 4px 20px rgba(53,23,101,0.05), 0px 1px 3px rgba(23,22,44,0.03)';
 const SHADOW_VIP = '0px 8px 24px rgba(75,36,138,0.08), 0px 1px 3px rgba(23,22,44,0.04)';
 
-type IconName = React.ComponentProps<typeof Feather>['name'];
-
 function MenuRow({
   icon,
   title,
@@ -52,7 +50,7 @@ function MenuRow({
   iconColor,
   showChevron = true,
 }: {
-  icon: IconName | 'wallet';
+  icon: ProfileMenuIconName;
   title: string;
   subtitle?: string;
   value?: string;
@@ -76,7 +74,7 @@ function MenuRow({
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
       <View style={[styles.rowIcon, { backgroundColor: resolvedBg }]} importantForAccessibility="no-hide-descendants">
-        {icon === 'wallet' ? <WalletIcon size={18} color={resolvedColor} strokeWidth={2.2} /> : <Feather name={icon} size={18} color={resolvedColor} />}
+        <ProfileMenuIcon name={icon} size={20} color={resolvedColor} strokeWidth={1.85} />
       </View>
       <View style={[styles.rowBody, !last && styles.divider]}>
         {subtitle ? (
@@ -649,7 +647,14 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, gap: 12 },
   rowPressed: { backgroundColor: SOFT },
-  rowIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  rowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Keep wells flat — no shadow/glow (those read as soft “sticker” icons on web).
+  },
   rowIconAccent: { backgroundColor: '#FEF3C7' },
   rowBody: {
     flex: 1,
