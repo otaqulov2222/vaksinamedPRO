@@ -116,6 +116,27 @@ function isCurrentDevice(storedUa: string | null, currentUa: string): boolean {
   return false;
 }
 
+/** Real desktop session (Electron or Windows/Mac Chrome without mobile UA). */
+function isDesktopViewer(ua: string): boolean {
+  if (isDesktopShell(ua)) return true;
+  if (/Windows NT|Macintosh|Mac OS X/i.test(ua) && !/Android|iPhone|iPad/i.test(ua)) return true;
+  return false;
+}
+
+/**
+ * Heuristic: mobile UA while the browser chrome is much wider than the page
+ * (typical Chrome DevTools device toolbar + side panel).
+ */
+function isLikelyDevtoolsPhoneEmulation(ua: string): boolean {
+  if (typeof window === 'undefined') return false;
+  if (!/Android|iPhone|iPad/i.test(ua) || isDesktopShell(ua)) return false;
+  try {
+    return window.outerWidth > window.innerWidth + 240;
+  } catch {
+    return false;
+  }
+}
+
 export default function DevicesScreen() {
   const insets = useSafeAreaInsets();
   const { t, fmt } = useApp();
@@ -126,6 +147,8 @@ export default function DevicesScreen() {
     () => (typeof navigator !== 'undefined' ? navigator.userAgent || '' : ''),
     [],
   );
+  const emulationHint = useMemo(() => isLikelyDevtoolsPhoneEmulation(currentUa), [currentUa]);
+  const desktopViewer = useMemo(() => isDesktopViewer(currentUa), [currentUa]);
 
   const load = useCallback(
     async (pull = false) => {
@@ -159,6 +182,20 @@ export default function DevicesScreen() {
         }
       >
         <Text style={styles.lead}>{t('profile.devicesDesc')}</Text>
+
+        {emulationHint ? (
+          <View style={styles.hint} testID="devices-emulation-hint">
+            <Feather name="info" size={16} color={PRIMARY} />
+            <Text style={styles.hintText}>{t('profile.devicesEmulationHint')}</Text>
+          </View>
+        ) : null}
+
+        {!loading && desktopViewer && devices.length > 0 && !devices.some((d) => isCurrentDevice(d.userAgent, currentUa)) ? (
+          <View style={styles.hint} testID="devices-desktop-missing-hint">
+            <Feather name="monitor" size={16} color={PRIMARY} />
+            <Text style={styles.hintText}>{t('profile.devicesDesktopMissingHint')}</Text>
+          </View>
+        ) : null}
 
         {loading ? (
           <View style={styles.center}>
@@ -223,6 +260,17 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: BG },
   content: { padding: 20, maxWidth: 440, width: '100%', alignSelf: 'center', gap: 12 },
   lead: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: MUTED, marginBottom: 4 },
+  hint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#F1EBFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  hintText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: DEEP },
   center: { paddingVertical: 40, alignItems: 'center' },
   empty: { alignItems: 'center', paddingVertical: 36, gap: 8 },
   emptyTitle: { fontFamily: 'Inter_700Bold', fontSize: 16, color: INK },

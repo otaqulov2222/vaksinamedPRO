@@ -203,6 +203,10 @@ export default defineMessages({
     devicesFormDesktop: 'Kompyuter',
     devicesKindLine: '{kind} · {detail}',
     devicesCurrent: 'Joriy qurilma',
+    devicesDesktopMissingHint:
+      'Bu kompyuter/noutbuk hali ro‘yxatda yo‘q — pastdagisi boshqa qurilma (masalan telefon). Shu yerdan push yoqsangiz, kompyuter alohida chiqadi.',
+    devicesEmulationHint:
+      'Chrome’da telefon ko‘rinishi (DevTools → Pixel va hokazo) yoqilgan: brauzer o‘zini telefon deb ko‘rsatadi. Ctrl+Shift+M bilan o‘chirib qayta oching.',
     devicesPlatform: 'Platforma',
     devicesPlatformIos: 'iOS',
     devicesPlatformAndroid: 'Android',
@@ -426,6 +430,10 @@ export default defineMessages({
     devicesFormDesktop: 'Компьютер',
     devicesKindLine: '{kind} · {detail}',
     devicesCurrent: 'Текущее устройство',
+    devicesDesktopMissingHint:
+      'Этот компьютер ещё не в списке — ниже другое устройство (например телефон). Включите push здесь, и компьютер появится отдельно.',
+    devicesEmulationHint:
+      'В Chrome включён режим телефона (DevTools → Pixel и т.п.): браузер представляется телефоном. Выключите Ctrl+Shift+M и откройте снова.',
     devicesPlatform: 'Платформа',
     devicesPlatformIos: 'iOS',
     devicesPlatformAndroid: 'Android',
@@ -649,6 +657,10 @@ export default defineMessages({
     devicesFormDesktop: 'Computer',
     devicesKindLine: '{kind} · {detail}',
     devicesCurrent: 'This device',
+    devicesDesktopMissingHint:
+      'This computer is not in the list yet — the row below is another device (e.g. a phone). Enable push here and the computer will appear separately.',
+    devicesEmulationHint:
+      'Chrome device mode is on (DevTools → Pixel, etc.): the browser pretends to be a phone. Turn it off with Ctrl+Shift+M and reopen.',
     devicesPlatform: 'Platform',
     devicesPlatformIos: 'iOS',
     devicesPlatformAndroid: 'Android',
