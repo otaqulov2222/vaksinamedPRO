@@ -77,7 +77,7 @@ export default defineMessages({
     otpResendFailed: 'Kodni qayta yuborib bo‘lmadi. Qayta urinib ko‘ring.',
   },
   ru: {
-    brandTagline: 'Сохраняя здоровье,\nделимся радостью жизни',
+    brandTagline: 'СОХРАНЯЯ ЗДОРОВЬЕ,\nДАРИМ РАДОСТЬ ЖИЗНИ!',
     registerAction: 'Регистрация',
     phonePrefixA11y: 'Код страны плюс 998',
     phoneA11y: 'Номер телефона',
