@@ -267,10 +267,20 @@ export default function PrescriptionScreen() {
         setLanguage(switched);
       }
 
+      const history = messages
+        .filter((m) => m.id !== 'welcome-msg' && (m.sender === 'user' || m.sender === 'assistant'))
+        .slice(-12)
+        .map((m) => ({
+          role: (m.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+          content: String(m.text || '').slice(0, 2000),
+        }))
+        .filter((m) => m.content.trim().length > 0);
+
       const res = await api.aiPrescriptionChat({
         message: trimmed,
         image: imagePayload,
         language: requestLanguage,
+        history,
       });
 
       const assistantMsg: ChatMessage = {

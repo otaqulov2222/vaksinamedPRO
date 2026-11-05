@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm";
 import { branches, db, products, productStocks, promos, rewards } from "@workspace/db";
 import { scanAndMatchPrescriptionText, type CatalogProductCandidate } from "../lib/prescriptionEngine";
-import { handleAiMedicalChat } from "../lib/aiPrescriptionChat";
+import { handleAiMedicalChatAsync } from "../lib/aiMedicalChat";
 
 const router = Router();
 
@@ -464,10 +464,12 @@ router.post("/catalog/prescription/chat", async (req, res, next) => {
       availableQuantity: branchStocksMap.has(p.id) ? branchStocksMap.get(p.id) : 10,
     }));
 
-    const response = handleAiMedicalChat({
+    const history = Array.isArray(req.body?.history) ? req.body.history : undefined;
+    const response = await handleAiMedicalChatAsync({
       message,
       image,
       language: language === "ru" || language === "en" ? language : "uz",
+      history,
       candidates,
     });
 
