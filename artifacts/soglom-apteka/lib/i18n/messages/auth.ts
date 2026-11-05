@@ -2,7 +2,7 @@ import { defineMessages } from '../core';
 
 export default defineMessages({
   uz: {
-    brandTagline: 'SOG‘LIQNI ASRAB,\nHAYOT QUVONCHINI ULASHAMIZ!',
+    brandTagline: 'Sog‘liqni asrab,\nhayot zavqini ulashamiz',
     registerAction: 'Ro‘yxatdan o‘tish',
     phonePrefixA11y: 'Mamlakat kodi plus 998',
     phoneA11y: 'Telefon raqam',
@@ -77,7 +77,7 @@ export default defineMessages({
     otpResendFailed: 'Kodni qayta yuborib bo‘lmadi. Qayta urinib ko‘ring.',
   },
   ru: {
-    brandTagline: 'СОХРАНЯЯ ЗДОРОВЬЕ,\nДАРИМ РАДОСТЬ ЖИЗНИ!',
+    brandTagline: 'Сохраняя здоровье,\nделимся радостью жизни',
     registerAction: 'Регистрация',
     phonePrefixA11y: 'Код страны плюс 998',
     phoneA11y: 'Номер телефона',
@@ -152,7 +152,7 @@ export default defineMessages({
     otpResendFailed: 'Не удалось отправить код повторно. Попробуйте ещё раз.',
   },
   en: {
-    brandTagline: 'PRESERVING HEALTH,\nGIVING THE JOY OF LIFE!',
+    brandTagline: 'Preserving health,\nsharing the joy of life',
     registerAction: 'Create account',
     phonePrefixA11y: 'Country code plus 998',
     phoneA11y: 'Phone number',
