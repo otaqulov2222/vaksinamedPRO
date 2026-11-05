@@ -44,6 +44,7 @@ export default function WelcomeScreen() {
   const wordH = Math.round(wordW / WORDMARK_ASPECT);
   const gapSymbol = Math.round(symbolH * 0.15);
   const groupH = symbolH + gapSymbol + wordH + 12 + TAGLINE_HEIGHT;
+  const glowSize = Math.round(symbolH * 1.55);
 
   const topPad = Platform.OS === 'web' ? 16 : Math.max(insets.top, 12) + 4;
   const bottomPad = Math.max(insets.bottom, 16) + 16;
@@ -55,18 +56,24 @@ export default function WelcomeScreen() {
 
   const v = useRef({
     backdrop: new Animated.Value(cold ? 0 : 1),
+    glowOpacity: new Animated.Value(cold && !fromNativeSplash ? 0 : 0.35),
+    glowScale: new Animated.Value(cold && !fromNativeSplash ? 0.55 : 1),
+    ringOpacity: new Animated.Value(0),
+    ringScale: new Animated.Value(0.7),
     symbolOpacity: new Animated.Value(fromNativeSplash ? 1 : 0),
-    symbolScale: new Animated.Value(cold && !fromNativeSplash ? 0.92 : 1),
+    symbolScale: new Animated.Value(cold && !fromNativeSplash ? 0.72 : 1),
     wordOpacity: new Animated.Value(0),
-    wordY: new Animated.Value(cold ? 8 : 0),
+    wordY: new Animated.Value(cold ? 14 : 0),
+    wordScale: new Animated.Value(cold ? 0.98 : 1),
     tagOpacity: new Animated.Value(0),
-    tagY: new Animated.Value(cold ? 6 : 8),
+    tagY: new Animated.Value(cold ? 10 : 0),
     groupY: new Animated.Value(cold ? centreOffset : -8),
     topOpacity: new Animated.Value(0),
+    topY: new Animated.Value(cold ? -6 : 0),
     primaryOpacity: new Animated.Value(0),
-    primaryY: new Animated.Value(12),
+    primaryY: new Animated.Value(18),
     secondaryOpacity: new Animated.Value(0),
-    secondaryY: new Animated.Value(12),
+    secondaryY: new Animated.Value(18),
   }).current;
 
   const running = useRef<Animated.CompositeAnimation | null>(null);
@@ -76,14 +83,20 @@ export default function WelcomeScreen() {
     running.current?.stop();
     running.current = null;
     v.backdrop.setValue(1);
+    v.glowOpacity.setValue(0.28);
+    v.glowScale.setValue(1);
+    v.ringOpacity.setValue(0);
+    v.ringScale.setValue(1.2);
     v.symbolOpacity.setValue(1);
     v.symbolScale.setValue(1);
     v.wordOpacity.setValue(1);
     v.wordY.setValue(0);
+    v.wordScale.setValue(1);
     v.tagOpacity.setValue(1);
     v.tagY.setValue(0);
     v.groupY.setValue(0);
     v.topOpacity.setValue(1);
+    v.topY.setValue(0);
     v.primaryOpacity.setValue(1);
     v.primaryY.setValue(0);
     v.secondaryOpacity.setValue(1);
@@ -101,22 +114,64 @@ export default function WelcomeScreen() {
         return;
       }
       const both = (...a: Animated.CompositeAnimation[]) => Animated.parallel(a);
+      const outCubic = Easing.out(Easing.cubic);
+      const inOutCubic = Easing.inOut(Easing.cubic);
+
+      /** Logo pop: grow past 1 then settle — asset itself never changes. */
+      const symbolReveal = Animated.sequence([
+        both(
+          easeTo(v.symbolOpacity, 1, 420, outCubic),
+          easeTo(v.symbolScale, 1.07, 520, outCubic),
+        ),
+        easeTo(v.symbolScale, 1, 320, inOutCubic),
+      ]);
+
+      const glowReveal = both(
+        easeTo(v.glowOpacity, 0.42, 480, outCubic),
+        easeTo(v.glowScale, 1, 640, outCubic),
+      );
+
+      const ringPulse = Animated.sequence([
+        both(
+          easeTo(v.ringOpacity, 0.45, 280, outCubic),
+          easeTo(v.ringScale, 1.08, 520, outCubic),
+        ),
+        both(
+          easeTo(v.ringOpacity, 0, 420, outCubic),
+          easeTo(v.ringScale, 1.28, 420, outCubic),
+        ),
+      ]);
+
       const sequence = cold
         ? Animated.parallel([
-            easeTo(v.backdrop, 1, 360),
-            at(60, both(easeTo(v.symbolOpacity, 1, 420), easeTo(v.symbolScale, 1, 440))),
-            at(380, both(easeTo(v.wordOpacity, 1, 360), easeTo(v.wordY, 0, 380))),
-            at(600, both(easeTo(v.tagOpacity, 1, 340), easeTo(v.tagY, 0, 360))),
-            at(1000, easeTo(v.groupY, 0, 460, Easing.inOut(Easing.cubic))),
-            at(1120, easeTo(v.topOpacity, 1, 320)),
-            at(1160, both(easeTo(v.primaryOpacity, 1, 320), easeTo(v.primaryY, 0, 360))),
-            at(1230, both(easeTo(v.secondaryOpacity, 1, 320), easeTo(v.secondaryY, 0, 360))),
+            easeTo(v.backdrop, 1, 420, outCubic),
+            at(40, glowReveal),
+            at(90, symbolReveal),
+            at(280, ringPulse),
+            at(520, both(
+              easeTo(v.wordOpacity, 1, 400, outCubic),
+              easeTo(v.wordY, 0, 440, outCubic),
+              easeTo(v.wordScale, 1, 440, outCubic),
+            )),
+            at(760, both(easeTo(v.tagOpacity, 1, 380, outCubic), easeTo(v.tagY, 0, 400, outCubic))),
+            at(980, easeTo(v.groupY, 0, 520, inOutCubic)),
+            at(1080, both(easeTo(v.topOpacity, 1, 340, outCubic), easeTo(v.topY, 0, 360, outCubic))),
+            at(1140, both(easeTo(v.primaryOpacity, 1, 360, outCubic), easeTo(v.primaryY, 0, 400, outCubic))),
+            at(1260, both(easeTo(v.secondaryOpacity, 1, 360, outCubic), easeTo(v.secondaryY, 0, 400, outCubic))),
+            // Soft resting glow after the punch
+            at(1400, easeTo(v.glowOpacity, 0.28, 500, outCubic)),
           ])
         : Animated.parallel([
-            both(easeTo(v.symbolOpacity, 1, 280), easeTo(v.wordOpacity, 1, 280), easeTo(v.groupY, 0, 300), easeTo(v.topOpacity, 1, 280)),
-            at(50, both(easeTo(v.tagOpacity, 1, 280), easeTo(v.tagY, 0, 300))),
-            at(100, both(easeTo(v.primaryOpacity, 1, 280), easeTo(v.primaryY, 0, 300))),
-            at(150, both(easeTo(v.secondaryOpacity, 1, 280), easeTo(v.secondaryY, 0, 300))),
+            both(
+              easeTo(v.symbolOpacity, 1, 300, outCubic),
+              easeTo(v.wordOpacity, 1, 300, outCubic),
+              easeTo(v.groupY, 0, 320, outCubic),
+              easeTo(v.topOpacity, 1, 300, outCubic),
+              easeTo(v.glowOpacity, 0.28, 300, outCubic),
+            ),
+            at(40, both(easeTo(v.tagOpacity, 1, 280, outCubic), easeTo(v.tagY, 0, 300, outCubic))),
+            at(90, both(easeTo(v.primaryOpacity, 1, 280, outCubic), easeTo(v.primaryY, 0, 300, outCubic))),
+            at(140, both(easeTo(v.secondaryOpacity, 1, 280, outCubic), easeTo(v.secondaryY, 0, 300, outCubic))),
           ]);
       running.current = sequence;
       sequence.start(({ finished }) => {
@@ -144,7 +199,12 @@ export default function WelcomeScreen() {
       </Animated.View>
 
       <View style={styles.frame}>
-        <Animated.View style={[styles.topBar, { top: topPad, opacity: v.topOpacity }]}>
+        <Animated.View
+          style={[
+            styles.topBar,
+            { top: topPad, opacity: v.topOpacity, transform: [{ translateY: v.topY }] },
+          ]}
+        >
           <WelcomeLanguageControl
             language={language as Language}
             onPress={() => setLanguageSheetOpen(true)}
@@ -158,12 +218,62 @@ export default function WelcomeScreen() {
           accessibilityLabel={t('common.appName')}
           testID="welcome-brand"
         >
-          {/* Brand mark + wordmark are fixed assets — never swap by language. */}
-          <Animated.View style={{ opacity: v.symbolOpacity, transform: [{ scale: v.symbolScale }] }}>
-            <Image source={BRAND_SYMBOL} style={{ width: symbolW, height: symbolH }} contentFit="contain" transition={0} />
-          </Animated.View>
-          <Animated.View style={{ marginTop: gapSymbol, opacity: v.wordOpacity, transform: [{ translateY: v.wordY }] }}>
-            <Image source={BRAND_WORDMARK} style={{ width: wordW, height: wordH }} contentFit="contain" transition={0} />
+          {/* Atmosphere only — brand PNGs stay untouched. */}
+          <View style={[styles.symbolStage, { width: glowSize, height: glowSize }]}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.glow,
+                {
+                  width: glowSize,
+                  height: glowSize,
+                  borderRadius: glowSize / 2,
+                  opacity: v.glowOpacity,
+                  transform: [{ scale: v.glowScale }],
+                },
+              ]}
+            />
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.ring,
+                {
+                  width: glowSize * 0.92,
+                  height: glowSize * 0.92,
+                  borderRadius: (glowSize * 0.92) / 2,
+                  opacity: v.ringOpacity,
+                  transform: [{ scale: v.ringScale }],
+                },
+              ]}
+            />
+            <Animated.View
+              style={{
+                opacity: v.symbolOpacity,
+                transform: [{ scale: v.symbolScale }],
+              }}
+            >
+              <Image
+                source={BRAND_SYMBOL}
+                style={{ width: symbolW, height: symbolH }}
+                contentFit="contain"
+                transition={0}
+              />
+            </Animated.View>
+          </View>
+
+          <Animated.View
+            style={{
+              marginTop: gapSymbol,
+              opacity: v.wordOpacity,
+              transform: [{ translateY: v.wordY }, { scale: v.wordScale }],
+            }}
+          >
+            <Image
+              source={BRAND_WORDMARK}
+              style={{ width: wordW, height: wordH }}
+              contentFit="contain"
+              transition={0}
+            />
           </Animated.View>
           <Animated.View style={{ marginTop: 12, opacity: v.tagOpacity, transform: [{ translateY: v.tagY }] }}>
             <Text style={styles.tagline} numberOfLines={2}>
@@ -208,6 +318,20 @@ const styles = StyleSheet.create({
   frame: { flex: 1, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   topBar: { position: 'absolute', right: 20 },
   group: { position: 'absolute', left: 24, right: 24, alignItems: 'center' },
+  symbolStage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glow: {
+    position: 'absolute',
+    backgroundColor: 'rgba(75,36,138,0.16)',
+  },
+  ring: {
+    position: 'absolute',
+    borderWidth: 1.5,
+    borderColor: 'rgba(75,36,138,0.28)',
+    backgroundColor: 'transparent',
+  },
   tagline: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 10.5,
