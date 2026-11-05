@@ -17,6 +17,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
 import { confirmAction, notify } from '@/lib/dialogs';
+import { localizeError } from '@/lib/i18n/errors';
 
 const PURPLE = '#6C38CC';
 const PURPLE_DEEP = '#1C025D';
@@ -285,7 +286,7 @@ export default function RemindersScreen() {
       }
       loadData();
     } catch (err: any) {
-      notify(err.message || t('common.errorGeneric'), 'error');
+      notify(t('common.errorTitle'), localizeError(err, t));
     }
   };
 
@@ -321,7 +322,7 @@ export default function RemindersScreen() {
       setMemberFormChronic('');
       loadData();
     } catch (err: any) {
-      notify(err.message || t('common.errorGeneric'), 'error');
+      notify(t('common.errorTitle'), localizeError(err, t));
     } finally {
       setMemberSaving(false);
     }
@@ -342,7 +343,7 @@ export default function RemindersScreen() {
       notify(t('reminders.takeSuccess'), 'success');
       loadData();
     } catch (err: any) {
-      notify(err.message || t('common.errorGeneric'), 'error');
+      notify(t('common.errorTitle'), localizeError(err, t));
     } finally {
       setTakingId(null);
     }
@@ -358,7 +359,7 @@ export default function RemindersScreen() {
       notify(t('reminders.refillSuccess', { name: res.productName }), 'success');
       loadData();
     } catch (err: any) {
-      notify(err.message || t('common.errorGeneric'), 'error');
+      notify(t('common.errorTitle'), localizeError(err, t));
     } finally {
       setRefillingId(null);
     }
@@ -370,7 +371,7 @@ export default function RemindersScreen() {
       notify(t('reminders.deletedSuccess'), 'success');
       loadData();
     } catch (err: any) {
-      notify(err.message || t('common.errorGeneric'), 'error');
+      notify(t('common.errorTitle'), localizeError(err, t));
     }
   };
 
@@ -407,7 +408,7 @@ export default function RemindersScreen() {
       resetForm();
       loadData();
     } catch (err: any) {
-      notify(err.message || t('common.errorGeneric'), 'error');
+      notify(t('common.errorTitle'), localizeError(err, t));
     } finally {
       setModalSaving(false);
     }

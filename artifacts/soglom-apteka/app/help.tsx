@@ -1,6 +1,6 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   LayoutAnimation,
   Linking,
@@ -84,40 +84,42 @@ type ContactRow = {
   url: string;
 };
 
-const CONTACT_ROWS: ContactRow[] = [
-  {
-    key: 'phone',
-    icon: 'phone',
-    labelKey: 'profile.helpContactPhone',
-    a11yKey: 'profile.helpContactPhoneA11y',
-    value: SUPPORT_CONTACTS.phoneDisplay,
-    url: `tel:${SUPPORT_CONTACTS.phoneE164}`,
-  },
-  {
-    key: 'email',
-    icon: 'mail',
-    labelKey: 'profile.helpContactEmail',
-    a11yKey: 'profile.helpContactEmailA11y',
-    value: SUPPORT_CONTACTS.email,
-    url: `mailto:${SUPPORT_CONTACTS.email}?subject=${encodeURIComponent('VaksinaMed yordam')}`,
-  },
-  {
-    key: 'telegram',
-    icon: 'send',
-    labelKey: 'profile.helpContactTelegram',
-    a11yKey: 'profile.helpContactTelegramA11y',
-    value: SUPPORT_CONTACTS.telegramHandle,
-    url: SUPPORT_CONTACTS.telegramUrl,
-  },
-  {
-    key: 'web',
-    icon: 'globe',
-    labelKey: 'profile.helpContactWebsite',
-    a11yKey: 'profile.helpContactWebsiteA11y',
-    value: SUPPORT_CONTACTS.websiteDisplay,
-    url: SUPPORT_CONTACTS.websiteUrl,
-  },
-];
+function buildContactRows(mailSubject: string): ContactRow[] {
+  return [
+    {
+      key: 'phone',
+      icon: 'phone',
+      labelKey: 'profile.helpContactPhone',
+      a11yKey: 'profile.helpContactPhoneA11y',
+      value: SUPPORT_CONTACTS.phoneDisplay,
+      url: `tel:${SUPPORT_CONTACTS.phoneE164}`,
+    },
+    {
+      key: 'email',
+      icon: 'mail',
+      labelKey: 'profile.helpContactEmail',
+      a11yKey: 'profile.helpContactEmailA11y',
+      value: SUPPORT_CONTACTS.email,
+      url: `mailto:${SUPPORT_CONTACTS.email}?subject=${encodeURIComponent(mailSubject)}`,
+    },
+    {
+      key: 'telegram',
+      icon: 'send',
+      labelKey: 'profile.helpContactTelegram',
+      a11yKey: 'profile.helpContactTelegramA11y',
+      value: SUPPORT_CONTACTS.telegramHandle,
+      url: SUPPORT_CONTACTS.telegramUrl,
+    },
+    {
+      key: 'web',
+      icon: 'globe',
+      labelKey: 'profile.helpContactWebsite',
+      a11yKey: 'profile.helpContactWebsiteA11y',
+      value: SUPPORT_CONTACTS.websiteDisplay,
+      url: SUPPORT_CONTACTS.websiteUrl,
+    },
+  ];
+}
 
 function FaqRow({ item, open, onToggle }: { item: FaqItem; open: boolean; onToggle: () => void }) {
   const { t } = useApp();
@@ -157,6 +159,7 @@ export default function HelpScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useApp();
   const [openKey, setOpenKey] = useState<string | null>('orders');
+  const contactRows = useMemo(() => buildContactRows(t('profile.helpMailSubject')), [t]);
 
   const toggle = (key: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -200,7 +203,7 @@ export default function HelpScreen() {
         <View style={styles.contactCard}>
           <Text style={styles.contactTitle}>{t('profile.helpContactTitle')}</Text>
           <Text style={styles.contactSubtitle}>{t('profile.helpContactSubtitle')}</Text>
-          {CONTACT_ROWS.map((row, i) => (
+          {contactRows.map((row, i) => (
             <View key={row.key}>
               {i > 0 ? <View style={styles.contactDivider} /> : null}
               <Pressable

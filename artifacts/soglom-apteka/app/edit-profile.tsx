@@ -235,14 +235,8 @@ export default function EditProfileScreen() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err: any) {
-      if (err?.message) {
-        setPasswordError(err.message);
-      } else if (err?.status === 401 || err?.status === 403) {
-        setPasswordError(t('common.errorSessionExpired'));
-      } else {
-        setPasswordError(t('profile.editSaveFailed'));
-      }
+    } catch (err: unknown) {
+      setPasswordError(localizeError(err, t, { fallback: 'profile.editSaveFailed' }));
     } finally {
       setPasswordSaving(false);
     }
@@ -256,8 +250,8 @@ export default function EditProfileScreen() {
       await api.requestOtp(phone, 'login');
       setOtpSent(true);
       notify(t('profile.editOtpSent'));
-    } catch (err: any) {
-      setOtpError(err?.message || t('profile.editSaveFailed'));
+    } catch (err: unknown) {
+      setOtpError(localizeError(err, t, { fallback: 'profile.editSaveFailed' }));
     } finally {
       setOtpSending(false);
     }
@@ -293,8 +287,8 @@ export default function EditProfileScreen() {
       setOtpConfirmPassword('');
       setOtpSent(false);
       setPasswordSuccess(true);
-    } catch (err: any) {
-      setOtpError(err?.message || t('profile.editSaveFailed'));
+    } catch (err: unknown) {
+      setOtpError(localizeError(err, t, { fallback: 'profile.editSaveFailed' }));
     } finally {
       setOtpResetting(false);
     }
