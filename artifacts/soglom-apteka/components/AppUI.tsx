@@ -1,4 +1,5 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@/components/AppIcon';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { PropsWithChildren } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type RefreshControlProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -49,7 +50,7 @@ export function Screen({ children, scroll = true, refreshControl }: PropsWithChi
   );
 }
 
-export function IconButton({ icon, onPress, badge }: { icon: keyof typeof Feather.glyphMap; onPress?: () => void; badge?: boolean }) {
+export function IconButton({ icon, onPress, badge }: { icon: string; onPress?: () => void; badge?: boolean }) {
   const colors = useColors();
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>

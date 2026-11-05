@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather } from '@/components/AppIcon';
 import { useApp } from '@/context/AppContext';
 import type { LatLng, RouteInfo } from '@/lib/maps';
 import { hasValidCoords, openYandexRoute } from '@/lib/maps';

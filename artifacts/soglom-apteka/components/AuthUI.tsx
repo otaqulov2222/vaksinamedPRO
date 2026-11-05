@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather } from '@/components/AppIcon';
 import { Image } from 'expo-image';
 import React, { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
 import {

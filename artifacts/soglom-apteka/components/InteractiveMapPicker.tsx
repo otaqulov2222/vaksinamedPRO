@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, type DimensionValue } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather } from '@/components/AppIcon';
 import type { LatLng } from '@/lib/maps';
 import { useApp } from '@/context/AppContext';
 

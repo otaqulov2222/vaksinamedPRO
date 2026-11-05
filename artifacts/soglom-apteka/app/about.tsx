@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather } from '@/components/AppIcon';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import React from 'react';

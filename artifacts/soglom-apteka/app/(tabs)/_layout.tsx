@@ -8,7 +8,7 @@ import {
   View,
   type ColorValue,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather } from '@/components/AppIcon';
 import { Tabs } from 'expo-router';
 import { router } from 'expo-router';
 import { QrIcon } from '@/components/LineIcons';
