@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -33,6 +33,17 @@ type DeviceRow = {
   createdAt: string;
 };
 
+function isDesktopShell(ua: string): boolean {
+  return /Electron|VaksinaMedDesktop/i.test(ua);
+}
+
+function isPhoneForm(ua: string, platform: string): boolean {
+  if (isDesktopShell(ua)) return false;
+  if (/Android|iPhone|iPad/i.test(ua)) return true;
+  const p = platform.toLowerCase();
+  return p === 'ios' || p === 'android';
+}
+
 function detectBrowser(ua: string, t: TFunction): string {
   if (/Edg\//i.test(ua)) return t('profile.devicesBrowserEdge');
   if (/OPR\/|Opera/i.test(ua)) return t('profile.devicesBrowserOpera');
@@ -55,7 +66,7 @@ function friendlyDeviceTitle(platform: string, userAgent: string | null, t: TFun
   const ua = userAgent || '';
   const p = platform.toLowerCase();
 
-  if (/Electron/i.test(ua)) return t('profile.devicesDesktop');
+  if (isDesktopShell(ua)) return t('profile.devicesDesktop');
 
   if (/Android/i.test(ua)) {
     const model = androidModel(ua);
@@ -67,7 +78,7 @@ function friendlyDeviceTitle(platform: string, userAgent: string | null, t: TFun
   if (/iPad/i.test(ua)) return t('profile.devicesIpad');
   if (/Windows NT/i.test(ua)) return t('profile.devicesWindows');
   if (/Macintosh|Mac OS X/i.test(ua)) return t('profile.devicesMac');
-  if (/Linux/i.test(ua)) return t('profile.devicesLinux');
+  if (/Linux/i.test(ua) && !/Android/i.test(ua)) return t('profile.devicesLinux');
 
   if (p === 'ios') return t('profile.devicesPlatformIos');
   if (p === 'android') return t('profile.devicesPlatformAndroid');
@@ -75,15 +86,18 @@ function friendlyDeviceTitle(platform: string, userAgent: string | null, t: TFun
   return t('profile.devicesUnknown');
 }
 
-function friendlyDeviceSubtitle(userAgent: string | null, t: TFunction): string | null {
+function friendlyDeviceSubtitle(platform: string, userAgent: string | null, t: TFunction): string | null {
   if (!userAgent) return null;
+  const phone = isPhoneForm(userAgent, platform);
+  const kind = phone ? t('profile.devicesFormPhone') : t('profile.devicesFormDesktop');
   const browser = detectBrowser(userAgent, t);
-  if (/Electron/i.test(userAgent)) {
-    return browser
-      ? t('profile.devicesDesktopShell', { browser })
-      : t('profile.devicesDesktopShellPlain');
+
+  if (isDesktopShell(userAgent)) {
+    const detail = browser || t('profile.devicesDesktopShellPlain');
+    return t('profile.devicesKindLine', { kind, detail });
   }
-  return browser || null;
+  if (browser) return t('profile.devicesKindLine', { kind, detail: browser });
+  return kind;
 }
 
 function platformIcon(
@@ -91,12 +105,15 @@ function platformIcon(
   userAgent: string | null,
 ): React.ComponentProps<typeof Feather>['name'] {
   const ua = userAgent || '';
-  if (/Electron/i.test(ua)) return 'monitor';
-  if (/Android|iPhone|iPad/i.test(ua)) return 'smartphone';
-  if (/Windows NT|Macintosh|Mac OS X|Linux/i.test(ua) && !/Android/i.test(ua)) return 'monitor';
-  const p = platform.toLowerCase();
-  if (p === 'ios' || p === 'android') return 'smartphone';
-  return 'monitor';
+  return isPhoneForm(ua, platform) ? 'smartphone' : 'monitor';
+}
+
+function isCurrentDevice(storedUa: string | null, currentUa: string): boolean {
+  if (!storedUa || !currentUa) return false;
+  if (storedUa === currentUa) return true;
+  // Same desktop shell session family (version suffix may differ after rebuild).
+  if (isDesktopShell(storedUa) && isDesktopShell(currentUa)) return true;
+  return false;
 }
 
 export default function DevicesScreen() {
@@ -105,6 +122,10 @@ export default function DevicesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
+  const currentUa = useMemo(
+    () => (typeof navigator !== 'undefined' ? navigator.userAgent || '' : ''),
+    [],
+  );
 
   const load = useCallback(
     async (pull = false) => {
@@ -145,7 +166,7 @@ export default function DevicesScreen() {
           </View>
         ) : devices.length === 0 ? (
           <View style={styles.empty}>
-            <Feather name="smartphone" size={28} color={MUTED} />
+            <Feather name="monitor" size={28} color={MUTED} />
             <Text style={styles.emptyTitle}>{t('profile.devicesEmpty')}</Text>
             <Text style={styles.emptyHint}>{t('profile.devicesEmptyHint')}</Text>
             <Pressable
@@ -161,14 +182,24 @@ export default function DevicesScreen() {
         ) : (
           devices.map((dev) => {
             const when = dev.lastUsedAt || dev.createdAt;
-            const subtitle = friendlyDeviceSubtitle(dev.userAgent, t);
+            const subtitle = friendlyDeviceSubtitle(dev.platform, dev.userAgent, t);
+            const current = isCurrentDevice(dev.userAgent, currentUa);
             return (
               <View key={dev.id} style={styles.card} testID={`device-row-${dev.id}`}>
                 <View style={styles.iconWrap}>
                   <Feather name={platformIcon(dev.platform, dev.userAgent)} size={18} color={PRIMARY} />
                 </View>
                 <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{friendlyDeviceTitle(dev.platform, dev.userAgent, t)}</Text>
+                  <View style={styles.titleRow}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {friendlyDeviceTitle(dev.platform, dev.userAgent, t)}
+                    </Text>
+                    {current ? (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{t('profile.devicesCurrent')}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                   {subtitle ? (
                     <Text style={styles.cardMeta} numberOfLines={1}>
                       {subtitle}
@@ -223,7 +254,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardBody: { flex: 1, gap: 4 },
-  cardTitle: { fontFamily: 'Inter_700Bold', fontSize: 15, color: DEEP },
+  cardBody: { flex: 1, gap: 4, minWidth: 0 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardTitle: { flex: 1, fontFamily: 'Inter_700Bold', fontSize: 15, color: DEEP },
+  badge: { backgroundColor: '#F1EBFF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeText: { fontFamily: 'Inter_600SemiBold', fontSize: 11, color: PRIMARY },
   cardMeta: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17, color: MUTED },
 });
