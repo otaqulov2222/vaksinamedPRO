@@ -2,7 +2,7 @@ import { defineMessages } from '../core';
 
 export default defineMessages({
   uz: {
-    brandTagline: 'Sog‘liqni asrab,\nhayot zavqini ulashamiz',
+    brandTagline: 'SOG‘LIQNI ASRAB,\nHAYOT ZAVQINI ULASHAMIZ!',
     registerAction: 'Ro‘yxatdan o‘tish',
     phonePrefixA11y: 'Mamlakat kodi plus 998',
     phoneA11y: 'Telefon raqam',
@@ -152,7 +152,7 @@ export default defineMessages({
     otpResendFailed: 'Не удалось отправить код повторно. Попробуйте ещё раз.',
   },
   en: {
-    brandTagline: 'Preserving health,\nsharing the joy of life',
+    brandTagline: 'PRESERVING HEALTH,\nSHARING THE JOY OF LIFE!',
     registerAction: 'Create account',
     phonePrefixA11y: 'Country code plus 998',
     phoneA11y: 'Phone number',

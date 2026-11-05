@@ -205,12 +205,13 @@ const styles = StyleSheet.create({
   topBar: { position: 'absolute', right: 20 },
   group: { position: 'absolute', left: 24, right: 24, alignItems: 'center' },
   tagline: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10.5,
     lineHeight: TAGLINE_HEIGHT / 2,
-    letterSpacing: 0.2,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
     textAlign: 'center',
-    color: 'rgba(75,36,138,0.68)',
+    color: 'rgba(75,36,138,0.62)',
   },
   actions: { position: 'absolute', left: 24, right: 24, gap: 12 },
 });
