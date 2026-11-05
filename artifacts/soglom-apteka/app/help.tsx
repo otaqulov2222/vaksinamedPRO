@@ -228,16 +228,6 @@ export default function HelpScreen() {
           <MaterialCommunityIcons name="information-outline" size={18} color={MUTED} />
           <Text style={styles.noteText}>{t('profile.helpNote')}</Text>
         </View>
-
-        <Pressable
-          style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.88 }]}
-          onPress={() => router.push('/branches')}
-          accessibilityRole="button"
-          accessibilityLabel={t('profile.helpBranchesButton')}
-        >
-          <Feather name="map-pin" size={16} color={PURPLE} />
-          <Text style={styles.secondaryBtnText}>{t('profile.helpBranchesButton')}</Text>
-        </Pressable>
       </ScrollView>
     </View>
   );
@@ -407,21 +397,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: MUTED,
     lineHeight: 17,
-  },
-  secondaryBtn: {
-    minHeight: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E9D5FF',
-    backgroundColor: '#Faf7ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  secondaryBtnText: {
-    color: PURPLE,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
   },
 });

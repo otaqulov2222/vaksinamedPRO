@@ -115,7 +115,7 @@ export default defineMessages({
     helpDeliveryCta: 'Dorixonalarni ko‘rish',
     helpPaymentTitle: 'To‘lov',
     helpPaymentBody:
-      'Payme yoki Click orqali to‘lov faqat ilovada buyurtmani onlayn rasmiylashtirishda mavjud (filialda merchant sozlangan bo‘lsa). Dorixonaga kelganda to‘lov naqd amalga oshiriladi — filialda Click/Payme orqali to‘lanmaydi.',
+      'Payme yoki Click orqali to‘lov faqat ilovada buyurtmani onlayn rasmiylashtirishda mavjud. Dorixonaga kelganda to‘lov naqd amalga oshiriladi — filialda Click/Payme orqali to‘lanmaydi.',
     helpPaymentCta: 'Rasmiylashtirish',
     helpCashbackBody:
       'Cashback balansi, daraja va tarixni Cashback bo‘limida ko‘ring. Bitta balans — yakunlangan xaridlardan (ilova yoki kassa); to‘lov usuli emas.',
@@ -320,7 +320,7 @@ export default defineMessages({
     helpDeliveryCta: 'Посмотреть аптеки',
     helpPaymentTitle: 'Оплата',
     helpPaymentBody:
-      'Оплата через Payme или Click доступна только при онлайн-оформлении заказа в приложении (если у филиала настроены merchant-ключи). В аптеке оплата наличными — Click/Payme на кассе не принимаются.',
+      'Оплата через Payme или Click доступна только при онлайн-оформлении заказа в приложении. В аптеке оплата наличными — Click/Payme на кассе не принимаются.',
     helpPaymentCta: 'Перейти к оформлению',
     helpCashbackBody:
       'Баланс кэшбэка, уровень и историю смотрите в разделе «Кэшбэк». Баланс единый — за завершённые покупки (в приложении или на кассе); это не способ оплаты.',
@@ -525,7 +525,7 @@ export default defineMessages({
     helpDeliveryCta: 'View pharmacies',
     helpPaymentTitle: 'Payment',
     helpPaymentBody:
-      'Payme or Click is available only when you pay online during checkout in the app (if the branch has merchant keys). At the pharmacy you pay in cash — Click/Payme is not accepted in-store.',
+      'Payme or Click is available only when you pay online during checkout in the app. At the pharmacy you pay in cash — Click/Payme is not accepted in-store.',
     helpPaymentCta: 'Go to checkout',
     helpCashbackBody:
       'See your cashback balance, tier and history in the Cashback section. There is one balance, earned from completed purchases (in the app or in store); it is not a payment method.',

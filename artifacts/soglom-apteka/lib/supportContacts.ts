@@ -5,7 +5,7 @@
 export const SUPPORT_CONTACTS = {
   phoneE164: '+998953404142',
   phoneDisplay: '+998 95 340 41 42',
-  email: 'ofis.vaksinamed@gmail.com',
+  email: 'vaksinamed@gmail.com',
   telegramUrl: 'https://t.me/vaksinamed_official',
   telegramHandle: '@vaksinamed_official',
   websiteUrl: 'https://vaksinamed.uz',
