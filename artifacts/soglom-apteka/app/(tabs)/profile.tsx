@@ -230,7 +230,7 @@ export default function ProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel={t('profile.notificationsA11y')}
               testID="profile-bell"
-              style={({ pressed }) => [styles.bell, pressed && styles.controlPressed]}
+              style={({ pressed }) => [styles.topIconBtn, pressed && styles.controlPressed]}
             >
               <Feather name="bell" size={18} color={PRIMARY} />
               {unreadCount > 0 ? (
@@ -238,6 +238,25 @@ export default function ProfileScreen() {
                   <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : String(unreadCount)}</Text>
                 </View>
               ) : null}
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (loggingOut || deletingAccount) return;
+                setLogoutSheetOpen(true);
+              }}
+              disabled={loggingOut || deletingAccount}
+              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.logoutA11y')}
+              accessibilityState={{ disabled: loggingOut || deletingAccount, busy: loggingOut }}
+              testID="profile-logout"
+              style={({ pressed }) => [styles.topIconBtn, pressed && styles.controlPressed]}
+            >
+              {loggingOut ? (
+                <ActivityIndicator color={DANGER} size="small" />
+              ) : (
+                <Feather name="log-out" size={18} color={DANGER} />
+              )}
             </Pressable>
           </View>
         </View>
@@ -315,7 +334,7 @@ export default function ProfileScreen() {
 
         {/*
           Grouped settings (iOS Settings / Telegram / Slack):
-          related rows in inset cards, 10px between groups — no floating “island” logout.
+          related rows in inset cards, 10px between groups — logout is a header icon.
         */}
         <View style={styles.menuStack}>
           <View style={styles.menuGroup}>
@@ -424,24 +443,8 @@ export default function ProfileScreen() {
             />
           </View>
 
-          {/* Legal docs live only under Ilova haqida — avoid profile duplicate. */}
+          {/* Logout lives in the header icon; danger zone keeps account deletion only. */}
           <View style={styles.menuGroup}>
-            <Pressable
-              onPress={() => {
-                if (loggingOut || deletingAccount) return;
-                setLogoutSheetOpen(true);
-              }}
-              disabled={loggingOut || deletingAccount}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.logoutA11y')}
-              accessibilityState={{ disabled: loggingOut || deletingAccount, busy: loggingOut }}
-              testID="profile-logout"
-              style={({ pressed }) => [styles.dangerRow, pressed && styles.dangerRowPressed]}
-            >
-              <Text style={styles.dangerRowText} numberOfLines={1}>
-                {loggingOut ? t('common.loggingOut') : t('common.logout')}
-              </Text>
-            </Pressable>
             <Pressable
               onPress={() => {
                 if (deletingAccount || loggingOut) return;
@@ -452,7 +455,7 @@ export default function ProfileScreen() {
               accessibilityLabel={t('profile.deleteAccountA11y')}
               accessibilityState={{ disabled: deletingAccount || loggingOut, busy: deletingAccount }}
               testID="profile-delete-account"
-              style={({ pressed }) => [styles.dangerRow, styles.dangerRowBorder, pressed && styles.dangerRowPressed]}
+              style={({ pressed }) => [styles.dangerRow, pressed && styles.dangerRowPressed]}
             >
               <Text style={styles.dangerRowMuted} numberOfLines={1}>
                 {t('profile.deleteAccount')}
@@ -522,7 +525,7 @@ const styles = StyleSheet.create({
   topBar: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   topTitle: { flexShrink: 1, fontFamily: 'Inter_700Bold', fontSize: 24, lineHeight: 30, color: INK, letterSpacing: -0.6 },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bell: {
+  topIconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -678,7 +681,7 @@ const styles = StyleSheet.create({
     color: '#B45309',
   },
 
-  /** iOS Settings / Slack: centered destructive row inside a group — not a floating CTA. */
+  /** Centered destructive row for account deletion only. */
   dangerRow: {
     minHeight: 48,
     alignItems: 'center',
@@ -686,18 +689,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  dangerRowBorder: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: DIVIDER,
-  },
   dangerRowPressed: { backgroundColor: '#FFF5F5' },
-  dangerRowText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
-    lineHeight: 21,
-    letterSpacing: -0.2,
-    color: DANGER,
-  },
   dangerRowMuted: {
     fontFamily: 'Inter_500Medium',
     fontSize: 15,

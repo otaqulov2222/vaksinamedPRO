@@ -290,7 +290,6 @@ describe('profile screen entry points', () => {
       'profile-help',
       'profile-rating',
       'profile-about',
-      'profile-logout',
     ];
     const positions = order.map((id) => {
       assert.equal(count(new RegExp(`testID="${id}"`, 'g')), 1, id);
@@ -298,6 +297,11 @@ describe('profile screen entry points', () => {
     });
     assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'menu rows keep the agreed order');
     assert.ok(profile.indexOf('testID="profile-edit"') < positions[0], 'edit belongs to the identity block above the menu');
+    assert.ok(
+      profile.indexOf('testID="profile-bell"') < profile.indexOf('testID="profile-logout"') &&
+        profile.indexOf('testID="profile-logout"') < positions[0],
+      'logout icon sits in the header to the right of the bell',
+    );
   });
 
   it('profile carries no dashboard: no activity history, statistics or decorative art', () => {
