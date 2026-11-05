@@ -8,8 +8,8 @@ export default defineMessages({
     cartWithCountA11y: 'Savat, {count} ta tur',
     searchPlaceholder: 'Dori yoki mahsulot qidirish...',
     searchA11y: 'Dori yoki mahsulot qidirish',
-    heroA11y: 'Vaksina Med — Sog‘liqni asrab hayot zavqini ulashamiz. Katalogga o‘tish.',
-    heroSlogan: 'Sog‘liqni asrab\nhayot zavqini\nulashamiz',
+    heroA11y: 'Vaksina Med — Sog‘liqni asrab, hayot zavqini ulashamiz. Katalogga o‘tish.',
+    heroSlogan: 'Sog‘liqni asrab,\nhayot zavqini\nulashamiz',
     heroBannerType: 'baked',
 
     quickSearch: 'Dori qidirish',
@@ -132,8 +132,8 @@ export default defineMessages({
     cartWithCountA11y: 'Корзина, позиций: {count}',
     searchPlaceholder: 'Поиск лекарств и товаров...',
     searchA11y: 'Поиск лекарств и товаров',
-    heroA11y: 'Vaksina Med — бережём здоровье, делимся радостью жизни. Перейти в каталог.',
-    heroSlogan: 'Бережём здоровье,\nделимся радостью\nжизни',
+    heroA11y: 'Vaksina Med — Сохраняя здоровье, дарим радость жизни! Перейти в каталог.',
+    heroSlogan: 'Сохраняя здоровье,\nдарим радость\nжизни!',
     heroBannerType: 'overlay',
 
     quickSearch: 'Поиск лекарств',
@@ -256,8 +256,8 @@ export default defineMessages({
     cartWithCountA11y: 'Cart, items: {count}',
     searchPlaceholder: 'Search medicines or products...',
     searchA11y: 'Search medicines or products',
-    heroA11y: 'Vaksina Med — caring for health, sharing the joy of life. Go to catalog.',
-    heroSlogan: 'Caring for health,\nsharing the joy\nof life',
+    heroA11y: 'Vaksina Med — Preserving health, sharing the joy of life. Go to catalog.',
+    heroSlogan: 'Preserving health,\nsharing the joy\nof life',
     heroBannerType: 'overlay',
 
     quickSearch: 'Find medicine',

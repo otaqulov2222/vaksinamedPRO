@@ -312,8 +312,8 @@ export default function HomeScreen() {
             style={[
               styles.heroSloganText,
               {
-                fontSize: Math.min(19, Math.max(14, Math.round(contentW * 0.046))),
-                lineHeight: Math.min(25, Math.max(18, Math.round(contentW * 0.058))),
+                fontSize: Math.min(18, Math.max(13, Math.round(contentW * 0.043))),
+                lineHeight: Math.min(24, Math.max(17, Math.round(contentW * 0.055))),
               },
             ]}
           >
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     left: 18,
-    width: '52%',
+    width: '50%',
     justifyContent: 'center',
   },
   heroSloganText: {
