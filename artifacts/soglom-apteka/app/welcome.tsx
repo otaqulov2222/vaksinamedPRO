@@ -20,81 +20,68 @@ import {
 import type { Language } from '@/lib/languages';
 
 const MAX_WIDTH = 440;
-const TAGLINE_HEIGHT = 36;
-
-/** The full brand reveal plays once per app session; later visits use the short entry. */
-let revealedThisSession = false;
+const TAGLINE_HEIGHT = 38;
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const at = (delay: number, anim: Animated.CompositeAnimation) => Animated.sequence([Animated.delay(delay), anim]);
 
+/**
+ * Welcome gate: full-screen brand entrance.
+ * Logo assets are never redrawn/distorted — only opacity / position / scale of wrappers.
+ */
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useApp();
   const { height: winH } = useWindowDimensions();
   const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
 
-  const cold = useRef(!revealedThisSession).current;
-  // The native splash already shows the symbol centred on the same background, so the reveal continues from it.
-  const fromNativeSplash = cold && Platform.OS !== 'web';
-
-  const symbolH = clamp(Math.round(winH * 0.19), 112, 164);
+  const symbolH = clamp(Math.round(winH * 0.2), 120, 172);
   const symbolW = Math.round(symbolH * SYMBOL_ASPECT);
-  const wordW = Math.round(symbolH * 1.65);
+  const wordW = Math.round(symbolH * 1.72);
   const wordH = Math.round(wordW / WORDMARK_ASPECT);
-  const gapSymbol = Math.round(symbolH * 0.15);
-  const groupH = symbolH + gapSymbol + wordH + 12 + TAGLINE_HEIGHT;
-  const glowSize = Math.round(symbolH * 1.55);
+  const gapSymbol = Math.round(symbolH * 0.18);
+  const groupH = symbolH + gapSymbol + wordH + 14 + TAGLINE_HEIGHT;
 
-  const topPad = Platform.OS === 'web' ? 16 : Math.max(insets.top, 12) + 4;
-  const bottomPad = Math.max(insets.bottom, 16) + 16;
-  const buttonsH = 54 * 2 + 12;
-  const areaTop = topPad + 40 + 16;
-  const areaBottom = winH - bottomPad - buttonsH - 16;
-  const groupTop = Math.max(areaTop, Math.round((areaTop + areaBottom) / 2 - groupH / 2 - 8));
-  const centreOffset = Math.round(winH / 2 - (groupTop + symbolH / 2));
+  const topPad = Platform.OS === 'web' ? 18 : Math.max(insets.top, 12) + 6;
+  const bottomPad = Math.max(insets.bottom, 18) + 20;
+  const buttonsH = 54 * 2 + 14;
+  const areaTop = topPad + 44 + 20;
+  const areaBottom = winH - bottomPad - buttonsH - 20;
+  const groupTop = Math.max(areaTop, Math.round((areaTop + areaBottom) / 2 - groupH / 2 - 12));
 
   const v = useRef({
-    backdrop: new Animated.Value(cold ? 0 : 1),
-    glowOpacity: new Animated.Value(cold && !fromNativeSplash ? 0 : 0.35),
-    glowScale: new Animated.Value(cold && !fromNativeSplash ? 0.55 : 1),
-    ringOpacity: new Animated.Value(0),
-    ringScale: new Animated.Value(0.7),
-    symbolOpacity: new Animated.Value(fromNativeSplash ? 1 : 0),
-    symbolScale: new Animated.Value(cold && !fromNativeSplash ? 0.72 : 1),
+    veil: new Animated.Value(1),
+    backdrop: new Animated.Value(0),
+    symbolOpacity: new Animated.Value(0),
+    symbolScale: new Animated.Value(0.42),
+    symbolY: new Animated.Value(56),
     wordOpacity: new Animated.Value(0),
-    wordY: new Animated.Value(cold ? 14 : 0),
-    wordScale: new Animated.Value(cold ? 0.98 : 1),
+    wordY: new Animated.Value(28),
     tagOpacity: new Animated.Value(0),
-    tagY: new Animated.Value(cold ? 10 : 0),
-    groupY: new Animated.Value(cold ? centreOffset : -8),
+    tagY: new Animated.Value(18),
     topOpacity: new Animated.Value(0),
-    topY: new Animated.Value(cold ? -6 : 0),
+    topY: new Animated.Value(-12),
     primaryOpacity: new Animated.Value(0),
-    primaryY: new Animated.Value(18),
+    primaryY: new Animated.Value(36),
     secondaryOpacity: new Animated.Value(0),
-    secondaryY: new Animated.Value(18),
+    secondaryY: new Animated.Value(36),
   }).current;
 
   const running = useRef<Animated.CompositeAnimation | null>(null);
-  const [revealing, setRevealing] = useState(cold);
+  const [revealing, setRevealing] = useState(true);
 
   const settle = () => {
     running.current?.stop();
     running.current = null;
+    v.veil.setValue(0);
     v.backdrop.setValue(1);
-    v.glowOpacity.setValue(0.28);
-    v.glowScale.setValue(1);
-    v.ringOpacity.setValue(0);
-    v.ringScale.setValue(1.2);
     v.symbolOpacity.setValue(1);
     v.symbolScale.setValue(1);
+    v.symbolY.setValue(0);
     v.wordOpacity.setValue(1);
     v.wordY.setValue(0);
-    v.wordScale.setValue(1);
     v.tagOpacity.setValue(1);
     v.tagY.setValue(0);
-    v.groupY.setValue(0);
     v.topOpacity.setValue(1);
     v.topY.setValue(0);
     v.primaryOpacity.setValue(1);
@@ -108,71 +95,50 @@ export default function WelcomeScreen() {
     let alive = true;
     void prefersCalmMotion().then((calm) => {
       if (!alive) return;
-      revealedThisSession = true;
       if (calm) {
         settle();
         return;
       }
+
       const both = (...a: Animated.CompositeAnimation[]) => Animated.parallel(a);
-      const outCubic = Easing.out(Easing.cubic);
-      const inOutCubic = Easing.inOut(Easing.cubic);
+      const out = Easing.out(Easing.cubic);
+      const inOut = Easing.inOut(Easing.cubic);
+      const soft = Easing.bezier(0.22, 1, 0.36, 1);
 
-      /** Logo pop: grow past 1 then settle — asset itself never changes. */
-      const symbolReveal = Animated.sequence([
-        both(
-          easeTo(v.symbolOpacity, 1, 420, outCubic),
-          easeTo(v.symbolScale, 1.07, 520, outCubic),
-        ),
-        easeTo(v.symbolScale, 1, 320, inOutCubic),
+      // 1) Scene opens  2) Logo rises into place  3) Wordmark  4) Slogan  5) Chrome + CTAs
+      const sequence = Animated.parallel([
+        easeTo(v.backdrop, 1, 520, out),
+        at(180, easeTo(v.veil, 0, 640, soft)),
+        at(260, both(
+          easeTo(v.symbolOpacity, 1, 560, out),
+          easeTo(v.symbolY, 0, 720, soft),
+          Animated.sequence([
+            easeTo(v.symbolScale, 1.04, 620, soft),
+            easeTo(v.symbolScale, 1, 260, inOut),
+          ]),
+        )),
+        at(780, both(
+          easeTo(v.wordOpacity, 1, 480, out),
+          easeTo(v.wordY, 0, 560, soft),
+        )),
+        at(1020, both(
+          easeTo(v.tagOpacity, 1, 440, out),
+          easeTo(v.tagY, 0, 500, soft),
+        )),
+        at(1180, both(
+          easeTo(v.topOpacity, 1, 400, out),
+          easeTo(v.topY, 0, 440, soft),
+        )),
+        at(1280, both(
+          easeTo(v.primaryOpacity, 1, 420, out),
+          easeTo(v.primaryY, 0, 500, soft),
+        )),
+        at(1420, both(
+          easeTo(v.secondaryOpacity, 1, 420, out),
+          easeTo(v.secondaryY, 0, 500, soft),
+        )),
       ]);
 
-      const glowReveal = both(
-        easeTo(v.glowOpacity, 0.42, 480, outCubic),
-        easeTo(v.glowScale, 1, 640, outCubic),
-      );
-
-      const ringPulse = Animated.sequence([
-        both(
-          easeTo(v.ringOpacity, 0.45, 280, outCubic),
-          easeTo(v.ringScale, 1.08, 520, outCubic),
-        ),
-        both(
-          easeTo(v.ringOpacity, 0, 420, outCubic),
-          easeTo(v.ringScale, 1.28, 420, outCubic),
-        ),
-      ]);
-
-      const sequence = cold
-        ? Animated.parallel([
-            easeTo(v.backdrop, 1, 420, outCubic),
-            at(40, glowReveal),
-            at(90, symbolReveal),
-            at(280, ringPulse),
-            at(520, both(
-              easeTo(v.wordOpacity, 1, 400, outCubic),
-              easeTo(v.wordY, 0, 440, outCubic),
-              easeTo(v.wordScale, 1, 440, outCubic),
-            )),
-            at(760, both(easeTo(v.tagOpacity, 1, 380, outCubic), easeTo(v.tagY, 0, 400, outCubic))),
-            at(980, easeTo(v.groupY, 0, 520, inOutCubic)),
-            at(1080, both(easeTo(v.topOpacity, 1, 340, outCubic), easeTo(v.topY, 0, 360, outCubic))),
-            at(1140, both(easeTo(v.primaryOpacity, 1, 360, outCubic), easeTo(v.primaryY, 0, 400, outCubic))),
-            at(1260, both(easeTo(v.secondaryOpacity, 1, 360, outCubic), easeTo(v.secondaryY, 0, 400, outCubic))),
-            // Soft resting glow after the punch
-            at(1400, easeTo(v.glowOpacity, 0.28, 500, outCubic)),
-          ])
-        : Animated.parallel([
-            both(
-              easeTo(v.symbolOpacity, 1, 300, outCubic),
-              easeTo(v.wordOpacity, 1, 300, outCubic),
-              easeTo(v.groupY, 0, 320, outCubic),
-              easeTo(v.topOpacity, 1, 300, outCubic),
-              easeTo(v.glowOpacity, 0.28, 300, outCubic),
-            ),
-            at(40, both(easeTo(v.tagOpacity, 1, 280, outCubic), easeTo(v.tagY, 0, 300, outCubic))),
-            at(90, both(easeTo(v.primaryOpacity, 1, 280, outCubic), easeTo(v.primaryY, 0, 300, outCubic))),
-            at(140, both(easeTo(v.secondaryOpacity, 1, 280, outCubic), easeTo(v.secondaryY, 0, 300, outCubic))),
-          ]);
       running.current = sequence;
       sequence.start(({ finished }) => {
         if (finished && alive) {
@@ -185,18 +151,18 @@ export default function WelcomeScreen() {
       alive = false;
       running.current?.stop();
     };
-    // Runs once per mount; geometry changes after the reveal only move the resting layout.
+    // Fresh full entrance every time this gate mounts (logout / app open).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const goRegister = () => router.push('/register');
-  const goLogin = () => router.push('/login');
 
   return (
     <View style={styles.root}>
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: v.backdrop }]}>
         <AuthBackdrop variant="hero" />
       </Animated.View>
+
+      {/* Opening veil — lifts off the scene; not a logo backdrop. */}
+      <Animated.View pointerEvents="none" style={[styles.veil, { opacity: v.veil }]} />
 
       <View style={styles.frame}>
         <Animated.View
@@ -211,61 +177,29 @@ export default function WelcomeScreen() {
           />
         </Animated.View>
 
-        <Animated.View
-          style={[styles.group, { top: groupTop, transform: [{ translateY: v.groupY }] }]}
-          accessible
-          accessibilityRole="header"
-          accessibilityLabel={t('common.appName')}
-          testID="welcome-brand"
-        >
-          {/* Atmosphere only — brand PNGs stay untouched. */}
-          <View style={[styles.symbolStage, { width: glowSize, height: glowSize }]}>
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.glow,
-                {
-                  width: glowSize,
-                  height: glowSize,
-                  borderRadius: glowSize / 2,
-                  opacity: v.glowOpacity,
-                  transform: [{ scale: v.glowScale }],
-                },
-              ]}
+        <View style={[styles.group, { top: groupTop }]} testID="welcome-brand">
+          <Animated.View
+            accessible
+            accessibilityRole="header"
+            accessibilityLabel={t('common.appName')}
+            style={{
+              opacity: v.symbolOpacity,
+              transform: [{ translateY: v.symbolY }, { scale: v.symbolScale }],
+            }}
+          >
+            <Image
+              source={BRAND_SYMBOL}
+              style={{ width: symbolW, height: symbolH }}
+              contentFit="contain"
+              transition={0}
             />
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.ring,
-                {
-                  width: glowSize * 0.92,
-                  height: glowSize * 0.92,
-                  borderRadius: (glowSize * 0.92) / 2,
-                  opacity: v.ringOpacity,
-                  transform: [{ scale: v.ringScale }],
-                },
-              ]}
-            />
-            <Animated.View
-              style={{
-                opacity: v.symbolOpacity,
-                transform: [{ scale: v.symbolScale }],
-              }}
-            >
-              <Image
-                source={BRAND_SYMBOL}
-                style={{ width: symbolW, height: symbolH }}
-                contentFit="contain"
-                transition={0}
-              />
-            </Animated.View>
-          </View>
+          </Animated.View>
 
           <Animated.View
             style={{
               marginTop: gapSymbol,
               opacity: v.wordOpacity,
-              transform: [{ translateY: v.wordY }, { scale: v.wordScale }],
+              transform: [{ translateY: v.wordY }],
             }}
           >
             <Image
@@ -275,12 +209,19 @@ export default function WelcomeScreen() {
               transition={0}
             />
           </Animated.View>
-          <Animated.View style={{ marginTop: 12, opacity: v.tagOpacity, transform: [{ translateY: v.tagY }] }}>
+
+          <Animated.View
+            style={{
+              marginTop: 14,
+              opacity: v.tagOpacity,
+              transform: [{ translateY: v.tagY }],
+            }}
+          >
             <Text style={styles.tagline} numberOfLines={2}>
               {t('auth.brandTagline')}
             </Text>
           </Animated.View>
-        </Animated.View>
+        </View>
 
         <View style={[styles.actions, { bottom: bottomPad }]}>
           <Animated.View style={{ opacity: v.primaryOpacity, transform: [{ translateY: v.primaryY }] }}>
@@ -288,7 +229,7 @@ export default function WelcomeScreen() {
               variant="yellow"
               label={t('auth.registerAction')}
               accessibilityHint={t('auth.welcomeRegisterHint')}
-              onPress={goRegister}
+              onPress={() => router.push('/register')}
               testID="welcome-register"
             />
           </Animated.View>
@@ -297,7 +238,7 @@ export default function WelcomeScreen() {
               variant="outline"
               label={t('common.loginAction')}
               accessibilityHint={t('auth.welcomeLoginHint')}
-              onPress={goLogin}
+              onPress={() => router.push('/login')}
               testID="welcome-login"
             />
           </Animated.View>
@@ -315,31 +256,22 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.soft, overflow: 'hidden' },
-  frame: { flex: 1, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
-  topBar: { position: 'absolute', right: 20 },
-  group: { position: 'absolute', left: 24, right: 24, alignItems: 'center' },
-  symbolStage: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  veil: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: C.soft,
+    zIndex: 2,
   },
-  glow: {
-    position: 'absolute',
-    backgroundColor: 'rgba(75,36,138,0.16)',
-  },
-  ring: {
-    position: 'absolute',
-    borderWidth: 1.5,
-    borderColor: 'rgba(75,36,138,0.28)',
-    backgroundColor: 'transparent',
-  },
+  frame: { flex: 1, width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', zIndex: 3 },
+  topBar: { position: 'absolute', right: 20, zIndex: 4 },
+  group: { position: 'absolute', left: 28, right: 28, alignItems: 'center' },
   tagline: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 10.5,
+    fontSize: 11,
     lineHeight: TAGLINE_HEIGHT / 2,
-    letterSpacing: 1.6,
+    letterSpacing: 1.7,
     textTransform: 'uppercase',
     textAlign: 'center',
-    color: 'rgba(75,36,138,0.62)',
+    color: 'rgba(75,36,138,0.64)',
   },
-  actions: { position: 'absolute', left: 24, right: 24, gap: 12 },
+  actions: { position: 'absolute', left: 24, right: 24, gap: 14 },
 });
