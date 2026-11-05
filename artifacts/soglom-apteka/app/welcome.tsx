@@ -316,7 +316,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.deep, overflow: 'hidden' },
   curtain: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: C.deep,
     zIndex: 8,
   },
