@@ -2,6 +2,11 @@ import {
   scanAndMatchPrescriptionText,
   type CatalogProductCandidate,
 } from "./prescriptionEngine";
+import {
+  hasClinicalContent,
+  isMedicineSeekingAsk,
+  normalizeUserSpeech,
+} from "./aiChatNlu";
 
 export interface AiChatMessage {
   role: "user" | "assistant" | "system";
@@ -43,10 +48,7 @@ export interface AiChatResponse {
 }
 
 function normalizeQuery(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[ʻ’‘`´]/g, "'")
-    .trim();
+  return normalizeUserSpeech(str);
 }
 
 // Patterns that indicate clearly non-medical off-topic inquiries
@@ -202,35 +204,7 @@ export function isMedicalDomain(query: string): boolean {
 }
 
 export function isExplicitMedicinePurchaseRequest(query: string): boolean {
-  const q = normalizeQuery(query);
-  return (
-    q.includes("sotib ol") ||
-    q.includes("buyurtma") ||
-    q.includes("savatga") ||
-    q.includes("narxi") ||
-    q.includes("qancha turadi") ||
-    q.includes("bormi") ||
-    q.includes("qayerdan olsam") ||
-    q.includes("dori bering") ||
-    q.includes("dori kerak") ||
-    q.includes("preparat kerak") ||
-    q.includes("topib ber") ||
-    q.includes("dokonda bormi") ||
-    q.includes("dorixonada bormi") ||
-    q.includes("купить") ||
-    q.includes("заказать") ||
-    q.includes("в корзину") ||
-    q.includes("сколько стоит") ||
-    q.includes("есть в наличии") ||
-    q.includes("наличие") ||
-    q.includes("дай лекарство") ||
-    q.includes("нужно лекарство") ||
-    q.includes("найди препарат") ||
-    q.includes("buy") ||
-    q.includes("order") ||
-    q.includes("price") ||
-    q.includes("in stock")
-  );
+  return isMedicineSeekingAsk(query);
 }
 
 /** If the user asks mid-chat to switch language, honour that over the app locale. */
@@ -421,10 +395,7 @@ export function handleAiMedicalChat(params: {
     ruGreetingRegex.test(qNorm) ||
     enGreetingRegex.test(qNorm);
 
-  const hasSpecificSymptomOrDrug =
-    /(?:og['`ʼ]?r|ogri|sanch|bosh|tish|milk|karies|pulpit|qorn|qorin|oshqozon|jigar|buyrak|isitma|temperatura|harorat|shamol|gripp|dori|retsept|preparat|vitamin|davlen|bosim|ich ket|diareya|ich qot|qabziyat|ko['`ʼ]?z|koz|quloq|burun|kuy[a-z]*|zahar|uyqu|uxla|peshob|siydik|qand|qandim|diabet|tsistit|jarohat|бол|зуб|голов|живот|желуд|жар|температур|давлен|сердц|порез|ожог|травм|перелом|сахар|простуд|грипп|кашель|горл|тошн|рвот|отравл|глаз|ухо|отит|kesil|singan|sinish|sindi|lat ye|qon |qonay|shish|yiring|toshma|allergi|tomoq|yo['`ʼ]?tal|balg['`ʼ]?am|nafas|bo['`ʼ]?g['`ʼ]?il|hush|behush|asab|yurak|puls|xirurg|travma|parasetamol|analgin|aspirin|ibuprofen|antibiotik|maz|malham|kapsula|tabletka|spirt|yod|xlorgeksidin|levomekol|pufak|yaracha|yara|bolam|chaqaloq|homilador)/i.test(
-      qNorm
-    );
+  const hasSpecificSymptomOrDrug = hasClinicalContent(userText);
 
   if (isGreetingWord && !hasSpecificSymptomOrDrug && !hasImage) {
     let reply = "";
@@ -511,8 +482,15 @@ export function handleAiMedicalChat(params: {
 
   // 4. EMERGENCY RED FLAGS (Call 103 immediately - strictly NO medication selling)
   const isEmergency =
-    ((qNorm.includes("yurak") || qNorm.includes("ko'krak") || qNorm.includes("kokrak")) &&
-      (qNorm.includes("siq") || qNorm.includes("og'ri") || qNorm.includes("sanch") || qNorm.includes("qis"))) ||
+    ((qNorm.includes("yurak") || qNorm.includes("ko'krak") || qNorm.includes("kokrak") || qNorm.includes("chest")) &&
+      (qNorm.includes("siq") ||
+        qNorm.includes("siqil") ||
+        qNorm.includes("ezil") ||
+        qNorm.includes("og'ri") ||
+        qNorm.includes("ogri") ||
+        qNorm.includes("sanch") ||
+        qNorm.includes("qis") ||
+        qNorm.includes("qisil"))) ||
     qNorm.includes("infarkt") ||
     qNorm.includes("инфаркт") ||
     qNorm.includes("insult") ||
@@ -1049,7 +1027,8 @@ export function handleAiMedicalChat(params: {
     qNorm.includes("zahar") ||
     qNorm.includes("zaharlan") ||
     qNorm.includes("intoksikatsiya") ||
-    qNorm.includes("ovqatdan") ||
+    (qNorm.includes("ovqatdan") &&
+      (qNorm.includes("zahar") || qNorm.includes("qus") || qNorm.includes("ko'ngil") || qNorm.includes("kongil"))) ||
     qNorm.includes("отравлен") ||
     qNorm.includes("интоксикаци") ||
     qNorm.includes("poison")
@@ -1121,7 +1100,7 @@ export function handleAiMedicalChat(params: {
   ) {
     categoryIntent = "trauma_sprain";
   } else if (
-    qNorm.includes("bosh") ||
+    (/\bbosh\b/.test(qNorm) && !/\bboshqa\b/.test(qNorm)) ||
     qNorm.includes("chakka") ||
     qNorm.includes("migren") ||
     qNorm.includes("голов") ||
