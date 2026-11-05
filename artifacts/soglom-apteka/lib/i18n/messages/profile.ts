@@ -111,11 +111,11 @@ export default defineMessages({
     helpOrdersCta: 'Buyurtmalarga o‘tish',
     helpDeliveryTitle: 'Dorixonadan olib ketish va bron qilish',
     helpDeliveryBody:
-      'Buyurtma berilgan dorilar tanlangan dorixona filialida 24 soat davomida siz uchun bepul bron qilinadi. Dorixonaga tashrif buyurib, buyurtma kodi orqali navbatsiz qabul qilib olishingiz mumkin.',
+      'Buyurtma berilgan dorilar tanlangan dorixona filialida 24 soat davomida siz uchun bepul bron qilinadi. Dorixonaga tashrif buyurib, buyurtma kodi orqali qabul qilib olishingiz mumkin.',
     helpDeliveryCta: 'Dorixonalarni ko‘rish',
     helpPaymentTitle: 'To‘lov',
     helpPaymentBody:
-      'Buyurtmani filialda (naqd yoki terminal) to‘lashingiz yoki Payme / Click orqali onlayn to‘lashingiz mumkin (filialda merchant kalitlari sozlangan bo‘lsa).',
+      'Payme yoki Click orqali to‘lov faqat ilovada buyurtmani onlayn rasmiylashtirishda mavjud (filialda merchant sozlangan bo‘lsa). Dorixonaga kelganda to‘lov naqd amalga oshiriladi — filialda Click/Payme orqali to‘lanmaydi.',
     helpPaymentCta: 'Rasmiylashtirish',
     helpCashbackBody:
       'Cashback balansi, daraja va tarixni Cashback bo‘limida ko‘ring. Bitta balans — yakunlangan xaridlardan (ilova yoki kassa); to‘lov usuli emas.',
@@ -127,8 +127,19 @@ export default defineMessages({
     helpRatingBody:
       'Yakunlangan buyurtma uchun filial xizmatini baholashingiz mumkin. Alohida xodim tanlash hozircha mavjud emas — buyurtmaga bog‘langan xodim identifikatori yo‘q.',
     helpRatingCta: 'Baholashga o‘tish',
-    helpNote: 'Qo‘shimcha yordam kerak bo‘lsa, yaqin Vaksina Med filialiga murojaat qiling.',
+    helpNote:
+      'Qo‘shimcha savol bo‘lsa, quyidagi aloqa kanallari orqali murojaat qiling. Yaqin filialni topish uchun Dorixonalar bo‘limidan foydalaning.',
     helpBranchesButton: 'Filiallarni ko‘rish',
+    helpContactTitle: 'Biz bilan bog‘lanish',
+    helpContactSubtitle: 'Qo‘ng‘iroq, xat yoki Telegram orqali yordam oling.',
+    helpContactPhone: 'Telefon',
+    helpContactEmail: 'Elektron pochta',
+    helpContactTelegram: 'Telegram',
+    helpContactWebsite: 'Veb-sayt',
+    helpContactPhoneA11y: 'Qo‘ng‘iroq qilish',
+    helpContactEmailA11y: 'Elektron pochta yuborish',
+    helpContactTelegramA11y: 'Telegram kanalini ochish',
+    helpContactWebsiteA11y: 'Rasmiy saytni ochish',
 
     aboutTagline: 'Sodiqlik dasturi va onlayn dorixona xizmati',
     aboutBody:
@@ -305,11 +316,11 @@ export default defineMessages({
     helpOrdersCta: 'Перейти к заказам',
     helpDeliveryTitle: 'Самовывоз и бронирование',
     helpDeliveryBody:
-      'Ваш заказ бесплатно бронируется в выбранной аптеке на 24 часа. Вы можете забрать его без очереди, назвав номер заказа на кассе аптеки.',
+      'Ваш заказ бесплатно бронируется в выбранной аптеке на 24 часа. Вы можете забрать его в аптеке по коду заказа.',
     helpDeliveryCta: 'Посмотреть аптеки',
     helpPaymentTitle: 'Оплата',
     helpPaymentBody:
-      'Оплатите заказ в аптеке (наличные или терминал) или онлайн через Payme / Click, если для филиала настроены merchant-ключи.',
+      'Оплата через Payme или Click доступна только при онлайн-оформлении заказа в приложении (если у филиала настроены merchant-ключи). В аптеке оплата наличными — Click/Payme на кассе не принимаются.',
     helpPaymentCta: 'Перейти к оформлению',
     helpCashbackBody:
       'Баланс кэшбэка, уровень и историю смотрите в разделе «Кэшбэк». Баланс единый — за завершённые покупки (в приложении или на кассе); это не способ оплаты.',
@@ -321,8 +332,19 @@ export default defineMessages({
     helpRatingBody:
       'Вы можете оценить обслуживание в аптеке по завершённому заказу. Выбрать конкретного сотрудника пока нельзя — к заказу не привязан идентификатор сотрудника.',
     helpRatingCta: 'Перейти к оценке',
-    helpNote: 'Если нужна дополнительная помощь, обратитесь в ближайшую аптеку Vaksina Med.',
+    helpNote:
+      'Если нужен дополнительный ответ, напишите или позвоните по контактам ниже. Ближайшую аптеку можно найти в разделе «Аптеки».',
     helpBranchesButton: 'Посмотреть аптеки',
+    helpContactTitle: 'Связаться с нами',
+    helpContactSubtitle: 'Звонок, письмо или Telegram — выберите удобный канал.',
+    helpContactPhone: 'Телефон',
+    helpContactEmail: 'Эл. почта',
+    helpContactTelegram: 'Telegram',
+    helpContactWebsite: 'Сайт',
+    helpContactPhoneA11y: 'Позвонить',
+    helpContactEmailA11y: 'Написать на электронную почту',
+    helpContactTelegramA11y: 'Открыть Telegram-канал',
+    helpContactWebsiteA11y: 'Открыть официальный сайт',
 
     aboutTagline: 'Программа лояльности и онлайн-аптека',
     aboutBody:
@@ -499,11 +521,11 @@ export default defineMessages({
     helpOrdersCta: 'Go to orders',
     helpDeliveryTitle: 'Pharmacy pickup & reservation',
     helpDeliveryBody:
-      'Your order is reserved for free at the selected pharmacy for 24 hours. You can pick it up without waiting in line by providing your order code at the pharmacy checkout.',
+      'Your order is reserved for free at the selected pharmacy for 24 hours. Visit the pharmacy and collect it using your order code.',
     helpDeliveryCta: 'View pharmacies',
     helpPaymentTitle: 'Payment',
     helpPaymentBody:
-      'Pay at the pharmacy (cash or terminal) or online via Payme / Click when the branch has merchant keys configured.',
+      'Payme or Click is available only when you pay online during checkout in the app (if the branch has merchant keys). At the pharmacy you pay in cash — Click/Payme is not accepted in-store.',
     helpPaymentCta: 'Go to checkout',
     helpCashbackBody:
       'See your cashback balance, tier and history in the Cashback section. There is one balance, earned from completed purchases (in the app or in store); it is not a payment method.',
@@ -515,8 +537,19 @@ export default defineMessages({
     helpRatingBody:
       'You can rate the pharmacy service for a completed order. Choosing a specific staff member isn’t available yet — orders aren’t linked to a staff ID.',
     helpRatingCta: 'Go to rating',
-    helpNote: 'If you need more help, contact your nearest Vaksina Med pharmacy.',
+    helpNote:
+      'For more help, use the contact options below. To find a nearby pharmacy, open the Pharmacies section.',
     helpBranchesButton: 'View pharmacies',
+    helpContactTitle: 'Contact us',
+    helpContactSubtitle: 'Call, email, or reach us on Telegram.',
+    helpContactPhone: 'Phone',
+    helpContactEmail: 'Email',
+    helpContactTelegram: 'Telegram',
+    helpContactWebsite: 'Website',
+    helpContactPhoneA11y: 'Call support',
+    helpContactEmailA11y: 'Send email',
+    helpContactTelegramA11y: 'Open Telegram channel',
+    helpContactWebsiteA11y: 'Open official website',
 
     aboutTagline: 'Loyalty program and online pharmacy',
     aboutBody:

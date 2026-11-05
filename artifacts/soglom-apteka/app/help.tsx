@@ -1,10 +1,21 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, View } from 'react-native';
+import {
+  LayoutAnimation,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import type { TranslationKey } from '@/lib/i18n';
+import { SUPPORT_CONTACTS } from '@/lib/supportContacts';
 
 const PURPLE = '#4B248A';
 const PURPLE_DEEP = '#1A1040';
@@ -64,6 +75,50 @@ const FAQ: FaqItem[] = [
   },
 ];
 
+type ContactRow = {
+  key: string;
+  icon: React.ComponentProps<typeof Feather>['name'];
+  labelKey: TranslationKey;
+  a11yKey: TranslationKey;
+  value: string;
+  url: string;
+};
+
+const CONTACT_ROWS: ContactRow[] = [
+  {
+    key: 'phone',
+    icon: 'phone',
+    labelKey: 'profile.helpContactPhone',
+    a11yKey: 'profile.helpContactPhoneA11y',
+    value: SUPPORT_CONTACTS.phoneDisplay,
+    url: `tel:${SUPPORT_CONTACTS.phoneE164}`,
+  },
+  {
+    key: 'email',
+    icon: 'mail',
+    labelKey: 'profile.helpContactEmail',
+    a11yKey: 'profile.helpContactEmailA11y',
+    value: SUPPORT_CONTACTS.email,
+    url: `mailto:${SUPPORT_CONTACTS.email}?subject=${encodeURIComponent('VaksinaMed yordam')}`,
+  },
+  {
+    key: 'telegram',
+    icon: 'send',
+    labelKey: 'profile.helpContactTelegram',
+    a11yKey: 'profile.helpContactTelegramA11y',
+    value: SUPPORT_CONTACTS.telegramHandle,
+    url: SUPPORT_CONTACTS.telegramUrl,
+  },
+  {
+    key: 'web',
+    icon: 'globe',
+    labelKey: 'profile.helpContactWebsite',
+    a11yKey: 'profile.helpContactWebsiteA11y',
+    value: SUPPORT_CONTACTS.websiteDisplay,
+    url: SUPPORT_CONTACTS.websiteUrl,
+  },
+];
+
 function FaqRow({ item, open, onToggle }: { item: FaqItem; open: boolean; onToggle: () => void }) {
   const { t } = useApp();
   return (
@@ -108,6 +163,10 @@ export default function HelpScreen() {
     setOpenKey((prev) => (prev === key ? null : key));
   };
 
+  const openContact = (url: string) => {
+    void Linking.openURL(url).catch(() => undefined);
+  };
+
   return (
     <View style={styles.screenRoot}>
       <ScrollView
@@ -121,31 +180,64 @@ export default function HelpScreen() {
         directionalLockEnabled
         keyboardShouldPersistTaps="handled"
       >
-      <View style={styles.hero}>
-        <View style={styles.iconWrap}>
-          <Feather name="headphones" size={28} color={PURPLE} />
-        </View>
-        <Text style={styles.title}>{t('common.navHelp')}</Text>
-        <Text style={styles.subtitle}>{t('profile.helpSubtitle')}</Text>
-      </View>
-
-      <View style={styles.card}>
-        {FAQ.map((item, i) => (
-          <View key={item.key}>
-            <FaqRow item={item} open={openKey === item.key} onToggle={() => toggle(item.key)} />
-            {i < FAQ.length - 1 ? <View style={styles.divider} /> : null}
+        <View style={styles.hero}>
+          <View style={styles.iconWrap}>
+            <Feather name="headphones" size={28} color={PURPLE} />
           </View>
-        ))}
-      </View>
+          <Text style={styles.title}>{t('common.navHelp')}</Text>
+          <Text style={styles.subtitle}>{t('profile.helpSubtitle')}</Text>
+        </View>
 
-      <View style={styles.note}>
-        <MaterialCommunityIcons name="information-outline" size={18} color={MUTED} />
-        <Text style={styles.noteText}>{t('profile.helpNote')}</Text>
-      </View>
+        <View style={styles.card}>
+          {FAQ.map((item, i) => (
+            <View key={item.key}>
+              <FaqRow item={item} open={openKey === item.key} onToggle={() => toggle(item.key)} />
+              {i < FAQ.length - 1 ? <View style={styles.divider} /> : null}
+            </View>
+          ))}
+        </View>
 
-      <Pressable style={styles.primaryBtn} onPress={() => router.push('/branches')}>
-        <Text style={styles.primaryBtnText}>{t('profile.helpBranchesButton')}</Text>
-      </Pressable>
+        <View style={styles.contactCard}>
+          <Text style={styles.contactTitle}>{t('profile.helpContactTitle')}</Text>
+          <Text style={styles.contactSubtitle}>{t('profile.helpContactSubtitle')}</Text>
+          {CONTACT_ROWS.map((row, i) => (
+            <View key={row.key}>
+              {i > 0 ? <View style={styles.contactDivider} /> : null}
+              <Pressable
+                onPress={() => openContact(row.url)}
+                style={({ pressed }) => [styles.contactRow, pressed && { opacity: 0.82 }]}
+                accessibilityRole="link"
+                accessibilityLabel={`${t(row.a11yKey)}: ${row.value}`}
+              >
+                <View style={styles.contactIcon}>
+                  <Feather name={row.icon} size={18} color={PURPLE} />
+                </View>
+                <View style={styles.contactCopy}>
+                  <Text style={styles.contactLabel}>{t(row.labelKey)}</Text>
+                  <Text style={styles.contactValue} numberOfLines={1}>
+                    {row.value}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={16} color="#CBD5E1" />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.note}>
+          <MaterialCommunityIcons name="information-outline" size={18} color={MUTED} />
+          <Text style={styles.noteText}>{t('profile.helpNote')}</Text>
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.88 }]}
+          onPress={() => router.push('/branches')}
+          accessibilityRole="button"
+          accessibilityLabel={t('profile.helpBranchesButton')}
+        >
+          <Feather name="map-pin" size={16} color={PURPLE} />
+          <Text style={styles.secondaryBtnText}>{t('profile.helpBranchesButton')}</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -247,6 +339,62 @@ const styles = StyleSheet.create({
     backgroundColor: BORDER,
     marginHorizontal: 14,
   },
+  contactCard: {
+    backgroundColor: CARD,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 14,
+    paddingTop: 16,
+    paddingBottom: 6,
+    boxShadow: '0 2px 10px rgba(42,16,78,0.03)',
+  },
+  contactTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    color: PURPLE_DEEP,
+    marginBottom: 4,
+    paddingHorizontal: 2,
+  },
+  contactSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12.5,
+    color: MUTED,
+    lineHeight: 17,
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  contactRow: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  contactIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F3E8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactCopy: { flex: 1, minWidth: 0 },
+  contactLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: MUTED,
+    marginBottom: 2,
+  },
+  contactValue: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: PURPLE_DEEP,
+  },
+  contactDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: BORDER,
+  },
   note: {
     flexDirection: 'row',
     gap: 8,
@@ -260,17 +408,20 @@ const styles = StyleSheet.create({
     color: MUTED,
     lineHeight: 17,
   },
-  primaryBtn: {
-    minHeight: 52,
-    borderRadius: 16,
-    backgroundColor: PURPLE,
+  secondaryBtn: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    backgroundColor: '#Faf7ff',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 4px 14px rgba(106,34,214,0.22)',
+    flexDirection: 'row',
+    gap: 8,
   },
-  primaryBtnText: {
-    color: '#fff',
-    fontFamily: 'Inter_700Bold',
-    fontSize: 15,
+  secondaryBtnText: {
+    color: PURPLE,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
   },
 });
