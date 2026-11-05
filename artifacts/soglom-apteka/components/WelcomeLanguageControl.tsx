@@ -1,10 +1,9 @@
-import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
+import { LanguageFlag } from '@/components/LanguageFlag';
 import { useApp } from '@/context/AppContext';
 import { getLanguageMeta, type Language } from '@/lib/languages';
 
-const PRIMARY = '#4B248A';
 const SURFACE = 'rgba(255,255,255,0.96)';
 
 type Props = {
@@ -13,9 +12,8 @@ type Props = {
 };
 
 /**
- * Welcome language entry — pattern used by major apps (Telegram settings,
- * HashiCorp Helios, Siemens Healthineers): globe only in the corner.
- * No flags, no UZ/RU/EN codes. Native names live in LanguagePickerSheet.
+ * Welcome language entry — current language as a drawable flag (not globe / emoji).
+ * Native names live in LanguagePickerSheet.
  */
 export function WelcomeLanguageControl({ language, onPress }: Props) {
   const { t } = useApp();
@@ -30,7 +28,7 @@ export function WelcomeLanguageControl({ language, onPress }: Props) {
       hitSlop={8}
       testID="welcome-language"
     >
-      <Feather name="globe" size={18} color={PRIMARY} />
+      <LanguageFlag language={language} size={18} />
     </Pressable>
   );
 }
