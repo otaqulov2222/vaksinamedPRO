@@ -1,3 +1,4 @@
+import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppBottomSheet } from '@/components/AppBottomSheet';
@@ -5,11 +6,12 @@ import { useApp } from '@/context/AppContext';
 import { LANGUAGES, type Language } from '@/lib/languages';
 
 const INK = '#17162C';
-const PILL_BG = '#F3F2F7';
-const PILL_BORDER = 'rgba(75,36,138,0.08)';
+const MUTED = '#64748B';
+const ROW_BG = '#F7F6FA';
 const PRIMARY = '#4B248A';
 const SELECTED_BG = '#F1EBFF';
-const SELECTED_BORDER = 'rgba(75,36,138,0.28)';
+const SELECTED_BORDER = 'rgba(75,36,138,0.22)';
+const DIVIDER = 'rgba(75,36,138,0.06)';
 
 type Props = {
   visible: boolean;
@@ -17,7 +19,10 @@ type Props = {
   onSelect?: (language: Language) => void;
 };
 
-/** Korzinka-style language picker: bottom sheet + pill options (endonyms). */
+/**
+ * Language list like Telegram / Helios / Siemens:
+ * native endonyms + checkmark — no flags, no UZ/RU/EN codes.
+ */
 export function LanguagePickerSheet({ visible, onClose, onSelect }: Props) {
   const { t, language, setLanguage } = useApp();
 
@@ -33,16 +38,17 @@ export function LanguagePickerSheet({ visible, onClose, onSelect }: Props) {
         {t('common.appLanguage')}
       </Text>
       <View style={styles.list}>
-        {LANGUAGES.map((option) => {
+        {LANGUAGES.map((option, index) => {
           const selected = language === option.code;
           return (
             <Pressable
               key={option.code}
               onPress={() => pick(option.code)}
               style={({ pressed }) => [
-                styles.pill,
-                selected && styles.pillSelected,
-                pressed && styles.pillPressed,
+                styles.row,
+                selected && styles.rowSelected,
+                index < LANGUAGES.length - 1 && styles.rowGap,
+                pressed && styles.rowPressed,
               ]}
               accessibilityRole="radio"
               accessibilityState={{ selected, checked: selected }}
@@ -53,9 +59,10 @@ export function LanguagePickerSheet({ visible, onClose, onSelect }: Props) {
               }
               testID={`language-option-${option.code}`}
             >
-              <Text style={[styles.pillText, selected && styles.pillTextSelected]} numberOfLines={1}>
+              <Text style={[styles.rowText, selected && styles.rowTextSelected]} numberOfLines={1}>
                 {option.nativeName}
               </Text>
+              {selected ? <Feather name="check" size={18} color={PRIMARY} /> : <View style={styles.checkSpacer} />}
             </Pressable>
           );
         })}
@@ -71,30 +78,35 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: INK,
     letterSpacing: -0.3,
-    marginBottom: 12,
+    marginBottom: 14,
     paddingHorizontal: 4,
   },
-  list: { gap: 10, paddingBottom: 8 },
-  pill: {
+  list: { paddingBottom: 8 },
+  row: {
     minHeight: 52,
-    borderRadius: 999,
-    backgroundColor: PILL_BG,
+    borderRadius: 14,
+    backgroundColor: ROW_BG,
     borderWidth: 1,
-    borderColor: PILL_BORDER,
+    borderColor: DIVIDER,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  pillSelected: {
+  rowGap: { marginBottom: 8 },
+  rowSelected: {
     backgroundColor: SELECTED_BG,
     borderColor: SELECTED_BORDER,
   },
-  pillPressed: { opacity: 0.88 },
-  pillText: {
+  rowPressed: { opacity: 0.9 },
+  rowText: {
+    flex: 1,
     fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
-    lineHeight: 20,
+    lineHeight: 21,
     color: INK,
   },
-  pillTextSelected: { color: PRIMARY },
+  rowTextSelected: { color: PRIMARY },
+  checkSpacer: { width: 18, height: 18 },
 });
