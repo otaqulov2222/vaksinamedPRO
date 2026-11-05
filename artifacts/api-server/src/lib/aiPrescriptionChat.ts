@@ -2,11 +2,7 @@ import {
   scanAndMatchPrescriptionText,
   type CatalogProductCandidate,
 } from "./prescriptionEngine";
-import {
-  hasClinicalContent,
-  isMedicineSeekingAsk,
-  normalizeUserSpeech,
-} from "./aiChatNlu";
+import { hasClinicalContent, normalizeUserSpeech } from "./aiChatNlu";
 
 export interface AiChatMessage {
   role: "user" | "assistant" | "system";
@@ -204,7 +200,36 @@ export function isMedicalDomain(query: string): boolean {
 }
 
 export function isExplicitMedicinePurchaseRequest(query: string): boolean {
-  return isMedicineSeekingAsk(query);
+  // Strict: only cart/buy/price/stock — NOT advisory "nima ichsam bo'ladi?"
+  const q = normalizeQuery(query);
+  return (
+    q.includes("sotib ol") ||
+    q.includes("buyurtma") ||
+    q.includes("savatga") ||
+    q.includes("narxi") ||
+    q.includes("qancha turadi") ||
+    q.includes("bormi") ||
+    q.includes("qayerdan olsam") ||
+    q.includes("dori bering") ||
+    q.includes("dori kerak") ||
+    q.includes("preparat kerak") ||
+    q.includes("topib ber") ||
+    q.includes("dokonda bormi") ||
+    q.includes("dorixonada bormi") ||
+    q.includes("купить") ||
+    q.includes("заказать") ||
+    q.includes("в корзину") ||
+    q.includes("сколько стоит") ||
+    q.includes("есть в наличии") ||
+    q.includes("наличие") ||
+    q.includes("дай лекарство") ||
+    q.includes("нужно лекарство") ||
+    q.includes("найди препарат") ||
+    /\bbuy\b/.test(q) ||
+    /\border\b/.test(q) ||
+    /\bprice\b/.test(q) ||
+    q.includes("in stock")
+  );
 }
 
 /** If the user asks mid-chat to switch language, honour that over the app locale. */
