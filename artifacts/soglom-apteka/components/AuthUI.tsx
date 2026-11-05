@@ -77,14 +77,15 @@ export function useEntryAnimation(distance = 10) {
 }
 
 /*
- * Backdrop geometry lives in a 390×844 frame scaled with `slice`, so it tracks the Welcome layout:
- * the brand sits around y 200–530 there and nothing with contrast may cross that band.
- * The rings echo the open concentric circles of the VaksinaMed symbol without repeating it.
+ * Backdrop: 390×844, slice-scaled. Brand lockup lives ~y 180–480 — keep that band free of
+ * high-contrast shapes and never put a soft disc behind the logo (reads as a glow).
+ * Hero is bold edge geometry; quiet is the same language at lower intensity for forms.
  */
-const BACKDROP_BASE = '#F8F7FB';
-const BACKDROP_DEPTH = '#F3EFFA';
-/** Lavender light mixed from the brand purple; reads as atmosphere where raw low-alpha purple turns grey. */
+const BACKDROP_BASE = '#F7F4FC';
+const BACKDROP_MID = '#EDE6F8';
+const BACKDROP_DEPTH = '#E2D8F2';
 const LAVENDER = '#B9A3E3';
+const LAVENDER_DEEP = '#8B6BC4';
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const polar = (cx: number, cy: number, r: number, deg: number) => {
@@ -104,45 +105,71 @@ const crossPath = (cx: number, cy: number, arm: number, half: number) =>
   `M${cx - half} ${cy - arm} H${cx + half} V${cy - half} H${cx + arm} V${cy + half} H${cx + half} V${cy + arm} ` +
   `H${cx - half} V${cy + half} H${cx - arm} V${cy - half} H${cx - half} Z`;
 
-/** Top-left: a quiet lavender field and one open precision ring. */
-const TL = { x: -130, y: -150 };
-const TOP_RING = [arcPath(TL.x, TL.y, 352, 8, 37), arcPath(TL.x, TL.y, 352, 43, 84)];
-/** Bottom-left: flowing purple band, the open measurement ring and the yellow light marker on it. */
-const BL = { x: -60, y: 900 };
-const BAND_INNER = 250;
-const BAND_OUTER = 360;
-const LOW_BAND = bandPath(BL.x, BL.y, BAND_INNER, BAND_OUTER, -100, 10);
-const LOW_BAND_EDGE = arcPath(BL.x, BL.y, BAND_OUTER, -100, 10);
-const LOW_RING = [arcPath(BL.x, BL.y, 392, -100, -67), arcPath(BL.x, BL.y, 392, -62, 10)];
-const LIGHT_MARKER = arcPath(BL.x, BL.y, 392, -79, -69);
-const LIGHT_SOURCE = { x: 81, y: 534 };
-/** Bottom-right: translucent protection form with a medical cross, meant to be found, not seen first. */
-const SHIELD = shieldPath(352, 520, 84, 206);
-const SHIELD_INNER = shieldPath(352, 541, 66, 162);
-const SHIELD_CROSS = crossPath(352, 612, 20, 6);
+/** Top-left atmosphere + open rings echoing the brand symbol. */
+const TL = { x: -90, y: -110 };
+const TOP_RING = [
+  arcPath(TL.x, TL.y, 280, 12, 78),
+  arcPath(TL.x, TL.y, 310, 8, 42),
+  arcPath(TL.x, TL.y, 310, 48, 88),
+  arcPath(TL.x, TL.y, 348, 18, 70),
+];
+/** Bottom-left sweep: filled band + measurement rings + yellow accent. */
+const BL = { x: -40, y: 920 };
+const BAND_INNER = 220;
+const BAND_OUTER = 400;
+const LOW_BAND = bandPath(BL.x, BL.y, BAND_INNER, BAND_OUTER, -108, 18);
+const LOW_BAND_EDGE = arcPath(BL.x, BL.y, BAND_OUTER, -108, 18);
+const LOW_RING = [
+  arcPath(BL.x, BL.y, 430, -108, -58),
+  arcPath(BL.x, BL.y, 430, -50, 18),
+  arcPath(BL.x, BL.y, 460, -95, -70),
+  arcPath(BL.x, BL.y, 460, -62, 12),
+];
+const LIGHT_MARKER = arcPath(BL.x, BL.y, 430, -84, -72);
+const LIGHT_SOURCE = { x: 96, y: 548 };
+/** Top-right secondary orbit (hero only). */
+const TR = { x: 420, y: 40 };
+const TOP_RIGHT_RING = [
+  arcPath(TR.x, TR.y, 160, 110, 200),
+  arcPath(TR.x, TR.y, 190, 100, 175),
+  arcPath(TR.x, TR.y, 190, 185, 220),
+];
+/** Bottom-right protection form. */
+const SHIELD = shieldPath(348, 500, 96, 230);
+const SHIELD_INNER = shieldPath(348, 524, 74, 180);
+const SHIELD_CROSS = crossPath(348, 600, 22, 7);
 
 /**
- * Static brand environment in three depths: base light, translucent curves, one glass protection form.
- * `quiet` keeps the same language at lower intensity for form screens.
+ * Brand environment for auth surfaces.
+ * Hero: strong edge composition for Welcome. Quiet: softer for login/register forms.
  */
 export function AuthBackdrop({ variant = 'hero' }: { variant?: 'hero' | 'quiet' }) {
   const hero = variant === 'hero';
-  const k = hero ? 1 : 0.6;
+  const k = hero ? 1 : 0.45;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Svg width="100%" height="100%" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice">
         <Defs>
-          <LinearGradient id={`base-${variant}`} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={BACKDROP_BASE} />
-            <Stop offset="0.6" stopColor={BACKDROP_BASE} />
-            <Stop offset="1" stopColor={BACKDROP_DEPTH} />
+          <LinearGradient id={`base-${variant}`} x1="0" y1="0" x2="0.35" y2="1">
+            <Stop offset="0" stopColor={hero ? '#EFE8FA' : BACKDROP_BASE} />
+            <Stop offset="0.45" stopColor={BACKDROP_BASE} />
+            <Stop offset="1" stopColor={hero ? BACKDROP_DEPTH : BACKDROP_MID} />
+          </LinearGradient>
+          <LinearGradient id={`wash-${variant}`} x1="1" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={C.primary} stopOpacity={hero ? 0.1 : 0.04} />
+            <Stop offset="0.55" stopColor={LAVENDER} stopOpacity={0} />
+            <Stop offset="1" stopColor={C.yellow} stopOpacity={hero ? 0.06 : 0.02} />
           </LinearGradient>
           <RadialGradient id={`field-${variant}`} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0.5" stopColor={LAVENDER} stopOpacity={0.26 * k} />
-            <Stop offset="0.85" stopColor={LAVENDER} stopOpacity={0.14 * k} />
+            <Stop offset="0.35" stopColor={LAVENDER_DEEP} stopOpacity={0.22 * k} />
+            <Stop offset="0.7" stopColor={LAVENDER} stopOpacity={0.28 * k} />
             <Stop offset="1" stopColor={LAVENDER} stopOpacity={0} />
           </RadialGradient>
-          {/* Soft inner edge, defined outer edge: the band reads as a lit translucent layer, not a flat block. */}
+          <RadialGradient id={`corner-${variant}`} cx="0.5" cy="0.5" r="0.5">
+            <Stop offset="0.2" stopColor={C.primary} stopOpacity={0.18 * k} />
+            <Stop offset="0.75" stopColor={LAVENDER} stopOpacity={0.12 * k} />
+            <Stop offset="1" stopColor={LAVENDER} stopOpacity={0} />
+          </RadialGradient>
           <RadialGradient
             id={`band-${variant}`}
             cx={BL.x}
@@ -153,60 +180,83 @@ export function AuthBackdrop({ variant = 'hero' }: { variant?: 'hero' | 'quiet' 
             gradientUnits="userSpaceOnUse"
           >
             <Stop offset={BAND_INNER / BAND_OUTER} stopColor={LAVENDER} stopOpacity={0} />
-            <Stop offset="0.93" stopColor={LAVENDER} stopOpacity={0.26 * k} />
-            <Stop offset="1" stopColor={C.primary} stopOpacity={0.09 * k} />
+            <Stop offset="0.88" stopColor={LAVENDER} stopOpacity={0.42 * k} />
+            <Stop offset="1" stopColor={C.primary} stopOpacity={0.22 * k} />
           </RadialGradient>
           <RadialGradient id={`depth-${variant}`} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0.55" stopColor={LAVENDER} stopOpacity={0} />
-            <Stop offset="0.82" stopColor={LAVENDER} stopOpacity={0.09} />
+            <Stop offset="0.4" stopColor={LAVENDER_DEEP} stopOpacity={0.16 * k} />
+            <Stop offset="0.85" stopColor={LAVENDER} stopOpacity={0.1 * k} />
             <Stop offset="1" stopColor={LAVENDER} stopOpacity={0} />
           </RadialGradient>
-          <RadialGradient id={`calm-${variant}`} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0" stopColor={C.surface} stopOpacity={0.95} />
-            <Stop offset="0.6" stopColor={C.surface} stopOpacity={0.6} />
-            <Stop offset="1" stopColor={C.surface} stopOpacity={0} />
-          </RadialGradient>
           <RadialGradient id={`light-${variant}`} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0" stopColor={C.yellow} stopOpacity={0.22} />
+            <Stop offset="0" stopColor={C.yellow} stopOpacity={hero ? 0.45 : 0.18} />
+            <Stop offset="0.55" stopColor={C.yellow} stopOpacity={0.12} />
             <Stop offset="1" stopColor={C.yellow} stopOpacity={0} />
           </RadialGradient>
-          <LinearGradient id={`glass-${variant}`} x1="0" y1="0" x2="0.8" y2="1">
-            <Stop offset="0" stopColor={C.surface} stopOpacity={0.7} />
-            <Stop offset="1" stopColor={LAVENDER} stopOpacity={0.2} />
+          <LinearGradient id={`glass-${variant}`} x1="0" y1="0" x2="0.85" y2="1">
+            <Stop offset="0" stopColor={C.surface} stopOpacity={0.78} />
+            <Stop offset="0.55" stopColor={LAVENDER} stopOpacity={0.28} />
+            <Stop offset="1" stopColor={C.primary} stopOpacity={0.12} />
           </LinearGradient>
           <LinearGradient id={`glassEdge-${variant}`} x1="0" y1="0" x2="0.8" y2="1">
-            <Stop offset="0" stopColor={C.primary} stopOpacity={0.05} />
-            <Stop offset="1" stopColor={C.primary} stopOpacity={0.17} />
+            <Stop offset="0" stopColor={C.primary} stopOpacity={0.12} />
+            <Stop offset="1" stopColor={C.primary} stopOpacity={0.32} />
           </LinearGradient>
         </Defs>
 
-        {/* Depth 1: base light — no soft disc under the logo (that read as a glow). */}
+        {/* Depth 1: tonal field — corners carry color; center stays open for the logo. */}
         <Rect x="0" y="0" width="390" height="844" fill={`url(#base-${variant})`} />
-        <Circle cx={TL.x} cy={TL.y} r={330} fill={`url(#field-${variant})`} />
-        {hero ? (
-          <Ellipse cx={40} cy={720} rx={220} ry={180} fill={`url(#depth-${variant})`} />
-        ) : null}
+        <Rect x="0" y="0" width="390" height="844" fill={`url(#wash-${variant})`} />
+        <Circle cx={TL.x} cy={TL.y} r={300} fill={`url(#field-${variant})`} />
+        {hero ? <Circle cx={TR.x} cy={TR.y} r={200} fill={`url(#corner-${variant})`} /> : null}
+        <Ellipse cx={20} cy={780} rx={260} ry={200} fill={`url(#depth-${variant})`} />
 
-        {/* Depth 2: translucent curves and precision rings */}
+        {/* Depth 2: filled sweep + open brand rings */}
         <Path d={LOW_BAND} fill={`url(#band-${variant})`} />
-        <Path d={LOW_BAND_EDGE} fill="none" stroke={C.surface} strokeOpacity={0.9} strokeWidth={1} />
-        {TOP_RING.map((d) => (
-          <Path key={d} d={d} fill="none" stroke={C.primary} strokeOpacity={0.09 * k} strokeWidth={1} strokeLinecap="round" />
+        <Path d={LOW_BAND_EDGE} fill="none" stroke={C.surface} strokeOpacity={0.95} strokeWidth={1.5} />
+        {TOP_RING.map((d, i) => (
+          <Path
+            key={`tr-${i}`}
+            d={d}
+            fill="none"
+            stroke={i === 0 ? LAVENDER_DEEP : C.primary}
+            strokeOpacity={(i === 0 ? 0.28 : 0.2) * k}
+            strokeWidth={i === 2 ? 1.5 : 1.25}
+            strokeLinecap="round"
+          />
         ))}
-        {LOW_RING.map((d) => (
-          <Path key={d} d={d} fill="none" stroke={C.primary} strokeOpacity={0.13 * k} strokeWidth={1} strokeLinecap="round" />
+        {LOW_RING.map((d, i) => (
+          <Path
+            key={`lr-${i}`}
+            d={d}
+            fill="none"
+            stroke={C.primary}
+            strokeOpacity={(0.18 + (i % 2) * 0.08) * k}
+            strokeWidth={1.25}
+            strokeLinecap="round"
+          />
         ))}
 
         {hero ? (
           <>
-            {/* Yellow: one light source and its marker on the ring */}
-            <Circle cx={LIGHT_SOURCE.x} cy={LIGHT_SOURCE.y} r={24} fill={`url(#light-${variant})`} />
-            <Path d={LIGHT_MARKER} fill="none" stroke={C.yellow} strokeOpacity={0.85} strokeWidth={1.5} strokeLinecap="round" />
+            {TOP_RIGHT_RING.map((d, i) => (
+              <Path
+                key={`rr-${i}`}
+                d={d}
+                fill="none"
+                stroke={C.primary}
+                strokeOpacity={0.22}
+                strokeWidth={1.2}
+                strokeLinecap="round"
+              />
+            ))}
 
-            {/* Depth 3: glass protection form */}
-            <Path d={SHIELD} fill={`url(#glass-${variant})`} stroke={`url(#glassEdge-${variant})`} strokeWidth={1} />
-            <Path d={SHIELD_INNER} fill="none" stroke={C.surface} strokeOpacity={0.85} strokeWidth={1} />
-            <Path d={SHIELD_CROSS} fill="none" stroke={C.primary} strokeOpacity={0.1} strokeWidth={1} strokeLinejoin="round" />
+            <Circle cx={LIGHT_SOURCE.x} cy={LIGHT_SOURCE.y} r={36} fill={`url(#light-${variant})`} />
+            <Path d={LIGHT_MARKER} fill="none" stroke={C.yellow} strokeOpacity={0.95} strokeWidth={2.25} strokeLinecap="round" />
+
+            <Path d={SHIELD} fill={`url(#glass-${variant})`} stroke={`url(#glassEdge-${variant})`} strokeWidth={1.25} />
+            <Path d={SHIELD_INNER} fill="none" stroke={C.surface} strokeOpacity={0.9} strokeWidth={1.1} />
+            <Path d={SHIELD_CROSS} fill="none" stroke={C.primary} strokeOpacity={0.22} strokeWidth={1.25} strokeLinejoin="round" />
           </>
         ) : null}
       </Svg>

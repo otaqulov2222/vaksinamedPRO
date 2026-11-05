@@ -26,7 +26,7 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 const at = (delay: number, anim: Animated.CompositeAnimation) => Animated.sequence([Animated.delay(delay), anim]);
 
 /**
- * Welcome gate — A+2: soft minimal surface, staggered fade/slide (no curtain, sheet, bounce, or logo halo).
+ * Welcome gate — staggered fade/slide on a strong hero backdrop (no curtain, sheet, bounce, or logo halo).
  */
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
@@ -140,7 +140,7 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.root}>
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: v.scene }]}>
-        <AuthBackdrop variant="quiet" />
+        <AuthBackdrop variant="hero" />
       </Animated.View>
 
       <View style={styles.frame}>
