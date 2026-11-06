@@ -1,8 +1,6 @@
 /**
- * OpenAI-compatible chat client (OpenAI / Groq / DeepSeek / NeuronAI / CoreAI / Ollama).
- * Production notes:
- * - Groq JSON mode often fails with usable text in `failed_generation` — we rescue it.
- * - For Groq we prefer plain completions (more reliable) unless forced.
+ * OpenAI-compatible chat client (OpenAI / Groq / DeepSeek / Ollama Cloud / …).
+ * Supports primary + optional fallback provider for Uzbekistan production uptime.
  */
 
 export type ChatRole = "system" | "user" | "assistant";
@@ -17,44 +15,80 @@ export interface LlmConfig {
   baseUrl: string;
   model: string;
   timeoutMs: number;
-  isGroq: boolean;
+  /** Providers that often break with response_format=json_object */
+  preferPlainText: boolean;
+  label: string;
 }
 
-export function getLlmConfig(): LlmConfig | null {
-  const apiKey = (
-    process.env.VAKSINAMED_AI_API_KEY ||
-    process.env.OPENAI_API_KEY ||
-    process.env.GROQ_API_KEY ||
-    ""
-  ).trim();
+function buildConfig(opts: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  timeoutMs: number;
+  label: string;
+}): LlmConfig | null {
+  const apiKey = opts.apiKey.trim();
   if (!apiKey) return null;
-
-  const baseUrl = (
-    process.env.VAKSINAMED_AI_BASE_URL ||
-    process.env.OPENAI_BASE_URL ||
-    "https://api.openai.com/v1"
-  )
-    .trim()
-    .replace(/\/+$/, "");
-
-  const model = (
-    process.env.VAKSINAMED_AI_MODEL ||
-    process.env.OPENAI_MODEL ||
-    "gpt-4o-mini"
-  ).trim();
-
-  const timeoutMs = Math.max(
-    5000,
-    Number(process.env.VAKSINAMED_AI_TIMEOUT_MS || 25000) || 25000,
-  );
-
+  const baseUrl = opts.baseUrl.trim().replace(/\/+$/, "");
+  const model = opts.model.trim();
+  if (!baseUrl || !model) return null;
+  const preferPlainText = /groq\.com|ollama\.com/i.test(baseUrl);
   return {
     apiKey,
     baseUrl,
     model,
-    timeoutMs,
-    isGroq: /groq\.com/i.test(baseUrl),
+    timeoutMs: opts.timeoutMs,
+    preferPlainText,
+    label: opts.label,
   };
+}
+
+export function getLlmConfig(): LlmConfig | null {
+  const timeoutMs = Math.max(
+    5000,
+    Number(process.env.VAKSINAMED_AI_TIMEOUT_MS || 35000) || 35000,
+  );
+
+  return buildConfig({
+    apiKey:
+      process.env.VAKSINAMED_AI_API_KEY ||
+      process.env.OLLAMA_API_KEY ||
+      process.env.OPENAI_API_KEY ||
+      process.env.GROQ_API_KEY ||
+      "",
+    baseUrl:
+      process.env.VAKSINAMED_AI_BASE_URL ||
+      process.env.OPENAI_BASE_URL ||
+      "https://api.openai.com/v1",
+    model:
+      process.env.VAKSINAMED_AI_MODEL ||
+      process.env.OPENAI_MODEL ||
+      "gpt-4o-mini",
+    timeoutMs,
+    label: "primary",
+  });
+}
+
+export function getLlmFallbackConfig(): LlmConfig | null {
+  const timeoutMs = Math.max(
+    5000,
+    Number(process.env.VAKSINAMED_AI_TIMEOUT_MS || 35000) || 35000,
+  );
+
+  return buildConfig({
+    apiKey:
+      process.env.VAKSINAMED_AI_FALLBACK_API_KEY ||
+      process.env.GROQ_API_KEY ||
+      "",
+    baseUrl:
+      process.env.VAKSINAMED_AI_FALLBACK_BASE_URL ||
+      "https://api.groq.com/openai/v1",
+    model:
+      process.env.VAKSINAMED_AI_FALLBACK_MODEL ||
+      "qwen/qwen3.8-27b",
+    timeoutMs,
+    label: "fallback",
+  });
 }
 
 export function isLlmConfigured(): boolean {
@@ -119,39 +153,44 @@ async function chatCompletionOnce(
       const errText = await res.text().catch(() => "");
       const rescued = extractFailedGeneration(errText);
       if (rescued) {
-        console.warn("[aiLlm] rescued failed_generation (", res.status, ")");
+        console.warn(`[aiLlm:${cfg.label}] rescued failed_generation (`, res.status, ")");
         return { content: rescued, retryable: false };
       }
       const retryable = res.status === 429 || res.status === 503 || res.status >= 500;
-      console.error("[aiLlm] HTTP", res.status, errText.slice(0, 400));
+      console.error(`[aiLlm:${cfg.label}] HTTP`, res.status, errText.slice(0, 400));
       return { content: null, retryable };
     }
 
     const data = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        message?: { content?: string; reasoning?: string };
+      }>;
     };
-    const content = data?.choices?.[0]?.message?.content;
+    const msg = data?.choices?.[0]?.message;
+    const content =
+      typeof msg?.content === "string" && msg.content.trim()
+        ? msg.content.trim()
+        : typeof msg?.reasoning === "string" && msg.reasoning.trim()
+          ? msg.reasoning.trim()
+          : null;
     return {
-      content: typeof content === "string" && content.trim() ? content.trim() : null,
+      content,
       retryable: false,
     };
   } catch (err) {
-    console.error("[aiLlm] request failed", err);
+    console.error(`[aiLlm:${cfg.label}] request failed`, err);
     return { content: null, retryable: true };
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function chatCompletion(
+async function chatWithConfig(
+  cfg: LlmConfig,
   messages: LlmMessage[],
   opts?: { temperature?: number; maxTokens?: number; responseFormatJson?: boolean },
 ): Promise<string | null> {
-  const cfg = getLlmConfig();
-  if (!cfg) return null;
-
-  // Groq JSON mode often drops good answers — never force json_object on Groq
-  const useJson = Boolean(opts?.responseFormatJson) && !cfg.isGroq;
+  const useJson = Boolean(opts?.responseFormatJson) && !cfg.preferPlainText;
 
   let result = await chatCompletionOnce(cfg, messages, {
     ...opts,
@@ -166,9 +205,7 @@ export async function chatCompletion(
     });
   }
 
-  // If plain failed and caller wanted structure, one more plain attempt is already default for Groq.
-  // If OpenAI JSON failed without rescue, try plain once.
-  if (!result.content && opts?.responseFormatJson && !cfg.isGroq) {
+  if (!result.content && opts?.responseFormatJson && !cfg.preferPlainText) {
     result = await chatCompletionOnce(cfg, messages, {
       ...opts,
       responseFormatJson: false,
@@ -176,4 +213,29 @@ export async function chatCompletion(
   }
 
   return result.content;
+}
+
+export async function chatCompletion(
+  messages: LlmMessage[],
+  opts?: { temperature?: number; maxTokens?: number; responseFormatJson?: boolean },
+): Promise<string | null> {
+  const primary = getLlmConfig();
+  if (!primary) return null;
+
+  const content = await chatWithConfig(primary, messages, opts);
+  if (content) return content;
+
+  const fallback = getLlmFallbackConfig();
+  if (!fallback) return null;
+  // Avoid looping the same provider
+  if (
+    fallback.baseUrl === primary.baseUrl &&
+    fallback.apiKey === primary.apiKey &&
+    fallback.model === primary.model
+  ) {
+    return null;
+  }
+
+  console.warn("[aiLlm] primary failed — trying fallback provider");
+  return chatWithConfig(fallback, messages, opts);
 }

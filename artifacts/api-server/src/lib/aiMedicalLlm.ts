@@ -196,6 +196,7 @@ export async function tryMedicalLlmReply(input: MedicalLlmInput): Promise<Medica
 
   const cfg = getLlmConfig();
   const catalogHint = compactCatalog(input.candidates);
+  // preferPlainText providers (Groq/Ollama) skip brittle JSON mode
   const messages: LlmMessage[] = [
     { role: "system", content: buildSystemPrompt(input.language, catalogHint) },
   ];
@@ -212,9 +213,8 @@ export async function tryMedicalLlmReply(input: MedicalLlmInput): Promise<Medica
     : userText;
   messages.push({ role: "user", content: userContent });
 
-  // Groq: plain text first (JSON mode frequently drops good answers)
-  // Other providers: try JSON first for structured chips
-  const preferJson = Boolean(cfg && !cfg.isGroq);
+  // Plain-text-first for Groq/Ollama; JSON first for OpenAI-compatible hosts that handle it well
+  const preferJson = Boolean(cfg && !cfg.preferPlainText);
   let raw = await chatCompletion(messages, {
     temperature: 0.3,
     maxTokens: 1100,
