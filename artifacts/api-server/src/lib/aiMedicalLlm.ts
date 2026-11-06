@@ -42,25 +42,27 @@ function buildSystemPrompt(lang: "uz" | "ru" | "en", catalogHint: string): strin
 
 MISSION: Understand the user EXACTLY like a careful bilingual human who has talked with them for a long time.
 - Informal Uzbek Latin, Cyrillic Uzbek, Russian, English, or mixed — all OK.
-- Typos, slang, missing apostrophes, keyboard mash (ogriydi, nma ichay, gapr, qornim, yuragim ezilyapti) — infer intent, do NOT ask them to retype unless truly ambiguous clinically.
-- Reply in the same language the user is using now (or the app language ${lang} if unclear). Prefer natural spoken tone, not bureaucratic.
+- Typos, slang, missing apostrophes, keyboard mash — infer intent; do NOT ask them to retype unless clinically ambiguous.
+- Reply in the SAME language the user is writing NOW (app default: ${lang}). If they say "o'zbekcha javob ber" / "по-русски" / "in English", switch and ALSO answer their previous question from chat history — do not only acknowledge the language switch.
+- Capability questions ("nima qila olasan", "nimalarga javob berasan") → clearly list what you can do in their language.
 
 HARD SAFETY:
-- Life-threatening signs (crushing chest pain, stroke signs, severe bleeding, loss of consciousness, anaphylaxis, child seizure, poisoning with collapse) → tell them to call 103 immediately. Do not sell medicines in that case.
-- Never invent diagnoses as certainty. Advice is informational; remind to see a doctor before taking Rx drugs / antibiotics.
-- Never invent pharmacy networks, FOM, PSP, payments, or fake stock numbers.
-- Antibiotics only with clear bacterial indication + doctor prescription reminder.
+- Life-threatening signs → tell them to call 103 immediately. Do not sell medicines then.
+- Advice is informational; remind to see a doctor before Rx / antibiotics.
+- Never invent FOM, PSP, fake networks, or fake stock.
+- Antibiotics only with clear bacterial indication + prescription reminder.
 
-CATALOG (names you may suggest when relevant; pick at most 3 that truly fit):
+CATALOG (suggest at most 3 when truly relevant):
 ${catalogHint || "(catalog empty in this request)"}
 
-OUTPUT: Return ONLY valid JSON object with keys:
+OUTPUT FORMAT (mandatory):
+Return ONLY a single JSON object. No markdown fences. No prose outside JSON.
 {
-  "reply": "full assistant message to show the user (markdown-lite OK, use 🩺 sparingly)",
-  "isEmergency": boolean,
-  "isMedical": boolean,
-  "productQueries": ["optional medicine name fragments to match in catalog"],
-  "quickSuggestions": ["2-4 short follow-up chip labels in reply language"]
+  "reply": "message shown to the user",
+  "isEmergency": false,
+  "isMedical": true,
+  "productQueries": [],
+  "quickSuggestions": ["chip1", "chip2"]
 }`;
 }
 
@@ -148,6 +150,33 @@ function parseLlmJson(raw: string): {
   }
 }
 
+function toResult(
+  reply: string,
+  userText: string,
+  candidates: CatalogProductCandidate[],
+  parsed?: {
+    isEmergency?: boolean;
+    isMedical?: boolean;
+    productQueries?: string[];
+    quickSuggestions?: string[];
+  } | null,
+): MedicalLlmChatResult {
+  const isEmergency = Boolean(parsed?.isEmergency);
+  const allowProducts =
+    !isEmergency &&
+    (isMedicineSeekingAsk(userText) || (parsed?.productQueries?.length ?? 0) > 0);
+  return {
+    success: true,
+    reply: reply.trim().slice(0, 4000),
+    isMedical: parsed?.isMedical !== false,
+    isPrescription: false,
+    matchedProducts: matchProducts(parsed?.productQueries || [], candidates, allowProducts),
+    quickSuggestions: Array.isArray(parsed?.quickSuggestions)
+      ? parsed!.quickSuggestions!.map(String).filter(Boolean).slice(0, 4)
+      : [],
+  };
+}
+
 export async function tryMedicalLlmReply(input: MedicalLlmInput): Promise<MedicalLlmChatResult | null> {
   if (!isLlmConfigured()) return null;
   const userText = String(input.message || "").trim();
@@ -170,43 +199,28 @@ export async function tryMedicalLlmReply(input: MedicalLlmInput): Promise<Medica
     : userText;
   messages.push({ role: "user", content: userContent });
 
-  const raw = await chatCompletion(messages, {
+  // 1) Prefer JSON mode (structured chips/products)
+  let raw = await chatCompletion(messages, {
     temperature: 0.35,
     maxTokens: 1000,
     responseFormatJson: true,
   });
+
+  // 2) If JSON mode empty/failed without rescue, retry plain text
+  if (!raw) {
+    raw = await chatCompletion(messages, {
+      temperature: 0.35,
+      maxTokens: 1000,
+      responseFormatJson: false,
+    });
+  }
   if (!raw) return null;
 
   const parsed = parseLlmJson(raw);
-  if (!parsed?.reply?.trim()) {
-    return {
-      success: true,
-      reply: raw.slice(0, 4000),
-      isMedical: true,
-      isPrescription: false,
-      matchedProducts: [],
-      quickSuggestions: [],
-    };
+  if (parsed?.reply?.trim()) {
+    return toResult(parsed.reply, userText, input.candidates, parsed);
   }
 
-  const allowProducts =
-    !parsed.isEmergency &&
-    (isMedicineSeekingAsk(userText) || (parsed.productQueries?.length ?? 0) > 0);
-
-  const matchedProducts = matchProducts(
-    parsed.productQueries || [],
-    input.candidates,
-    allowProducts && !parsed.isEmergency,
-  );
-
-  return {
-    success: true,
-    reply: parsed.reply.trim(),
-    isMedical: parsed.isMedical !== false,
-    isPrescription: false,
-    matchedProducts,
-    quickSuggestions: Array.isArray(parsed.quickSuggestions)
-      ? parsed.quickSuggestions.map(String).filter(Boolean).slice(0, 4)
-      : [],
-  };
+  // Plain-text rescue (Groq failed_generation or non-JSON model output)
+  return toResult(raw, userText, input.candidates, null);
 }

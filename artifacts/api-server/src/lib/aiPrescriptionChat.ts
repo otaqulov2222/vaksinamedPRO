@@ -238,7 +238,7 @@ export function detectReplyLanguage(
   fallback: "uz" | "ru" | "en" = "uz",
 ): "uz" | "ru" | "en" {
   const q = normalizeQuery(message);
-  // "gap" / "gapr" / "gapir" typos + common switch phrases
+  // Explicit switch phrases first
   if (
     /(?:o['`ʼ]?zbek|uzbek|узбек).{0,24}(?:til|язык|language|cha)|(?:tilida|на узбекском|in uzbek|по-узбекски).{0,24}(?:gap\w*|javob|speak|ответь|пиши|yoz)|speak\s*uzbek|javob.*o['`ʼ]?zbek|o['`ʼ]?zbekcha\s*(?:gap\w*|javob|yoz)/i.test(
       q,
@@ -258,6 +258,21 @@ export function detectReplyLanguage(
       q,
     )
   ) {
+    return "en";
+  }
+
+  // Infer from the message itself (so Uzbek typing wins over a stale app locale)
+  const cyr = (q.match(/[а-яё]/gi) || []).length;
+  const lat = (q.match(/[a-z']/gi) || []).length;
+  if (cyr >= 4 && cyr > lat) return "ru";
+  if (
+    /(?:^|[\s])(salom|assalom|nima\w*|qila\w*|qilay|bera\w*|berasan|ichsam|ichay|og'?ri\w*|yordam\w*|dorixona|retsept|shamol\w*|isitma|rahmat|yuqori\w*|savol\w*|javob\w*|ozi\b)/i.test(
+      ` ${q} `,
+    )
+  ) {
+    return "uz";
+  }
+  if (/\b(hello|please|thanks|what can you|how (?:do|can) i|medicine|prescription)\b/i.test(q)) {
     return "en";
   }
   return fallback;

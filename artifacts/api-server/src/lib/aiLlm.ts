@@ -52,6 +52,27 @@ export function isLlmConfigured(): boolean {
   return getLlmConfig() != null;
 }
 
+function extractFailedGeneration(errText: string): string | null {
+  try {
+    const parsed = JSON.parse(errText) as {
+      error?: { failed_generation?: string; message?: string };
+    };
+    const fg = parsed?.error?.failed_generation;
+    if (typeof fg === "string" && fg.trim()) return fg.trim();
+  } catch {
+    // ignore
+  }
+  const m = errText.match(/"failed_generation"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (m?.[1]) {
+    try {
+      return JSON.parse(`"${m[1]}"`);
+    } catch {
+      return m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+    }
+  }
+  return null;
+}
+
 export async function chatCompletion(
   messages: LlmMessage[],
   opts?: { temperature?: number; maxTokens?: number; responseFormatJson?: boolean },
@@ -85,6 +106,12 @@ export async function chatCompletion(
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
+      // Groq often returns the usable reply inside failed_generation when JSON mode fails
+      const rescued = extractFailedGeneration(errText);
+      if (rescued) {
+        console.warn("[aiLlm] rescued failed_generation (", res.status, ")");
+        return rescued;
+      }
       console.error("[aiLlm] HTTP", res.status, errText.slice(0, 400));
       return null;
     }

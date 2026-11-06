@@ -1,5 +1,6 @@
 import { tryMedicalLlmReply } from "./aiMedicalLlm";
 import {
+  detectReplyLanguage,
   handleAiMedicalChat,
   type AiChatResponse,
 } from "./aiPrescriptionChat";
@@ -21,7 +22,9 @@ export async function handleAiMedicalChatAsync(params: {
 }): Promise<AiChatResponse> {
   const userText = String(params.message || "").trim();
   const hasImage = Boolean(params.image && params.image.trim().length > 0);
-  const lang = params.language || "uz";
+  const appLang = params.language || "uz";
+  // Prefer the language the user is writing in over a stale app locale
+  const lang = detectReplyLanguage(userText, appLang);
 
   const looksLikePrescription =
     hasImage ||
