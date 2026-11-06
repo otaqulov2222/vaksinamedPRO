@@ -39,12 +39,25 @@ Delivery history/ETA/filters intentionally **not** done (`DELIVERY_DISABLED` pic
 
 | Module | Status |
 |--------|--------|
-| Settings write (`PATCH /admin/settings/cashback`, `settings:manage`) | **IMPLEMENTED** |
+| Settings write (`PATCH /admin/settings/cashback`, `settings:manage`) | **IMPLEMENTED** (Phase A spend; Phase B min/TTL/tiers; Phase C welcome/birthday/deliveryFee) |
 | Reports comparison + deeper CSV | **IMPLEMENTED** |
 | Cashback refund UI + HQ adjustment | **IMPLEMENTED** |
 | Ratings hide (`hidden_at`, `ratings:moderate`) | **IMPLEMENTED** |
 | Audit CSV export | **IMPLEMENTED** |
 | Staging HTTP role smoke | **PASS** on Eskiz `APP_ENV=staging` (`https://77-83-206-192.sslip.io`, 2026-11-06): HQ GET matrix 200; cashier 403 on dashboard/reports/audit/settings; foreign `branchId` IDOR 403; anon audit 401; HQ settings spend ratio write round-trip 30→31→30. Password login blocked by WebAuthn — sessions minted via `admin-staging-role-smoke-mint.ts` (`SMOKE_MINT_ENABLED=1`). |
+| Live deploy Phase B+C | **PASS** Eskiz VPS `491486e` (2026-11-06): `GET /api/healthz` HTTPS 200 `database:up` postgres; `GET /api/cashback/rules` publishes `ttlAppliesTo=new_grants_only` + welcome/birthday/deliveryFee fields |
+
+### OPS gates snapshot (2026-11-06, public evidence only)
+
+| Gate | Live Eskiz status |
+|------|-------------------|
+| HTTPS edge | **PASS** — nginx TLS on `https://77-83-206-192.sslip.io` (sslip.io, not custom domen) |
+| Custom domen | **OPS_REQUIRED** — haqiqiy domen hali yo‘q |
+| API + Postgres | **PASS** — healthz `database:up` / `driver:postgres` |
+| Redis live verify (P0-4) | **OPS_REQUIRED** — provider / `REDIS_URL` live NOT_PROVEN (repo gate) |
+| Payme/Click sandbox E2E (P0-3) | **OPS_REQUIRED** — credentials / NOT_RUN |
+| Managed PG PITR + restore (P0-1) | **OPS_REQUIRED** — backup/restore drill yo‘q |
+| Merchant KMS (P0-2) | **OPS_REQUIRED** — app ready, managed KMS yo‘q |
 
 ---
 
