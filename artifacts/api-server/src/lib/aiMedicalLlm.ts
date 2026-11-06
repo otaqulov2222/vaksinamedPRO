@@ -106,7 +106,7 @@ function compactCatalog(candidates: CatalogProductCandidate[]): string {
 }
 
 const ACUTE_SYMPTOM_RE =
-  /(?:\bbosh\b(?!qa).{0,24}og['']?ri|og['']?ri.{0,24}\bbosh\b(?!qa)|headache|головн|болит\s+голов|isitma|harorat|temperatura|fever|tish.{0,12}og['']?ri|toothache|зубн|tomoq.{0,12}og['']?ri|yo['']?tal|cough|кашел|qorin.{0,12}og['']?ri|stomach\s*pain)/i;
+  /(?:\bbosh\b(?!qa).{0,24}og['']?ri|og['']?ri.{0,24}\bbosh\b(?!qa)|headache|головн|болит\s+голов|isitma|harorat|temperatura|fever|tish.{0,12}og['']?ri|toothache|зубн|tomoq.{0,12}og['']?ri|yo['']?tal|cough|кашел|qorin.{0,12}og['']?ri|stomach\s*pain|shamoll|gripp|простуд|cold\b)/i;
 
 const VITAMIN_OR_SUPPLEMENT_RE =
   /(?:vitamin|витамин|\bd3\b|\bд3\b|omega|омега|кальц|calci|suyak|кость|БАД|\bbad\b|multivit|askorbin|аскорбин|magniy|магний)/i;
@@ -118,6 +118,13 @@ const KNOWN_OTC_ALIASES: Array<{ re: RegExp; query: string }> = [
   { re: /analgin|анальгин|metamizol/i, query: "analgin" },
   { re: /aspirin|аспирин|atsetilsalitsil/i, query: "aspirin" },
   { re: /ats?ts\b|ацц|atsetiltsistein|acetylcysteine/i, query: "acc" },
+  { re: /aqua\s*maris|aquamaris|аква\s*марис/i, query: "aqua maris" },
+  { re: /smecta|smekta|смекта/i, query: "smecta" },
+  { re: /linex|линекс/i, query: "linex" },
+  { re: /rehydron|regidron|регидрон/i, query: "rehydron" },
+  { re: /faol\s*ko['']?mir|activated\s*charcoal|активированн\w*\s*угол/i, query: "ko'mir" },
+  { re: /loratadin|лоратадин/i, query: "loratadin" },
+  { re: /nozol|назол|ksilometazolin|ксилометазолин/i, query: "nozol" },
 ];
 
 function isAcuteSymptomAsk(userText: string): boolean {
@@ -132,11 +139,35 @@ function userAskedForVitamins(userText: string): boolean {
   return isVitaminOrSupplementQuery(userText);
 }
 
+/** Pull catalog brand tokens that the assistant actually named in the reply. */
+function extractCatalogMentions(
+  reply: string,
+  candidates: CatalogProductCandidate[] | undefined,
+): string[] {
+  if (!candidates?.length) return [];
+  const replyNorm = normalizeUserSpeech(reply);
+  const hits: Array<{ q: string; len: number }> = [];
+  for (const p of candidates) {
+    for (const rawName of [p.nameUz, p.nameRu, p.analogGroup]) {
+      if (!rawName) continue;
+      const cleaned = normalizeUserSpeech(String(rawName).replace(/\(.*?\)/g, ""));
+      const brand = cleaned.split(/\s+/).find((w) => w.length >= 4);
+      if (!brand) continue;
+      if (replyNorm.includes(brand)) {
+        hits.push({ q: brand, len: brand.length });
+      }
+    }
+  }
+  hits.sort((a, b) => b.len - a.len);
+  return hits.map((h) => h.q);
+}
+
 /** Prefer medicines named in the reply; drop LLM productQueries that contradict the reply. */
 export function reconcileProductQueries(
   reply: string,
   llmQueries: string[] | undefined,
   userText: string,
+  candidates?: CatalogProductCandidate[],
 ): string[] {
   const replyNorm = normalizeUserSpeech(reply);
   const fromReply: string[] = [];
@@ -146,6 +177,7 @@ export function reconcileProductQueries(
       fromReply.push(alias.query);
     }
   }
+  fromReply.push(...extractCatalogMentions(reply, candidates));
 
   const fromLlm = (llmQueries || [])
     .map((q) => String(q || "").trim())
@@ -161,9 +193,10 @@ export function reconcileProductQueries(
       return grounded;
     });
 
-  let queries = fromReply.length ? fromReply : fromLlm;
+  // Merge reply-grounded names first, then any other grounded LLM queries
+  let queries = [...fromReply, ...fromLlm];
 
-  // Acute pain/fever: never attach vitamins/bone supplements unless user asked for them
+  // Acute pain/fever/cold: never attach vitamins/bone supplements unless user asked for them
   if (isAcuteSymptomAsk(userText) && !userAskedForVitamins(userText)) {
     queries = queries.filter((q) => !isVitaminOrSupplementQuery(q));
   }
@@ -295,7 +328,12 @@ function toResult(
   } | null,
 ): MedicalLlmChatResult {
   const isEmergency = Boolean(parsed?.isEmergency);
-  const productQueries = reconcileProductQueries(reply, parsed?.productQueries, userText);
+  const productQueries = reconcileProductQueries(
+    reply,
+    parsed?.productQueries,
+    userText,
+    candidates,
+  );
   const allowProducts =
     !isEmergency &&
     productQueries.length > 0 &&

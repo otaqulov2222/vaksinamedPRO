@@ -71,4 +71,68 @@ describe("AI product card grounding", () => {
     });
     assert.equal(res.matchedProducts.length, 0);
   });
+
+  it("attaches Aqua Maris + Paracetamol for cold reply that names both", () => {
+    const catalog: CatalogProductCandidate[] = [
+      ...candidates,
+      {
+        id: 3,
+        sku: "AQUA",
+        nameUz: "Aqua Maris sprey (Demo)",
+        nameRu: "Аква Марис спрей (Demo)",
+        category: "Shamollash",
+        manufacturer: "Jadran",
+        price: 36000,
+        unit: "bottle",
+        requiresPrescription: false,
+        availableQuantity: 4,
+      },
+    ];
+    const reply =
+      "Ko'p suv iching. Burun bitganda Aqua Maris sprey yordam beradi. Og'riq yoki isitmada Paratsetamol 500 mg ichish mumkin.";
+    const res = buildMedicalLlmResult(reply, "shamollaganman", "uz", catalog, {
+      productQueries: ["Paratsetamol"],
+    });
+    const names = res.matchedProducts.map((p) => p.nameUz).join(" | ");
+    assert.match(names, /Aqua Maris/i);
+    assert.match(names, /Paratsetamol/i);
+  });
+
+  it("attaches Smecta and Linex when stomach reply names them", () => {
+    const catalog: CatalogProductCandidate[] = [
+      ...candidates,
+      {
+        id: 4,
+        sku: "SMEC",
+        nameUz: "Smecta (Demo)",
+        nameRu: "Смекта (Demo)",
+        category: "Ovqat hazm",
+        manufacturer: "Ipsen",
+        price: 32000,
+        unit: "box",
+        requiresPrescription: false,
+        availableQuantity: 6,
+      },
+      {
+        id: 5,
+        sku: "LINE",
+        nameUz: "Linex (Demo)",
+        nameRu: "Линекс (Demo)",
+        category: "Ovqat hazm",
+        manufacturer: "Sandoz",
+        price: 64000,
+        unit: "box",
+        requiresPrescription: false,
+        availableQuantity: 3,
+      },
+    ];
+    const reply =
+      "Hazm bilan bog'liq og'riqda Smecta yoki Linex yordam berishi mumkin, lekin shifokor bilan maslahatlashing.";
+    const res = buildMedicalLlmResult(reply, "qornim ogriyabdi", "uz", catalog, {
+      productQueries: [],
+    });
+    const names = res.matchedProducts.map((p) => p.nameUz).join(" | ");
+    assert.match(names, /Smecta/i);
+    assert.match(names, /Linex/i);
+  });
 });
