@@ -140,9 +140,10 @@ PRODUCT CARD RULES (critical — never mismatch text vs card):
 - productQueries = ONLY those exact catalog names you explicitly recommend in "reply" (max 3).
 - If reply mentions Paracetamol / Paratsetamol — productQueries MUST include that name, never Vitamin D3.
 - Acute headache / fever / toothache / cold / cough / stomach / diarrhea / allergy → matching OTC from catalog, NEVER vitamins/D3/Omega/Calcium unless user asked vitamins.
+- NEVER recommend or put antibiotics (Amoksitsillin, Azithromycin, etc.) in productQueries for ordinary symptoms. Say "antibiotik faqat shifokor retsepti bilan" without naming a buyable antibiotic card.
 - Cold with blocked nose → Aqua Maris (if in catalog) + Paracetamol if fever/pain.
 - Stomach discomfort → Smecta / Linex / Omeprazol / Espumizan (whichever fits AND is in catalog) — do NOT invent No-shpa/Mezim/Regidron if absent from catalog.
-- Cough with phlegm → ACC or Ambroksol from catalog (never glucometer strips).
+- Cough with phlegm → ACC or Ambroksol from catalog (never glucometer strips, never antibiotics).
 - If you only give lifestyle advice with no named OTC — productQueries MUST be [].
 - quickSuggestions must be in the SAME language as reply and clinically relevant to THIS answer (not generic greeting chips).
 
@@ -197,6 +198,10 @@ const ACUTE_SYMPTOM_RE =
 
 const VITAMIN_OR_SUPPLEMENT_RE =
   /(?:vitamin|витамин|\bd3\b|\bд3\b|omega|омега|кальц|calci|suyak|кость|БАД|\bbad\b|multivit|askorbin|аскорбин|magniy|магний|femibion|tsink|цинк)/i;
+
+/** Rx antibiotics must never auto-attach on symptom chat (only explicit antibiotic ask / Rx scan). */
+const ANTIBIOTIC_RE =
+  /(?:amoksitsillin|amoxicillin|амоксициллин|azitromitsin|azithromycin|азитромицин|antibiotik|антибиот)/i;
 
 const KNOWN_OTC_ALIASES: Array<{ re: RegExp; query: string }> = [
   { re: /paratse?tamol|парацетамол|acetaminophen/i, query: "paratsetamol" },
@@ -306,6 +311,11 @@ export function reconcileProductQueries(
     queries = queries.filter((q) => !isVitaminOrSupplementQuery(q));
   }
 
+  // Never auto-sell antibiotics on symptom chat unless the user explicitly asked for an antibiotic
+  if (!ANTIBIOTIC_RE.test(normalizeUserSpeech(userText))) {
+    queries = queries.filter((q) => !ANTIBIOTIC_RE.test(normalizeUserSpeech(q)));
+  }
+
   const seen = new Set<string>();
   const out: string[] = [];
   for (const q of queries) {
@@ -366,6 +376,12 @@ function matchProducts(
       const nameHay = normalizeUserSpeech(`${p.nameUz} ${p.nameRu} ${p.analogGroup || ""}`);
       const skuHay = normalizeUserSpeech(`${p.sku || ""}`);
       if (blockVitamins && isVitaminLikeProduct(p)) continue;
+      if (
+        !ANTIBIOTIC_RE.test(normalizeUserSpeech(userText)) &&
+        (p.requiresPrescription || ANTIBIOTIC_RE.test(nameHay))
+      ) {
+        continue;
+      }
       // Hard ban Accu-Chek / device strips for cough medicine queries
       if (/\bacc\b|ацц/.test(q) && /accu|chek|глюкомет|strip|полоск/i.test(nameHay)) continue;
       const score = scoreProductMatch(q, nameHay, skuHay);

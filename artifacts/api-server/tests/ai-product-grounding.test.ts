@@ -210,6 +210,32 @@ describe("AI product card grounding", () => {
     assert.ok(queries.some((q) => /smecta/i.test(q)));
     assert.ok(!queries.some((q) => /vitamin|d3/i.test(q)));
   });
+
+  it("never attaches antibiotics for ordinary headache/throat", () => {
+    const catalog: CatalogProductCandidate[] = [
+      ...candidates,
+      {
+        id: 9,
+        sku: "AMOX",
+        nameUz: "Amoksitsillin 500 mg (Demo)",
+        nameRu: "Амоксициллин 500 мг (Демо)",
+        category: "Antibiotik",
+        manufacturer: "Demo",
+        price: 28000,
+        unit: "box",
+        requiresPrescription: true,
+        availableQuantity: 4,
+      },
+    ];
+    const reply =
+      "Bosh og'rig'ida Paratsetamol yordam beradi. Antibiotik (Amoksitsillin) shifokor retseptisiz ichilmaydi.";
+    const res = buildMedicalLlmResult(reply, "boshim ogriyabdi", "uz", catalog, {
+      productQueries: ["Paratsetamol", "Amoksitsillin"],
+    });
+    const names = res.matchedProducts.map((p) => p.nameUz).join(" | ");
+    assert.match(names, /Paratsetamol/i);
+    assert.ok(!/Amoksitsillin|Амоксициллин/i.test(names));
+  });
 });
 
 describe("Purchase intent must not fire on symptom bormi", () => {
