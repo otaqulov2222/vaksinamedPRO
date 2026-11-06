@@ -39,9 +39,9 @@ export interface MedicalLlmInput {
 }
 
 function defaultChips(lang: ChatLang): string[] {
-  if (lang === "ru") return ["Сфотографировать рецепт", "Симптомы простуды", "Головная боль", "Витамин D3"];
-  if (lang === "en") return ["Scan prescription", "Cold symptoms", "Headache", "Vitamin D3"];
-  return ["Retseptni rasmga olish", "Shamollash alomatlari", "Bosh og‘rig‘i", "Vitamin D3"];
+  if (lang === "ru") return ["Сфотографировать рецепт", "Симптомы простуды", "Головная боль", "Цены на лекарства"];
+  if (lang === "en") return ["Scan prescription", "Cold symptoms", "Headache", "Medicine prices"];
+  return ["Retseptni rasmga olish", "Shamollash alomatlari", "Bosh og‘rig‘i", "Dori narxlari"];
 }
 
 function buildSystemPrompt(lang: ChatLang, catalogHint: string): string {
@@ -61,6 +61,14 @@ YOU CAN HELP WITH:
 - Dosage orientation from packaging rules (never invent Rx antibiotics)
 - Prescription photo / text → match catalog names when possible
 - Stock/price orientation using CATALOG below only
+
+PRODUCT CARD RULES (critical — never mismatch text vs card):
+- productQueries = ONLY the exact medicine names you explicitly recommend in "reply" for THIS symptom (max 3).
+- If reply mentions Paracetamol / Paratsetamol — productQueries MUST include that name, never Vitamin D3.
+- Acute headache / fever / toothache / cold pain → analgesic/antipyretic (e.g. Paracetamol), NOT vitamins, NOT bone/calcium/D3 supplements.
+- Vitamins / D3 / Omega only when the user asked about vitamins, deficiency, bones, immunity courses — not for acute pain.
+- If you only give lifestyle advice (rest, BP check) with no named OTC — productQueries MUST be [].
+- Never invent catalog products that are not listed below.
 
 HARD SAFETY (Uzbekistan):
 - Emergencies (chest crush pain, stroke signs, severe bleeding, anaphylaxis, seizures, collapse) → call 103 now. No selling.
@@ -97,41 +105,139 @@ function compactCatalog(candidates: CatalogProductCandidate[]): string {
   return lines.join("\n");
 }
 
+const ACUTE_SYMPTOM_RE =
+  /(?:\bbosh\b(?!qa).{0,24}og['']?ri|og['']?ri.{0,24}\bbosh\b(?!qa)|headache|головн|болит\s+голов|isitma|harorat|temperatura|fever|tish.{0,12}og['']?ri|toothache|зубн|tomoq.{0,12}og['']?ri|yo['']?tal|cough|кашел|qorin.{0,12}og['']?ri|stomach\s*pain)/i;
+
+const VITAMIN_OR_SUPPLEMENT_RE =
+  /(?:vitamin|витамин|\bd3\b|\bд3\b|omega|омега|кальц|calci|suyak|кость|БАД|\bbad\b|multivit|askorbin|аскорбин|magniy|магний)/i;
+
+const KNOWN_OTC_ALIASES: Array<{ re: RegExp; query: string }> = [
+  { re: /paratse?tamol|парацетамол|acetaminophen/i, query: "paratsetamol" },
+  { re: /ibuprofen|ибупрофен/i, query: "ibuprofen" },
+  { re: /nimesulid|нимесулид|nimesil/i, query: "nimesulid" },
+  { re: /analgin|анальгин|metamizol/i, query: "analgin" },
+  { re: /aspirin|аспирин|atsetilsalitsil/i, query: "aspirin" },
+  { re: /ats?ts\b|ацц|atsetiltsistein|acetylcysteine/i, query: "acc" },
+];
+
+function isAcuteSymptomAsk(userText: string): boolean {
+  return ACUTE_SYMPTOM_RE.test(normalizeUserSpeech(userText));
+}
+
+function isVitaminOrSupplementQuery(text: string): boolean {
+  return VITAMIN_OR_SUPPLEMENT_RE.test(normalizeUserSpeech(text));
+}
+
+function userAskedForVitamins(userText: string): boolean {
+  return isVitaminOrSupplementQuery(userText);
+}
+
+/** Prefer medicines named in the reply; drop LLM productQueries that contradict the reply. */
+export function reconcileProductQueries(
+  reply: string,
+  llmQueries: string[] | undefined,
+  userText: string,
+): string[] {
+  const replyNorm = normalizeUserSpeech(reply);
+  const fromReply: string[] = [];
+
+  for (const alias of KNOWN_OTC_ALIASES) {
+    if (alias.re.test(reply) || alias.re.test(replyNorm)) {
+      fromReply.push(alias.query);
+    }
+  }
+
+  const fromLlm = (llmQueries || [])
+    .map((q) => String(q || "").trim())
+    .filter(Boolean)
+    .filter((q) => {
+      const qn = normalizeUserSpeech(q);
+      if (qn.length < 3) return false;
+      // Must be grounded in the reply text (avoid "Paracetamol in text, D3 in card")
+      const grounded =
+        replyNorm.includes(qn) ||
+        qn.split(/\s+/).filter((w) => w.length >= 5).some((w) => replyNorm.includes(w)) ||
+        KNOWN_OTC_ALIASES.some((a) => a.re.test(q) && (a.re.test(reply) || a.re.test(replyNorm)));
+      return grounded;
+    });
+
+  let queries = fromReply.length ? fromReply : fromLlm;
+
+  // Acute pain/fever: never attach vitamins/bone supplements unless user asked for them
+  if (isAcuteSymptomAsk(userText) && !userAskedForVitamins(userText)) {
+    queries = queries.filter((q) => !isVitaminOrSupplementQuery(q));
+  }
+
+  // Dedupe preserving order
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const q of queries) {
+    const key = normalizeUserSpeech(q);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+function scoreProductMatch(queryNorm: string, productHay: string): number {
+  if (!queryNorm || !productHay) return 0;
+  if (productHay.includes(queryNorm)) return 100 + Math.min(queryNorm.length, 40);
+  const words = queryNorm.split(/\s+/).filter((w) => w.length >= 4);
+  let score = 0;
+  for (const w of words) {
+    if (productHay.includes(w)) score += 20 + Math.min(w.length, 12);
+  }
+  return score;
+}
+
 function matchProducts(
   queries: string[],
   candidates: CatalogProductCandidate[],
   allowAttach: boolean,
+  userText: string,
 ): MatchedProductCard[] {
   if (!allowAttach || !queries.length) return [];
   const cards: MatchedProductCard[] = [];
   const seen = new Set<number>();
+  const blockVitamins = isAcuteSymptomAsk(userText) && !userAskedForVitamins(userText);
 
   for (const raw of queries) {
     const q = normalizeUserSpeech(raw);
     if (q.length < 3) continue;
+
+    let best: CatalogProductCandidate | null = null;
+    let bestScore = 0;
     for (const p of candidates) {
       if (seen.has(p.id)) continue;
-      const hay = normalizeUserSpeech(`${p.nameUz} ${p.nameRu} ${p.sku} ${p.analogGroup || ""}`);
-      if (!hay.includes(q) && !q.split(/\s+/).some((w) => w.length >= 4 && hay.includes(w))) {
-        continue;
+      const hay = normalizeUserSpeech(
+        `${p.nameUz} ${p.nameRu} ${p.sku} ${p.analogGroup || ""} ${p.category || ""}`,
+      );
+      if (blockVitamins && isVitaminOrSupplementQuery(hay)) continue;
+      const score = scoreProductMatch(q, hay);
+      if (score > bestScore) {
+        bestScore = score;
+        best = p;
       }
-      seen.add(p.id);
-      cards.push({
-        id: p.id,
-        sku: p.sku,
-        nameUz: p.nameUz,
-        nameRu: p.nameRu,
-        category: p.category,
-        manufacturer: p.manufacturer,
-        price: p.price,
-        unit: p.unit,
-        requiresPrescription: p.requiresPrescription,
-        analogGroup: p.analogGroup,
-        inStock: (p.availableQuantity ?? 1) > 0,
-      });
-      if (cards.length >= 3) return cards;
-      break;
     }
+    // Require a real match (avoid weak 1-word collisions)
+    if (!best || bestScore < 20) continue;
+    seen.add(best.id);
+    cards.push({
+      id: best.id,
+      sku: best.sku,
+      nameUz: best.nameUz,
+      nameRu: best.nameRu,
+      category: best.category,
+      manufacturer: best.manufacturer,
+      price: best.price,
+      unit: best.unit,
+      requiresPrescription: best.requiresPrescription,
+      analogGroup: best.analogGroup,
+      inStock: (best.availableQuantity ?? 1) > 0,
+    });
+    if (cards.length >= 3) return cards;
   }
   return cards;
 }
@@ -160,6 +266,22 @@ export function parseLlmJson(raw: string): {
   }
 }
 
+/** Exported for unit tests — builds chat result with grounded product cards. */
+export function buildMedicalLlmResult(
+  reply: string,
+  userText: string,
+  lang: ChatLang,
+  candidates: CatalogProductCandidate[],
+  parsed?: {
+    isEmergency?: boolean;
+    isMedical?: boolean;
+    productQueries?: string[];
+    quickSuggestions?: string[];
+  } | null,
+): MedicalLlmChatResult {
+  return toResult(reply, userText, lang, candidates, parsed);
+}
+
 function toResult(
   reply: string,
   userText: string,
@@ -173,9 +295,13 @@ function toResult(
   } | null,
 ): MedicalLlmChatResult {
   const isEmergency = Boolean(parsed?.isEmergency);
+  const productQueries = reconcileProductQueries(reply, parsed?.productQueries, userText);
   const allowProducts =
     !isEmergency &&
-    (isMedicineSeekingAsk(userText) || (parsed?.productQueries?.length ?? 0) > 0);
+    productQueries.length > 0 &&
+    (isMedicineSeekingAsk(userText) ||
+      productQueries.some((q) => normalizeUserSpeech(reply).includes(normalizeUserSpeech(q))) ||
+      KNOWN_OTC_ALIASES.some((a) => a.re.test(reply)));
   const chips = Array.isArray(parsed?.quickSuggestions)
     ? parsed!.quickSuggestions!.map(String).filter(Boolean).slice(0, 4)
     : [];
@@ -184,7 +310,7 @@ function toResult(
     reply: reply.trim().slice(0, 4000),
     isMedical: parsed?.isMedical !== false,
     isPrescription: false,
-    matchedProducts: matchProducts(parsed?.productQueries || [], candidates, allowProducts),
+    matchedProducts: matchProducts(productQueries, candidates, allowProducts, userText),
     quickSuggestions: chips.length ? chips : defaultChips(lang),
   };
 }
