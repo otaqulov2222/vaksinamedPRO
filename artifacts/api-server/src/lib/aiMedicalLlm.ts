@@ -316,6 +316,16 @@ export function reconcileProductQueries(
     queries = queries.filter((q) => !ANTIBIOTIC_RE.test(normalizeUserSpeech(q)));
   }
 
+  // Abdominal pain: do not attach systemic analgesics (masks appendicitis risk)
+  if (
+    /(?:qorin|qorn|oshqozon|живот|stomach|abdomen|belly)/i.test(normalizeUserSpeech(userText)) &&
+    !/(?:paratsetamol|ibuprofen|analgin)\s+bormi/i.test(normalizeUserSpeech(userText))
+  ) {
+    queries = queries.filter(
+      (q) => !/(?:paratsetamol|paracetamol|ibuprofen|nurofen|analgin|aspirin)/i.test(normalizeUserSpeech(q)),
+    );
+  }
+
   const seen = new Set<string>();
   const out: string[] = [];
   for (const q of queries) {
