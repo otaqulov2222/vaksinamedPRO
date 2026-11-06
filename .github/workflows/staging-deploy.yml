@@ -178,21 +178,22 @@ jobs:
     name: Staging Readiness Gate Notice
     runs-on: ubuntu-latest
     needs: [build-and-package]
+    # Do not reference secrets in job-level if: — they always appear empty there.
     if: |
       always() &&
       needs.build-and-package.result == 'success' &&
-      (vars.STAGING_DEPLOY_READY != 'true' || secrets.STAGING_SSH_KEY == '' || secrets.TAILSCALE_AUTHKEY == '') &&
+      vars.STAGING_DEPLOY_READY != 'true' &&
       github.event.inputs.force_deploy != 'true'
     steps:
       - name: Report Deployment Gated Status
         run: |
           echo "### ⏸️ Staging Server Deployment Gated" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Repository variable \`STAGING_DEPLOY_READY\` is not set to \`true\` or deployment credentials (STAGING_SSH_KEY / TAILSCALE_AUTHKEY) are not configured." >> $GITHUB_STEP_SUMMARY
+          echo "Repository variable \`STAGING_DEPLOY_READY\` is not set to \`true\`." >> $GITHUB_STEP_SUMMARY
           echo "- All tests, typechecks, security gates, and release packaging completed **successfully**." >> $GITHUB_STEP_SUMMARY
-          echo "- Live deployment to Hetzner staging server was **safely skipped** because the server is not provisioned or credentials are not configured." >> $GITHUB_STEP_SUMMARY
-          echo "- Once root bootstrap is executed on the staging server and credentials are set, set \`STAGING_DEPLOY_READY=true\` in repository variables to enable live server deployment." >> $GITHUB_STEP_SUMMARY
-          echo "::notice title=Deployment Gated::Server deployment safely skipped: STAGING_DEPLOY_READY is not set to true or server credentials are not configured."
+          echo "- Live deployment to Hetzner staging server was **safely skipped** (server not provisioned / gate closed)." >> $GITHUB_STEP_SUMMARY
+          echo "- Eskiz live VPS continues via \`live-vps-deploy.yml\`. When Hetzner staging is ready, set \`STAGING_DEPLOY_READY=true\` and configure STAGING_SSH_KEY / TAILSCALE_AUTHKEY." >> $GITHUB_STEP_SUMMARY
+          echo "::notice title=Deployment Gated::Hetzner staging deploy skipped: STAGING_DEPLOY_READY is not true."
 
   deploy-staging:
     name: Deploy to Hetzner Staging
@@ -203,26 +204,39 @@ jobs:
       always() &&
       needs.build-and-package.result == 'success' &&
       (vars.STAGING_DEPLOY_READY == 'true' || github.event.inputs.force_deploy == 'true') &&
-      secrets.STAGING_SSH_KEY != '' &&
-      secrets.TAILSCALE_AUTHKEY != '' &&
       github.ref == 'refs/heads/main'
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Require staging deploy secrets
+        env:
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          if [ -z "${STAGING_SSH_KEY}" ] || [ -z "${TAILSCALE_AUTHKEY}" ]; then
+            echo "::notice title=Staging Credentials Missing::STAGING_SSH_KEY / TAILSCALE_AUTHKEY not configured — skipping live Hetzner deploy."
+            echo "DEPLOY_SKIPPED=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "DEPLOY_SKIPPED=false" >> "$GITHUB_ENV"
+
       - name: Download Frontend Artifact
+        if: env.DEPLOY_SKIPPED != 'true'
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: /tmp/artifacts
 
       - name: Download Backend Artifact
+        if: env.DEPLOY_SKIPPED != 'true'
         uses: actions/download-artifact@v4
         with:
           name: backend-dist
           path: /tmp/artifacts
 
       - name: Download Checksums Artifact
+        if: env.DEPLOY_SKIPPED != 'true'
         uses: actions/download-artifact@v4
         with:
           name: release-checksums
@@ -230,6 +244,7 @@ jobs:
 
       # Connect to Tailscale Private Mesh Network
       - name: Connect to Tailscale Private Mesh Network
+        if: env.DEPLOY_SKIPPED != 'true'
         uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
@@ -237,11 +252,13 @@ jobs:
 
       # Setup SSH Agent safely in memory
       - name: Setup SSH Agent
+        if: env.DEPLOY_SKIPPED != 'true'
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
 
       - name: Execute Atomic Staging Deployment
+        if: env.DEPLOY_SKIPPED != 'true'
         env:
           SSH_HOST: ${{ secrets.STAGING_SSH_HOST || '100.85.166.99' }}
           SSH_USER: ${{ secrets.STAGING_SSH_USER || 'deployer' }}
@@ -272,22 +289,16 @@ jobs:
           fi
 
           # 1. Pre-flight Check: Verify server readiness and root wrapper BEFORE transferring packages
+          # (Avoid column-0 heredoc terminators — they invalidate the workflow YAML.)
           echo "--> Verifying server readiness and root control wrapper on ${SSH_USER}@${SSH_HOST}..."
-          if ! ssh -o ConnectTimeout=10 -o BatchMode=yes -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" 'bash -s' << 'EOF'
-            set -euo pipefail
-            if [ ! -x "/usr/local/bin/vaksinamed-staging-ctl" ]; then
-              echo "CRITICAL ERROR: Root control wrapper /usr/local/bin/vaksinamed-staging-ctl is not installed or not executable on the server!" >&2
-              echo "Server provisioning required by root before deployment can proceed." >&2
-              echo "Halting deployment immediately. No server files were transferred or modified." >&2
-              exit 1
-            fi
-            echo "--> Server root control wrapper verified: /usr/local/bin/vaksinamed-staging-ctl is ready."
-EOF
+          if ! ssh -o ConnectTimeout=10 -o BatchMode=yes -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" \
+            'test -x /usr/local/bin/vaksinamed-staging-ctl'
           then
-            echo "::notice title=Staging Server Unreachable::Could not connect to ${SSH_USER}@${SSH_HOST}. Skipping live deployment."
+            echo "::notice title=Staging Server Unreachable::Could not connect to ${SSH_USER}@${SSH_HOST} or control wrapper missing. Skipping live deployment."
             echo "DEPLOY_SKIPPED=true" >> "$GITHUB_ENV"
             exit 0
           fi
+          echo "--> Server root control wrapper verified: /usr/local/bin/vaksinamed-staging-ctl is ready."
 
           # 2. Transfer Packages to Server as deployer
           echo "--> Transferring release packages to ${SSH_USER}@${SSH_HOST}..."
@@ -299,13 +310,8 @@ EOF
 
           # 3. Execute Deployment on Server as deployer
           echo "--> Executing remote deployment script on server..."
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "bash -s -- '${RELEASE_ID}'" << 'EOF'
-            set -euo pipefail
-            REL_ID="${1}"
-            chmod +x /tmp/deploy-staging.sh /tmp/rollback-staging.sh
-            /tmp/deploy-staging.sh "${REL_ID}"
-            rm -f /tmp/deploy-staging.sh /tmp/rollback-staging.sh
-          EOF
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" \
+            "chmod +x /tmp/deploy-staging.sh /tmp/rollback-staging.sh && /tmp/deploy-staging.sh '${RELEASE_ID}' && rm -f /tmp/deploy-staging.sh /tmp/rollback-staging.sh"
 
       - name: Public Domain Health Check Verification
         if: env.DEPLOY_SKIPPED != 'true'
