@@ -2,6 +2,7 @@ import type { CatalogProductCandidate } from "./prescriptionEngine";
 import { isMedicineSeekingAsk, normalizeUserSpeech } from "./aiChatNlu";
 import { chatCompletion, getLlmConfig, isLlmConfigured, type LlmMessage } from "./aiLlm";
 import type { ChatLang } from "./aiLocale";
+import { isProductAllowedForUserAsk } from "./aiProductPolicy";
 
 /** Compatible with AiChatResponse in aiPrescriptionChat (kept local to avoid cycles). */
 export interface MedicalLlmChatResult {
@@ -386,12 +387,7 @@ function matchProducts(
       const nameHay = normalizeUserSpeech(`${p.nameUz} ${p.nameRu} ${p.analogGroup || ""}`);
       const skuHay = normalizeUserSpeech(`${p.sku || ""}`);
       if (blockVitamins && isVitaminLikeProduct(p)) continue;
-      if (
-        !ANTIBIOTIC_RE.test(normalizeUserSpeech(userText)) &&
-        (p.requiresPrescription || ANTIBIOTIC_RE.test(nameHay))
-      ) {
-        continue;
-      }
+      if (!isProductAllowedForUserAsk(userText, p)) continue;
       // Hard ban Accu-Chek / device strips for cough medicine queries
       if (/\bacc\b|ацц/.test(q) && /accu|chek|глюкомет|strip|полоск/i.test(nameHay)) continue;
       const score = scoreProductMatch(q, nameHay, skuHay);
@@ -444,7 +440,14 @@ export function parseLlmJson(raw: string): {
   }
 }
 
-/** Never show raw JSON / fences to the user. */
+/** Reject model chain-of-thought / meta reasoning that leaked into the user reply. */
+function looksLikeLeakedReasoning(text: string): boolean {
+  return /(?:The user is writing|Let me (?:think|check|analyze)|I need to|Foydalanuvchi (?:so['']radi|yozmoqda)|As an AI|reasoning:|system_fingerprint)/i.test(
+    text,
+  );
+}
+
+/** Never show raw JSON / fences / CoT to the user. */
 export function sanitizeAssistantReply(raw: string): string | null {
   const trimmed = String(raw || "").trim();
   if (!trimmed) return null;
@@ -459,12 +462,14 @@ export function sanitizeAssistantReply(raw: string): string | null {
       else return null;
     }
     if (/^\s*[{\[]/.test(reply) || /"productQueries"\s*:/.test(reply)) return null;
+    if (looksLikeLeakedReasoning(reply)) return null;
     return reply.slice(0, 4000);
   }
 
   if (/^\s*[{\[]/.test(trimmed) || /"productQueries"\s*:/.test(trimmed)) {
     return null;
   }
+  if (looksLikeLeakedReasoning(trimmed)) return null;
   return trimmed.slice(0, 4000);
 }
 
@@ -571,9 +576,14 @@ export async function tryMedicalLlmReply(input: MedicalLlmInput): Promise<Medica
     messages.push({ role: h.role, content: h.content.slice(0, 2000) });
   }
 
-  const userContent = input.hasImage
-    ? `${userText || "(user sent a prescription / medicine photo)"}\n[Note: image OCR may be limited; ask for medicine names if unclear.]`
-    : userText;
+  // Canonicalize informal Uzbek so the model does not misread "yotalim" as "yotish"
+  const canonical = normalizeUserSpeech(userText);
+  let userContent: string;
+  if (input.hasImage) {
+    userContent = `${userText || "(user sent a prescription / medicine photo)"}\n[Note: image OCR may be limited; ask for medicine names if unclear.]`;
+  } else {
+    userContent = `${userText}\n[Normalized clinical intent: ${canonical}. Treat "yotal/yotalim" as cough (yo'tal), never as "yotish"/lying down. Never output chain-of-thought.]`;
+  }
   messages.push({ role: "user", content: userContent });
 
   const preferJson = Boolean(cfg && !cfg.preferPlainText);
