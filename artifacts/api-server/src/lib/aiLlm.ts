@@ -1,6 +1,8 @@
 /**
  * OpenAI-compatible chat client (OpenAI / Groq / DeepSeek / NeuronAI / CoreAI / Ollama).
- * Configure via env — no hardcoded vendor lock-in.
+ * Production notes:
+ * - Groq JSON mode often fails with usable text in `failed_generation` — we rescue it.
+ * - For Groq we prefer plain completions (more reliable) unless forced.
  */
 
 export type ChatRole = "system" | "user" | "assistant";
@@ -15,6 +17,7 @@ export interface LlmConfig {
   baseUrl: string;
   model: string;
   timeoutMs: number;
+  isGroq: boolean;
 }
 
 export function getLlmConfig(): LlmConfig | null {
@@ -45,14 +48,20 @@ export function getLlmConfig(): LlmConfig | null {
     Number(process.env.VAKSINAMED_AI_TIMEOUT_MS || 25000) || 25000,
   );
 
-  return { apiKey, baseUrl, model, timeoutMs };
+  return {
+    apiKey,
+    baseUrl,
+    model,
+    timeoutMs,
+    isGroq: /groq\.com/i.test(baseUrl),
+  };
 }
 
 export function isLlmConfigured(): boolean {
   return getLlmConfig() != null;
 }
 
-function extractFailedGeneration(errText: string): string | null {
+export function extractFailedGeneration(errText: string): string | null {
   try {
     const parsed = JSON.parse(errText) as {
       error?: { failed_generation?: string; message?: string };
@@ -73,13 +82,15 @@ function extractFailedGeneration(errText: string): string | null {
   return null;
 }
 
-export async function chatCompletion(
+async function sleep(ms: number) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
+async function chatCompletionOnce(
+  cfg: LlmConfig,
   messages: LlmMessage[],
   opts?: { temperature?: number; maxTokens?: number; responseFormatJson?: boolean },
-): Promise<string | null> {
-  const cfg = getLlmConfig();
-  if (!cfg) return null;
-
+): Promise<{ content: string | null; retryable: boolean }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
 
@@ -87,8 +98,8 @@ export async function chatCompletion(
     const body: Record<string, unknown> = {
       model: cfg.model,
       messages,
-      temperature: opts?.temperature ?? 0.4,
-      max_tokens: opts?.maxTokens ?? 900,
+      temperature: opts?.temperature ?? 0.35,
+      max_tokens: opts?.maxTokens ?? 1000,
     };
     if (opts?.responseFormatJson) {
       body.response_format = { type: "json_object" };
@@ -106,25 +117,63 @@ export async function chatCompletion(
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      // Groq often returns the usable reply inside failed_generation when JSON mode fails
       const rescued = extractFailedGeneration(errText);
       if (rescued) {
         console.warn("[aiLlm] rescued failed_generation (", res.status, ")");
-        return rescued;
+        return { content: rescued, retryable: false };
       }
+      const retryable = res.status === 429 || res.status === 503 || res.status >= 500;
       console.error("[aiLlm] HTTP", res.status, errText.slice(0, 400));
-      return null;
+      return { content: null, retryable };
     }
 
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const content = data?.choices?.[0]?.message?.content;
-    return typeof content === "string" && content.trim() ? content.trim() : null;
+    return {
+      content: typeof content === "string" && content.trim() ? content.trim() : null,
+      retryable: false,
+    };
   } catch (err) {
     console.error("[aiLlm] request failed", err);
-    return null;
+    return { content: null, retryable: true };
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function chatCompletion(
+  messages: LlmMessage[],
+  opts?: { temperature?: number; maxTokens?: number; responseFormatJson?: boolean },
+): Promise<string | null> {
+  const cfg = getLlmConfig();
+  if (!cfg) return null;
+
+  // Groq JSON mode often drops good answers — never force json_object on Groq
+  const useJson = Boolean(opts?.responseFormatJson) && !cfg.isGroq;
+
+  let result = await chatCompletionOnce(cfg, messages, {
+    ...opts,
+    responseFormatJson: useJson,
+  });
+
+  if (!result.content && result.retryable) {
+    await sleep(600);
+    result = await chatCompletionOnce(cfg, messages, {
+      ...opts,
+      responseFormatJson: useJson,
+    });
+  }
+
+  // If plain failed and caller wanted structure, one more plain attempt is already default for Groq.
+  // If OpenAI JSON failed without rescue, try plain once.
+  if (!result.content && opts?.responseFormatJson && !cfg.isGroq) {
+    result = await chatCompletionOnce(cfg, messages, {
+      ...opts,
+      responseFormatJson: false,
+    });
+  }
+
+  return result.content;
 }

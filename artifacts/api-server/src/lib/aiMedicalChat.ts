@@ -1,17 +1,25 @@
 import { tryMedicalLlmReply } from "./aiMedicalLlm";
-import {
-  detectReplyLanguage,
-  handleAiMedicalChat,
-  type AiChatResponse,
-} from "./aiPrescriptionChat";
+import { handleAiMedicalChat, type AiChatResponse } from "./aiPrescriptionChat";
 import type { CatalogProductCandidate } from "./prescriptionEngine";
 import { isLlmConfigured } from "./aiLlm";
+import { detectReplyLanguage, offlineAssistantFallback } from "./aiLocale";
+
+function looksLikePrescriptionScan(userText: string, hasImage: boolean): boolean {
+  if (hasImage) return true;
+  const t = userText.trim();
+  if (/\brp\s*[:：]/i.test(t)) return true;
+  if (/tab\.\s*\w+/i.test(t) && /\d+\s*mg/i.test(t)) return true;
+  // Bare word "retsept" in a question is NOT a scan — e.g. "retseptni qanday yuboraman?"
+  if (/\b(retsept|recept|рецепт)\b/i.test(t) && /(?:Rp:|mg|#\d+|tab\.|капсул|таблет)/i.test(t)) {
+    return true;
+  }
+  return false;
+}
 
 /**
- * Orchestrates medical chat:
- * - Deterministic path for prescription photos / Rp text (catalog matching)
- * - LLM for free-form understanding (typos, slang, any phrasing) when configured
- * - Rule-based fallback when LLM is off or fails
+ * Production orchestrator for Uzbekistan-wide medical chat.
+ * LLM-first for free-form; deterministic catalog path for real prescriptions;
+ * language-safe soft fallback if the model is down (never wrong-language walls).
  */
 export async function handleAiMedicalChatAsync(params: {
   message?: string;
@@ -23,17 +31,9 @@ export async function handleAiMedicalChatAsync(params: {
   const userText = String(params.message || "").trim();
   const hasImage = Boolean(params.image && params.image.trim().length > 0);
   const appLang = params.language || "uz";
-  // Prefer the language the user is writing in over a stale app locale
   const lang = detectReplyLanguage(userText, appLang);
 
-  const looksLikePrescription =
-    hasImage ||
-    /\b(retsept|recept|рецепт)\b/i.test(userText) ||
-    /\brp\s*[:：]/i.test(userText) ||
-    /tab\.\s*\w+/i.test(userText);
-
-  // Catalog/OCR fidelity stays rule-based
-  if (looksLikePrescription) {
+  if (looksLikePrescriptionScan(userText, hasImage)) {
     return handleAiMedicalChat({
       message: params.message,
       image: params.image,
@@ -50,15 +50,36 @@ export async function handleAiMedicalChatAsync(params: {
       candidates: params.candidates,
       hasImage: false,
     });
-    if (llm) {
+    if (llm?.reply?.trim()) {
       return llm as AiChatResponse;
     }
   }
 
-  return handleAiMedicalChat({
+  // Soft, language-correct offline fallback (avoid dumping wrong-locale clinical templates)
+  const soft = offlineAssistantFallback(lang);
+  // Still try rule engine for clear clinical intents when LLM is down
+  const rules = handleAiMedicalChat({
     message: params.message,
     image: params.image,
     language: lang,
     candidates: params.candidates,
   });
+
+  // If rules only produced the generic clarification wall, prefer soft capability intro
+  const isGenericWall =
+    /Чтобы предоставить вам точную|To provide safe and accurate|to‘g‘ri va xavfsiz yordam bera olishim uchun/i.test(
+      rules.reply,
+    );
+  if (isGenericWall) {
+    return {
+      success: true,
+      reply: soft.reply,
+      isMedical: true,
+      isPrescription: false,
+      matchedProducts: [],
+      quickSuggestions: soft.quickSuggestions,
+    };
+  }
+
+  return rules;
 }

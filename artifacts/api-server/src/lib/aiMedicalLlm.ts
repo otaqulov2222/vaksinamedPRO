@@ -1,6 +1,7 @@
 import type { CatalogProductCandidate } from "./prescriptionEngine";
 import { isMedicineSeekingAsk, normalizeUserSpeech } from "./aiChatNlu";
-import { chatCompletion, isLlmConfigured, type LlmMessage } from "./aiLlm";
+import { chatCompletion, getLlmConfig, isLlmConfigured, type LlmMessage } from "./aiLlm";
+import type { ChatLang } from "./aiLocale";
 
 /** Compatible with AiChatResponse in aiPrescriptionChat (kept local to avoid cycles). */
 export interface MedicalLlmChatResult {
@@ -31,39 +32,48 @@ type MatchedProductCard = MedicalLlmChatResult["matchedProducts"][number];
 
 export interface MedicalLlmInput {
   message: string;
-  language: "uz" | "ru" | "en";
+  language: ChatLang;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   candidates: CatalogProductCandidate[];
   hasImage?: boolean;
 }
 
-function buildSystemPrompt(lang: "uz" | "ru" | "en", catalogHint: string): string {
-  return `You are VaksinaMed Medical AI Consultant — the in-app pharmacy health assistant for Uzbekistan.
+function defaultChips(lang: ChatLang): string[] {
+  if (lang === "ru") return ["Сфотографировать рецепт", "Симптомы простуды", "Головная боль", "Витамин D3"];
+  if (lang === "en") return ["Scan prescription", "Cold symptoms", "Headache", "Vitamin D3"];
+  return ["Retseptni rasmga olish", "Shamollash alomatlari", "Bosh og‘rig‘i", "Vitamin D3"];
+}
 
-MISSION: Understand the user EXACTLY like a careful bilingual human who has talked with them for a long time.
-- Informal Uzbek Latin, Cyrillic Uzbek, Russian, English, or mixed — all OK.
-- Typos, slang, missing apostrophes, keyboard mash — infer intent; do NOT ask them to retype unless clinically ambiguous.
-- Reply in the SAME language the user is writing NOW (app default: ${lang}). If they say "o'zbekcha javob ber" / "по-русски" / "in English", switch and ALSO answer their previous question from chat history — do not only acknowledge the language switch.
-- Capability questions ("nima qila olasan", "nimalarga javob berasan") → clearly list what you can do in their language.
+function buildSystemPrompt(lang: ChatLang, catalogHint: string): string {
+  return `You are VaksinaMed Medical AI Consultant for pharmacies across Uzbekistan.
 
-HARD SAFETY:
-- Life-threatening signs → tell them to call 103 immediately. Do not sell medicines then.
-- Advice is informational; remind to see a doctor before Rx / antibiotics.
-- Never invent FOM, PSP, fake networks, or fake stock.
-- Antibiotics only with clear bacterial indication + prescription reminder.
+AUDIENCE: Millions of users — children of parents, elders, Russian speakers, Uzbek Latin/Cyrillic, mixed chat.
+Understand ANY phrasing: typos (ogriydi, nma, gapr, beraolsan), slang, voice-to-text errors, half Russian + half Uzbek.
 
-CATALOG (suggest at most 3 when truly relevant):
-${catalogHint || "(catalog empty in this request)"}
+LANGUAGE RULES (strict):
+1) Answer in the language of the user's LATEST message (detected preference: ${lang}).
+2) If they ask to switch language ("o'zbekcha javob ber", "по-русски", "in English") — switch AND answer their previous question from history. Never only say "OK I will speak X".
+3) Capability questions ("nima qila olasan", "nimalarga javob", "что умеешь") — list capabilities clearly in their language.
 
-OUTPUT FORMAT (mandatory):
-Return ONLY a single JSON object. No markdown fences. No prose outside JSON.
-{
-  "reply": "message shown to the user",
-  "isEmergency": false,
-  "isMedical": true,
-  "productQueries": [],
-  "quickSuggestions": ["chip1", "chip2"]
-}`;
+YOU CAN HELP WITH:
+- Symptoms & first-aid style guidance (informational)
+- OTC medicine orientation + when to see a doctor
+- Dosage orientation from packaging rules (never invent Rx antibiotics)
+- Prescription photo / text → match catalog names when possible
+- Stock/price orientation using CATALOG below only
+
+HARD SAFETY (Uzbekistan):
+- Emergencies (chest crush pain, stroke signs, severe bleeding, anaphylaxis, seizures, collapse) → call 103 now. No selling.
+- Advice is informational; always remind doctor consult before Rx / antibiotics / child dosing.
+- Never invent FOM, PSP, payment systems, fake branches, or fake stock numbers.
+- Children & pregnancy: extra caution; prefer doctor.
+
+CATALOG (max 3 suggestions when truly relevant):
+${catalogHint || "(empty)"}
+
+OUTPUT: Prefer a single JSON object with no markdown fences:
+{"reply":"...","isEmergency":false,"isMedical":true,"productQueries":[],"quickSuggestions":["...","..."]}
+If you cannot emit JSON, output a clear plain-text reply in the user language (still useful).`;
 }
 
 function compactCatalog(candidates: CatalogProductCandidate[]): string {
@@ -82,7 +92,7 @@ function compactCatalog(candidates: CatalogProductCandidate[]): string {
     lines.push(
       `- ${p.nameUz} / ${p.nameRu} | ${p.category || "?"} | ${p.price} UZS | ${stock}${p.requiresPrescription ? " | Rx" : ""}`,
     );
-    if (lines.length >= 80) break;
+    if (lines.length >= 60) break;
   }
   return lines.join("\n");
 }
@@ -126,14 +136,14 @@ function matchProducts(
   return cards;
 }
 
-function parseLlmJson(raw: string): {
+export function parseLlmJson(raw: string): {
   reply: string;
   isEmergency?: boolean;
   isMedical?: boolean;
   productQueries?: string[];
   quickSuggestions?: string[];
 } | null {
-  const trimmed = raw.trim();
+  const trimmed = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   try {
     return JSON.parse(trimmed);
   } catch {
@@ -153,6 +163,7 @@ function parseLlmJson(raw: string): {
 function toResult(
   reply: string,
   userText: string,
+  lang: ChatLang,
   candidates: CatalogProductCandidate[],
   parsed?: {
     isEmergency?: boolean;
@@ -165,15 +176,16 @@ function toResult(
   const allowProducts =
     !isEmergency &&
     (isMedicineSeekingAsk(userText) || (parsed?.productQueries?.length ?? 0) > 0);
+  const chips = Array.isArray(parsed?.quickSuggestions)
+    ? parsed!.quickSuggestions!.map(String).filter(Boolean).slice(0, 4)
+    : [];
   return {
     success: true,
     reply: reply.trim().slice(0, 4000),
     isMedical: parsed?.isMedical !== false,
     isPrescription: false,
     matchedProducts: matchProducts(parsed?.productQueries || [], candidates, allowProducts),
-    quickSuggestions: Array.isArray(parsed?.quickSuggestions)
-      ? parsed!.quickSuggestions!.map(String).filter(Boolean).slice(0, 4)
-      : [],
+    quickSuggestions: chips.length ? chips : defaultChips(lang),
   };
 }
 
@@ -182,6 +194,7 @@ export async function tryMedicalLlmReply(input: MedicalLlmInput): Promise<Medica
   const userText = String(input.message || "").trim();
   if (!userText && !input.hasImage) return null;
 
+  const cfg = getLlmConfig();
   const catalogHint = compactCatalog(input.candidates);
   const messages: LlmMessage[] = [
     { role: "system", content: buildSystemPrompt(input.language, catalogHint) },
@@ -199,18 +212,19 @@ export async function tryMedicalLlmReply(input: MedicalLlmInput): Promise<Medica
     : userText;
   messages.push({ role: "user", content: userContent });
 
-  // 1) Prefer JSON mode (structured chips/products)
+  // Groq: plain text first (JSON mode frequently drops good answers)
+  // Other providers: try JSON first for structured chips
+  const preferJson = Boolean(cfg && !cfg.isGroq);
   let raw = await chatCompletion(messages, {
-    temperature: 0.35,
-    maxTokens: 1000,
-    responseFormatJson: true,
+    temperature: 0.3,
+    maxTokens: 1100,
+    responseFormatJson: preferJson,
   });
 
-  // 2) If JSON mode empty/failed without rescue, retry plain text
-  if (!raw) {
+  if (!raw && preferJson) {
     raw = await chatCompletion(messages, {
-      temperature: 0.35,
-      maxTokens: 1000,
+      temperature: 0.3,
+      maxTokens: 1100,
       responseFormatJson: false,
     });
   }
@@ -218,9 +232,8 @@ export async function tryMedicalLlmReply(input: MedicalLlmInput): Promise<Medica
 
   const parsed = parseLlmJson(raw);
   if (parsed?.reply?.trim()) {
-    return toResult(parsed.reply, userText, input.candidates, parsed);
+    return toResult(parsed.reply, userText, input.language, input.candidates, parsed);
   }
 
-  // Plain-text rescue (Groq failed_generation or non-JSON model output)
-  return toResult(raw, userText, input.candidates, null);
+  return toResult(raw, userText, input.language, input.candidates, null);
 }

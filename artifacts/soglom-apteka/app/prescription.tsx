@@ -32,37 +32,49 @@ const KEY_ENTER = 'Enter'; // i18n-ignore
 
 type ChatLang = 'uz' | 'ru' | 'en';
 
-/** Detect mid-chat "speak Uzbek/Russian/English" requests (typos like gapr OK). */
-function detectChatLanguageSwitch(text: string): ChatLang | null {
-  const q = text.trim();
-  if (!q) return null;
-  const isSwitch =
-    /(?:tilida|speak|язык|language|по-узбек|по-русск|по-англ|o['`ʼ]?zbekcha|ruscha|inglizcha).{0,30}(?:gap\w*|javob|speak|ответь|пиши|yoz|please)|(?:gap\w*|javob|speak|ответь).{0,20}(?:o['`ʼ]?zbek|uzbek|rus|russian|ingliz|english|узбек|русск|англ)/i.test(
-      q,
-    );
-  if (!isSwitch) return null;
+/** Infer chat language from what the user just typed (UZ market: Latin Uzbek beats stale app locale). */
+function inferChatLanguage(text: string, fallback: ChatLang): ChatLang {
+  const q = text
+    .toLowerCase()
+    .replace(/[ʻʼ’‘`´]/g, "'")
+    .trim();
+  if (!q) return fallback;
+
   if (
-    /(?:o['`ʼ]?zbek|uzbek|узбек).{0,24}(?:til|язык|language|cha)|(?:tilida|на узбекском|in uzbek|по-узбекски).{0,24}(?:gap\w*|javob|speak)|speak\s*uzbek|o['`ʼ]?zbekcha\s*(?:gap\w*|javob)/i.test(
+    /(?:o['`]?zbek|uzbek|узбек).{0,24}(?:til|язык|cha)|(?:tilida|по-узбек|in uzbek).{0,24}(?:gap\w*|javob|speak)|o['`]?zbekcha\s*(?:gap\w*|javob)/i.test(
       q,
     )
   ) {
     return 'uz';
   }
   if (
-    /(?:rus(?:cha|til)?|русск|russian).{0,24}(?:til|язык|language)|(?:tilida|на русском|in russian|по-русски).{0,24}(?:gap\w*|javob|speak)|speak\s*russian/i.test(
+    /(?:rus(?:cha)?|русск|russian).{0,24}(?:til|язык|gap\w*|javob)|(?:по-русски|in russian|на русском).{0,24}(?:gap\w*|javob|speak)|ruscha\s*(?:gap\w*|javob)/i.test(
       q,
     )
   ) {
     return 'ru';
   }
   if (
-    /(?:ingliz|english|англ).{0,24}(?:til|язык|language)|(?:tilida|in english|на английском|по-английски).{0,24}(?:gap\w*|javob|speak)|speak\s*english/i.test(
+    /(?:ingliz|english|англ).{0,24}(?:til|язык|gap\w*|javob)|(?:in english|на английском|по-английски)/i.test(
       q,
     )
   ) {
     return 'en';
   }
-  return null;
+
+  const cyr = (q.match(/[а-яё]/gi) || []).length;
+  const lat = (q.match(/[a-z']/gi) || []).length;
+  if (cyr >= 4 && cyr > lat * 1.2) return 'ru';
+  if (
+    /(?:salom|assalom|rahmat|yordam|savol|javob|nima|qanday|ichsam|ichay|og'?ri|bosh|qorin|isitma|shamol|dori|retsept|yuqori|ozi\b)/i.test(
+      q,
+    )
+  ) {
+    return 'uz';
+  }
+  if (/\b(hello|please|thanks|medicine|prescription|fever|headache)\b/i.test(q)) return 'en';
+  if (lat >= 6 && cyr === 0 && fallback === 'ru') return 'uz';
+  return fallback;
 }
 
 export interface ChatProductItem {
@@ -261,10 +273,9 @@ export default function PrescriptionScreen() {
     scrollToBottom();
 
     try {
-      const switched = detectChatLanguageSwitch(trimmed);
-      const requestLanguage: ChatLang = switched || language;
-      if (switched && switched !== language) {
-        setLanguage(switched);
+      const requestLanguage = inferChatLanguage(trimmed, language);
+      if (requestLanguage !== language) {
+        setLanguage(requestLanguage);
       }
 
       const history = messages

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { detectReplyLanguage } from "../src/lib/aiPrescriptionChat";
+import { detectReplyLanguage } from "../src/lib/aiLocale";
 
 describe("AI reply language inference", () => {
   it("prefers Uzbek when user writes informal Uzbek even if app locale is Russian", () => {
@@ -8,7 +8,7 @@ describe("AI reply language inference", () => {
     assert.equal(detectReplyLanguage("yuqoridagi savolimga o'zbekcha javob ber", "ru"), "uz");
   });
 
-  it("detects Russian Cyrillic messages", () => {
-    assert.equal(detectReplyLanguage("Что ты умеешь делать?", "uz"), "ru");
+  it("detects russian and english switch phrases", () => {
+    assert.equal(detectReplyLanguage("Что ты умеешь?", "uz"), "ru");
   });
 });

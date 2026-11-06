@@ -3,6 +3,10 @@ import {
   type CatalogProductCandidate,
 } from "./prescriptionEngine";
 import { hasClinicalContent, normalizeUserSpeech } from "./aiChatNlu";
+import {
+  detectReplyLanguage as detectLocaleLanguage,
+  isLanguageSwitchRequest as isLocaleLanguageSwitch,
+} from "./aiLocale";
 
 export interface AiChatMessage {
   role: "user" | "assistant" | "system";
@@ -232,58 +236,16 @@ export function isExplicitMedicinePurchaseRequest(query: string): boolean {
   );
 }
 
-/** If the user asks mid-chat to switch language, honour that over the app locale. */
+/** Re-export / delegate to shared Uzbekistan-wide locale detector. */
 export function detectReplyLanguage(
   message: string,
   fallback: "uz" | "ru" | "en" = "uz",
 ): "uz" | "ru" | "en" {
-  const q = normalizeQuery(message);
-  // Explicit switch phrases first
-  if (
-    /(?:o['`ʼ]?zbek|uzbek|узбек).{0,24}(?:til|язык|language|cha)|(?:tilida|на узбекском|in uzbek|по-узбекски).{0,24}(?:gap\w*|javob|speak|ответь|пиши|yoz)|speak\s*uzbek|javob.*o['`ʼ]?zbek|o['`ʼ]?zbekcha\s*(?:gap\w*|javob|yoz)/i.test(
-      q,
-    )
-  ) {
-    return "uz";
-  }
-  if (
-    /(?:rus(?:cha|til)?|русск|russian).{0,24}(?:til|язык|language|gap\w*|javob|speak|ответь|пиши|yoz)|(?:tilida|на русском|in russian|по-русски).{0,24}(?:gap\w*|javob|speak|ответь|пиши|yoz)|speak\s*russian|javob.*rus|ruscha\s*(?:gap\w*|javob|yoz)/i.test(
-      q,
-    )
-  ) {
-    return "ru";
-  }
-  if (
-    /(?:ingliz|english|англ).{0,24}(?:til|язык|language|gap\w*|javob|speak|ответь|пиши|yoz)|(?:tilida|in english|на английском|по-английски).{0,24}(?:gap\w*|javob|speak|ответь|пиши|yoz)|speak\s*english|javob.*ingliz|inglizcha\s*(?:gap\w*|javob|yoz)/i.test(
-      q,
-    )
-  ) {
-    return "en";
-  }
-
-  // Infer from the message itself (so Uzbek typing wins over a stale app locale)
-  const cyr = (q.match(/[а-яё]/gi) || []).length;
-  const lat = (q.match(/[a-z']/gi) || []).length;
-  if (cyr >= 4 && cyr > lat) return "ru";
-  if (
-    /(?:^|[\s])(salom|assalom|nima\w*|qila\w*|qilay|bera\w*|berasan|ichsam|ichay|og'?ri\w*|yordam\w*|dorixona|retsept|shamol\w*|isitma|rahmat|yuqori\w*|savol\w*|javob\w*|ozi\b)/i.test(
-      ` ${q} `,
-    )
-  ) {
-    return "uz";
-  }
-  if (/\b(hello|please|thanks|what can you|how (?:do|can) i|medicine|prescription)\b/i.test(q)) {
-    return "en";
-  }
-  return fallback;
+  return detectLocaleLanguage(message, fallback);
 }
 
-/** True when the message is primarily asking the assistant to switch reply language. */
 export function isLanguageSwitchRequest(message: string): boolean {
-  const q = normalizeQuery(message);
-  return /(?:tilida|speak|язык|language|по-узбек|по-русск|по-англ|o['`ʼ]?zbekcha|ruscha|inglizcha).{0,30}(?:gap\w*|javob|speak|ответь|пиши|yoz|please)|(?:gap\w*|javob|speak|ответь).{0,20}(?:o['`ʼ]?zbek|uzbek|rus|russian|ingliz|english|узбек|русск|англ)/i.test(
-    q,
-  );
+  return isLocaleLanguageSwitch(message);
 }
 
 export function handleAiMedicalChat(params: {
