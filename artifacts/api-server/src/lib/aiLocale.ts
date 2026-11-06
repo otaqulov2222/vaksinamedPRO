@@ -91,19 +91,19 @@ export function offlineAssistantFallback(lang: ChatLang): {
     return {
       reply:
         "Здравствуйте! Я медицинский ИИ-консультант VaksinaMed 🩺.\n\nМогу помочь с симптомами, лекарствами, дозировками и фото рецепта (проверка по каталогу аптек).\n\nОпишите, что беспокоит, или пришлите название препарата.\n\n⚠️ Рекомендации информационные; перед приёмом лекарств проконсультируйтесь с врачом. При угрожающих симптомах звоните 103.",
-      quickSuggestions: ["Сфотографировать рецепт", "Симптомы простуды", "Головная боль", "Витамин D3"],
+      quickSuggestions: ["Сфотографировать рецепт", "Симптомы простуды", "Головная боль", "Цены на лекарства"],
     };
   }
   if (lang === "en") {
     return {
       reply:
         "Hello! I am the VaksinaMed Medical AI Consultant 🩺.\n\nI can help with symptoms, medicines, dosage guidance, and prescription photos (catalog matching).\n\nTell me what is bothering you or send a medicine name.\n\n⚠️ Advice is informational; consult a doctor before taking medicines. For emergencies call 103.",
-      quickSuggestions: ["Scan prescription", "Cold symptoms", "Headache", "Vitamin D3"],
+      quickSuggestions: ["Scan prescription", "Cold symptoms", "Headache", "Medicine prices"],
     };
   }
   return {
     reply:
       "Assalomu alaykum! Men VaksinaMed tibbiy AI maslahatchisiman 🩺.\n\nSizga alomatlar, dori-darmon, doza va retsept surati (dorixona katalogidan qidirish) bo‘yicha yordam bera olaman.\n\nNima bezovta qilyapti — yozing yoki dori nomini yuboring.\n\n⚠️ Maslahatlar tavsiyaviy; dori qabul qilishdan oldin shifokor bilan maslahatlashing. Xavfli holatda 103 ni chaqiring.",
-    quickSuggestions: ["Retseptni rasmga olish", "Shamollash alomatlari", "Bosh og‘rig‘i", "Vitamin D3"],
+    quickSuggestions: ["Retseptni rasmga olish", "Shamollash alomatlari", "Bosh og‘rig‘i", "Dori narxlari"],
   };
 }

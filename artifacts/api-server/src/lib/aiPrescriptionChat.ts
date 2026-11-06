@@ -205,21 +205,34 @@ export function isMedicalDomain(query: string): boolean {
 
 export function isExplicitMedicinePurchaseRequest(query: string): boolean {
   // Strict: only cart/buy/price/stock — NOT advisory "nima ichsam bo'ladi?"
+  // Bare "isitma bormi?" / "allergiya belgilari bormi?" is NOT a purchase ask.
   const q = normalizeQuery(query);
+  if (
+    /(?:isitma|harorat|temperatura|allergiya|belgi|simptom|og['']?riq?|belgi(?:lari)?)\s+bormi\b/i.test(
+      q,
+    )
+  ) {
+    return false;
+  }
+  const medicineStockAsk =
+    /(?:dori|preparat|tabletka|kapsula|sirop|sprey|malham)\b.{0,40}\bbormi\b|\bbormi\b.{0,40}(?:dori|preparat|tabletka)|(?:dorixonada|dokonda|apteka|filial).{0,20}\bbormi\b/i.test(
+      q,
+    ) ||
+    /(?:paratsetamol|paracetamol|ibuprofen|smecta|linex|loratadin|acc|aqua\s*maris|nurofen|omeprazol|ambroksol).{0,20}\bbormi\b/i.test(
+      q,
+    );
   return (
     q.includes("sotib ol") ||
     q.includes("buyurtma") ||
     q.includes("savatga") ||
     q.includes("narxi") ||
     q.includes("qancha turadi") ||
-    q.includes("bormi") ||
+    medicineStockAsk ||
     q.includes("qayerdan olsam") ||
     q.includes("dori bering") ||
     q.includes("dori kerak") ||
     q.includes("preparat kerak") ||
     q.includes("topib ber") ||
-    q.includes("dokonda bormi") ||
-    q.includes("dorixonada bormi") ||
     q.includes("купить") ||
     q.includes("заказать") ||
     q.includes("в корзину") ||
@@ -1280,28 +1293,49 @@ export function handleAiMedicalChat(params: {
           }
         }
       } else if (categoryIntent === "throat_cough") {
-        if (name.includes("acc") || name.includes("septolete") || name.includes("strepsils")) {
+        const isAccuChek = name.includes("accu") || name.includes("chek") || name.includes("глюкомет");
+        const isAcc =
+          !isAccuChek &&
+          (/(?:^|[^a-z0-9])acc(?:$|[^a-z0-9])/.test(name) || name.includes("ацц"));
+        if (isAcc || name.includes("ambroksol") || name.includes("septolete") || name.includes("strepsils")) {
           if (!seenGroups.has(group)) {
             seenGroups.add(group);
             relevantCandidates.push(p);
           }
         }
       } else if (categoryIntent === "stomach") {
-        if (name.includes("no-shpa") || name.includes("noshpa") || name.includes("drotaverin") || name.includes("omeprazol") || name.includes("mezim")) {
+        if (
+          name.includes("omeprazol") ||
+          name.includes("espumizan") ||
+          name.includes("smecta") ||
+          name.includes("linex") ||
+          name.includes("pankreatin") ||
+          name.includes("no-shpa") ||
+          name.includes("noshpa") ||
+          name.includes("drotaverin") ||
+          name.includes("mezim")
+        ) {
           if (!seenGroups.has(group)) {
             seenGroups.add(group);
             relevantCandidates.push(p);
           }
         }
       } else if (categoryIntent === "diarrhea" || categoryIntent === "poisoning") {
-        if (name.includes("rehidron") || name.includes("smecta") || name.includes("ugol")) {
+        if (
+          name.includes("smecta") ||
+          name.includes("linex") ||
+          name.includes("rehidron") ||
+          name.includes("regidron") ||
+          name.includes("rehydron") ||
+          name.includes("ugol")
+        ) {
           if (!seenGroups.has(group)) {
             seenGroups.add(group);
             relevantCandidates.push(p);
           }
         }
       } else if (categoryIntent === "constipation") {
-        if (name.includes("duphalac") || name.includes("laktuloza") || name.includes("senna")) {
+        if (name.includes("duphalac") || name.includes("laktuloza") || name.includes("senna") || name.includes("linex")) {
           if (!seenGroups.has(group)) {
             seenGroups.add(group);
             relevantCandidates.push(p);
@@ -1315,7 +1349,12 @@ export function handleAiMedicalChat(params: {
           }
         }
       } else if (categoryIntent === "allergy") {
-        if (name.includes("loratadin") || name.includes("setirizin") || name.includes("cetirizine")) {
+        if (
+          name.includes("loratadin") ||
+          name.includes("setirizin") ||
+          name.includes("cetirizine") ||
+          name.includes("klaritin")
+        ) {
           if (!seenGroups.has("antihistamine")) {
             seenGroups.add("antihistamine");
             relevantCandidates.push(p);
@@ -1797,14 +1836,14 @@ Zudlik bilan nimalar qilish kerak:
 
     if (isAbdominalPain) {
       if (lang === "ru") {
-        reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Боль в области живота и желудка\n\nБоль в животе (мышечный спазм, гастрит, пищевое расстройство или острая хирургическая патология — аппендицит) требует предельной осторожности.\n\nРекомендации ИИ-ассистента и правила безопасности:\n1. Строгий запрет: До осмотра врача категорически запрещено прикладывать грелку к животу и принимать сильные обезболивающие (анальгетики)! Снятие боли маскирует симптомы острого аппендицита и перитонита;\n2. Прилягте в удобном положении, расстегните ремень. Воздержитесь от тяжелой и жирной пищи. Пейте теплую воду без газа небольшими глотками;\n3. При спазмах гладкой мускулатуры по согласованию с врачом допускается прием спазмолитика (Дротаверин / Но-шпа);\n4. Опасные симптомы (вызов 103): Острая боль справа внизу живота, рвота, повышение температуры, твердый живот — требуют немедленного вызова скорой помощи!\n\n⚠️ Важное напоминание: Данная консультация носит информационный характер. При острой боли в животе обязательно обратитесь к врачу.`;
-        quickSuggestions = ["Симптомы аппендицита", "Когда вызывать 103?", "Купить Но-шпа"];
+        reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Боль в области живота и желудка\n\nБоль в животе (газы, дискомфорт пищеварения, гастрит или острая хирургическая патология — аппендицит) требует предельной осторожности.\n\nРекомендации ИИ-ассистента и правила безопасности:\n1. Строгий запрет: До осмотра врача категорически запрещено прикладывать грелку к животу и принимать сильные обезболивающие! Снятие боли маскирует симптомы острого аппендицита;\n2. Прилягте, расстегните ремень, избегайте тяжёлой пищи; пейте воду небольшими глотками;\n3. При вздутии/газах из каталога может помочь Эспумизан; при изжоге — Омепразол (только после согласования с врачом). Смекта/Линекс — при расстройстве стула;\n4. Опасные симптомы (вызов 103): острая боль справа внизу живота, рвота, температура, твёрдый живот.\n\n⚠️ Консультация информационная. При острой боли обратитесь к врачу.`;
+        quickSuggestions = ["Симптомы аппендицита", "Когда вызывать 103?", "Купить Эспумизан"];
       } else if (lang === "en") {
-        reply = `🩺 VaksinaMed Medical AI Assistant: Abdominal & Stomach Pain\n\nAbdominal pain can stem from indigestion, cramps, gastritis, or serious acute conditions such as appendicitis.\n\nAI Assistant guidance & precautions:\n1. Strict prohibition: NEVER apply warm heating pads to the abdomen or take strong analgesics! Masking pain can hide acute appendicitis or peritonitis;\n2. Rest comfortably, loosen tight belts, and avoid heavy or spicy foods. Sip small amounts of room-temperature water;\n3. For smooth muscle cramps, an antispasmodic (such as Drotaverine / No-shpa) may be taken with doctor approval;\n4. Emergency red flags: If pain shifts to the lower right abdomen, worsens continuously, or is accompanied by fever or vomiting — call 103 ambulance immediately!\n\n⚠️ Medical reminder: Consult a physician or surgeon promptly for acute abdominal pain.`;
-        quickSuggestions = ["Appendicitis warning signs", "When to call 103", "Buy No-shpa"];
+        reply = `🩺 VaksinaMed Medical AI Assistant: Abdominal & Stomach Pain\n\nAbdominal pain can stem from indigestion, gas, gastritis, or serious conditions such as appendicitis.\n\nAI Assistant guidance & precautions:\n1. Strict prohibition: NEVER apply warm heating pads or take strong painkillers before a medical exam — masking pain can hide appendicitis;\n2. Rest, loosen tight belts, avoid heavy foods; sip water;\n3. From our catalog: Espumizan may help gas/bloating; Omeprazole for heartburn; Smecta/Linex for stool issues — only after clinician advice when unsure;\n4. Emergency red flags: pain shifting to the lower right abdomen, fever, vomiting, hard abdomen — call 103.\n\n⚠️ Advice is informational. Seek a doctor for acute abdominal pain.`;
+        quickSuggestions = ["Appendicitis warning signs", "When to call 103", "Buy Espumizan"];
       } else {
-        reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Qorin va oshqozon sohasidagi og‘riqda nima qilish kerak?\n\nQorindagi og‘riqlar turli sabablar (me'da spazmi, gastrit, noto‘g‘ri ovqatlanish yoki o‘tkir jarrohlik holatlari — masalan, ko‘richak / appenditsit) oqibatida paydo bo‘lishi mumkin.\n\nAI yordamchisi tavsiyalari va xavfsizlik choralari:\n1. Qat'iy taqiq: Qorindagi og‘riq sababi aniqlanmaguncha, aslo issiq grelka qo‘ymang va kuchli og‘riq qoldiruvchi dorilarni (analgetiklarni) ichmang! Og‘riqni sun'iy bosish xavfli jarrohlik holatlarini (masalan, ko‘richak yorilishi yoki peritonitni) yashirib qo‘yishi mumkin;\n2. Tinch holatda yoting, tor kamarni bo‘shating. Qattiq, yog‘li, qovurilgan taomlar yemang. Gazsiz iliq suv yoki moychechak damlamasidan oz-ozdan iching;\n3. Qisilish va spazm bilan kechadigan og‘riqlarda shifokor bilan maslahatlashgan holda faqat spazmolitik vosita (masalan, Drotaverin / No-shpa) qabul qilinishi mumkin;\n4. Zudlik bilan shifokorga murojaat qilish belgilari: Agar og‘riq qorinning o‘ng pastki qismiga o‘tsa, to‘xtovsiz kuchaysa, ko‘ngil aynishi, qusish yoki tana harorati ko‘tarilishi bilan kechsa — darhol 103 Tez yordam chaqiring!\n\n⚠️ Muhim eslatma: Ushbu tavsiyalar axborot xarakteriga ega. Qorin og‘rig‘ida shifokor-terapevt yoki jarroh ko‘rigidan o‘tish zarur.`;
-        quickSuggestions = ["Xavfli ko‘richak belgilari", "Qachon 103 chaqiriladi?", "No-shpa sotib olish"];
+        reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Qorin va oshqozon sohasidagi og‘riqda nima qilish kerak?\n\nQorin og‘rig‘i gaz, hazm buzilishi, gastrit yoki o‘tkir jarrohlik holatlari (masalan, appenditsit) tufayli bo‘lishi mumkin.\n\nAI yordamchisi tavsiyalari va xavfsizlik choralari:\n1. Qat'iy taqiq: Sabab aniqlanmaguncha issiq grelka qo‘ymang va kuchli og‘riq qoldiruvchi ichmang — og‘riqni yashirish xavfli;\n2. Tinch yoting, tor kamarni bo‘shating, og‘ir taom yemang, suvni oz-ozdan iching;\n3. Katalogdagi yordam: gaz/shishishda Espumizan; jig‘ildonda Omeprazol; ichak noqulayligida Smecta yoki Linex — shubha bo‘lsa shifokor bilan;\n4. 103 chaqirish: og‘riq o‘ng pastga o‘tsa, isitma, qusish yoki qorin qotib qolsa.\n\n⚠️ Tavsiyalar axborot xarakterida. O‘tkir qorin og‘rig‘ida shifokorga boring.`;
+        quickSuggestions = ["Xavfli ko‘richak belgilari", "Qachon 103 chaqiriladi?", "Espumizan sotib olish"];
       }
     } else {
       if (lang === "ru") {
@@ -1820,14 +1859,14 @@ Zudlik bilan nimalar qilish kerak:
     }
   } else if (categoryIntent === "diarrhea") {
     if (lang === "ru") {
-      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Диарея и расстройство пищеварения\n\nГлавная опасность при диарее — потеря жидкости и электролитов.\n\nРекомендации ИИ-ассистента:\n1. Восполняйте баланс солей (раствор Регидрона небольшими порциями);\n2. Для вывода токсинов примите Смекту или активированный уголь;\n3. Не пейте антибиотики без назначения врача;\n4. При повышенной температуре или крови в стуле немедленно обратитесь к врачу-инфекционисту.`;
-      quickSuggestions = ["Прием Регидрона", "Диета при расстройстве", "Купить Регидрон"];
+      reply = `🩺 Медицинский ИИ-ассистент VaksinaMed: Диарея и расстройство пищеварения\n\nГлавная опасность при диарее — потеря жидкости и электролитов.\n\nРекомендации ИИ-ассистента:\n1. Пейте много жидкости небольшими глотками (вода, слабый чай); при сильной потере жидкости обсудите с врачом регидратацию;\n2. Из каталога: Смекта помогает связать токсины; Линекс — для поддержки микрофлоры;\n3. Не пейте антибиотики без назначения врача;\n4. При температуре или крови в стуле обратитесь к инфекционисту.`;
+      quickSuggestions = ["Диета при расстройстве", "Когда к врачу?", "Купить Смекту"];
     } else if (lang === "en") {
-      reply = `🩺 VaksinaMed Medical AI Assistant: Diarrhea Management\n\nThe primary danger during acute diarrhea is fluid and electrolyte depletion.\n\nAI Assistant guidance:\n1. Replenish electrolytes using Oral Rehydration Salts (Rehydron);\n2. Use adsorbents such as Smecta to eliminate toxins;\n3. Avoid antibiotics unless specifically indicated by lab tests;\n4. Seek medical attention if fever or bloody stool occurs.`;
-      quickSuggestions = ["Oral rehydration", "Dietary rules", "Buy Rehydron"];
+      reply = `🩺 VaksinaMed Medical AI Assistant: Diarrhea Management\n\nThe primary danger during acute diarrhea is fluid and electrolyte depletion.\n\nAI Assistant guidance:\n1. Sip fluids frequently (water, weak tea); ask a clinician about oral rehydration if losses are severe;\n2. From our catalog: Smecta can bind toxins; Linex may support flora;\n3. Avoid antibiotics unless prescribed;\n4. Seek care if fever or bloody stool occurs.`;
+      quickSuggestions = ["Dietary rules", "When to see a doctor", "Buy Smecta"];
     } else {
-      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Ich ketishi (diareya)da nima qilish kerak?\n\nIch ketishida eng katta xavf — organizmning suyuqlik va tuzlarni yo‘qotishidir.\n\nAI yordamchisi tavsiyalari:\n1. Suvsizlanishning oldini olish uchun tuzli eritma (Regidron)ni kun davomida qultumlab iching;\n2. Ichakdagi zararli moddalarni chiqarish uchun Smekta qabul qiling;\n3. Qat'iy qoida: O‘zboshimchalik bilan antibiotik ichmang;\n4. Isitma ko‘tarilsa yoki qonli ich kelsa, zudlik bilan shifokor-infeksionistga murojaat qiling.`;
-      quickSuggestions = ["Regidron ichish tartibi", "Ich ketganda parhez", "Regidron sotib olish"];
+      reply = `🩺 VaksinaMed AI tibbiy yordamchisi: Ich ketishi (diareya)da nima qilish kerak?\n\nIch ketishida eng katta xavf — organizmning suyuqlik va tuzlarni yo‘qotishidir.\n\nAI yordamchisi tavsiyalari:\n1. Kun davomida suv va yengil choydan qultumlab iching; kuchli suvsizlanishda shifokor bilan rehidratsiya muhokama qiling;\n2. Katalogdan: Smecta toksinlarni bog‘lashga yordam beradi; Linex mikroflorani qo‘llab-quvvatlashi mumkin;\n3. Qat'iy qoida: O‘zboshimchalik bilan antibiotik ichmang;\n4. Isitma yoki qonli ich kelsa — infeksiyonistga boring.`;
+      quickSuggestions = ["Ich ketganda parhez", "Shifokorga qachon?", "Smecta sotib olish"];
     }
   } else if (categoryIntent === "allergy") {
     if (lang === "ru") {

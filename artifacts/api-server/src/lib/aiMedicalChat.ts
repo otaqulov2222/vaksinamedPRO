@@ -1,5 +1,9 @@
 import { tryMedicalLlmReply } from "./aiMedicalLlm";
-import { handleAiMedicalChat, type AiChatResponse } from "./aiPrescriptionChat";
+import {
+  handleAiMedicalChat,
+  isLanguageSwitchRequest,
+  type AiChatResponse,
+} from "./aiPrescriptionChat";
 import type { CatalogProductCandidate } from "./prescriptionEngine";
 import { isLlmConfigured } from "./aiLlm";
 import { detectReplyLanguage, offlineAssistantFallback } from "./aiLocale";
@@ -14,6 +18,24 @@ function looksLikePrescriptionScan(userText: string, hasImage: boolean): boolean
     return true;
   }
   return false;
+}
+
+/** Last clinical user turn before a language-switch message (so we still answer the prior question). */
+function priorClinicalUserMessage(
+  history: Array<{ role: "user" | "assistant"; content: string }> | undefined,
+  current: string,
+): string | null {
+  if (!history?.length) return null;
+  if (!isLanguageSwitchRequest(current)) return null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const h = history[i];
+    if (h?.role !== "user") continue;
+    const t = String(h.content || "").trim();
+    if (!t || isLanguageSwitchRequest(t)) continue;
+    if (looksLikePrescriptionScan(t, false)) continue;
+    return t;
+  }
+  return null;
 }
 
 /**
@@ -32,6 +54,8 @@ export async function handleAiMedicalChatAsync(params: {
   const hasImage = Boolean(params.image && params.image.trim().length > 0);
   const appLang = params.language || "uz";
   const lang = detectReplyLanguage(userText, appLang);
+  const priorClinical = priorClinicalUserMessage(params.history, userText);
+  const effectiveMessage = priorClinical || userText;
 
   if (looksLikePrescriptionScan(userText, hasImage)) {
     return handleAiMedicalChat({
@@ -57,9 +81,9 @@ export async function handleAiMedicalChatAsync(params: {
 
   // Soft, language-correct offline fallback (avoid dumping wrong-locale clinical templates)
   const soft = offlineAssistantFallback(lang);
-  // Still try rule engine for clear clinical intents when LLM is down
+  // On language switch without LLM: answer the prior clinical question in the new language
   const rules = handleAiMedicalChat({
-    message: params.message,
+    message: effectiveMessage,
     image: params.image,
     language: lang,
     candidates: params.candidates,
