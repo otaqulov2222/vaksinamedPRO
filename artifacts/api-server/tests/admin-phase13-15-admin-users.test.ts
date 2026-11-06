@@ -29,6 +29,7 @@ const securityEnv = read(path.join(root, "src/lib/securityEnv.ts"));
 const adminSchema = read(path.join(repoRoot, "lib/db/src/schema/admin.ts"));
 const m0001 = read(path.join(repoRoot, "lib/db/migrations/0001_sessions_rbac.sql"));
 const m0004 = read(path.join(repoRoot, "lib/db/migrations/0004_inventory_adjust_permission.sql"));
+const m0022 = read(path.join(repoRoot, "lib/db/migrations/0022_admin_settings_permissions.sql"));
 const docs = read(path.join(repoRoot, "docs/ADMIN_IMPLEMENTATION_STATUS.md"));
 const css = read(path.join(adminWeb, "styles.css"));
 const acCss = css.slice(
@@ -53,7 +54,11 @@ const routeSources = srcFiles(path.join(root, "src/routes")).map((f) => ({ f: pa
 const serverSources = routeSources.concat(srcFiles(path.join(root, "src/lib")).map((f) => ({ f: path.basename(f), src: read(f) })));
 
 const quoted = (src: string) => [...src.matchAll(/'([a-z_]+:[a-z_:]+)'/g)].map((m) => m[1]);
-const seedAll = [...quoted(between(m0001, "INSERT INTO auth_permissions", "ON CONFLICT")), ...quoted(m0004).slice(0, 1)];
+const seedAll = [
+  ...quoted(between(m0001, "INSERT INTO auth_permissions", "ON CONFLICT")),
+  ...quoted(m0004).slice(0, 1),
+  ...quoted(between(m0022, "INSERT INTO auth_permissions", "ON CONFLICT")),
+];
 const seedCashier = quoted(between(m0001, "JOIN auth_permissions p ON p.code IN (", "WHERE r.code = 'cashier'"));
 const fallbackHq = [...between(rbac, "isHqAdminRole(role)", ": new Set([").matchAll(/"([a-z_]+:[a-z_:]+)"/g)].map((m) => m[1]);
 const fallbackCashier = [...between(rbac, ": new Set([", "]);").matchAll(/"([a-z_]+:[a-z_:]+)"/g)].map((m) => m[1]);
@@ -119,7 +124,7 @@ describe("Admin Phase 13.15 Admin users / RBAC — real server contract", () => 
   });
 
   it("the page label map covers the migration seed exactly; the rbac.ts fallbacks equal the seed; codes shown come from the API", () => {
-    assert.equal(seedAll.length, 22);
+    assert.equal(seedAll.length, 25);
     assert.equal(new Set(labelCodes).size, labelCodes.length);
     assert.deepEqual(sorted(labelCodes), sorted(seedAll));
     assert.deepEqual(sorted(fallbackHq), sorted(seedAll));
@@ -127,11 +132,14 @@ describe("Admin Phase 13.15 Admin users / RBAC — real server contract", () => 
     assert.equal(seedCashier.length, 9);
     assert.match(m0004, /'inventory:adjust'/);
     assert.match(between(m0004, "INSERT INTO auth_role_permissions", "ON CONFLICT"), /r\.code = 'super_admin'/);
+    assert.match(m0022, /'settings:manage'/);
+    assert.match(m0022, /'customers:manage'/);
+    assert.match(m0022, /'ratings:moderate'/);
     assert.doesNotMatch(code, /CASHIER_SEED|PERMISSION_GROUPS|ALL_CODES/);
     assert.match(code, /for \(const p of rbac\?\.permissions \|\| \[\]\)/);
   });
 
-  it("every one of the 22 permission codes is now enforced by a real route (rbac:manage by the admin management router)", () => {
+  it("every one of the 25 permission codes is now enforced by a real route (rbac:manage by the admin management router)", () => {
     const enforced = new Set(
       routeSources.flatMap(({ src }) => [...src.matchAll(/(?:requirePermission|adminHasPermission)\([^,]+,\s*"([a-z_]+:[a-z_:]+)"\)/g)].map((m) => m[1])),
     );

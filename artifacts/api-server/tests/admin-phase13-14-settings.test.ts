@@ -247,8 +247,8 @@ describe("Admin Phase 13.14 Settings — design system and docs", () => {
     const section = between(docs, "## Phase 13.14 — Sozlamalar", "## Phase 13.13 — Audit");
     assert.match(section, /GET \/api\/cashback\/rules/);
     assert.match(section, /system_settings/);
-    assert.match(section, /O‘zgartirish mumkin bo‘lgan sozlama yo‘q/);
-    assert.match(section, /DB sxemasi va migratsiyalar o‘zgartirilmadi/);
-    assert.match(section, /Backend o‘zgarmadi/);
+    assert.match(section, /PATCH \/api\/admin\/settings\/cashback/);
+    assert.match(section, /settings:manage/);
+    assert.match(section, /read \+ cashback spend write|max_spend_ratio/);
   });
 });

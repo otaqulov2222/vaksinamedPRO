@@ -49,13 +49,15 @@ describe("Admin Phase 13.7 Customers — backend contract (unchanged)", () => {
       assert.ok(perm > 0);
       assert.ok(perm < body.indexOf("db."), "permission check precedes DB access");
     }
-    assert.doesNotMatch(adminRoute, /router\.(post|patch|put|delete)\("\/admin\/customers/);
+    assert.match(adminRoute, /router\.post\("\/admin\/customers\/:id\/cashback\/adjustment"/);
+    assert.doesNotMatch(adminRoute, /router\.(patch|put|delete)\("\/admin\/customers/);
   });
 
-  it("customers:read is HQ-only; no customers:manage; cashier fallback lacks it", () => {
-    assert.doesNotMatch(rbac, /customers:manage/);
+  it("customers:read is HQ-only; customers:manage is HQ cashback adjustment; cashier fallback lacks both", () => {
+    assert.match(rbac, /customers:manage/);
     const cashierFallback = rbac.slice(rbac.indexOf(": new Set(["), rbac.indexOf("]);", rbac.indexOf(": new Set([")));
     assert.doesNotMatch(cashierFallback, /customers:read/);
+    assert.doesNotMatch(cashierFallback, /customers:manage/);
     assert.match(nav, /\{ id: "customers", label: "Mijozlar", permission: "customers:read"/);
   });
 

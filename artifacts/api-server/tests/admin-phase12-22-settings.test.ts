@@ -1,6 +1,6 @@
 /**
  * Admin Phase 12.22 — Settings product reconstruction.
- * UI-only: no settings engine / API / DB changes.
+ * Later Phase 13.14 adds a governed spend-ratio write (`PATCH /admin/settings/cashback`).
  */
 
 import assert from "node:assert/strict";
@@ -20,12 +20,14 @@ describe("Admin Phase 12.22 — Settings honest console", () => {
     assert.match(page, /\/api\/cashback\/rules/);
     assert.match(page, /maxSpendPercent/);
     assert.match(page, /Faqat ko‘rish/);
-    assert.doesNotMatch(page, /\/api\/admin\/settings/);
+    assert.match(page, /\/api\/admin\/settings\/cashback/);
+    assert.doesNotMatch(page, /\/api\/admin\/config|\/api\/settings\b/);
   });
 
   it("no invent save / toggles / secrets / fake system controls", () => {
     const page = readFileSync(path.join(adminWeb, "pages/SettingsPage.tsx"), "utf8");
-    assert.doesNotMatch(page, /Saqlash|onSubmit|method:\s*[\"']PATCH|method:\s*[\"']POST/);
+    assert.match(page, /Saqlash/);
+    assert.match(page, /method:\s*[\"']PATCH/);
     assert.doesNotMatch(page, /type=\"checkbox\"|maintenanceMode|Redis|runWorkers|backupNow/i);
     assert.doesNotMatch(page, /payme.?secret|click.?secret|merchant.?secret|webhook.?secret/i);
     assert.doesNotMatch(page, /value=\{.*secret|password=/i);

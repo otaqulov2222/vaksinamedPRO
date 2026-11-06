@@ -33,7 +33,7 @@ describe("Admin Phase 12.12 — Orders operations console", () => {
     assert.match(page, /<th>To‘lov<\/th>/);
     assert.match(page, /Summa/);
     assert.match(page, /<th>Vaqt<\/th>/);
-    assert.doesNotMatch(page, /<th>Tur<\/th>/);
+    assert.match(page, /<th>Tur<\/th>/);
     assert.doesNotMatch(page, /<th>Bron<\/th>/);
   });
 

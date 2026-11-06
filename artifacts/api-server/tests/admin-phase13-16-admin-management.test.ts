@@ -427,19 +427,22 @@ describe("13.16 password", () => {
 });
 
 describe("13.16 RBAC control plane", () => {
-  it("GET /admin/rbac returns seeded roles, all 22 permissions incl. rbac:manage, and the DB matrix", async () => {
+  it("GET /admin/rbac returns seeded roles, all 25 permissions incl. rbac:manage, and the DB matrix", async () => {
     const r = await call("GET", "/api/admin/rbac", hqToken);
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.roles.map((x: any) => [x.code, x.scope]), [["super_admin", "all"], ["cashier", "branch"]]);
     const perms = r.body.permissions.map((p: any) => p.code);
-    assert.equal(perms.length, 22);
+    assert.equal(perms.length, 25);
     assert.ok(perms.includes("rbac:manage"));
+    assert.ok(perms.includes("settings:manage"));
+    assert.ok(perms.includes("customers:manage"));
+    assert.ok(perms.includes("ratings:moderate"));
     const dbPerms = rows(await db.execute(sql`SELECT code FROM auth_permissions ORDER BY code`)).map((p) => p.code);
     assert.deepEqual(perms, dbPerms);
     const hqRow = r.body.matrix.find((m: any) => m.role === "super_admin");
     const cashierRow = r.body.matrix.find((m: any) => m.role === "cashier");
     assert.equal(hqRow.source, "db");
-    assert.equal(hqRow.permissions.length, 22);
+    assert.equal(hqRow.permissions.length, 25);
     assert.equal(cashierRow.permissions.length, 9);
     assert.equal(cashierRow.permissions.includes("rbac:manage"), false);
     assert.deepEqual(r.body.assignableRoles, ["super_admin", "cashier"]);

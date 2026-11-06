@@ -59,7 +59,9 @@ describe("Admin Phase 12.25 — final UX consolidation", () => {
 
     const settings = read("pages/SettingsPage.tsx");
     assert.match(settings, /\/api\/cashback\/rules|cashback\/rules/);
-    assert.doesNotMatch(settings, />\s*Saqlash\s*</);
+    assert.match(settings, /\/api\/admin\/settings\/cashback/);
+    assert.match(settings, />\s*Saqlash\s*</);
+    assert.doesNotMatch(settings, /maintenanceMode|runWorkers|backupNow/i);
 
     const admins = read("pages/AdminAccessPage.tsx");
     assert.match(admins, /operatorCapabilityLabel\("API_REQUIRED"\)/);
@@ -69,7 +71,8 @@ describe("Admin Phase 12.25 — final UX consolidation", () => {
 
     const audit = read("pages/AuditPage.tsx");
     assert.match(audit, /actionDraft|setEntity/);
-    assert.doesNotMatch(audit, /security score|Excel|CSV export|branchFilter|actorFilter/i);
+    assert.match(audit, /\/api\/admin\/audit\/export/);
+    assert.doesNotMatch(audit, /security score|Excel|branchFilter|actorFilter/i);
 
     const reports = read("pages/ReportsPage.tsx");
     assert.match(reports, /\/api\/admin\/reports/);

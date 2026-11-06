@@ -54,7 +54,9 @@ describe("Phase 12.26 — production gap matrix", () => {
     assert.doesNotMatch(fomPage, /<button[^>]*>\s*Ulanishni tekshirish\s*</);
 
     const settings = readFileSync(path.join(adminWeb, "pages/SettingsPage.tsx"), "utf8");
-    assert.doesNotMatch(settings, />\s*Saqlash\s*</);
+    assert.match(settings, /\/api\/admin\/settings\/cashback/);
+    assert.match(settings, />\s*Saqlash\s*</);
+    assert.doesNotMatch(settings, /maintenanceMode|runWorkers|backupNow/i);
 
     const admins = readFileSync(path.join(adminWeb, "pages/AdminAccessPage.tsx"), "utf8");
     assert.match(admins, /operatorCapabilityLabel\("API_REQUIRED"\)/);

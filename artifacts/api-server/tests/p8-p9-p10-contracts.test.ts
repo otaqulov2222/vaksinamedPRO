@@ -10,11 +10,11 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("P8–P10 API contracts", () => {
-  it("P8 delivery module + adapter CONTRACT_PENDING", () => {
+  it("P8 delivery module disabled + adapter CONTRACT_PENDING", () => {
     const deliveries = readFileSync(path.join(root, "src/routes/deliveries.ts"), "utf8");
     assert.match(deliveries, /requirePermission\(admin,\s*"delivery:update"\)/);
-    assert.match(deliveries, /assertBranchScope/);
-    assert.match(deliveries, /COURIER_BRANCH_MISMATCH|assignCourier/);
+    assert.match(deliveries, /DELIVERY_DISABLED|deliveryDisabled/);
+    assert.doesNotMatch(deliveries, /assertBranchScope/);
     const adapters = readFileSync(path.join(root, "src/lib/deliveryAdapters.ts"), "utf8");
     assert.match(adapters, /CONTRACT_PENDING/);
     const payments = readFileSync(path.join(root, "src/routes/payments.ts"), "utf8");

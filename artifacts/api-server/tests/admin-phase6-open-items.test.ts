@@ -57,11 +57,14 @@ describe("Admin Phase 6 — cashback correction", () => {
   it("no admin route grants/deducts cashback by direct balance edit", () => {
     const admin = readFileSync(path.join(root, "src/routes/admin.ts"), "utf8");
     assert.doesNotMatch(admin, /update\(cashbackAccounts\)|\.set\(\{[^}]*balance/);
-    assert.doesNotMatch(admin, /earnCashback|useCashback|adjustCashback|grantCashback/);
+    // HQ adjustment uses governed earnCashback / useCashback (SYSTEM) — never raw balance UPDATE.
+    assert.match(admin, /cashback\/adjustment/);
+    assert.match(admin, /earnCashback|useCashback/);
+    assert.doesNotMatch(admin, /adjustCashback|grantCashback|adminAdjustCashback/);
     const app = readFileSync(path.join(adminWeb, "App.tsx"), "utf8");
     const cashback = readFileSync(path.join(adminWeb, "pages/CashbackPage.tsx"), "utf8");
-    assert.doesNotMatch(app, /cashback.?correct|grant cashback|adjust balance|manual.?earn/i);
-    assert.doesNotMatch(cashback, /cashback.?correct|grant cashback|adjust balance|manual.?earn/i);
+    assert.doesNotMatch(app, /grant cashback|adjust balance|manual.?earn/i);
+    assert.match(cashback, /cashback\/adjustment/);
   });
 
   it("order-scoped refund-cashback exists; ADJUSTMENT is seed/integrity — not admin correction UI", () => {

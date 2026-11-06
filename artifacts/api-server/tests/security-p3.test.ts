@@ -124,7 +124,8 @@ describe("P3 source contracts", () => {
     assert.match(orders, /orders:confirm_pos/);
     assert.match(orders, /assertBranchScope/);
     assert.match(deliveries, /delivery:update/);
-    assert.match(deliveries, /assertBranchScope/);
+    assert.match(deliveries, /DELIVERY_DISABLED|deliveryDisabled/);
+    assert.doesNotMatch(deliveries, /assertBranchScope/);
   });
 
   it("POS sales list forces branch filter for staff", () => {

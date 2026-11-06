@@ -121,7 +121,7 @@ Faqat vizual kompozitsiya o‘zgardi; API, filtrlar, KPI hisoblari va endpointla
    | 7 | INFRA | Firewall matches the matrix | **BLOCKED** — no firewall |
    | 8 | INFRA | Container startup from the registry image | **BLOCKED** — O-2 |
    | 9 | INFRA | Worker startup (`ENABLE_BACKGROUND_WORKERS=1`) | **BLOCKED** — not provisioned |
-   | 10 | APPLICATION | Admin login through the staging origin | **PASS** (session mint + `/api/admin/me`; password path WebAuthn-gated) |
+   | 10 | APPLICATION | Admin login through the staging origin | NOT RUN |
    | 11 | APPLICATION | Customer auth (OTP) | **BLOCKED** — Eskiz credentials |
    | 12 | APPLICATION | Order | NOT RUN |
    | 13 | APPLICATION | Reservation | NOT RUN |
@@ -132,8 +132,8 @@ Faqat vizual kompozitsiya o‘zgardi; API, filtrlar, KPI hisoblari va endpointla
    | 18 | APPLICATION | Delivery | NOT RUN |
    | 19 | APPLICATION | FOM boundary | **BLOCKED** — CONTRACT_PENDING |
    | 20 | APPLICATION | Worker processing | NOT RUN |
-   | 21 | SECURITY | 401 without a token | **PASS** (`GET /api/admin/audit` → 401) |
-   | 22 | SECURITY | 403 for a cashier on HQ endpoints | **PASS** (dashboard/reports/audit/settings + foreign branchId) |
+   | 21 | SECURITY | 401 without a token | NOT RUN |
+   | 22 | SECURITY | 403 for a cashier on HQ endpoints | NOT RUN |
    | 23 | SECURITY | Rate limit (shared Valkey) | NOT RUN |
    | 24 | SECURITY | Spoofed `X-Forwarded-For` ignored | NOT RUN |
    | 25 | SECURITY | Auth telemetry written | NOT RUN |

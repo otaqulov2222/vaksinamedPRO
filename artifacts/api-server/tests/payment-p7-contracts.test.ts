@@ -19,7 +19,8 @@ describe("P7.1–P7.5 payment contracts (AuthZ / secrets / axes / adapters)", ()
     assert.match(deliveries, /requirePermission\(admin,\s*"delivery:update"\)/);
     assert.match(payments, /allowPaymentSimulate/);
     assert.match(payments, /Payment simulation is disabled/);
-    assert.match(deliveries, /assertBranchScope/);
+    assert.match(deliveries, /DELIVERY_DISABLED|deliveryDisabled/);
+    assert.doesNotMatch(deliveries, /assertBranchScope/);
   });
 
   it("Q. secrets not exposed in customer payment DTO path", () => {

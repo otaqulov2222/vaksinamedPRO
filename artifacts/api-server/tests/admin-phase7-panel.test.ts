@@ -27,7 +27,6 @@ describe("Admin Phase 7 — shell navigation", () => {
       "payments",
       "promos",
       "ratings",
-      "delivery",
       "reports",
       "audit",
       "fom",
@@ -61,12 +60,12 @@ describe("Admin Phase 7 — newly surfaced APIs", () => {
     assert.doesNotMatch(admin, /update\(cashbackAccounts\)/);
   });
 
-  it("admin deliveries list is branch-scoped via resolveStaffBranchFilter", () => {
+  it("admin deliveries list is disabled network-wide (DELIVERY_DISABLED)", () => {
     const deliveries = readFileSync(path.join(root, "src/routes/deliveries.ts"), "utf8");
     assert.match(deliveries, /\/admin\/deliveries/);
     assert.match(deliveries, /requirePermission\(admin,\s*"delivery:update"\)/);
-    assert.match(deliveries, /resolveStaffBranchFilter/);
-    assert.match(deliveries, /externalProvider:\s*"CONTRACT_PENDING"/);
+    assert.match(deliveries, /DELIVERY_DISABLED|deliveryDisabled/);
+    assert.doesNotMatch(deliveries, /resolveStaffBranchFilter/);
   });
 
   it("inventory adjust UI exists and posts to server adjust API", () => {
