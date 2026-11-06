@@ -43,6 +43,7 @@ describe("Admin Phase 13.2 Orders — API contract unchanged", () => {
       "/api/orders/${id}/${STEP_ACTIONS[to].path}",
       "/api/orders/${id}/confirm-pos",
       "/api/orders/${selected.id}/admin-cancel",
+      "/api/orders/${selected.id}/refund-cashback",
     ]);
   });
 
@@ -74,7 +75,8 @@ describe("Admin Phase 13.2 Orders — API contract unchanged", () => {
   });
 
   it("no invented actions (refund, mark-paid, export, sync, retry payment, edit)", () => {
-    assert.doesNotMatch(page, /refund-cashback|mark-paid|\/export|\/sync/);
+    assert.match(page, /refund-cashback/);
+    assert.doesNotMatch(page, /mark-paid|\/export|\/sync/);
     assert.doesNotMatch(page, /\b(Eksport|Export|Sinxron|Sync|Tahrirlash|Edit)\b/);
     assert.doesNotMatch(page, /canRetryPayment|Pul qaytarildi/);
     assert.doesNotMatch(page, /window\.confirm|[^.\w]confirm\(/);
@@ -138,7 +140,7 @@ describe("Admin Phase 13.2 Orders — actions follow the server graph and capabi
     assert.match(page, /if \(to === "COMPLETED"\) \{\s*setConfirmFinish\("complete"\);/);
     assert.match(page, /onClick=\{\(\) => setConfirmFinish\("pos"\)\}/);
     assert.match(page, /onClick=\{\(\) => setConfirmCancel\(true\)\}/);
-    assert.equal((page.match(/<ConfirmDialog\b/g) || []).length, 2);
+    assert.equal((page.match(/<ConfirmDialog\b/g) || []).length, 3);
     assert.match(page, /Bu amalni ortga qaytarib bo‘lmaydi\./);
   });
 

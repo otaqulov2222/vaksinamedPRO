@@ -33,6 +33,19 @@
 | Production enablement | **CLOSED** |
 | FOM writer / FOM POS | OFF / **CONTRACT_PENDING** |
 
+### Admin remaining modules (2026-11-06)
+
+Delivery history/ETA/filters intentionally **not** done (`DELIVERY_DISABLED` pickup-only). Closed instead:
+
+| Module | Status |
+|--------|--------|
+| Settings write (`PATCH /admin/settings/cashback`, `settings:manage`) | **IMPLEMENTED** |
+| Reports comparison + deeper CSV | **IMPLEMENTED** |
+| Cashback refund UI + HQ adjustment | **IMPLEMENTED** |
+| Ratings hide (`hidden_at`, `ratings:moderate`) | **IMPLEMENTED** |
+| Audit CSV export | **IMPLEMENTED** |
+| Staging HTTP role smoke | Script ready: `admin-staging-role-smoke.ts` (+ mint helper for WebAuthn). Live run recorded below after deploy. |
+
 ---
 
 ## Phase 13.0 refinement — Dashboard (Network Operations Center)
@@ -691,7 +704,7 @@ Faqat vizual kompozitsiya o‘zgardi; API, filtrlar, KPI hisoblari va endpointla
 
 ## Phase 13.14 — Sozlamalar (Settings)
 
-**Status: IMPLEMENTED (read-only).** Settings console over the real server read sources. There is no settings or config API (`/api/admin/settings`, `/api/settings`, `/api/admin/config` → 404) and no write path for `system_settings`. O‘zgartirish mumkin bo‘lgan sozlama yo‘q, so every value is marked "Faqat ko‘rish — o‘zgartirish API mavjud emas"; there are no edit controls, Save buttons or ConfirmDialog. Backend o‘zgarmadi. DB sxemasi va migratsiyalar o‘zgartirilmadi.
+**Status: IMPLEMENTED (read + cashback spend write).** Settings console over the real server read sources. Phase A write path: `PATCH /api/admin/settings/cashback` `{ maxSpendRatio }` (`settings:manage`, HQ) upserts `system_settings.cashback.max_spend_ratio` and audits `settings.cashback_update`. Min purchase / tiers / TTL remain code constants (read-only UI). Migration `0022_admin_settings_permissions.sql` seeds `settings:manage`.
 
 | Source | Permission | Values used | Value source |
 | --- | --- | --- | --- |
@@ -734,7 +747,6 @@ Responsive: two section columns on wide screens, one column ≤1280px, rows stac
 Browser QA: real dev DB, GET-only (the only writes were `POST /api/admin/login`, each writing one `admin.login` audit row). Fixtures were used only for error, loading and race states.
 
 Remaining gaps (backend):
-- No settings write API: changing `cashback.max_spend_ratio` still needs DB access.
 - `ttlDays` (90) is published but not enforced.
 - Tier promotion (`nextTier`) runs only on POS sales.
 - Minimal purchase, delivery fee, tiers and reservation hours are code constants.
@@ -760,7 +772,7 @@ Next phase: Phase 13.15.
 | Pagination | REAL | `limit` (default 40, max 100; invalid → 40), `offset` (negative → 0); `pagination { limit, offset, total, hasMore, nextOffset }`; order `createdAt desc, id desc`; `readOnly: true` |
 | Filters | REAL (2) | `action`: case-insensitive substring (`ILIKE`, with `%`, `_` and `\` stripped). `entity`: exact match. Unknown params (`actor`, `createdFrom`, `branchId`, `q`) are ignored by the server, so the page does not offer them |
 | Branch scope | HQ-global | no branch filter on the endpoint; safe today because only HQ holds `audit:read` |
-| Export | MISSING (disclosed) | "Audit eksporti API mavjud emas"; no local CSV |
+| Export | REAL | `GET /api/admin/audit/export` — same filters, cap 10000, UTF-8 BOM CSV via `sanitizeAuditPayload`; UI «Yuklab olish (CSV)» |
 | Auth events | MISSING (disclosed) | `auth_events` (login success/failure, authz denied) has no read API |
 
 Audit source of truth (code audit of every writer): `admin.login`, `branch.create` / `update` / `delete`, `product.create` / `update`, `inventory.adjust`, `inventory.expire_due`, `order.transition.<CONFIRMED|PREPARING|READY_FOR_PICKUP|OUT_FOR_DELIVERY|COMPLETED>`, `order.confirm_pos`, `order.cancel` (admin), `order.refund_cashback.<full|partial>`, `fom.sale_confirmed`, `pos.sale`, `pos.void`. Entities: `admin_user`, `branch`, `product`, `product_stock`, `reservation`, `order`, `pos_sale`. **Not audited:** customer-initiated cancel, delivery (courier) actions, payment callbacks/status changes, customer/loyalty actions, admin logout, background workers other than reservation expiry. The page lists these in an "Audit qamrovi" section.
@@ -835,14 +847,14 @@ Read-only period report console. Dashboard stays the operational overview (`GET 
 | Product / category | REAL | completed `order_items` (POS has no line items) |
 | Branch / payments / cashback period / delivery | REAL | server aggregates; cashback ledger is network-wide |
 | Time-series | REAL (table) | daily rows, max 90 days, Asia/Tashkent — no chart library |
-| Comparison with previous period | MISSING (disclosed) | not in the API — no ↑/↓ or % |
-| Export | REAL | `GET /api/admin/reports/export` CSV (UTF-8 BOM); UI downloads server bytes |
+| Comparison with previous period | REAL | equal-length prior window: revenue / orders / deltaPct (server-only) |
+| Export | REAL | `GET /api/admin/reports/export` CSV (UTF-8 BOM) includes categories, branches, payments, cashback period; UI downloads server bytes |
 
 UI (`ReportsPage.tsx`): header chips "Davr bo‘yicha agregat · faqat ko‘rish", scope ("Barcha filiallar yoki bitta filial" / "Faqat o‘z filialingiz"), "CSV serverdan", Yangilash + Yuklab olish (CSV). Period presets Bugun / Kecha / 7 kun / 30 kun (default) / Barcha davr / Maxsus — computed on the Asia/Tashkent calendar via `Intl`, sent to the server as `createdFrom` / `createdTo`; Maxsus sends nothing until both dates are applied and from ≤ to. Filial select for HQ only; no client-side filtering. Context line: period · branch · Asia/Tashkent · last update.
 - **Savdo va buyurtmalar:** Tushum (hero, `money()`), Buyurtmalar, Yakunlangan, Bekor qilingan. Revenue note: orders created in the period that are now completed, after cashback, incl. delivery fee; refunds are not subtracted. POS is a separate section. Status breakdown table (Yakunlangan, Ochiq — yetkazib berish, Ochiq — olib ketish, To‘lov kutilmoqda, Bekor qilingan) with "Jami buyurtmalar" = server `orders` (no client sum).
 - **Umumiy holat:** Mijozlar, Cashback majburiyati, Filiallar — labelled as not tied to the period/branch filter.
 - **Ombor holati:** branch only (stock rows, "Mavjud emas", lowest-available table); otherwise a "Filial tanlash" prompt.
-- **Hali ulanmagan hisobotlar:** oldingi davr bilan taqqoslash — API yo‘q, brauzerda hisoblanmaydi.
+- **Davr taqqoslash:** server `comparison` (oldingi teng uzunlikdagi oyna) — revenue / orders / deltaPct.
 
 States: loading skeleton, empty ("Hozircha buyurtmalar yo‘q."), filter-empty ("Bu davr uchun ma’lumot yo‘q." + reset), custom pending, 401 / 403 / 404 / 400 (date) / 500 / network with fixed Uzbek copy (server `message` never rendered); retry only for 500 / network; stale responses dropped (`loadSeq`).
 
@@ -853,7 +865,6 @@ Security: no customer phones (server `includePhone: false`; page ignores `recent
 Browser QA: real dev DB, read-only (only `POST /api/admin/login`); isolated PGlite with real-API-created orders verified KPI values, breakdown sum and branch scoping.
 
 Remaining gaps (backend):
-- Comparison with previous period is still missing (disclosed).
 - Revenue is filtered by order creation date, not completion date; order KPIs rely on legacy `orders.status`.
 - `/admin/dashboard` still computes `recentOrders` with per-row `serializeOrder` (N+1) and scans all inventory rows of the branch, even though Reports does not use `recentOrders`.
 - `tashkentBusinessDayUtcRange` accepts overflowing calendar dates (`2026-02-30` → 2 March); the UI date input cannot produce them.
@@ -941,9 +952,9 @@ Read-only UI reconstruction over the single existing admin contract. No backend,
 | Search / score / date filters, sorting | NOT IMPLEMENTED | no API parameters |
 | KPI (average, distribution) | NOT IMPLEMENTED | no aggregate API; only server `total` is shown |
 | Customer / product relation | NOT EXPOSED | `customerId` omitted from DTO (least privilege); no product relation in model |
-| Order code | CONTRACT_PENDING | DTO returns `orderId` only; UI shows `#id` |
-| Tags | CONTRACT_PENDING | stored in `staff_ratings.tags`, not returned by admin API |
-| Moderation / reply / delete / edit | NOT IMPLEMENTED | no endpoint, no status column; page has no mutation controls |
+| Order code | REAL | DTO includes `orderCode` when joinable |
+| Tags | REAL | DTO includes `tags` |
+| Moderation / reply / delete / edit | REAL (hide) | `PATCH /admin/ratings/:id` `{ hidden, note? }` (`ratings:moderate`); migration `0023` `hidden_at` / `hidden_by`; audit `rating.hide` / `rating.unhide`; default list excludes hidden (`includeHidden`) |
 
 UI: header with "Faqat ko‘rish — baholarni o‘zgartirish API mavjud emas", server branch filter (HQ), table Baho → Buyurtma → Filial → Izoh → Sana, stars + number with tones (4–5 positive, 3 neutral, 2 warning, 1 negative), "Izohsiz" for empty comments, drawer Baho → Buyurtma → Filial → Izoh → collapsed technical section. Dates in Asia/Tashkent. Order column hidden ≤900px; cards ≤560px.
 
@@ -966,8 +977,8 @@ Read-only UI composition over existing contracts. No backend, schema, RBAC or ca
 | Account list | REAL | `GET /admin/customers` (server `q`, limit/offset, SoT balance) |
 | Account ledger | REAL | `GET /admin/customers/:id/cashback-history` (append-only `cashback_ledger`, "Yana ko‘rsatish") |
 | Entry drawer | REAL | ledger row → commercial transaction → order / POS receipt / branch; REVERSAL section; technical collapsed |
-| Cashback adjust / reverse / expire actions | NOT IMPLEMENTED | no admin write API; page performs no mutation |
-| Original entry link for REVERSAL | CONTRACT_PENDING | history DTO does not expose `reverses_entry_id` |
+| Cashback adjust / reverse / expire actions | REAL (governed) | Orders drawer: `POST /orders/:id/refund-cashback`; HQ: `POST /admin/customers/:id/cashback/adjustment` via earn/use SYSTEM (no raw balance UPDATE); audit `cashback.manual_adjustment` |
+| Original entry link for REVERSAL | REAL | history DTO exposes `reversesEntryId` when present |
 | Ledger total count | CONTRACT_PENDING | history API returns no total |
 | TTL (`ttlDays`) | NOT IMPLEMENTED | published in rules, not enforced by engine |
 | Integrity check | CONTRACT_PENDING | `cashbackIntegrity` has no admin route |

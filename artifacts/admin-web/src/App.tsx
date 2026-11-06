@@ -625,13 +625,13 @@ export default function App() {
             />
           ) : null}
           {tab === "customers" ? <CustomersPage token={token} /> : null}
-          {tab === "cashback" ? <CashbackPage token={token} /> : null}
+          {tab === "cashback" ? <CashbackPage token={token} permissions={permissions} /> : null}
           {tab === "payments" ? (
             <PaymentsPage token={token} permissions={permissions} branches={branches} />
           ) : null}
           {tab === "promos" ? <PromosPage token={token} /> : null}
           {tab === "ratings" ? (
-            <RatingsPage token={token} user={user} branches={branches} />
+            <RatingsPage token={token} user={user} branches={branches} permissions={permissions} />
           ) : null}
           {tab === "delivery" ? (
             <DeliveryPage

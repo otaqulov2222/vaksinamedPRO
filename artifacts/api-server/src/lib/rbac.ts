@@ -34,6 +34,9 @@ export function fallbackPermissionsForRole(role: string): Set<string> {
       "delivery:update",
       "inventory:adjust",
       "rbac:manage",
+      "settings:manage",
+      "customers:manage",
+      "ratings:moderate",
     ])
     : new Set([
       "products:read",

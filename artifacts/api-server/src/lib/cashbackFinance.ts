@@ -99,6 +99,39 @@ export async function getMaxSpendRatio(executor: DbLike = db): Promise<number> {
   return DEFAULT_MAX_SPEND_RATIO;
 }
 
+/**
+ * HQ upsert for `cashback.max_spend_ratio`.
+ * Rejects non-finite / out-of-range values (does not silently fall back).
+ */
+export async function setMaxSpendRatio(
+  raw: unknown,
+  executor: DbLike = db,
+): Promise<{ previous: number; next: number }> {
+  const v = Number(raw);
+  if (!Number.isFinite(v) || v <= 0 || v > 1) {
+    throw Object.assign(new Error("maxSpendRatio 0 dan katta va 1 dan katta bo‘lmasligi kerak"), {
+      status: 400,
+      code: "INVALID_SPEND_RATIO",
+    });
+  }
+  const next = Math.round(v * 10_000) / 10_000;
+  const previous = await getMaxSpendRatio(executor);
+  const description = "Max cashback spend as fraction of goods amount (0–1]";
+  await executor
+    .insert(systemSettings)
+    .values({
+      key: "cashback.max_spend_ratio",
+      value: String(next),
+      description,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: systemSettings.key,
+      set: { value: String(next), description, updatedAt: new Date() },
+    });
+  return { previous, next };
+}
+
 /** Ensure account exists; create with zero if missing. */
 export async function ensureCashbackAccount(
   customerId: number,

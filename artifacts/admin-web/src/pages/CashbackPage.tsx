@@ -13,6 +13,7 @@ import {
   LoadingBlock,
   DetailDrawer,
   DrawerSection,
+  ConfirmDialog,
   operatorCapabilityLabel,
 } from "../ui";
 import { PAGE_DESCRIPTIONS } from "../nav";
@@ -79,8 +80,15 @@ function rowKeys(open: () => void) {
   };
 }
 
-export function CashbackPage(props: { token: string }) {
+export function CashbackPage(props: { token: string; permissions?: string[] }) {
+  const canAdjust = Array.isArray(props.permissions) && props.permissions.includes("customers:manage");
   const [liability, setLiability] = useState<Liability>(null);
+  const [adjDirection, setAdjDirection] = useState<"credit" | "debit">("credit");
+  const [adjAmount, setAdjAmount] = useState("");
+  const [adjReason, setAdjReason] = useState("");
+  const [adjConfirm, setAdjConfirm] = useState(false);
+  const [adjBusy, setAdjBusy] = useState(false);
+  const [adjFeedback, setAdjFeedback] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
   const [rules, setRules] = useState<any>(null);
   const [rulesFailed, setRulesFailed] = useState(false);
 
@@ -249,6 +257,44 @@ export function CashbackPage(props: { token: string }) {
     setEntry(item);
   }
 
+  async function submitAdjustment() {
+    if (!selectedId || adjBusy) return;
+    const amount = Math.floor(Number(adjAmount) || 0);
+    if (amount <= 0 || adjReason.trim().length < 5) {
+      setAdjFeedback({ tone: "danger", text: "Miqdor va sabab (kamida 5 belgi) majburiy." });
+      setAdjConfirm(false);
+      return;
+    }
+    setAdjBusy(true);
+    setAdjFeedback(null);
+    try {
+      const idempotencyKey = `cb-adj-${selectedId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const res = await request(`/api/admin/customers/${selectedId}/cashback/adjustment`, props.token, {
+        method: "POST",
+        body: JSON.stringify({
+          direction: adjDirection,
+          amount,
+          reason: adjReason.trim(),
+          idempotencyKey,
+        }),
+      });
+      setAdjFeedback({
+        tone: "ok",
+        text: res?.idempotent
+          ? "Tuzatish allaqachon bajarilgan (idempotent)."
+          : `Balans yangilandi: ${money(Number(res?.balance || 0))}.`,
+      });
+      setAdjAmount("");
+      setAdjReason("");
+      await openAccount(selectedId);
+    } catch {
+      setAdjFeedback({ tone: "danger", text: "Tuzatish bajarilmadi. Ruxsat va balansni tekshiring." });
+    } finally {
+      setAdjBusy(false);
+      setAdjConfirm(false);
+    }
+  }
+
   const initialLoading = loading && !loaded;
   const head = account || rows.find((r) => r.id === selectedId) || null;
   const tiers: any[] = Array.isArray(rules?.tiers) ? rules.tiers : [];
@@ -258,7 +304,13 @@ export function CashbackPage(props: { token: string }) {
       <AdminPageHeader
         title="Cashback / Loyalty"
         description={PAGE_DESCRIPTIONS.cashback}
-        meta={<span className="cb-readonly">Faqat ko‘rish — bu sahifada cashback o‘zgartirilmaydi</span>}
+        meta={
+          <span className="cb-readonly">
+            {canAdjust
+              ? "HQ tuzatish: mijoz hisobida credit/debit (audit bilan)"
+              : "Faqat ko‘rish — bu sahifada cashback o‘zgartirilmaydi"}
+          </span>
+        }
         actions={
           <button
             className={`btn-secondary cb-refresh${loading ? " is-busy" : ""}`}
@@ -584,7 +636,9 @@ export function CashbackPage(props: { token: string }) {
                   </div>
                   <div>
                     <dt>Asl yozuv</dt>
-                    <dd className="cb-muted">Admin API’da ko‘rsatilmaydi</dd>
+                    <dd className="cb-kv-mono">
+                      {entry.reversesEntryId != null ? `#${entry.reversesEntryId}` : "—"}
+                    </dd>
                   </div>
                 </dl>
               </DrawerSection>
@@ -642,6 +696,58 @@ export function CashbackPage(props: { token: string }) {
                   </div>
                 </dl>
                 <p className="cb-note">Loyalty darajasi cashback balansidan alohida; bu yerda o‘zgartirilmaydi.</p>
+              </DrawerSection>
+            ) : null}
+
+            {canAdjust && account && selectedId != null ? (
+              <DrawerSection title="Qo‘lda tuzatish">
+                <div className="cb-adjust">
+                  <label>
+                    Yo‘nalish
+                    <select
+                      value={adjDirection}
+                      disabled={adjBusy}
+                      onChange={(e) => setAdjDirection(e.target.value === "debit" ? "debit" : "credit")}
+                    >
+                      <option value="credit">Credit (qo‘shish)</option>
+                      <option value="debit">Debit (ayirish)</option>
+                    </select>
+                  </label>
+                  <label>
+                    Miqdor (so‘m)
+                    <input
+                      type="number"
+                      min={1}
+                      value={adjAmount}
+                      disabled={adjBusy}
+                      onChange={(e) => setAdjAmount(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Sabab
+                    <input
+                      type="text"
+                      maxLength={200}
+                      value={adjReason}
+                      disabled={adjBusy}
+                      onChange={(e) => setAdjReason(e.target.value)}
+                      placeholder="Masalan: qo‘llab-quvvatlash tuzatmasi"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={adjBusy}
+                    onClick={() => setAdjConfirm(true)}
+                  >
+                    Tuzatishni tasdiqlash
+                  </button>
+                  {adjFeedback ? (
+                    <p className={`cb-note${adjFeedback.tone === "danger" ? " is-warn" : ""}`} role="status">
+                      {adjFeedback.text}
+                    </p>
+                  ) : null}
+                </div>
               </DrawerSection>
             ) : null}
 
@@ -713,6 +819,18 @@ export function CashbackPage(props: { token: string }) {
           </>
         )}
       </DetailDrawer>
+
+      <ConfirmDialog
+        open={adjConfirm}
+        title="Cashbackni qo‘lda tuzatish"
+        busy={adjBusy}
+        confirmLabel="Tasdiqlash"
+        description={`${adjDirection === "credit" ? "Credit" : "Debit"} ${money(Math.floor(Number(adjAmount) || 0))} — ${adjReason.trim() || "sababsiz"}. Bu amal audit jurnaliga yoziladi.`}
+        onCancel={() => {
+          if (!adjBusy) setAdjConfirm(false);
+        }}
+        onConfirm={() => void submitAdjustment()}
+      />
     </div>
   );
 }

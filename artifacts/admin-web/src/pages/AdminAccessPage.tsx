@@ -167,6 +167,9 @@ const PERMISSION_LABELS: Record<string, string> = {
   "products:read": "Katalogni ko‘rish",
   "products:manage": "Mahsulot qo‘shish va tahrirlash",
   "inventory:adjust": "Ombor qoldig‘ini tuzatish",
+  "settings:manage": "Tizim sozlamalarini o‘zgartirish",
+  "customers:manage": "Cashbackni qo‘lda tuzatish",
+  "ratings:moderate": "Baholarni moderatsiya qilish",
   "orders:read": "Buyurtmalarni ko‘rish",
   "orders:confirm_pos": "Buyurtmani kassada tasdiqlash",
   "orders:cancel": "Buyurtmani bekor qilish",
@@ -197,6 +200,7 @@ const GROUP_LABELS: Record<string, string> = {
   ratings: "Mijozlar va marketing",
   payments: "To‘lovlar",
   delivery: "Yetkazib berish",
+  settings: "Tizim",
   audit: "Tizim",
   rbac: "Tizim",
 };

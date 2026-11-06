@@ -2,7 +2,7 @@ import { Router } from "express";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { and, count, desc, eq, gt, gte, ilike, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, ilike, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import {
   adminUsers,
@@ -43,6 +43,8 @@ import { adminHasPermission, assertBranchScope, requirePermission, resolveStaffB
 import { revokeSessionFromToken } from "../lib/sessions";
 import { recordAuthEvent } from "../lib/authEvents";
 import { adjustStock, expireDueReservations } from "../lib/inventory";
+import { earnCashback, getMaxSpendRatio, setMaxSpendRatio, useCashback } from "../lib/cashbackFinance";
+import { publicCashbackRules } from "../lib/cashback";
 import {
   adminCustomerIdentity,
   sanitizeAdminOrderSearch,
@@ -58,6 +60,22 @@ const ADMIN_PAYMENTS_DEFAULT_LIMIT = 25;
 const ADMIN_PAYMENTS_MAX_LIMIT = 50;
 const ADMIN_AUDIT_DEFAULT_LIMIT = 40;
 const ADMIN_AUDIT_MAX_LIMIT = 100;
+const ADMIN_AUDIT_EXPORT_MAX = 10000;
+
+function auditExportCsvEscape(value: unknown): string {
+  const s = String(value ?? "");
+  if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function parseStaffRatingTags(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
 const ADMIN_CUSTOMERS_DEFAULT_LIMIT = 25;
 const ADMIN_CUSTOMERS_MAX_LIMIT = 50;
 
@@ -1058,6 +1076,95 @@ router.get("/admin/customers/:id/cashback-history", async (req, res, next) => {
   }
 });
 
+/**
+ * HQ governed cashback correction — uses earn/use engine (SYSTEM commercial), never raw balance UPDATE.
+ */
+router.post("/admin/customers/:id/cashback/adjustment", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "customers:manage");
+    if (!isHqAdminRole(user.role)) {
+      return res.status(403).json({ message: "Faqat HQ cashbackni qo‘lda tuzata oladi", code: "HQ_ONLY" });
+    }
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(404).json({ message: "Mijoz topilmadi", code: "CUSTOMER_NOT_FOUND" });
+    }
+    const exists = (await db.select({ id: customers.id }).from(customers).where(eq(customers.id, id)).limit(1))[0];
+    if (!exists) return res.status(404).json({ message: "Mijoz topilmadi", code: "CUSTOMER_NOT_FOUND" });
+
+    const direction = String(req.body?.direction || "").toLowerCase() === "debit" ? "debit" : "credit";
+    const amount = Math.floor(Number(req.body?.amount) || 0);
+    const reason = String(req.body?.reason || "").trim();
+    const idempotencyKey = String(req.body?.idempotencyKey || req.header("idempotency-key") || "").trim();
+    if (amount <= 0) {
+      return res.status(400).json({ message: "Miqdor musbat butun son bo‘lishi kerak", code: "INVALID_AMOUNT" });
+    }
+    if (reason.length < 5) {
+      return res.status(400).json({ message: "Sabab kamida 5 belgidan iborat bo‘lsin", code: "REASON_REQUIRED" });
+    }
+    if (!idempotencyKey || idempotencyKey.length < 8) {
+      return res.status(400).json({ message: "idempotencyKey majburiy", code: "IDEMPOTENCY_REQUIRED" });
+    }
+
+    const sourceKey = `admin_adj:${idempotencyKey}`;
+    const commercial = {
+      sourceType: "SYSTEM" as const,
+      sourceKey,
+      customerId: id,
+      amount,
+      meta: { adminId: user.id, direction, reason },
+    };
+    const actor = `staff:${user.email}`;
+
+    const result =
+      direction === "credit"
+        ? await earnCashback({
+            customerId: id,
+            amount,
+            commercial,
+            actor,
+            reason: `manual_credit:${reason}`,
+            idempotencyKey: `adj:credit:${idempotencyKey}`,
+          })
+        : await useCashback({
+            customerId: id,
+            amount,
+            commercial,
+            actor,
+            reason: `manual_debit:${reason}`,
+            idempotencyKey: `adj:debit:${idempotencyKey}`,
+          });
+
+    await db.insert(auditLog).values({
+      actor: user.email,
+      action: "cashback.manual_adjustment",
+      entity: "cashback_account",
+      payload: JSON.stringify({
+        customerId: id,
+        direction,
+        amount,
+        reason,
+        idempotencyKey,
+        ledgerEntryId: result.entry.id,
+        idempotent: result.idempotent,
+        balance: result.account.balance,
+      }),
+    });
+
+    return res.json({
+      ok: true,
+      direction,
+      amount,
+      idempotent: result.idempotent,
+      balance: result.account.balance,
+      ledgerEntryId: result.entry.id,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get("/admin/ratings", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
@@ -1069,10 +1176,14 @@ router.get("/admin/ratings", async (req, res, next) => {
       user,
       Number.isFinite(requested as number) ? (requested as number) : undefined,
     );
+    const includeHidden = req.query.includeHidden === "1" || req.query.includeHidden === "true";
 
     const filters: SQL[] = [];
     if (branchFilter != null) {
       filters.push(eq(staffRatings.branchId, branchFilter));
+    }
+    if (!includeHidden) {
+      filters.push(isNull(staffRatings.hiddenAt));
     }
     const whereClause = filters.length ? and(...filters) : undefined;
 
@@ -1090,25 +1201,105 @@ router.get("/admin/ratings", async (req, res, next) => {
         id: staffRatings.id,
         branchId: staffRatings.branchId,
         orderId: staffRatings.orderId,
+        orderCode: orders.code,
         employeeName: staffRatings.employeeName,
         rating: staffRatings.rating,
+        tags: staffRatings.tags,
         comment: staffRatings.comment,
         createdAt: staffRatings.createdAt,
+        hiddenAt: staffRatings.hiddenAt,
       })
       .from(staffRatings)
+      .leftJoin(orders, eq(staffRatings.orderId, orders.id))
       .where(whereClause)
       .orderBy(desc(staffRatings.createdAt), desc(staffRatings.id))
       .limit(limit)
       .offset(offset);
 
-    // Omit customerId from list DTO (least privilege); detail not exposed here.
+    const ratings = rows.map((row) => {
+      const item: Record<string, unknown> = {
+        id: row.id,
+        branchId: row.branchId,
+        orderId: row.orderId,
+        orderCode: row.orderCode ?? null,
+        employeeName: row.employeeName,
+        rating: row.rating,
+        tags: parseStaffRatingTags(row.tags),
+        comment: row.comment,
+        createdAt: row.createdAt,
+      };
+      if (includeHidden) {
+        item.hiddenAt = row.hiddenAt;
+      }
+      return item;
+    });
+
     return res.json({
-      ratings: rows,
+      ratings,
       total,
       hasMore: offset + rows.length < total,
       branchFilter: branchFilter ?? null,
       pagination: { limit, offset, total },
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch("/admin/ratings/:id", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "ratings:moderate");
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(404).json({ message: "Baho topilmadi" });
+    }
+    const existing = (await db.select().from(staffRatings).where(eq(staffRatings.id, id)).limit(1))[0];
+    if (!existing) {
+      return res.status(404).json({ message: "Baho topilmadi" });
+    }
+    await assertBranchScope(user, existing.branchId);
+
+    const body = req.body ?? {};
+    if (typeof body.hidden !== "boolean") {
+      return res.status(400).json({ message: "hidden maydoni boolean bo‘lishi kerak" });
+    }
+    const note = typeof body.note === "string" ? body.note.trim().slice(0, 500) : undefined;
+
+    const patch: {
+      hiddenAt: Date | null;
+      hiddenBy: string | null;
+      moderationNote?: string;
+    } = body.hidden
+      ? { hiddenAt: new Date(), hiddenBy: user.email }
+      : { hiddenAt: null, hiddenBy: null };
+    if (note !== undefined) {
+      patch.moderationNote = note;
+    }
+
+    const updated = await db
+      .update(staffRatings)
+      .set(patch)
+      .where(eq(staffRatings.id, id))
+      .returning();
+
+    try {
+      await db.insert(auditLog).values({
+        actor: user.email,
+        action: body.hidden ? "rating.hide" : "rating.unhide",
+        entity: "staff_rating",
+        payload: JSON.stringify({
+          ratingId: id,
+          branchId: existing.branchId,
+          orderId: existing.orderId,
+          note: note ?? null,
+        }),
+      });
+    } catch {
+      // audit must not block moderation
+    }
+
+    return res.json({ rating: updated[0] });
   } catch (error) {
     return next(error);
   }
@@ -1168,6 +1359,45 @@ router.get("/admin/audit", async (req, res, next) => {
       pagination: { limit, offset, total, hasMore, nextOffset: hasMore ? offset + rows.length : null },
       readOnly: true,
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get("/admin/audit/export", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "audit:read");
+
+    const action = typeof req.query.action === "string" ? req.query.action.trim().slice(0, 80) : "";
+    const entity = typeof req.query.entity === "string" ? req.query.entity.trim().slice(0, 80) : "";
+
+    const filters: SQL[] = [];
+    if (action) filters.push(ilike(auditLog.action, `%${action.replace(/[%_\\]/g, "")}%`));
+    if (entity) filters.push(eq(auditLog.entity, entity));
+    const whereClause = filters.length ? and(...filters) : undefined;
+
+    const rows = await db
+      .select()
+      .from(auditLog)
+      .where(whereClause)
+      .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+      .limit(ADMIN_AUDIT_EXPORT_MAX);
+
+    const header = ["id", "createdAt", "actor", "action", "entity", "payload"].map(auditExportCsvEscape).join(";");
+    const lines = rows.map((row) => [
+      row.id,
+      row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt ?? ""),
+      row.actor,
+      row.action,
+      row.entity,
+      JSON.stringify(sanitizeAuditPayload(row.payload)),
+    ].map(auditExportCsvEscape).join(";"));
+
+    const csv = `\uFEFF${[header, ...lines].join("\r\n")}\r\n`;
+    res.setHeader("content-type", "text/csv; charset=utf-8");
+    res.setHeader("content-disposition", 'attachment; filename="vaksinamed-audit.csv"');
+    return res.send(csv);
   } catch (error) {
     return next(error);
   }
@@ -1324,6 +1554,50 @@ router.post("/admin/inventory/expire-due", async (req, res, next) => {
       payload: JSON.stringify(result),
     });
     return res.json({ ok: true, ...result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * HQ — update cashback spend cap stored in system_settings.
+ */
+router.patch("/admin/settings/cashback", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "settings:manage");
+    if (!isHqAdminRole(user.role)) {
+      return res.status(403).json({ message: "Faqat HQ sozlamani o‘zgartira oladi", code: "HQ_ONLY" });
+    }
+    const result = await setMaxSpendRatio(req.body?.maxSpendRatio);
+    await db.insert(auditLog).values({
+      actor: user.email,
+      action: "settings.cashback_update",
+      entity: "system_settings",
+      payload: JSON.stringify({
+        key: "cashback.max_spend_ratio",
+        previous: result.previous,
+        next: result.next,
+        maxSpendPercent: Math.round(result.next * 100),
+      }),
+    });
+    return res.json({
+      ok: true,
+      previous: result.previous,
+      next: result.next,
+      rules: publicCashbackRules(result.next),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get("/admin/settings/cashback", async (req, res, next) => {
+  try {
+    const user = await requireAdmin(req);
+    await requirePermission(user, "settings:manage");
+    const ratio = await getMaxSpendRatio();
+    return res.json({ rules: publicCashbackRules(ratio) });
   } catch (error) {
     return next(error);
   }

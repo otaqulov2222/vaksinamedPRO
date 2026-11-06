@@ -286,6 +286,8 @@ export function OrdersPage(props: {
   const [phoneVisible, setPhoneVisible] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmFinish, setConfirmFinish] = useState<"complete" | "pos" | null>(null);
+  const [confirmRefundCashback, setConfirmRefundCashback] = useState<"full" | "partial" | null>(null);
+  const [partialRefundAmount, setPartialRefundAmount] = useState("");
 
   const listSeq = useRef(0);
   const detailSeq = useRef(0);
@@ -473,6 +475,24 @@ export function OrdersPage(props: {
       if (data?.idempotent) return { tone: "info", text: "Buyurtma avvalroq bekor qilingan." };
       return { tone: "ok", text: "Buyurtma bekor qilindi." };
     });
+  }
+
+  function refundCashback(mode: "full" | "partial") {
+    if (!selected) return;
+    const body: Record<string, unknown> = { mode };
+    if (mode === "partial") {
+      const n = Math.floor(Number(partialRefundAmount) || 0);
+      if (n <= 0) {
+        setFeedback({ tone: "danger", text: "Qisman qaytarish miqdori musbat bo‘lishi kerak." });
+        return;
+      }
+      body.earnReversalAmount = n;
+    }
+    void orderAction(selected.id, `/api/orders/${selected.id}/refund-cashback`, (data) => {
+      if (data?.cashback?.idempotent) return { tone: "info", text: "Cashback qaytarish allaqachon bajarilgan." };
+      const amt = Number(data?.cashback?.reversalAmount || 0);
+      return { tone: "ok", text: amt > 0 ? `Cashback qaytarildi: ${money(amt)}.` : "Cashback qaytarish bajarildi." };
+    }, body);
   }
 
   const drawerCode =
@@ -845,6 +865,12 @@ export function OrdersPage(props: {
                 {selected.paymentMethod ? (
                   <Row label="Usul">{paymentMethodLabel(selected.paymentMethod)}</Row>
                 ) : null}
+                {Number(selected.cashbackEarned || 0) > 0 ? (
+                  <Row label="Cashback (earn)">{money(Number(selected.cashbackEarned || 0))}</Row>
+                ) : null}
+                {Number(selected.cashbackUsed || 0) > 0 ? (
+                  <Row label="Cashback (use)">{money(Number(selected.cashbackUsed || 0))}</Row>
+                ) : null}
               </dl>
               {fulfillmentOpen && selected.paymentStatus !== "PAID" && capabilities?.canTransitionFulfillment ? (
                 <p className="orders-note">Yakunlash yoki FOM tasdiq to‘lovni «To‘langan» holatiga o‘tkazadi.</p>
@@ -853,6 +879,29 @@ export function OrdersPage(props: {
                 <p className="orders-note">
                   Provayder orqali pul qaytarish {operatorCapabilityLabel("CONTRACT_PENDING").toLowerCase()}.
                 </p>
+              ) : null}
+              {capabilities?.canConfirmPos && Number(selected.cashbackEarned || 0) > 0 ? (
+                <div className="orders-refund-cashback" role="group" aria-label="Cashback qaytarish">
+                  <button
+                    type="button"
+                    className="btn-tertiary"
+                    disabled={busy}
+                    onClick={() => setConfirmRefundCashback("full")}
+                  >
+                    Cashbackni to‘liq qaytarish
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={busy}
+                    onClick={() => {
+                      setPartialRefundAmount(String(selected.cashbackEarned || ""));
+                      setConfirmRefundCashback("partial");
+                    }}
+                  >
+                    Qisman qaytarish
+                  </button>
+                </div>
               ) : null}
             </DrawerSection>
 
@@ -929,6 +978,41 @@ export function OrdersPage(props: {
           if (!selected) return;
           setConfirmCancel(false);
           cancelOrder();
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmRefundCashback != null}
+        title={confirmRefundCashback === "partial" ? "Cashbackni qisman qaytarish" : "Cashbackni to‘liq qaytarish"}
+        busy={busy}
+        confirmLabel="Qaytarish"
+        description={
+          selected ? (
+            <div className="orders-refund-desc">
+              <p>
+                {selected.code} bo‘yicha hisoblangan cashback ({money(Number(selected.cashbackEarned || 0))}) mijoz
+                balansidan ayiriladi. Bu pul (PSP) qaytarishi emas.
+              </p>
+              {confirmRefundCashback === "partial" ? (
+                <label className="orders-refund-partial">
+                  Miqdor (so‘m)
+                  <input
+                    type="number"
+                    min={1}
+                    max={Number(selected.cashbackEarned || 0)}
+                    value={partialRefundAmount}
+                    onChange={(e) => setPartialRefundAmount(e.target.value)}
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : undefined
+        }
+        onCancel={() => setConfirmRefundCashback(null)}
+        onConfirm={() => {
+          const mode = confirmRefundCashback;
+          setConfirmRefundCashback(null);
+          if (mode) refundCashback(mode);
         }}
       />
 

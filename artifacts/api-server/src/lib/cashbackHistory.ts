@@ -26,6 +26,8 @@ export type CashbackHistoryItemDto = {
   /** Stable id for UI keys — ledger row id as string. */
   id: string;
   ledgerId: number;
+  /** Present on REVERSAL rows — id of the reversed ledger entry. */
+  reversesEntryId: number | null;
   /** Authoritative ledger entry type (unchanged amounts). */
   entryType: string;
   /** Absolute ledger amount (so'm). */
@@ -178,6 +180,7 @@ export async function getCustomerCashbackHistory(
       entryType: cashbackLedger.entryType,
       amount: cashbackLedger.amount,
       createdAt: cashbackLedger.createdAt,
+      reversesEntryId: cashbackLedger.reversesEntryId,
       commercialTransactionId: cashbackLedger.commercialTransactionId,
       ledgerOrderId: cashbackLedger.orderId,
       ledgerMeta: cashbackLedger.meta,
@@ -317,6 +320,7 @@ export async function getCustomerCashbackHistory(
     const item: CashbackHistoryItemDto = {
       id: String(row.ledgerId),
       ledgerId: row.ledgerId,
+      reversesEntryId: row.reversesEntryId != null ? Number(row.reversesEntryId) : null,
       entryType,
       amount: absAmount,
       cashback,

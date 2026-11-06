@@ -178,6 +178,9 @@ export const staffRatings = pgTable("staff_ratings", {
   rating: integer("rating").notNull(),
   tags: text("tags").notNull().default("[]"),
   comment: text("comment").notNull().default(""),
+  hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+  hiddenBy: text("hidden_by"),
+  moderationNote: text("moderation_note").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

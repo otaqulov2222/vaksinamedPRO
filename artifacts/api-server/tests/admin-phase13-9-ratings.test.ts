@@ -3,7 +3,7 @@
  * Read-only UI composition over the single existing admin contract:
  *   GET /admin/ratings  (ratings:read; branchId filter via resolveStaffBranchFilter; limit/offset/total/hasMore)
  * Ratings are created only by customers (POST /ratings, integer 1–5, one per completed owned order).
- * No moderation, reply, delete or edit API exists.
+ * Moderation: PATCH /admin/ratings/:id (ratings:moderate) hide/unhide; list joins order code and tags.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -38,6 +38,7 @@ function between(src: string, start: string, end: string) {
 }
 
 const listRoute = between(adminRoute, 'router.get("/admin/ratings", ', "\nrouter.");
+const moderateRoute = between(adminRoute, 'router.patch("/admin/ratings/:id", ', "\nrouter.");
 const createRoute = between(integrations, 'router.post("/ratings", ', "\n});");
 const table = between(schema, 'export const staffRatings = pgTable("staff_ratings", {', "\n});");
 
@@ -46,8 +47,17 @@ describe("Admin Phase 13.9 Ratings — backend contract (unchanged)", () => {
     const perm = listRoute.indexOf('requirePermission(user, "ratings:read")');
     assert.ok(perm > 0);
     assert.ok(perm < listRoute.indexOf("db."), "permission check precedes DB access");
-    assert.doesNotMatch(adminRoute, /router\.(post|patch|put|delete)\("\/admin\/ratings/);
+    assert.match(adminRoute, /router\.patch\("\/admin\/ratings\/:id"/);
+    assert.doesNotMatch(adminRoute, /router\.(post|put|delete)\("\/admin\/ratings/);
     assert.doesNotMatch(adminRoute, /router\.get\("\/admin\/ratings\/:id/);
+  });
+
+  it("PATCH moderation gated by ratings:moderate before DB; branch scope; audit hide/unhide", () => {
+    const perm = moderateRoute.indexOf('requirePermission(user, "ratings:moderate")');
+    assert.ok(perm > 0 && perm < moderateRoute.indexOf("db."));
+    assert.match(moderateRoute, /assertBranchScope\(user, existing\.branchId\)/);
+    assert.match(moderateRoute, /action: body\.hidden \? "rating\.hide" : "rating\.unhide"/);
+    assert.match(moderateRoute, /entity: "staff_rating"/);
   });
 
   it("branch scope is server-side; cashiers cannot widen it via branchId", () => {
@@ -65,15 +75,21 @@ describe("Admin Phase 13.9 Ratings — backend contract (unchanged)", () => {
     assert.doesNotMatch(listRoute, /req\.query\.(q|search|rating|sort|orderId|customerId)/);
   });
 
-  it("list DTO fields: id, branchId, orderId, employeeName, rating, comment, createdAt (no customer, no tags)", () => {
-    const select = between(listRoute, ".select({\n", "})");
-    const fields = [...select.matchAll(/(\w+): staffRatings\.(\w+)/g)].map((m) => m[1]);
-    assert.deepEqual(fields, ["id", "branchId", "orderId", "employeeName", "rating", "comment", "createdAt"]);
-    assert.doesNotMatch(select, /customerId|tags/);
+  it("list joins orders; parses tags; excludes hidden unless includeHidden; DTO has orderCode (no customerId)", () => {
+    assert.match(listRoute, /leftJoin\(orders, eq\(staffRatings\.orderId, orders\.id\)\)/);
+    assert.match(listRoute, /parseStaffRatingTags/);
+    assert.match(listRoute, /isNull\(staffRatings\.hiddenAt\)/);
+    assert.match(listRoute, /includeHidden/);
+    assert.match(listRoute, /orderCode: row\.orderCode/);
+    assert.match(listRoute, /tags: parseStaffRatingTags/);
+    assert.doesNotMatch(between(listRoute, ".select({", "return res.json"), /customerId/);
   });
 
-  it("record has no status, moderation, reply, product or updatedAt columns", () => {
-    assert.doesNotMatch(table, /status|moderat|reply|productId|updatedAt|hidden|approved/i);
+  it("record has moderation columns; no status, reply, product or updatedAt", () => {
+    assert.match(table, /hiddenAt: timestamp\("hidden_at"/);
+    assert.match(table, /hiddenBy: text\("hidden_by"\)/);
+    assert.match(table, /moderationNote: text\("moderation_note"\)/);
+    assert.doesNotMatch(table, /status|reply|productId|updatedAt|approved/i);
     assert.match(table, /rating: integer\("rating"\)\.notNull\(\)/);
   });
 
@@ -86,7 +102,8 @@ describe("Admin Phase 13.9 Ratings — backend contract (unchanged)", () => {
     assert.match(createRoute, /const branchId = order\.branchId;/);
   });
 
-  it("only ratings:read exists; HQ-only; cashier has neither fallback nor seeded grant", () => {
+  it("ratings:read + ratings:moderate; HQ-only read; cashier has neither fallback nor seeded grant", () => {
+    assert.match(rbac, /ratings:moderate/);
     assert.doesNotMatch(rbac + rbacMigration, /ratings:manage|reviews:/);
     const cashierFallback = rbac.slice(rbac.indexOf(": new Set(["), rbac.indexOf("]);", rbac.indexOf(": new Set([")));
     assert.doesNotMatch(cashierFallback, /ratings:read/);
@@ -97,15 +114,16 @@ describe("Admin Phase 13.9 Ratings — backend contract (unchanged)", () => {
 });
 
 describe("Admin Phase 13.9 Ratings — page composition", () => {
-  it("single GET request; no mutation, moderation or export controls", () => {
+  it("list GET + optional PATCH moderation via ConfirmDialog for ratings:moderate", () => {
     const calls = [...page.matchAll(/request\(\s*`([^`]+)`/g)].map((m) => m[1]);
-    assert.deepEqual(calls, ["/api/admin/ratings?${qs}"]);
-    assert.doesNotMatch(page, /method:\s*"|ConfirmDialog|confirm\(/);
-    assert.doesNotMatch(
-      page,
-      /O‘chirish|Yashirish|Tasdiqlash|Rad etish|Javob berish|Tahrirlash|Tiklash|Moderatsiya|Eksport|Export|CSV|Bloklash/,
-    );
-    assert.match(page, /Faqat ko‘rish — baholarni o‘zgartirish API mavjud emas/);
+    assert.deepEqual(calls, ["/api/admin/ratings?${qs}", "/api/admin/ratings/${moderateTarget.item.id}"]);
+    assert.match(page, /ConfirmDialog/);
+    assert.match(page, /method: "PATCH"/);
+    assert.match(page, /ratings:moderate/);
+    assert.match(page, /includeHidden/);
+    assert.match(page, /orderLabel\(item\)/);
+    assert.match(page, /ratingTags\(item\)/);
+    assert.doesNotMatch(page, /Faqat ko‘rish — baholarni o‘zgartirish API mavjud emas/);
   });
 
   it("no fake KPI, average or search field", () => {
@@ -132,7 +150,8 @@ describe("Admin Phase 13.9 Ratings — page composition", () => {
     assert.ok(order.every((i, n) => i > 0 && (n === 0 || i > order[n - 1])));
     assert.doesNotMatch(head, /Mijoz|Mahsulot|Holat|Status/);
     assert.match(page, /const RATING_COLUMNS = 5;/);
-    assert.doesNotMatch(page, /customerId|\.tags\b|\.phone|productName|(item|selected)\.status|reply/);
+    assert.doesNotMatch(page, /customerId|\.phone|productName|(item|selected)\.status|reply/);
+    assert.match(page, /ratingTags/);
   });
 
   it("scale is the server's 1–5 integer; values outside it render raw, never rescaled", () => {
@@ -148,14 +167,16 @@ describe("Admin Phase 13.9 Ratings — page composition", () => {
   });
 
   it("comment preview in table, full text in drawer, neutral 'Izohsiz' when empty", () => {
-    assert.match(page, /<span className="rt-comment">\{comment\}<\/span> : <span className="rt-muted">Izohsiz<\/span>/);
+    assert.match(page, /<span className="rt-comment">\{comment\}<\/span>/);
+    assert.match(page, /rt-muted">Izohsiz<\/span>/);
     assert.match(page, /<p className="rt-comment-full">\{selectedComment\}<\/p>/);
     assert.match(page, /rt-comment-none">Izohsiz/);
   });
 
   it("drawer: Baho → Buyurtma → Filial → Izoh, technical collapsed; relation honesty", () => {
     const sections = [...page.matchAll(/<DrawerSection title="([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(sections, ["Baho", "Buyurtma", "Filial", "Izoh"]);
+    assert.ok(sections.slice(0, 4).join(",") === "Baho,Buyurtma,Filial,Izoh");
+    assert.match(page, /DrawerSection title="Moderatsiya"/);
     assert.match(page, /<details className="rt-tech">/);
     assert.doesNotMatch(page, /<details className="rt-tech" open/);
     assert.match(page, /Bog‘lanmagan \(eski yozuv\)/);
@@ -194,7 +215,7 @@ describe("Admin Phase 13.9 Ratings — page composition", () => {
   });
 
   it("no secrets or customer PII in the page", () => {
-    const stripped = page.replace(/props\.token/g, "").replace(/\{ token: string;/, "");
+    const stripped = page.replace(/props\.token/g, "").replace(/\btoken:\s*string;?/g, "");
     assert.doesNotMatch(stripped, /token|secret|password|hmac|otp\b|apiKey|telegram|localStorage|console\./i);
   });
 });

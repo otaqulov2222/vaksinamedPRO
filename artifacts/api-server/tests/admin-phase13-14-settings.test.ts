@@ -1,11 +1,10 @@
 /**
- * Admin Phase 13.14 — Settings console over the real read sources (no settings API, no write API).
- *   GET /api/cashback/rules (public)        — maxSpendPercent (system_settings), minPurchase / ttlDays / deliveryFee / tiers (code constants)
+ * Admin Phase 13.14 — Settings console + HQ cashback spend write.
+ *   GET /api/cashback/rules (public)        — maxSpendPercent (system_settings), minPurchase / ttlDays / tiers (code constants)
+ *   PATCH /api/admin/settings/cashback      — settings:manage; upsert cashback.max_spend_ratio
  *   GET /api/admin/branches (branches:read) — isOpen / is24h / hasPayme / hasClick; merchant secrets masked
- *   GET /api/admin/deliveries (delivery:update) — externalProvider CONTRACT_PENDING
  *   GET /api/integrations/fom/status (admin) — CONTRACT_PENDING, inventory writer OFF
  *   GET /api/healthz (public)               — database up/down + driver
- * No backend, DB schema or migration change.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -57,15 +56,18 @@ const migrations = readdirSync(path.join(repoRoot, "lib/db/migrations"))
   .join("\n");
 
 describe("Admin Phase 13.14 Settings — real server contract", () => {
-  it("there is no settings / config API and no write path for system_settings", () => {
+  it("HQ cashback spend write upserts system_settings; no generic config API", () => {
+    assert.match(adminRoute, /router\.patch\("\/admin\/settings\/cashback"/);
+    assert.match(adminRoute, /requirePermission\(user, "settings:manage"\)/);
+    assert.match(adminRoute, /settings\.cashback_update/);
+    assert.match(finance, /export async function setMaxSpendRatio/);
+    assert.match(finance, /insert\(systemSettings\)/);
     for (const { f, src } of routeSources) {
-      assert.doesNotMatch(src, /router\.\w+\("\/(admin\/)?(settings|config)\b/, f);
+      assert.doesNotMatch(src, /router\.\w+\("\/(admin\/)?config\b/, f);
       assert.doesNotMatch(src, /router\.(post|put|patch|delete)\("\/cashback\/rules/, f);
     }
-    for (const { f, src } of serverSources) {
-      assert.doesNotMatch(src, /(insert|update|delete)\(systemSettings\)|(INSERT INTO|UPDATE|DELETE FROM) system_settings/, f);
-    }
     assert.match(migrations, /INSERT INTO system_settings \(key, value, description\)\s+VALUES \(\s+'cashback\.max_spend_ratio',\s+'0\.30'/);
+    assert.match(migrations, /'settings:manage'/);
   });
 
   it("cashback rules: GET only, spend ratio from system_settings with the documented default", () => {
@@ -124,10 +126,11 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
     assert.doesNotMatch(health, /process\.env|health\.error|connectionString/);
   });
 
-  it("permissions: no settings permission exists or is invented; settings nav is HQ-only", () => {
-    assert.doesNotMatch(rbac, /settings:/);
-    assert.doesNotMatch(migrations, /'settings:(read|manage)'/);
-    assert.doesNotMatch(code, /settings:(read|manage)|cashback:manage|payments:manage/);
+  it("settings:manage is HQ fallback; settings nav stays HQ-only", () => {
+    assert.match(rbac, /"settings:manage"/);
+    assert.match(migrations, /'settings:manage'/);
+    assert.match(code, /settings:manage/);
+    assert.doesNotMatch(code, /cashback:manage/);
     assert.match(nav, /\{ id: "settings", label: "Sozlamalar", permission: null, hqOnly: true, weight: "system" \}/);
     assert.match(nav, /if \(item\.hqOnly\) return isHqRole\(role\);/);
   });
@@ -135,8 +138,9 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
 
 describe("Admin Phase 13.14 Settings — page reads only real sources", () => {
   it("four GET sources in one parallel batch; delivery not fetched (disabled)", () => {
-    const urls = [...code.matchAll(/request\("([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(urls, [
+    const loadFn = between(code, "async function load()", "\n  }");
+    const getUrls = [...loadFn.matchAll(/request\("([^"]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(getUrls, [
       "/api/cashback/rules",
       "/api/admin/branches",
       "/api/integrations/fom/status",
@@ -144,19 +148,21 @@ describe("Admin Phase 13.14 Settings — page reads only real sources", () => {
     ]);
     assert.equal(code.match(/Promise\.allSettled\(/g)?.length, 1);
     assert.doesNotMatch(code, /\/api\/admin\/deliveries/);
-    assert.doesNotMatch(code, /\/api\/(admin\/)?(settings|config)|softRequest|\.map\(\s*async/);
+    assert.match(code, /request\("\/api\/admin\/settings\/cashback"/);
   });
 
-  it("read-only: no mutation, no form controls, no ConfirmDialog", () => {
-    assert.doesNotMatch(code, /method:|ConfirmDialog|confirm\(|<input|<select|<textarea|<form|onSubmit|Saqlash|Tahrirlash/);
+  it("spend ratio edit uses ConfirmDialog and PATCH; other rows stay view-only", () => {
+    assert.match(code, /ConfirmDialog/);
+    assert.match(code, /method: "PATCH"/);
+    assert.match(code, /id="st-spend-percent"/);
+    assert.match(code, /Saqlash/);
     assert.match(code, /const READ_ONLY = "Faqat ko‘rish — o‘zgartirish API mavjud emas";/);
     assert.match(code, /<span className="st-readonly" title=\{READ_ONLY\}>Faqat ko‘rish<\/span>/);
-    assert.match(code, /Alohida sozlamalar API’si yo‘q/);
   });
 
-  it("values shown as the server returns them — no recomputation of the spend cap or money", () => {
+  it("display percent comes from server rules; PATCH sends ratio = percent / 100", () => {
     assert.match(code, /value=\{maxSpendPercent != null \? `\$\{maxSpendPercent\}%` : null\}/);
-    assert.doesNotMatch(code, /maxSpendRatio|\* 100|\/ 100/);
+    assert.match(code, /maxSpendRatio: percent \/ 100/);
     assert.match(code, /money\(minPurchase\)/);
     assert.match(code, /money\(Number\(t\.fromTotal\)\)/);
   });

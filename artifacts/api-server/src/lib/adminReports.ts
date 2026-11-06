@@ -87,6 +87,48 @@ function spanDays(from: string | null, to: string | null): number | null {
   return Math.round((b - a) / 86400000) + 1;
 }
 
+function shiftYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/** Equal-length window immediately before [from, to] inclusive. */
+export function previousEqualPeriod(from: string, to: string): { createdFrom: string; createdTo: string } | null {
+  const days = spanDays(from, to);
+  if (!days) return null;
+  const prevTo = shiftYmd(from, -1);
+  const prevFrom = shiftYmd(prevTo, -(days - 1));
+  return { createdFrom: prevFrom, createdTo: prevTo };
+}
+
+function deltaPct(current: number, previous: number): number | null {
+  if (!Number.isFinite(previous) || previous === 0) return current === 0 ? 0 : null;
+  return Math.round(((current - previous) / Math.abs(previous)) * 1000) / 10;
+}
+
+async function orderKpiSnapshot(filters: AdminReportFilters) {
+  const orderFilters: SQL[] = [];
+  if (filters.branchFilter != null) orderFilters.push(eq(orders.branchId, filters.branchFilter));
+  if (filters.fromRange) orderFilters.push(gte(orders.createdAt, filters.fromRange.start));
+  if (filters.toRange) orderFilters.push(lt(orders.createdAt, filters.toRange.endExclusive));
+  const orderWhere = orderFilters.length ? and(...orderFilters) : undefined;
+  const [row] = await db
+    .select({
+      orders: count(),
+      completed: sql<number>`count(*) filter (where ${orders.status} = 'completed')`.mapWith(Number),
+      revenue: sql<number>`coalesce(sum(${orders.total}) filter (where ${orders.status} = 'completed'), 0)`.mapWith(Number),
+      cancelled: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`.mapWith(Number),
+    })
+    .from(orders)
+    .where(orderWhere);
+  return {
+    orders: Number(row?.orders || 0),
+    completed: Number(row?.completed || 0),
+    revenue: Number(row?.revenue || 0),
+    cancelled: Number(row?.cancelled || 0),
+  };
+}
+
 export async function loadAdminReport(filters: AdminReportFilters) {
   const orderFilters: SQL[] = [];
   if (filters.branchFilter != null) orderFilters.push(eq(orders.branchId, filters.branchFilter));
@@ -357,6 +399,49 @@ export async function loadAdminReport(filters: AdminReportFilters) {
     })
     .from(cashbackAccounts);
 
+  let comparison: {
+    previousFrom: string;
+    previousTo: string;
+    current: { revenue: number; orders: number; completed: number; cancelled: number };
+    previous: { revenue: number; orders: number; completed: number; cancelled: number };
+    deltaPct: { revenue: number | null; orders: number | null; completed: number | null; cancelled: number | null };
+  } | null = null;
+
+  if (filters.createdFrom && filters.createdTo) {
+    const prev = previousEqualPeriod(filters.createdFrom, filters.createdTo);
+    if (prev) {
+      const prevFromRange = tashkentBusinessDayUtcRange(prev.createdFrom);
+      const prevToRange = tashkentBusinessDayUtcRange(prev.createdTo);
+      if (prevFromRange && prevToRange) {
+        const previous = await orderKpiSnapshot({
+          branchFilter: filters.branchFilter,
+          fromRange: prevFromRange,
+          toRange: prevToRange,
+          createdFrom: prev.createdFrom,
+          createdTo: prev.createdTo,
+        });
+        const current = {
+          revenue: Number(orderKpis?.revenue || 0),
+          orders: Number(orderKpis?.orders || 0),
+          completed: Number(orderKpis?.completed || 0),
+          cancelled: Number(orderKpis?.cancelled || 0),
+        };
+        comparison = {
+          previousFrom: prev.createdFrom,
+          previousTo: prev.createdTo,
+          current,
+          previous,
+          deltaPct: {
+            revenue: deltaPct(current.revenue, previous.revenue),
+            orders: deltaPct(current.orders, previous.orders),
+            completed: deltaPct(current.completed, previous.completed),
+            cancelled: deltaPct(current.cancelled, previous.cancelled),
+          },
+        };
+      }
+    }
+  }
+
   return {
     kpis: {
       revenue: Number(orderKpis?.revenue || 0),
@@ -374,6 +459,7 @@ export async function loadAdminReport(filters: AdminReportFilters) {
       cashbackScope: "global" as const,
       branchesScope: "global" as const,
     },
+    comparison,
     pos: {
       sales: Number(posKpis?.sales || 0),
       amount: Number(posKpis?.amount || 0),
@@ -490,6 +576,52 @@ export function reportToCsv(report: Awaited<ReturnType<typeof loadAdminReport>>)
   }
   row("Jami SKU", report.products.totals.skus, "", report.products.totals.quantity, report.products.totals.revenue);
   row("");
+  row("Kategoriya", "Soni", "Tushum");
+  for (const item of report.categories.rows) {
+    row(item.category, item.quantity, item.revenue);
+  }
+  row("");
+  row("Filial", "Buyurtmalar", "Tushum");
+  for (const item of report.branchBreakdown.rows) {
+    row(item.name, item.orders, item.revenue);
+  }
+  row("");
+  row("To‘lov holati", "Provayder", "Soni", "Summa");
+  for (const item of report.payments.rows) {
+    row(item.status, item.provider, item.count, item.amount);
+  }
+  row("To‘lovlar jami", "", report.payments.totals.count, report.payments.totals.amount);
+  row("");
+  row("Cashback davri");
+  row("Yozuvlar", report.cashbackPeriod.entries);
+  row("Haqiqiy (EARN)", report.cashbackPeriod.earned);
+  row("Ishlatilgan", report.cashbackPeriod.used);
+  row("Muddati o‘tgan", report.cashbackPeriod.expired);
+  row("Qaytarilgan", report.cashbackPeriod.reversed);
+  row("");
+  if (report.comparison) {
+    row("Oldingi davr taqqoslash", report.comparison.previousFrom, report.comparison.previousTo);
+    row("Metrika", "Joriy", "Oldingi", "Farq %");
+    row(
+      "Tushum",
+      report.comparison.current.revenue,
+      report.comparison.previous.revenue,
+      report.comparison.deltaPct.revenue ?? "—",
+    );
+    row(
+      "Buyurtmalar",
+      report.comparison.current.orders,
+      report.comparison.previous.orders,
+      report.comparison.deltaPct.orders ?? "—",
+    );
+    row(
+      "Yakunlangan",
+      report.comparison.current.completed,
+      report.comparison.previous.completed,
+      report.comparison.deltaPct.completed ?? "—",
+    );
+    row("");
+  }
   row("Kun", "Buyurtmalar", "Buyurtma tushumi", "POS", "POS summa");
   for (const item of report.daily.rows) {
     row(item.day, item.orders, item.orderRevenue, item.posSales, item.posAmount);

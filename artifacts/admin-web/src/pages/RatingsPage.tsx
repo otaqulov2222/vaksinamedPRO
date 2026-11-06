@@ -9,6 +9,8 @@ import {
   ErrorState,
   DetailDrawer,
   DrawerSection,
+  ConfirmDialog,
+  StatusBadge,
 } from "../ui";
 import { PAGE_DESCRIPTIONS } from "../nav";
 
@@ -79,11 +81,22 @@ function RatingScore(props: { value: unknown }) {
   );
 }
 
-function orderLabel(orderId: unknown) {
-  return orderId != null ? `#${orderId}` : "—";
+function orderLabel(item: { orderCode?: unknown; orderId?: unknown }) {
+  const code = typeof item.orderCode === "string" ? item.orderCode.trim() : "";
+  if (code) return code;
+  return item.orderId != null ? `#${item.orderId}` : "—";
 }
 
-export function RatingsPage(props: { token: string; user: AdminUser | null; branches: any[] }) {
+function ratingTags(item: { tags?: unknown }): string[] {
+  return Array.isArray(item.tags) ? item.tags.map(String).filter(Boolean) : [];
+}
+
+export function RatingsPage(props: {
+  token: string;
+  user: AdminUser | null;
+  branches: any[];
+  permissions?: string[];
+}) {
   const [rows, setRows] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -93,17 +106,27 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<LoadError | null>(null);
   const [selected, setSelected] = useState<any>(null);
+  const [includeHidden, setIncludeHidden] = useState(false);
+  const [moderateTarget, setModerateTarget] = useState<{ item: any; hidden: boolean } | null>(null);
+  const [moderateBusy, setModerateBusy] = useState(false);
+  const [moderateError, setModerateError] = useState("");
   const listSeq = useRef(0);
 
   const isHq = Boolean(props.user && isHqRole(props.user.role));
-  const hasFilters = Boolean(branchId);
+  const canModerate = Boolean((props.permissions || []).includes("ratings:moderate"));
+  const hasFilters = Boolean(branchId || (canModerate && includeHidden));
 
-  async function load(nextOffset: number, bid: string = branchId) {
+  async function load(
+    nextOffset: number,
+    bid: string = branchId,
+    withHidden: boolean = includeHidden,
+  ) {
     const seq = ++listSeq.current;
     const qs = new URLSearchParams();
     qs.set("limit", String(RATINGS_PAGE));
     qs.set("offset", String(nextOffset));
     if (bid) qs.set("branchId", bid);
+    if (withHidden) qs.set("includeHidden", "1");
     setLoading(true);
     setError(null);
     try {
@@ -137,7 +160,34 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
 
   function applyBranch(value: string) {
     setBranchId(value);
-    void load(0, value);
+    void load(0, value, includeHidden);
+  }
+
+  function applyIncludeHidden(checked: boolean) {
+    setIncludeHidden(checked);
+    void load(0, branchId, checked);
+  }
+
+  async function confirmModeration() {
+    if (!moderateTarget || moderateBusy) return;
+    setModerateBusy(true);
+    setModerateError("");
+    try {
+      await request(`/api/admin/ratings/${moderateTarget.item.id}`, props.token, {
+        method: "PATCH",
+        body: JSON.stringify({ hidden: moderateTarget.hidden }),
+      });
+      setModerateTarget(null);
+      setSelected(null);
+      await load(offset, branchId, includeHidden);
+    } catch (err) {
+      const status = statusOf(err);
+      if (status === 401) setModerateError("Sessiya tugagan. Qayta kiring.");
+      else if (status === 403) setModerateError("Moderatsiya uchun ruxsat yo‘q.");
+      else setModerateError("Baho yangilanmadi. Qayta urinib ko‘ring.");
+    } finally {
+      setModerateBusy(false);
+    }
   }
 
   function rowKeys(item: any) {
@@ -157,7 +207,11 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
       <AdminPageHeader
         title="Baholar"
         description={PAGE_DESCRIPTIONS.ratings}
-        meta={<span className="rt-readonly">Faqat ko‘rish — baholarni o‘zgartirish API mavjud emas</span>}
+        meta={
+          canModerate ? undefined : (
+            <span className="rt-readonly">Faqat ko‘rish — moderatsiya ruxsati yo‘q</span>
+          )
+        }
         actions={
           <button
             className={`btn-secondary rt-refresh${loading ? " is-busy" : ""}`}
@@ -185,8 +239,29 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
               <input value="O‘z filiali" disabled readOnly />
             )}
           </FilterField>
+          {canModerate ? (
+            <FilterField label="Yashirilgan">
+              <label className="rt-check">
+                <input
+                  type="checkbox"
+                  checked={includeHidden}
+                  disabled={loading && !loaded}
+                  onChange={(e) => applyIncludeHidden(e.target.checked)}
+                />
+                <span>Ko‘rsatish</span>
+              </label>
+            </FilterField>
+          ) : null}
           {hasFilters ? (
-            <button className="btn-tertiary rt-clear" type="button" disabled={loading} onClick={() => applyBranch("")}>
+            <button
+              className="btn-tertiary rt-clear"
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                applyBranch("");
+                if (includeHidden) applyIncludeHidden(false);
+              }}
+            >
               Tozalash
             </button>
           ) : null}
@@ -250,21 +325,29 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
                   rows.map((item) => {
                     const active = selected?.id === item.id;
                     const comment = String(item.comment || "").trim();
+                    const tags = ratingTags(item);
+                    const isHidden = Boolean(item.hiddenAt);
                     return (
                       <tr
                         key={item.id}
-                        className={`rt-row${active ? " is-active" : ""}`}
+                        className={`rt-row${active ? " is-active" : ""}${isHidden ? " is-hidden-rating" : ""}`}
                         tabIndex={0}
                         aria-selected={active}
                         aria-label={`Baho ${scoreText(item.rating)}, ${branchName(item.branchId)} — tafsilot`}
                         onClick={() => setSelected(item)}
                         onKeyDown={rowKeys(item)}
                       >
-                        <td className="rt-cell-score"><RatingScore value={item.rating} /></td>
-                        <td className="rt-cell-order rt-col-order">{orderLabel(item.orderId)}</td>
+                        <td className="rt-cell-score">
+                          <RatingScore value={item.rating} />
+                          {isHidden ? <StatusBadge tone="neutral">Yashirilgan</StatusBadge> : null}
+                        </td>
+                        <td className="rt-cell-order rt-col-order">{orderLabel(item)}</td>
                         <td className="rt-cell-branch">{branchName(item.branchId)}</td>
                         <td className="rt-cell-comment">
-                          {comment ? <span className="rt-comment">{comment}</span> : <span className="rt-muted">Izohsiz</span>}
+                          {tags.length ? (
+                            <span className="rt-tags">{tags.join(", ")}</span>
+                          ) : null}
+                          {comment ? <span className="rt-comment">{comment}</span> : !tags.length ? <span className="rt-muted">Izohsiz</span> : null}
                         </td>
                         <td className="rt-cell-date">{fmtTashkent(item.createdAt)}</td>
                       </tr>
@@ -312,8 +395,16 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
               <dl className="rt-kv">
                 <div>
                   <dt>Buyurtma</dt>
-                  <dd className="rt-kv-mono">{selected.orderId != null ? orderLabel(selected.orderId) : "Bog‘lanmagan (eski yozuv)"}</dd>
+                  <dd className="rt-kv-mono">
+                    {selected.orderId != null || selected.orderCode ? orderLabel(selected) : "Bog‘lanmagan (eski yozuv)"}
+                  </dd>
                 </div>
+                {ratingTags(selected).length ? (
+                  <div>
+                    <dt>Teglar</dt>
+                    <dd>{ratingTags(selected).join(", ")}</dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt>Baholangan</dt>
                   <dd>{selected.employeeName || "—"}</dd>
@@ -339,6 +430,35 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
                 <p className="rt-muted rt-comment-none">Izohsiz</p>
               )}
             </DrawerSection>
+            {canModerate ? (
+              <DrawerSection title="Moderatsiya">
+                {selected.hiddenAt ? (
+                  <p className="rt-muted">Yashirilgan: {fmtTashkent(selected.hiddenAt)}</p>
+                ) : null}
+                {moderateError ? <p className="rt-error" role="alert">{moderateError}</p> : null}
+                <div className="rt-moderate-actions">
+                  {selected.hiddenAt ? (
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      disabled={moderateBusy}
+                      onClick={() => setModerateTarget({ item: selected, hidden: false })}
+                    >
+                      Tiklash
+                    </button>
+                  ) : (
+                    <button
+                      className="btn-danger"
+                      type="button"
+                      disabled={moderateBusy}
+                      onClick={() => setModerateTarget({ item: selected, hidden: true })}
+                    >
+                      Yashirish
+                    </button>
+                  )}
+                </div>
+              </DrawerSection>
+            ) : null}
             <details className="rt-tech">
               <summary>Texnik ma’lumotlar</summary>
               <dl className="rt-kv rt-kv-tech">
@@ -367,6 +487,23 @@ export function RatingsPage(props: { token: string; user: AdminUser | null; bran
           </>
         ) : null}
       </DetailDrawer>
+
+      <ConfirmDialog
+        open={Boolean(moderateTarget)}
+        title={moderateTarget?.hidden ? "Bahoni yashirish" : "Bahoni tiklash"}
+        description={
+          moderateTarget?.hidden
+            ? "Baho ro‘yxatdan yashiriladi (mijoz ilovasida ko‘rinmasligi alohida qoidalar bilan belgilanadi)."
+            : "Baho qayta ko‘rinadigan qilib tiklanadi."
+        }
+        confirmLabel={moderateTarget?.hidden ? "Yashirish" : "Tiklash"}
+        danger={Boolean(moderateTarget?.hidden)}
+        busy={moderateBusy}
+        onCancel={() => {
+          if (!moderateBusy) setModerateTarget(null);
+        }}
+        onConfirm={() => void confirmModeration()}
+      />
     </div>
   );
 }

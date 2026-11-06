@@ -145,18 +145,22 @@ describe("Admin Phase 13.12 Reports — page uses real server values only", () =
     for (const key of inventoryRead) assert.ok(new RegExp(`\\b${key}\\b`).test(inventoryShape), `inventory.${key}`);
   });
 
-  it("no client-side financial math or invented KPI / comparison / chart", () => {
+  it("comparison and CSV come from server; no client-side invented KPI math", () => {
     assert.doesNotMatch(code, /reduce\(|Math\.max\(0,|kpis\.\w+\s*[-+/*]\s*|\)\s*[-+]\s*Number\(kpis/);
-    assert.doesNotMatch(code, /avgTicket|completionRate|O‘rtacha chek|Yakunlanish foizi|%\s*\{|toFixed|percent/i);
-    assert.doesNotMatch(code, /↑|↓|oldingi (oy|davr)ga nisbatan|prevRevenue|delta/i);
+    assert.doesNotMatch(code, /avgTicket|completionRate|O‘rtacha chek|Yakunlanish foizi|toFixed/);
     assert.doesNotMatch(code, /recharts|Chart\.js|<canvas|<svg|new Chart|bar-chart|sales-chart/i);
     assert.doesNotMatch(code, /Blob\(|download=|text\/csv|\.xlsx|window\.print/);
     assert.match(code, /requestDownload/);
     assert.match(code, /\/api\/admin\/reports\/export/);
+    assert.match(code, /data\?\.comparison/);
+    assert.match(code, /Oldingi davr/);
     assert.match(code, /time-series/);
     assert.match(code, /Qaytarishlar ayirilmaydi/);
     assert.match(code, /money\(Number\(kpis\.revenue\)\)/);
     assert.match(code, /money\(Number\(kpis\.cashback\)\)/);
+    assert.match(reportsLib, /previousEqualPeriod|comparison/);
+    assert.match(reportsLib, /row\("Kategoriya"/);
+    assert.match(reportsLib, /row\("Cashback davri"\)/);
   });
 
   it("global KPIs labelled as not period/branch filtered; inventory only with a branch", () => {

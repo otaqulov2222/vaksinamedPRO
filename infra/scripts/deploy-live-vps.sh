@@ -63,6 +63,16 @@ log "building customer web (API=$PUBLIC_API_URL)"
   EXPO_PUBLIC_API_URL="$PUBLIC_API_URL" node scripts/export-web.mjs
 )
 
+log "building admin-web"
+(
+  cd "$ROOT/artifacts/admin-web"
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm run build
+  else
+    npm run build
+  fi
+)
+
 log "building API"
 (
   cd "$ROOT/artifacts/api-server"

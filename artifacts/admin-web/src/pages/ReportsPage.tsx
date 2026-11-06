@@ -44,9 +44,7 @@ const BREAKDOWN: Array<{ key: string; label: string; tone: Tone; note: string }>
 ];
 
 /** Reports the API still does not provide — shown as unavailable, never approximated in the browser. */
-const UNAVAILABLE: Array<{ title: string; detail: string }> = [
-  { title: "Oldingi davr bilan taqqoslash", detail: "Taqqoslash qiymatlari API’da yo‘q — brauzerda hisoblanmaydi." },
-];
+const UNAVAILABLE: Array<{ title: string; detail: string }> = [];
 
 function statusOf(err: unknown): number {
   return err && typeof err === "object" && "status" in err ? Number((err as ApiError).status) || 0 : 0;
@@ -370,6 +368,51 @@ export function ReportsPage(props: {
               <StatCard className="rp-kpi" label="Yakunlangan" value={kpi("completed")} context="Bajarilgan buyurtmalar" />
               <StatCard className="rp-kpi" label="Bekor qilingan" value={kpi("cancelled")} context="Tushumga kirmaydi" />
             </div>
+            {data?.comparison ? (
+              <div className="rp-compare" role="group" aria-label="Oldingi davr bilan taqqoslash">
+                <p className="rp-note">
+                  Oldingi davr: {data.comparison.previousFrom} — {data.comparison.previousTo} (teng uzunlikdagi
+                  oyna, server hisobi).
+                </p>
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <th>Metrika</th>
+                      <th className="num">Joriy</th>
+                      <th className="num">Oldingi</th>
+                      <th className="num">Farq %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(
+                      [
+                        ["Tushum", "revenue", true],
+                        ["Buyurtmalar", "orders", false],
+                        ["Yakunlangan", "completed", false],
+                        ["Bekor", "cancelled", false],
+                      ] as const
+                    ).map(([label, key, asMoney]) => {
+                      const cur = Number(data.comparison.current[key] || 0);
+                      const prev = Number(data.comparison.previous[key] || 0);
+                      const pct = data.comparison.deltaPct[key];
+                      return (
+                        <tr key={key}>
+                          <td>{label}</td>
+                          <td className="num">{asMoney ? money(cur) : cur}</td>
+                          <td className="num">{asMoney ? money(prev) : prev}</td>
+                          <td className="num">{pct == null ? "—" : `${pct > 0 ? "+" : ""}${pct}%`}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </DataTable>
+              </div>
+            ) : (
+              <p className="rp-note">
+                Oldingi davr taqqoslash uchun boshlanish va tugash sanasini tanlang (teng uzunlikdagi oldingi oyna
+                serverda hisoblanadi).
+              </p>
+            )}
             <p className="rp-note">
               Tushum — davrda yaratilgan va hozir «Yakunlangan» holatdagi buyurtmalarning yakuniy summasi (cashback
               chegirmasidan keyin, yetkazish to‘lovi bilan). Qaytarishlar ayirilmaydi, to‘lov holati alohida hisobga
@@ -769,23 +812,25 @@ export function ReportsPage(props: {
         </div>
       )}
 
-      <section className="rp-section rp-unavailable" aria-labelledby="rp-unavailable-title">
-        <div className="rp-section-head">
-          <h2 className="rp-section-title" id="rp-unavailable-title">Hali ulanmagan hisobotlar</h2>
-          <span className="rp-section-scope">Alohida API yo‘q — brauzerda taxminiy hisoblanmaydi</span>
-        </div>
-        <ul className="rp-unavailable-list">
-          {UNAVAILABLE.map((item) => (
-            <li key={item.title} className="rp-unavailable-item">
-              <div className="rp-unavailable-row">
-                <span className="rp-unavailable-name">{item.title}</span>
-                <StatusBadge tone="neutral">Hali ulanmagan</StatusBadge>
-              </div>
-              <p className="rp-unavailable-detail">{item.detail}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {UNAVAILABLE.length ? (
+        <section className="rp-section rp-unavailable" aria-labelledby="rp-unavailable-title">
+          <div className="rp-section-head">
+            <h2 className="rp-section-title" id="rp-unavailable-title">Hali ulanmagan hisobotlar</h2>
+            <span className="rp-section-scope">Alohida API yo‘q — brauzerda taxminiy hisoblanmaydi</span>
+          </div>
+          <ul className="rp-unavailable-list">
+            {UNAVAILABLE.map((item) => (
+              <li key={item.title} className="rp-unavailable-item">
+                <div className="rp-unavailable-row">
+                  <span className="rp-unavailable-name">{item.title}</span>
+                  <StatusBadge tone="neutral">Hali ulanmagan</StatusBadge>
+                </div>
+                <p className="rp-unavailable-detail">{item.detail}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

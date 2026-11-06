@@ -15,11 +15,12 @@ import {
   Layers,
 } from "lucide-react";
 import { request, money, type AdminUser } from "../api";
-import { ErrorState, LoadingBlock, StatusBadge } from "../ui";
+import { ConfirmDialog, ErrorState, LoadingBlock, StatusBadge } from "../ui";
 
 /**
- * Settings console — read-only view over the real server sources.
- * There is no settings aggregate or settings write API; every value below is read from the endpoint that owns it.
+ * Settings console over real server sources.
+ * Writable: cashback max spend ratio (PATCH /api/admin/settings/cashback, settings:manage).
+ * Other rows remain read-only code constants / status probes.
  */
 
 const BUSINESS_TZ = "Asia/Tashkent";
@@ -138,7 +139,12 @@ export function SettingsPage(props: {
   const [loaded, setLoaded] = useState(false);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
   const [activeCat, setActiveCat] = useState<SettingsCategory>("all");
+  const [spendDraft, setSpendDraft] = useState("");
+  const [spendBusy, setSpendBusy] = useState(false);
+  const [spendConfirm, setSpendConfirm] = useState(false);
+  const [spendFeedback, setSpendFeedback] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
   const loadSeq = useRef(0);
+  const canManageSettings = Array.isArray(props.permissions) && props.permissions.includes("settings:manage");
 
   async function load() {
     const seq = ++loadSeq.current;
@@ -158,7 +164,11 @@ export function SettingsPage(props: {
       res.status === "fulfilled"
         ? { data: map(res.value), error: null }
         : { data: null, error: loadError(res.reason, key) };
-    setRules(pick(r, "rules", (v) => (v && typeof v === "object" ? (v as Rules) : {})));
+    const nextRules = pick(r, "rules", (v) => (v && typeof v === "object" ? (v as Rules) : {}));
+    setRules(nextRules);
+    if (nextRules.data?.maxSpendPercent != null) {
+      setSpendDraft(String(nextRules.data.maxSpendPercent));
+    }
     setBranches(pick(b, "branches", (v) => (Array.isArray(v?.branches) ? (v.branches as BranchRow[]) : [])));
     setFom(pick(f, "fom", (v) => ({
       status: typeof v?.status === "string" ? v.status : undefined,
@@ -175,6 +185,36 @@ export function SettingsPage(props: {
     setCheckedAt(new Date());
     setLoaded(true);
     setLoading(false);
+  }
+
+  async function saveSpendRatio() {
+    if (spendBusy) return;
+    const percent = Number(String(spendDraft).replace(",", ".").trim());
+    if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+      setSpendFeedback({ tone: "danger", text: "Limit 0 dan katta va 100 dan oshmasligi kerak." });
+      setSpendConfirm(false);
+      return;
+    }
+    setSpendBusy(true);
+    setSpendFeedback(null);
+    try {
+      const res = await request("/api/admin/settings/cashback", props.token || "", {
+        method: "PATCH",
+        body: JSON.stringify({ maxSpendRatio: percent / 100 }),
+      });
+      const nextPercent = Number(res?.rules?.maxSpendPercent ?? Math.round(Number(res?.next) * 100));
+      setRules((prev) => ({
+        data: { ...(prev.data || {}), ...(res?.rules || {}), maxSpendPercent: nextPercent },
+        error: null,
+      }));
+      setSpendDraft(String(nextPercent));
+      setSpendFeedback({ tone: "ok", text: `Cashback limiti ${nextPercent}% ga yangilandi.` });
+    } catch {
+      setSpendFeedback({ tone: "danger", text: "Limitni saqlab bo‘lmadi. Ruxsat va aloqani tekshiring." });
+    } finally {
+      setSpendBusy(false);
+      setSpendConfirm(false);
+    }
   }
 
   useEffect(() => {
@@ -213,9 +253,13 @@ export function SettingsPage(props: {
             <h1 className="st-header-title" title="Sozlamalar">Sozlamalar</h1>
             <span
               className="st-header-hint"
-              title="Alohida sozlamalar API’si yo‘q: har bir qiymat o‘z server manbasidan o‘qiladi va bu yerdan o‘zgartirilmaydi."
+              title={
+                canManageSettings
+                  ? "Cashback ishlatish limitini shu yerdan o‘zgartirish mumkin. Boshqa qiymatlar o‘z server manbasidan o‘qiladi."
+                  : "Ko‘p qiymatlar o‘qish uchun. Cashback limitini o‘zgartirish uchun settings:manage kerak."
+              }
             >
-              Alohida sozlamalar API’si yo‘q
+              {canManageSettings ? "Cashback limitti tahrirlash mumkin" : "Aksariyat qiymatlar faqat ko‘rish"}
             </span>
             {checkedAt ? (
               <span className="st-intro-time" title="Oxirgi server tekshiruvi (Asia/Tashkent)">
@@ -276,7 +320,18 @@ export function SettingsPage(props: {
               onRetry={() => void load()}
               footer={openLink("cashback", "Balanslar va ledger — Cashback / Loyalty")}
             >
-              {rules.data ? <CashbackRows rules={rules.data} openLink={openLink} /> : null}
+              {rules.data ? (
+                <CashbackRows
+                  rules={rules.data}
+                  openLink={openLink}
+                  canManage={canManageSettings}
+                  spendDraft={spendDraft}
+                  onSpendDraft={setSpendDraft}
+                  onRequestSave={() => setSpendConfirm(true)}
+                  busy={spendBusy}
+                  feedback={spendFeedback}
+                />
+              ) : null}
             </Section>
           ) : null}
 
@@ -416,6 +471,18 @@ export function SettingsPage(props: {
           ) : null}
         </div>
       )}
+
+      <ConfirmDialog
+        open={spendConfirm}
+        title="Cashback limitti saqlash"
+        description={`Ishlatish limiti ${String(spendDraft).trim()}% ga o‘zgartiriladi. Bu barcha yangi buyurtma va kassa hisob-kitoblariga ta’sir qiladi.`}
+        confirmLabel="Saqlash"
+        busy={spendBusy}
+        onCancel={() => {
+          if (!spendBusy) setSpendConfirm(false);
+        }}
+        onConfirm={() => void saveSpendRatio()}
+      />
     </div>
   );
 }
@@ -491,7 +558,16 @@ function SettingRow(props: {
   );
 }
 
-function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: string) => ReactNode }) {
+function CashbackRows(props: {
+  rules: Rules;
+  openLink: (tab: string, label: string) => ReactNode;
+  canManage?: boolean;
+  spendDraft?: string;
+  onSpendDraft?: (v: string) => void;
+  onRequestSave?: () => void;
+  busy?: boolean;
+  feedback?: { tone: "ok" | "danger"; text: string } | null;
+}) {
   const r = props.rules;
   const maxSpendPercent = finite(r.maxSpendPercent);
   const minPurchase = finite(r.minPurchase);
@@ -502,10 +578,42 @@ function CashbackRows(props: { rules: Rules; openLink: (tab: string, label: stri
       <SettingRow
         icon={<Coins size={15} aria-hidden="true" />}
         title="Cashback ishlatish limiti"
-        source="Server sozlamasi · system_settings (standart 30%)"
+        source="PATCH /api/admin/settings/cashback · system_settings"
         value={maxSpendPercent != null ? `${maxSpendPercent}%` : null}
-        action={props.openLink("cashback", "Boshqarish")}
-      />
+        action={props.canManage ? null : props.openLink("cashback", "Boshqarish")}
+      >
+        {props.canManage ? (
+          <div className="st-edit-row">
+            <label className="st-edit-label" htmlFor="st-spend-percent">
+              Yangi limit (%)
+            </label>
+            <input
+              id="st-spend-percent"
+              className="st-edit-input"
+              type="number"
+              min={1}
+              max={100}
+              step={1}
+              value={props.spendDraft ?? ""}
+              disabled={props.busy}
+              onChange={(e) => props.onSpendDraft?.(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={props.busy}
+              onClick={() => props.onRequestSave?.()}
+            >
+              Saqlash
+            </button>
+            {props.feedback ? (
+              <span className={`st-edit-feedback is-${props.feedback.tone}`} role="status">
+                {props.feedback.text}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </SettingRow>
       <SettingRow
         icon={<ShoppingBag size={15} aria-hidden="true" />}
         title="Minimal xarid summasi"

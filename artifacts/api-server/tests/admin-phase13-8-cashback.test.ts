@@ -75,12 +75,13 @@ describe("Admin Phase 13.8 Cashback — backend contract (unchanged)", () => {
     assert.doesNotMatch(route, /req\.(query|body|params)\.customerId/);
   });
 
-  it("no admin cashback/loyalty write routes and no cashback permissions were added", () => {
-    assert.doesNotMatch(adminRoute, /router\.(post|patch|put|delete)\("[^"]*(cashback|loyalty)/);
+  it("HQ cashback adjustment uses customers:manage; no invented cashback:* permission", () => {
+    assert.match(adminRoute, /router\.post\("\/admin\/customers\/:id\/cashback\/adjustment"/);
+    assert.match(adminRoute, /requirePermission\(user, "customers:manage"\)/);
     assert.doesNotMatch(rbac, /"cashback:|"loyalty:/);
     assert.match(nav, /\{ id: "cashback", label: "Cashback \/ Loyalty", permission: "customers:read"/);
     const cashierFallback = rbac.slice(rbac.indexOf(": new Set(["), rbac.indexOf("]);", rbac.indexOf(": new Set([")));
-    assert.doesNotMatch(cashierFallback, /customers:read|dashboard:read/);
+    assert.doesNotMatch(cashierFallback, /customers:read|dashboard:read|customers:manage/);
     const refund = between(ordersRoute, 'router.post("/orders/:id/refund-cashback"', "\n});");
     assert.match(refund, /requirePermission\(admin, "orders:confirm_pos"\)/);
     assert.match(refund, /assertBranchScope\(admin, rows\[0\]\.branchId\)/);
@@ -98,20 +99,20 @@ describe("Admin Phase 13.8 Cashback — backend contract (unchanged)", () => {
 });
 
 describe("Admin Phase 13.8 Cashback — page composition", () => {
-  it("GET only; no mutation, confirm or refund wiring", () => {
+  it("HQ manual adjustment via customers:manage; order refund stays on Orders page", () => {
     const calls = [...page.matchAll(/request\(\s*`?"?([^`",)]+)/g)].map((m) => m[1]);
     assert.ok(calls.length >= 4);
-    assert.doesNotMatch(page, /method:\s*"(POST|PATCH|PUT|DELETE)"/);
-    assert.doesNotMatch(page, /ConfirmDialog|confirm\(|refund-cashback|\/loyalty\/redeem/);
-    assert.doesNotMatch(
-      page,
-      /Cashback qo‘shish|Balansni o‘zgartirish|Darajani o‘zgartirish|Bekor qilish|Eksport|Export|Muddatini uzaytirish|Tahrirlash|O‘chirish/,
-    );
+    assert.match(page, /cashback\/adjustment/);
+    assert.match(page, /method: "POST"/);
+    assert.match(page, /ConfirmDialog/);
+    assert.match(page, /customers:manage/);
+    assert.doesNotMatch(page, /refund-cashback|\/loyalty\/redeem/);
     assert.match(page, /Faqat ko‘rish — bu sahifada cashback o‘zgartirilmaydi/);
+    assert.match(adminRoute, /router\.post\("\/admin\/customers\/:id\/cashback\/adjustment"/);
   });
 
   it("no client balance maths, no hardcoded rules or tiers", () => {
-    assert.doesNotMatch(page, /reduce\(|(cashback|balance|sum|total)\w* \+= |\.balance\b|cashback_accounts/i);
+    assert.doesNotMatch(page, /reduce\(|(cashback|balance|sum|total)\w* \+= |cashback_accounts/i);
     assert.doesNotMatch(page, /Number\([^)]*\) [-+] Number\(/);
     assert.match(page, /money\(Number\(item\.cashbackBalance \|\| 0\)\)/);
     assert.match(page, /money\(Number\(account\.cashbackBalance \|\| 0\)\)/);
@@ -169,11 +170,11 @@ describe("Admin Phase 13.8 Cashback — page composition", () => {
     assert.match(entryView, /toUpperCase\(\) === "REVERSAL" \? \(\s*<DrawerSection title="Qaytarish">/);
     assert.match(entryView, /<details className="cb-tech">/);
     assert.doesNotMatch(page, /<details className="cb-tech" open/);
-    assert.match(entryView, /Admin API’da ko‘rsatilmaydi/);
+    assert.match(entryView, /reversesEntryId/);
     assert.match(entryView, /entry\.sourceType \|\| "Bog‘lanmagan"/);
     assert.match(entryView, /operatorCapabilityLabel\(String\(entry\.sourceContract\)\)/);
     const accountSections = [...page.slice(page.indexOf(") : (\n          <>")).matchAll(/<DrawerSection title="([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(accountSections, ["Cashback hisobi", "Cashback tarixi"]);
+    assert.deepEqual(accountSections, ["Cashback hisobi", "Qo‘lda tuzatish", "Cashback tarixi"]);
   });
 
   it("states: empty / filtered empty / error / forbidden / loading", () => {
@@ -197,10 +198,11 @@ describe("Admin Phase 13.8 Cashback — page composition", () => {
     assert.doesNotMatch(page, /addEventListener\("keydown"|useModalFocus/);
   });
 
-  it("no secrets, source keys or idempotency keys in the page", () => {
-    assert.doesNotMatch(page, /sourceKey|idempotency|actor/);
-    const stripped = page.replace(/props\.token/g, "").replace(/\{ token: string \}/, "");
-    assert.doesNotMatch(stripped, /token|secret|password|hmac|otp\b|apiKey|localStorage|console\./i);
+  it("no secrets or sourceKey leakage; adjustment idempotency key is client-generated only", () => {
+    assert.doesNotMatch(page, /sourceKey/);
+    assert.match(page, /idempotencyKey/);
+    const stripped = page.replace(/props\.token/g, "").replace(/\{ token: string; permissions\?: string\[\] \}/, "");
+    assert.doesNotMatch(stripped, /secret|password|hmac|otp\b|apiKey|localStorage|console\./i);
   });
 });
 

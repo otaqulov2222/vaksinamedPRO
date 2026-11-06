@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ExternalLink, History, RefreshCw } from "lucide-react";
-import { request, money, type ApiError } from "../api";
+import { request, requestDownload, money, type ApiError } from "../api";
 import {
   AdminPageHeader,
   FilterBar,
@@ -53,6 +53,10 @@ const ACTION_LABELS: Record<string, string> = {
   "fom.sale_confirmed": "FOM sotuvi tasdiqlandi",
   "pos.sale": "Kassa sotuvi",
   "pos.void": "Kassa cheki bekor qilindi",
+  "rating.hide": "Baho yashirildi",
+  "rating.unhide": "Baho tiklandi",
+  "settings.cashback_update": "Cashback ishlatish limiti yangilandi",
+  "cashback.manual_adjustment": "Cashback qo‘lda tuzatildi",
 };
 const TRANSITION_PREFIX = "order.transition.";
 const TRANSITION_TARGETS = ["CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "COMPLETED"];
@@ -68,6 +72,9 @@ const ACTION_FILTERS: Array<{ value: string; label: string }> = [
   { value: "order.confirm", label: "Buyurtma kassada tasdiqlandi" },
   { value: "order.cancel", label: "Buyurtma bekor qilindi" },
   { value: "order.refund", label: "Cashback qaytarish" },
+  { value: "cashback.manual", label: "Cashback qo‘lda tuzatish" },
+  { value: "settings.", label: "Sozlamalar" },
+  { value: "rating.", label: "Baho moderatsiyasi" },
   { value: "pos.", label: "Kassa sotuvi va bekor qilish" },
   { value: "fom.", label: "FOM sotuvi" },
 ];
@@ -81,6 +88,9 @@ const ENTITY_LABELS: Record<string, string> = {
   reservation: "Bron",
   order: "Buyurtma",
   pos_sale: "Kassa sotuvi",
+  staff_rating: "Mijoz bahosi",
+  system_settings: "Tizim sozlamalari",
+  cashback_account: "Cashback hisobi",
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -274,6 +284,8 @@ export function AuditPage(props: {
   const [action, setAction] = useState("");
   const [entity, setEntity] = useState("");
   const [selected, setSelected] = useState<AuditRow | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportMsg, setExportMsg] = useState("");
   const loadSeq = useRef(0);
 
   const branchMap = useMemo(() => {
@@ -357,6 +369,29 @@ export function AuditPage(props: {
     setEntity("");
   }
 
+  async function downloadCsv() {
+    if (exportBusy) return;
+    setExportBusy(true);
+    setExportMsg("");
+    try {
+      const qs = new URLSearchParams();
+      if (action) qs.set("action", action);
+      if (entity) qs.set("entity", entity);
+      await requestDownload(
+        `/api/admin/audit/export${qs.toString() ? `?${qs}` : ""}`,
+        props.token,
+        "vaksinamed-audit.csv",
+      );
+    } catch (err) {
+      const status = statusOf(err);
+      if (status === 401) setExportMsg("Sessiya tugagan. Qayta kiring.");
+      else if (status === 403) setExportMsg("Audit eksporti uchun ruxsat yo‘q.");
+      else setExportMsg("CSV yuklab olinmadi. Qayta urinib ko‘ring.");
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   function rowKeys(row: AuditRow) {
     return (e: KeyboardEvent<HTMLTableRowElement>) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -399,19 +434,28 @@ export function AuditPage(props: {
           <span className="au-meta">
             <span className="au-chip">Faqat o‘qish</span>
             <span className="au-chip">Barcha filiallar · faqat HQ</span>
-            <span className="au-chip">Audit eksporti API mavjud emas</span>
           </span>
         }
         actions={
-          <button
-            className={`btn-secondary au-refresh${loading ? " is-busy" : ""}`}
-            type="button"
-            disabled={loading}
-            onClick={() => void load({ offset })}
-          >
-            <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />
-            Yangilash
-          </button>
+          <>
+            <button
+              className={`btn-secondary${exportBusy ? " is-busy" : ""}`}
+              type="button"
+              disabled={exportBusy || loading}
+              onClick={() => void downloadCsv()}
+            >
+              Yuklab olish (CSV)
+            </button>
+            <button
+              className={`btn-secondary au-refresh${loading ? " is-busy" : ""}`}
+              type="button"
+              disabled={loading}
+              onClick={() => void load({ offset })}
+            >
+              <RefreshCw size={14} strokeWidth={2} aria-hidden="true" />
+              Yangilash
+            </button>
+          </>
         }
       />
 
@@ -445,6 +489,8 @@ export function AuditPage(props: {
             </button>
           ) : null}
         </FilterBar>
+
+        {exportMsg ? <p className="au-export-msg" role="status">{exportMsg}</p> : null}
 
         <div className="au-summary" aria-live="polite">
           <span className="au-result-count">

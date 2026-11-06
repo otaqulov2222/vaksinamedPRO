@@ -1,7 +1,7 @@
 /**
  * Admin Phase 13.13 — Audit investigation console over the real audit_log contract.
  *   GET /admin/audit (audit:read, HQ only) — limit (≤100, default 40), offset, action (ILIKE substring, `%_\` stripped),
- *   entity (exact). Rows: id, actor, action, entity, createdAt, metadata (sanitizeAuditPayload). No detail / export / delete.
+ *   entity (exact). Rows: id, actor, action, entity, createdAt, metadata (sanitizeAuditPayload). GET /admin/audit/export CSV (≤10000). No detail / delete.
  * Backend change: sanitizeAuditPayload drops sensitive keys at every depth (+ cookie / session / hmac). No DB schema / migration change.
  */
 import assert from "node:assert/strict";
@@ -59,6 +59,7 @@ const writers = serverSources.flatMap((file) => {
 const staticActions = new Set(writers.filter((w) => !w.action.includes("${")).map((w) => w.action));
 const writerEntities = new Set(writers.map((w) => w.entity));
 const auditRoute = between(adminRoute, 'router.get("/admin/audit", ', "\nrouter.");
+const auditExportRoute = between(adminRoute, 'router.get("/admin/audit/export", ', "\nrouter.");
 const actionLabelKeys = [...between(page, "const ACTION_LABELS", "\n};").matchAll(/^ {2}"([^"]+)":/gm)].map((m) => m[1]);
 const transitionTargets = [...between(page, "const TRANSITION_TARGETS", ";").matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]);
 const actionFilters = [...between(page, "const ACTION_FILTERS", "\n];").matchAll(/value: "([^"]*)"/g)].map((m) => m[1]);
@@ -83,6 +84,18 @@ describe("Admin Phase 13.13 Audit — backend contract", () => {
       assert.doesNotMatch(read(file), /router\.(post|put|patch|delete)\("\/admin\/audit/, path.basename(file));
       assert.doesNotMatch(read(file), /router\.get\("\/admin\/audit\/:/, path.basename(file));
     }
+  });
+
+  it("GET /admin/audit/export: audit:read, same filters, cap 10000, BOM CSV with sanitized payload", () => {
+    const perm = auditExportRoute.indexOf('requirePermission(user, "audit:read")');
+    assert.ok(perm > 0 && perm < auditExportRoute.indexOf("await db"));
+    assert.match(auditExportRoute, /ADMIN_AUDIT_EXPORT_MAX/);
+    assert.match(auditExportRoute, /ilike\(auditLog\.action/);
+    assert.match(auditExportRoute, /eq\(auditLog\.entity, entity\)/);
+    assert.match(auditExportRoute, /JSON\.stringify\(sanitizeAuditPayload\(row\.payload\)\)/);
+    assert.match(auditExportRoute, /\\uFEFF/);
+    assert.match(auditExportRoute, /text\/csv; charset=utf-8/);
+    assert.match(adminRoute, /router\.get\("\/admin\/audit\/export"/);
   });
 
   it("permission: audit:read is HQ only (fallback + seed); no RBAC mutation endpoint can grant it", () => {
@@ -137,8 +150,12 @@ describe("Admin Phase 13.13 Audit — backend contract", () => {
 describe("Admin Phase 13.13 Audit — action / entity mapping stays inside the real catalogue", () => {
   it("every static action written by the server has a label, and every label is a real action", () => {
     for (const action of staticActions) assert.ok(actionLabelKeys.includes(action) , `unlabelled ${action}`);
+    const dynamicActions = new Set(["rating.hide", "rating.unhide"]);
     for (const key of actionLabelKeys) {
-      const real = staticActions.has(key) || (key.startsWith("order.refund_cashback.") && ["full", "partial"].includes(key.split(".").pop()!));
+      const real =
+        staticActions.has(key)
+        || dynamicActions.has(key)
+        || (key.startsWith("order.refund_cashback.") && ["full", "partial"].includes(key.split(".").pop()!));
       assert.ok(real, `invented action ${key}`);
     }
     const orders = read(path.join(root, "src/routes/orders.ts"));
@@ -150,12 +167,20 @@ describe("Admin Phase 13.13 Audit — action / entity mapping stays inside the r
   });
 
   it("entity labels = entity codes written by the server", () => {
-    assert.deepEqual([...entityKeys].sort(), [...writerEntities].sort());
+    const entities = new Set([...writerEntities, "staff_rating"]);
+    assert.deepEqual([...entityKeys].sort(), [...entities].sort());
     assert.match(code, /return ENTITY_LABELS\[e\] \|\| \(e \? `Obyekt: \$\{e\}` : "—"\);/);
   });
 
   it("action filters are server substrings without stripped characters and each matches real actions", () => {
-    const codes = [...staticActions, ...transitionTargets.map((t) => `order.transition.${t}`), "order.refund_cashback.full", "order.refund_cashback.partial"];
+    const codes = [
+      ...staticActions,
+      ...transitionTargets.map((t) => `order.transition.${t}`),
+      "order.refund_cashback.full",
+      "order.refund_cashback.partial",
+      "rating.hide",
+      "rating.unhide",
+    ];
     for (const value of actionFilters.filter(Boolean)) {
       assert.doesNotMatch(value, /[%_\\]/, value);
       assert.ok(codes.some((c) => c.toLowerCase().includes(value.toLowerCase())), value);
@@ -181,7 +206,7 @@ describe("Admin Phase 13.13 Audit — page uses the real contract only", () => {
     const urls = [...code.matchAll(/request\(\s*`([^`]+)`/g)].map((m) => m[1]);
     assert.deepEqual(urls, ["/api/admin/audit?${qs}"]);
     const params = [...code.matchAll(/qs\.set\("(\w+)"/g)].map((m) => m[1]);
-    assert.deepEqual(params, ["limit", "offset", "action", "entity"]);
+    assert.deepEqual([...new Set(params)].sort(), ["action", "entity", "limit", "offset"]);
     assert.doesNotMatch(code, /createdFrom|createdTo|actorId|dateFrom|branchFilter|actorFilter|qs\.set\("(q|search|branchId|actor|status)"/);
     assert.equal(code.match(/await request\(/g)?.length, 1);
     assert.doesNotMatch(code, /Promise\.all|\.map\(\s*async|softRequest/);
@@ -210,10 +235,13 @@ describe("Admin Phase 13.13 Audit — page uses the real contract only", () => {
     assert.match(code, /if \(meta\.idempotent === true\)/);
   });
 
-  it("read-only: no mutation, no export, no local file generation", () => {
+  it("read-only list; CSV download via server export only", () => {
     assert.doesNotMatch(code, /method:\s*"(POST|PUT|PATCH|DELETE)"|ConfirmDialog|confirm\(/);
-    assert.doesNotMatch(code, /Blob\(|download=|text\/csv|\.xlsx|window\.print|>\s*(CSV|Excel|PDF|Eksport)\s*</);
-    assert.match(code, /Audit eksporti API mavjud emas/);
+    assert.doesNotMatch(code, /Blob\(|download=|text\/csv|\.xlsx|window\.print/);
+    assert.match(code, /requestDownload/);
+    assert.match(code, /\/api\/admin\/audit\/export/);
+    assert.match(code, /Yuklab olish \(CSV\)/);
+    assert.doesNotMatch(code, /Audit eksporti API mavjud emas/);
     assert.match(code, /Faqat o‘qish/);
   });
 
@@ -287,6 +315,5 @@ describe("Admin Phase 13.13 Audit — design system and docs", () => {
     assert.match(section, /audit:read/);
     assert.match(section, /sanitizeAuditPayload/);
     assert.match(section, /DB sxemasi va migratsiyalar o‘zgartirilmadi/);
-    assert.match(section, /Audit eksporti API mavjud emas/);
   });
 });
