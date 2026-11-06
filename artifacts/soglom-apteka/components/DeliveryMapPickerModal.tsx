@@ -10,10 +10,10 @@ import {
 } from 'react-native';
 import { Feather } from '@/components/AppIcon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Location from 'expo-location';
 import InteractiveMapPicker from '@/components/InteractiveMapPicker';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
+import { getDeviceLocation, type DeviceLocationError } from '@/lib/deviceLocation';
 import { toGeocodeLocale } from '@/lib/i18n/format';
 import type { DeliveryAddressSelection, LatLng } from '@/lib/maps';
 import { TASHKENT_DEFAULT, hasValidCoords } from '@/lib/maps';
@@ -54,28 +54,12 @@ export default function DeliveryMapPickerModal({
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeFailed, setGeocodeFailed] = useState(false);
   const [locatingUser, setLocatingUser] = useState(false);
-  const [locPermissionDenied, setLocPermissionDenied] = useState(false);
+  const [locationError, setLocationError] = useState<DeviceLocationError | null>(null);
 
   const debounceTimer = useRef<any>(null);
   const requestIdRef = useRef(0);
   const lastGeocodedCoordsRef = useRef<LatLng | null>(null);
-
-  useEffect(() => {
-    if (visible) {
-      if (initialCoords && hasValidCoords(initialCoords)) {
-        setCurrentCoords(initialCoords);
-        if (initialAddress) {
-          setResolvedAddress(initialAddress);
-        } else {
-          void doReverseGeocode(initialCoords);
-        }
-      } else {
-        // Priority 1: device location if already granted; Priority 2: Tashkent default
-        setCurrentCoords(TASHKENT_DEFAULT);
-        void doReverseGeocode(TASHKENT_DEFAULT);
-      }
-    }
-  }, [visible, initialCoords?.lat, initialCoords?.lng, initialAddress]);
+  const autoLocateAttempted = useRef(false);
 
   const doReverseGeocode = useCallback(
     async (coords: LatLng) => {
@@ -117,6 +101,51 @@ export default function DeliveryMapPickerModal({
     [language],
   );
 
+  const locateUser = useCallback(
+    async (requestPermission: boolean) => {
+      setLocatingUser(true);
+      setLocationError(null);
+      try {
+        const result = await getDeviceLocation({ requestPermission });
+        if (!result.ok) {
+          setLocationError(result.error);
+          return;
+        }
+        setCurrentCoords(result.coords);
+        void doReverseGeocode(result.coords);
+      } catch {
+        setLocationError('unavailable');
+      } finally {
+        setLocatingUser(false);
+      }
+    },
+    [doReverseGeocode],
+  );
+
+  useEffect(() => {
+    if (!visible) {
+      autoLocateAttempted.current = false;
+      setLocationError(null);
+      return;
+    }
+    if (initialCoords && hasValidCoords(initialCoords)) {
+      setCurrentCoords(initialCoords);
+      if (initialAddress) {
+        setResolvedAddress(initialAddress);
+      } else {
+        void doReverseGeocode(initialCoords);
+      }
+      return;
+    }
+    // Show Tashkent immediately, then try real GPS once (web uses browser Geolocation)
+    setCurrentCoords(TASHKENT_DEFAULT);
+    void doReverseGeocode(TASHKENT_DEFAULT);
+    if (!autoLocateAttempted.current) {
+      autoLocateAttempted.current = true;
+      void locateUser(true);
+    }
+  }, [visible, initialCoords?.lat, initialCoords?.lng, initialAddress, doReverseGeocode, locateUser]);
+
   const handleLocationChange = useCallback(
     (coords: LatLng) => {
       setCurrentCoords(coords);
@@ -128,25 +157,18 @@ export default function DeliveryMapPickerModal({
     [doReverseGeocode],
   );
 
-  const handleMyLocation = async () => {
-    setLocatingUser(true);
-    setLocPermissionDenied(false);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLocPermissionDenied(true);
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const userCoords: LatLng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setCurrentCoords(userCoords);
-      void doReverseGeocode(userCoords);
-    } catch {
-      setLocPermissionDenied(true);
-    } finally {
-      setLocatingUser(false);
-    }
+  const handleMyLocation = () => {
+    void locateUser(true);
   };
+
+  const locationErrorText =
+    locationError === 'denied'
+      ? t('cart.checkoutMapLocationDenied')
+      : locationError === 'timeout'
+        ? t('cart.checkoutMapLocationTimeout')
+        : locationError
+          ? t('cart.checkoutMapLocationUnavailable')
+          : null;
 
   const handleConfirm = () => {
     const cleanAddress = resolvedAddress.trim();
@@ -216,10 +238,10 @@ export default function DeliveryMapPickerModal({
 
         {/* Bottom Card */}
         <View style={[styles.bottomCard, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          {locPermissionDenied ? (
+          {locationErrorText ? (
             <View style={styles.warnBanner}>
               <Feather name="alert-circle" size={16} color="#D97706" />
-              <Text style={styles.warnText}>{t('cart.checkoutMapLocationDenied')}</Text>
+              <Text style={styles.warnText}>{locationErrorText}</Text>
             </View>
           ) : null}
 

@@ -111,6 +111,9 @@ export default defineMessages({
     checkoutMapLocating: 'Manzil aniqlanmoqda...',
     checkoutMapGeocodeFailed: 'Manzilni topib bo‘lmadi. Xarita orqali boshqa joyni tanlang.',
     checkoutMapLocationDenied: 'Joylashuvga ruxsat berilmagan. Manzilni xaritadan qo‘lda tanlashingiz mumkin.',
+    checkoutMapLocationUnavailable:
+      'Joylashuv aniqlanmadi (GPS/tarmoq). Brauzerda geolokatsiya yoqilgan bo‘lsa ham qurilma joylashuv bermayapti — xaritadan qo‘lda tanlang yoki qayta urinib ko‘ring.',
+    checkoutMapLocationTimeout: 'Joylashuvni aniqlash vaqti tugadi. Qayta urinib ko‘ring yoki xaritadan qo‘lda tanlang.',
     checkoutMapConfirmTitle: 'Manzilni tasdiqlash',
     checkoutMapConfirmAddress: 'Shu manzilni tanlash',
     checkoutSaveAddress: 'Manzilni saqlash',
@@ -251,6 +254,9 @@ export default defineMessages({
     checkoutMapLocating: 'Определение адреса...',
     checkoutMapGeocodeFailed: 'Не удалось определить адрес. Выберите другое место на карте.',
     checkoutMapLocationDenied: 'Нет доступа к геолокации. Вы можете выбрать адрес вручную на карте.',
+    checkoutMapLocationUnavailable:
+      'Не удалось определить местоположение (GPS/сеть). Даже при разрешении в браузере устройство может не отдать координаты — выберите точку на карте или попробуйте снова.',
+    checkoutMapLocationTimeout: 'Время определения местоположения истекло. Повторите попытку или выберите адрес на карте.',
     checkoutMapConfirmTitle: 'Подтверждение адреса',
     checkoutMapConfirmAddress: 'Выбрать этот адрес',
     checkoutSaveAddress: 'Сохранить адрес',
@@ -391,6 +397,9 @@ export default defineMessages({
     checkoutMapLocating: 'Locating address...',
     checkoutMapGeocodeFailed: 'Could not resolve the address. Please pick another point on the map.',
     checkoutMapLocationDenied: 'Location permission denied. You can select an address manually on the map.',
+    checkoutMapLocationUnavailable:
+      'Could not determine your location (GPS/network). Even with browser permission, the device may not return coordinates — pick on the map or try again.',
+    checkoutMapLocationTimeout: 'Location request timed out. Try again or select an address on the map.',
     checkoutMapConfirmTitle: 'Confirm address',
     checkoutMapConfirmAddress: 'Select this address',
     checkoutSaveAddress: 'Save address',
