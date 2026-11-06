@@ -2,7 +2,7 @@ import { Router } from "express";
 import { processFomSale } from "../lib/fomBridge";
 import { completeOrderCashback, serializeOrder } from "./orders";
 import { publicCashbackRules } from "../lib/cashback";
-import { getMaxSpendRatio } from "../lib/cashbackFinance";
+import { getCashbackPolicy } from "../lib/cashbackFinance";
 import { db, orders, staffRatings } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAdmin, requireCustomer } from "../lib/auth";
@@ -10,11 +10,11 @@ import { assertFomWebhookAuthorized } from "../lib/securityEnv";
 
 const router = Router();
 
-/** Cashback qoidalari (ilova / kassa / FOM uchun ochiq) — spend ratio from server settings */
+/** Cashback qoidalari (ilova / kassa / FOM uchun ochiq) — policy from system_settings */
 router.get("/cashback/rules", async (_req, res, next) => {
   try {
-    const ratio = await getMaxSpendRatio();
-    res.json(publicCashbackRules(ratio));
+    const policy = await getCashbackPolicy();
+    res.json(publicCashbackRules(policy));
   } catch (error) {
     next(error);
   }
@@ -86,8 +86,8 @@ router.get("/integrations/fom/status", async (req, res, next) => {
     // Admin-authenticated only — do not expose integration topology anonymously.
     await requireAdmin(req);
 
-    const ratio = await getMaxSpendRatio();
-    const rules = publicCashbackRules(ratio);
+    const policy = await getCashbackPolicy();
+    const rules = publicCashbackRules(policy);
     res.json({
       provider: "F-Apteka / DMED / F-Kassa",
       /** Honest: bridge exists; FOM_POS external receipt contract is NOT ready. */

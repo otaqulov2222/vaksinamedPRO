@@ -43,12 +43,23 @@ import {
   GRANT_EXPIRING_SOON_DAYS,
   clampCashbackSpend,
   DEFAULT_MAX_SPEND_RATIO,
+  DEFAULT_TIERS,
+  FIXED_TIER_NAMES,
+  defaultCashbackPolicy,
   grantExpiryDate,
   normalizeSpendRatio,
+  type CashbackPolicy,
+  type CashbackTier,
+  type CashbackTierDef,
 } from "./cashback";
 import { emitAlert, ALERT } from "./alerts";
 
 type DbLike = typeof db;
+
+const KEY_MAX_SPEND = "cashback.max_spend_ratio";
+const KEY_MIN_PURCHASE = "cashback.min_purchase_uzs";
+const KEY_TTL_DAYS = "cashback.ttl_days";
+const KEY_TIERS = "cashback.tiers";
 
 export type CommercialSourceType = "ORDER" | "POS" | "FOM_POS" | "SYSTEM";
 
@@ -84,19 +95,227 @@ function isUniqueViolation(error: unknown): boolean {
   return msg.includes("unique") || msg.includes("duplicate");
 }
 
+async function readSetting(key: string, executor: DbLike): Promise<string | null> {
+  try {
+    const rows = await executor.select().from(systemSettings).where(eq(systemSettings.key, key)).limit(1);
+    return rows[0]?.value != null ? String(rows[0].value) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function upsertSetting(
+  key: string,
+  value: string,
+  description: string,
+  executor: DbLike,
+): Promise<void> {
+  await executor
+    .insert(systemSettings)
+    .values({ key, value, description, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: systemSettings.key,
+      set: { value, description, updatedAt: new Date() },
+    });
+}
+
+function parseMinPurchase(raw: string | null): number {
+  if (raw == null) return defaultCashbackPolicy().minPurchase;
+  const v = Math.floor(Number(raw));
+  if (!Number.isFinite(v) || v <= 0) return defaultCashbackPolicy().minPurchase;
+  return v;
+}
+
+function parseTtlDays(raw: string | null): number {
+  if (raw == null) return defaultCashbackPolicy().ttlDays;
+  const v = Math.floor(Number(raw));
+  if (!Number.isFinite(v) || v < 7 || v > 365) return defaultCashbackPolicy().ttlDays;
+  return v;
+}
+
+function parseTiers(raw: string | null): CashbackTierDef[] {
+  if (raw == null || !raw.trim()) return DEFAULT_TIERS.map((t) => ({ ...t }));
+  try {
+    const parsed = JSON.parse(raw);
+    const normalized = normalizeTiersInput(parsed, { soft: true });
+    return normalized ?? DEFAULT_TIERS.map((t) => ({ ...t }));
+  } catch {
+    return DEFAULT_TIERS.map((t) => ({ ...t }));
+  }
+}
+
+/** Validate HQ tier payload. soft=true → return null on failure (read path). */
+export function normalizeTiersInput(
+  raw: unknown,
+  opts: { soft?: boolean } = {},
+): CashbackTierDef[] | null {
+  const fail = (message: string, code = "INVALID_TIERS") => {
+    if (opts.soft) return null;
+    throw Object.assign(new Error(message), { status: 400, code });
+  };
+  if (!Array.isArray(raw) || raw.length !== 3) {
+    return fail("Tierlar: aniq 3 ta (Silver, Gold, Platinum) bo‘lishi kerak");
+  }
+  const out: CashbackTierDef[] = [];
+  for (let i = 0; i < 3; i++) {
+    const row = raw[i] as Record<string, unknown>;
+    const expected = FIXED_TIER_NAMES[i];
+    const name = String(row?.tier || "").trim() as CashbackTier;
+    if (name !== expected) {
+      return fail(`Tier tartibi fixed: ${FIXED_TIER_NAMES.join(" → ")} (kutilgan ${expected})`);
+    }
+    let rateBps = Math.floor(Number(row?.rateBps));
+    if (!Number.isFinite(rateBps) && row?.rate != null) {
+      const pct = Number(String(row.rate).replace("%", "").replace(",", "."));
+      if (Number.isFinite(pct)) rateBps = Math.round(pct * 100);
+    }
+    const fromTotal = Math.floor(Number(row?.fromTotal));
+    if (!Number.isFinite(rateBps) || rateBps < 100 || rateBps > 2000) {
+      return fail(`${expected}: rateBps 100–2000 oralig‘ida bo‘lishi kerak`);
+    }
+    if (!Number.isFinite(fromTotal) || fromTotal < 0) {
+      return fail(`${expected}: fromTotal noto‘g‘ri`);
+    }
+    if (i > 0 && fromTotal <= out[i - 1].fromTotal) {
+      return fail("fromTotal qat’iy o‘suvchi bo‘lishi kerak (Silver < Gold < Platinum)");
+    }
+    out.push({ tier: expected, rateBps, fromTotal });
+  }
+  return out;
+}
+
+/** Full HQ cashback policy from system_settings (defaults on miss). */
+export async function getCashbackPolicy(executor: DbLike = db): Promise<CashbackPolicy> {
+  const [ratioRaw, minRaw, ttlRaw, tiersRaw] = await Promise.all([
+    readSetting(KEY_MAX_SPEND, executor),
+    readSetting(KEY_MIN_PURCHASE, executor),
+    readSetting(KEY_TTL_DAYS, executor),
+    readSetting(KEY_TIERS, executor),
+  ]);
+  return {
+    maxSpendRatio: ratioRaw != null ? normalizeSpendRatio(ratioRaw) : DEFAULT_MAX_SPEND_RATIO,
+    minPurchase: parseMinPurchase(minRaw),
+    ttlDays: parseTtlDays(ttlRaw),
+    tiers: parseTiers(tiersRaw),
+  };
+}
+
+export type CashbackPolicyPatch = {
+  maxSpendRatio?: unknown;
+  minPurchase?: unknown;
+  ttlDays?: unknown;
+  tiers?: unknown;
+};
+
+/**
+ * Partial HQ upsert. At least one field required.
+ * TTL changes apply to new grants only (existing expires_at untouched).
+ */
+export async function setCashbackPolicy(
+  patch: CashbackPolicyPatch,
+  executor: DbLike = db,
+): Promise<{ previous: CashbackPolicy; next: CashbackPolicy; changed: string[] }> {
+  const has =
+    patch.maxSpendRatio !== undefined ||
+    patch.minPurchase !== undefined ||
+    patch.ttlDays !== undefined ||
+    patch.tiers !== undefined;
+  if (!has) {
+    throw Object.assign(new Error("Hech qanday sozlama yuborilmadi"), {
+      status: 400,
+      code: "EMPTY_SETTINGS_PATCH",
+    });
+  }
+
+  const previous = await getCashbackPolicy(executor);
+  const next: CashbackPolicy = { ...previous, tiers: previous.tiers.map((t) => ({ ...t })) };
+  const changed: string[] = [];
+
+  if (patch.maxSpendRatio !== undefined) {
+    const v = Number(patch.maxSpendRatio);
+    if (!Number.isFinite(v) || v <= 0 || v > 1) {
+      throw Object.assign(new Error("maxSpendRatio 0 dan katta va 1 dan katta bo‘lmasligi kerak"), {
+        status: 400,
+        code: "INVALID_SPEND_RATIO",
+      });
+    }
+    next.maxSpendRatio = Math.round(v * 10_000) / 10_000;
+    if (next.maxSpendRatio !== previous.maxSpendRatio) changed.push("maxSpendRatio");
+  }
+
+  if (patch.minPurchase !== undefined) {
+    const v = Math.floor(Number(patch.minPurchase));
+    if (!Number.isFinite(v) || v <= 0 || v > 10_000_000) {
+      throw Object.assign(new Error("minPurchase 1–10_000_000 so‘m oralig‘ida bo‘lishi kerak"), {
+        status: 400,
+        code: "INVALID_MIN_PURCHASE",
+      });
+    }
+    next.minPurchase = v;
+    if (next.minPurchase !== previous.minPurchase) changed.push("minPurchase");
+  }
+
+  if (patch.ttlDays !== undefined) {
+    const v = Math.floor(Number(patch.ttlDays));
+    if (!Number.isFinite(v) || v < 7 || v > 365) {
+      throw Object.assign(new Error("ttlDays 7–365 oralig‘ida bo‘lishi kerak"), {
+        status: 400,
+        code: "INVALID_TTL_DAYS",
+      });
+    }
+    next.ttlDays = v;
+    if (next.ttlDays !== previous.ttlDays) changed.push("ttlDays");
+  }
+
+  if (patch.tiers !== undefined) {
+    const tiers = normalizeTiersInput(patch.tiers);
+    if (!tiers) {
+      throw Object.assign(new Error("Tierlar noto‘g‘ri"), { status: 400, code: "INVALID_TIERS" });
+    }
+    next.tiers = tiers;
+    if (JSON.stringify(next.tiers) !== JSON.stringify(previous.tiers)) changed.push("tiers");
+  }
+
+  if (changed.includes("maxSpendRatio") || patch.maxSpendRatio !== undefined) {
+    await upsertSetting(
+      KEY_MAX_SPEND,
+      String(next.maxSpendRatio),
+      "Max cashback spend as fraction of goods amount (0–1]",
+      executor,
+    );
+  }
+  if (changed.includes("minPurchase") || patch.minPurchase !== undefined) {
+    await upsertSetting(
+      KEY_MIN_PURCHASE,
+      String(next.minPurchase),
+      "Minimum goods amount (UZS) required to earn/spend cashback",
+      executor,
+    );
+  }
+  if (changed.includes("ttlDays") || patch.ttlDays !== undefined) {
+    await upsertSetting(
+      KEY_TTL_DAYS,
+      String(next.ttlDays),
+      "Cashback grant TTL in days — applies to new grants only",
+      executor,
+    );
+  }
+  if (changed.includes("tiers") || patch.tiers !== undefined) {
+    await upsertSetting(
+      KEY_TIERS,
+      JSON.stringify(next.tiers),
+      "Fixed Silver/Gold/Platinum rateBps + fromTotal thresholds",
+      executor,
+    );
+  }
+
+  return { previous, next, changed };
+}
+
 /** P6.5 — server setting `cashback.max_spend_ratio` (default 0.30). */
 export async function getMaxSpendRatio(executor: DbLike = db): Promise<number> {
-  try {
-    const rows = await executor
-      .select()
-      .from(systemSettings)
-      .where(eq(systemSettings.key, "cashback.max_spend_ratio"))
-      .limit(1);
-    if (rows[0]) return normalizeSpendRatio(rows[0].value);
-  } catch {
-    // settings table missing on ancient DBs — fall through
-  }
-  return DEFAULT_MAX_SPEND_RATIO;
+  const policy = await getCashbackPolicy(executor);
+  return policy.maxSpendRatio;
 }
 
 /**
@@ -107,29 +326,8 @@ export async function setMaxSpendRatio(
   raw: unknown,
   executor: DbLike = db,
 ): Promise<{ previous: number; next: number }> {
-  const v = Number(raw);
-  if (!Number.isFinite(v) || v <= 0 || v > 1) {
-    throw Object.assign(new Error("maxSpendRatio 0 dan katta va 1 dan katta bo‘lmasligi kerak"), {
-      status: 400,
-      code: "INVALID_SPEND_RATIO",
-    });
-  }
-  const next = Math.round(v * 10_000) / 10_000;
-  const previous = await getMaxSpendRatio(executor);
-  const description = "Max cashback spend as fraction of goods amount (0–1]";
-  await executor
-    .insert(systemSettings)
-    .values({
-      key: "cashback.max_spend_ratio",
-      value: String(next),
-      description,
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: systemSettings.key,
-      set: { value: String(next), description, updatedAt: new Date() },
-    });
-  return { previous, next };
+  const result = await setCashbackPolicy({ maxSpendRatio: raw }, executor);
+  return { previous: result.previous.maxSpendRatio, next: result.next.maxSpendRatio };
 }
 
 /** Ensure account exists; create with zero if missing. */
@@ -249,6 +447,7 @@ async function mirrorLegacyBalance(tx: DbLike, customerId: number, balance: numb
 async function ensureGrantForEarnEntry(
   tx: DbLike,
   entry: CashbackLedgerEntry,
+  ttlDays: number = CASHBACK_TTL_DAYS,
 ): Promise<void> {
   if (entry.entryType !== "EARN" && entry.entryType !== "ADJUSTMENT") return;
   const existing = await tx
@@ -257,17 +456,18 @@ async function ensureGrantForEarnEntry(
     .where(eq(cashbackGrants.ledgerEntryId, entry.id))
     .limit(1);
   if (existing[0]) return;
+  const ttl = Number.isFinite(ttlDays) && ttlDays > 0 ? Math.floor(ttlDays) : CASHBACK_TTL_DAYS;
   try {
     await tx.insert(cashbackGrants).values({
       accountId: entry.accountId,
       customerId: entry.customerId,
       originalAmount: entry.amount,
       unconsumedAmount: entry.amount,
-      expiresAt: grantExpiryDate(entry.createdAt || new Date()),
+      expiresAt: grantExpiryDate(entry.createdAt || new Date(), ttl),
       commercialTransactionId: entry.commercialTransactionId,
       ledgerEntryId: entry.id,
       status: "ACTIVE",
-      meta: JSON.stringify({ ttlDays: CASHBACK_TTL_DAYS }),
+      meta: JSON.stringify({ ttlDays: ttl }),
     });
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
@@ -328,17 +528,19 @@ async function restoreGrantOnUseReversal(
   account: CashbackAccount,
   amount: number,
   useEntryId: number,
+  ttlDays: number = CASHBACK_TTL_DAYS,
 ): Promise<void> {
   const restore = Math.floor(Number(amount) || 0);
   if (restore <= 0) return;
+  const ttl = Number.isFinite(ttlDays) && ttlDays > 0 ? Math.floor(ttlDays) : CASHBACK_TTL_DAYS;
   await tx.insert(cashbackGrants).values({
     accountId: account.id,
     customerId: account.customerId,
     originalAmount: restore,
     unconsumedAmount: restore,
-    expiresAt: grantExpiryDate(),
+    expiresAt: grantExpiryDate(new Date(), ttl),
     status: "ACTIVE",
-    meta: JSON.stringify({ reversedUseEntryId: useEntryId, ttlDays: CASHBACK_TTL_DAYS }),
+    meta: JSON.stringify({ reversedUseEntryId: useEntryId, ttlDays: ttl }),
   });
 }
 
@@ -407,6 +609,7 @@ export async function earnCashback(
   if (amount <= 0) throw badRequest("EARN miqdori musbat bo‘lishi kerak");
 
   return withTx(executor, Boolean(opts.alreadyInTx), async (tx) => {
+    const policy = await getCashbackPolicy(tx);
     const account = await ensureCashbackAccount(input.customerId, tx, { alreadyInTx: true });
     const { commercial } = await resolveCommercialTransaction(
       {
@@ -431,7 +634,7 @@ export async function earnCashback(
       .limit(1);
     if (existing[0]) {
       const locked = await lockAccount(tx, account.id);
-      await ensureGrantForEarnEntry(tx, existing[0]);
+      await ensureGrantForEarnEntry(tx, existing[0], policy.ttlDays);
       return { account: locked, entry: existing[0], commercial, idempotent: true };
     }
 
@@ -478,7 +681,7 @@ export async function earnCashback(
           source: "unique_race",
         });
         const again = await lockAccount(tx, account.id);
-        await ensureGrantForEarnEntry(tx, raced[0]);
+        await ensureGrantForEarnEntry(tx, raced[0], policy.ttlDays);
         return { account: again, entry: raced[0], commercial, idempotent: true };
       }
       emitAlert(ALERT.CASHBACK_OPERATION_FAILURE, {
@@ -496,7 +699,7 @@ export async function earnCashback(
       .where(eq(cashbackAccounts.id, locked.id))
       .returning();
 
-    await ensureGrantForEarnEntry(tx, entry);
+    await ensureGrantForEarnEntry(tx, entry, policy.ttlDays);
     await mirrorLegacyBalance(tx, input.customerId, nextBalance);
 
     if (input.orderId) {
@@ -750,7 +953,8 @@ export async function reverseCashbackEntry(
     if (original.entryType === "EARN" || original.entryType === "ADJUSTMENT") {
       await reduceGrantOnEarnReversal(tx, locked, original, reverseAmount);
     } else if (original.entryType === "USE") {
-      await restoreGrantOnUseReversal(tx, locked, reverseAmount, original.id);
+      const policy = await getCashbackPolicy(tx);
+      await restoreGrantOnUseReversal(tx, locked, reverseAmount, original.id, policy.ttlDays);
     }
 
     let entry: CashbackLedgerEntry;
@@ -1024,6 +1228,7 @@ export async function getCashbackGrantSummary(
   nextExpiresAt: string | null;
 }> {
   const account = await ensureCashbackAccount(customerId, executor);
+  const policy = await getCashbackPolicy(executor);
   const soon = new Date(Date.now() + GRANT_EXPIRING_SOON_DAYS * 24 * 60 * 60 * 1000);
   const rows = await executor.execute(sql`
     SELECT
@@ -1045,7 +1250,7 @@ export async function getCashbackGrantSummary(
   const row = rowsOf(rows)[0];
   const next = row?.next_expires;
   return {
-    ttlDays: CASHBACK_TTL_DAYS,
+    ttlDays: policy.ttlDays,
     activeAmount: Number(row?.active || 0),
     expiringAmount: Number(row?.expiring || 0),
     nextExpiresAt: next ? new Date(String(next)).toISOString() : null,

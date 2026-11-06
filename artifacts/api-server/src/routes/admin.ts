@@ -43,7 +43,7 @@ import { adminHasPermission, assertBranchScope, requirePermission, resolveStaffB
 import { revokeSessionFromToken } from "../lib/sessions";
 import { recordAuthEvent } from "../lib/authEvents";
 import { adjustStock, expireDueReservations } from "../lib/inventory";
-import { earnCashback, getMaxSpendRatio, setMaxSpendRatio, useCashback } from "../lib/cashbackFinance";
+import { earnCashback, getCashbackPolicy, setCashbackPolicy, useCashback } from "../lib/cashbackFinance";
 import { publicCashbackRules } from "../lib/cashback";
 import {
   adminCustomerIdentity,
@@ -1560,7 +1560,10 @@ router.post("/admin/inventory/expire-due", async (req, res, next) => {
 });
 
 /**
- * HQ — update cashback spend cap stored in system_settings.
+ * HQ — update cashback policy stored in system_settings.
+ * Body (all optional, at least one required):
+ *   { maxSpendRatio?, minPurchase?, ttlDays?, tiers? }
+ * TTL applies to new grants only; existing expires_at is never rewritten.
  */
 router.patch("/admin/settings/cashback", async (req, res, next) => {
   try {
@@ -1569,20 +1572,28 @@ router.patch("/admin/settings/cashback", async (req, res, next) => {
     if (!isHqAdminRole(user.role)) {
       return res.status(403).json({ message: "Faqat HQ sozlamani o‘zgartira oladi", code: "HQ_ONLY" });
     }
-    const result = await setMaxSpendRatio(req.body?.maxSpendRatio);
+    const body = req.body || {};
+    const result = await setCashbackPolicy({
+      maxSpendRatio: body.maxSpendRatio,
+      minPurchase: body.minPurchase,
+      ttlDays: body.ttlDays,
+      tiers: body.tiers,
+    });
     await db.insert(auditLog).values({
       actor: user.email,
       action: "settings.cashback_update",
       entity: "system_settings",
       payload: JSON.stringify({
-        key: "cashback.max_spend_ratio",
+        changed: result.changed,
         previous: result.previous,
         next: result.next,
-        maxSpendPercent: Math.round(result.next * 100),
+        maxSpendPercent: Math.round(result.next.maxSpendRatio * 100),
+        ttlAppliesTo: "new_grants_only",
       }),
     });
     return res.json({
       ok: true,
+      changed: result.changed,
       previous: result.previous,
       next: result.next,
       rules: publicCashbackRules(result.next),
@@ -1596,8 +1607,8 @@ router.get("/admin/settings/cashback", async (req, res, next) => {
   try {
     const user = await requireAdmin(req);
     await requirePermission(user, "settings:manage");
-    const ratio = await getMaxSpendRatio();
-    return res.json({ rules: publicCashbackRules(ratio) });
+    const policy = await getCashbackPolicy();
+    return res.json({ rules: publicCashbackRules(policy), policy });
   } catch (error) {
     return next(error);
   }

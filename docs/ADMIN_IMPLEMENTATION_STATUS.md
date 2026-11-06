@@ -704,55 +704,37 @@ Faqat vizual kompozitsiya o‘zgardi; API, filtrlar, KPI hisoblari va endpointla
 
 ## Phase 13.14 — Sozlamalar (Settings)
 
-**Status: IMPLEMENTED (read + cashback spend write).** Settings console over the real server read sources. Phase A write path: `PATCH /api/admin/settings/cashback` `{ maxSpendRatio }` (`settings:manage`, HQ) upserts `system_settings.cashback.max_spend_ratio` and audits `settings.cashback_update`. Min purchase / tiers / TTL remain code constants (read-only UI). Migration `0022_admin_settings_permissions.sql` seeds `settings:manage`.
+**Status: IMPLEMENTED (read + cashback policy write — Phase B).** Settings console over the real server read sources. HQ write path: `PATCH /api/admin/settings/cashback` with optional `{ maxSpendRatio?, minPurchase?, ttlDays?, tiers? }` (`settings:manage`, HQ) upserts `system_settings` keys and audits `settings.cashback_update` (`previous` / `next` / `changed`). TTL applies to **new grants only** (`ttlAppliesTo: new_grants_only`); existing `expires_at` is never rewritten. Tiers are fixed Silver → Gold → Platinum (rateBps + fromTotal only; no CRUD). Welcome bonus / birthday / deliveryFee remain code constants. Migration `0022_admin_settings_permissions.sql` seeds `settings:manage` (no new migration for Phase B).
 
 | Source | Permission | Values used | Value source |
 | --- | --- | --- | --- |
-| `GET /api/cashback/rules` | public (app / kassa / FOM) | `maxSpendPercent` | DB `system_settings.cashback.max_spend_ratio` (seed 0.30; default 30% if missing; clamped to (0, 1]) |
-| ″ | ″ | `minPurchase` (1 000 so‘m), `deliveryFee` (15 000 so‘m), `tiers` (Silver 3% / 200 000, Gold 5% / 1 000 000, Platinum 7% / 5 000 000), `ttlDays` (90), `earnWhen` / `spendWhen` | code constants in `lib/cashback.ts` (immutable) |
+| `GET /api/cashback/rules` | public (app / kassa / FOM) | `maxSpendPercent`, `minPurchase`, `ttlDays`, `tiers` | DB via `getCashbackPolicy()` — keys `cashback.max_spend_ratio`, `cashback.min_purchase_uzs`, `cashback.ttl_days`, `cashback.tiers` (defaults on miss: 0.30 / 1 000 / 90 / DEFAULT_TIERS) |
+| ″ | ″ | `deliveryFee`, welcome / birthday, `earnWhen` / `spendWhen` | code constants in `lib/cashback.ts` |
+| `PATCH /api/admin/settings/cashback` | `settings:manage` (HQ) | partial policy upsert | `setCashbackPolicy` → `system_settings` |
+| `GET /api/admin/settings/cashback` | `settings:manage` (HQ) | `{ rules, policy }` | same policy + `publicCashbackRules` |
 | `GET /api/admin/branches` | `branches:read` (HQ; cashier 403) | `isOpen`, `is24h`, `hasPayme`, `hasClick` | branch records; secrets masked by `toAdminBranchPaymentDto` (`paymeKey` / `clickSecret` → `••••` or empty) |
-| `GET /api/admin/deliveries?limit=1` | `delivery:update` | `externalProvider` (`CONTRACT_PENDING`) | static contract field |
 | `GET /api/integrations/fom/status` | any admin | `status` (`CONTRACT_PENDING`), `ready`, `inventoryWriter` (`OFF`) | static contract fields |
 | `GET /api/healthz` | public | `database` (`up` / `down`, 503 → down), `driver`, `time` | live DB check |
 | `GET /api/admin/me` (App bootstrap) | admin | role, permission count | session |
 
-Permissions: no `settings:*` permission exists and none was added. The nav item is HQ-only (`hqOnly`), and each section is protected server-side by its own endpoint permission. Links to Cashback / Filiallar / Yetkazib berish / FOM / Adminlar are shown only for tabs the operator can open.
+Permissions: `settings:manage` is HQ fallback + seed. The nav item is HQ-only (`hqOnly`). Links to Cashback / Filiallar / FOM / Adminlar are shown only for tabs the operator can open. Delivery admin list stays `DELIVERY_DISABLED` (not fetched).
 
 UI (`SettingsPage.tsx`):
-- Header chips: "Faqat ko‘rish", "Faqat HQ", "Har bo‘lim o‘z server ruxsati bilan". Yangilash button. An intro line ("Alohida sozlamalar API’si yo‘q…") shows the last read time in Asia/Tashkent.
-- Each section card shows its endpoint. Each setting row shows: title, description, value, "Manba: …", optional status and a "Faqat ko‘rish" marker.
-- **Cashback / Loyalty:** spend limit 30%, minimal purchase, tier table, TTL 90 days. TTL is flagged "Serverda qo‘llanmaydi": no server code expires cashback. Server rule text is collapsed. A note says customer balances and the ledger live in Cashback / Loyalty, and no balance endpoint is read.
-- **Filiallar va to‘lov kabinetlari:** Payme / Click configured counts (`0 / 121` on the dev DB) from `hasPayme` / `hasClick`, plus open and 24/7 counts. Configured branches are listed by name only. Key values, merchant IDs and `••••` masks are never read or rendered. Branch CRUD stays in Filiallar.
-- **Yetkazib berish:** delivery fee; external provider "Hali ulanmagan — tashqi provider contract mavjud emas". No courier or ETA settings, because none exist.
-- **FOM integratsiyasi:** "Shartnoma kutilmoqda" (not production-ready); inventory writer "O‘chirilgan".
-- **Kirish va ruxsatlar:** current role and server permission count (link to Adminlar).
-- **Tizim holati:** database driver and "Javob berdi" / "Javob bermadi", only from `/healthz`.
-- **Admin API orqali ko‘rinmaydi:** SMS / notifications (Eskiz), workers, Payme / Click mode (sandbox / production), session TTL / OTP / rate limits, order reservation hours. Listed as not visible, with no status or value.
+- Header chips + Yangilash; last read time in Asia/Tashkent.
+- **Cashback / Loyalty (editable with ConfirmDialog):** max spend %, min purchase, TTL days (honesty copy: faqat yangi grantlarga), fixed 3-tier table (rate % + fromTotal). Welcome / birthday rows stay read-only («Server kodi · o‘zgarmas»).
+- **Filiallar va to‘lov kabinetlari:** Payme / Click configured counts from `hasPayme` / `hasClick`; secrets never rendered.
+- **Yetkazib berish:** static disabled (`DELIVERY_DISABLED`).
+- **FOM / Kirish / Tizim / Admin API orqali ko‘rinmaydi:** unchanged from Phase A read model.
 
-Security / secrets:
-- No secret, token, password, KEK, connection string or env value is read or rendered.
-- Browser QA scanned every `/api` response and the page DOM: no unmasked `paymeKey` / `clickSecret`, no `enc:v1`, no connection strings.
-- The server error `message` is never shown.
+Security / secrets: no secret, token, password, KEK, connection string or env value is read or rendered. Server error `message` is never shown.
 
-States:
-- per-section 403 / 404 / 500 / network with fixed Uzbek copy (retry only for 500 / network);
-- page-level 401 (session) and full network outage;
-- initial LoadingBlock; dimmed refresh;
-- stale batches dropped (`loadSeq`).
-
-Performance: one parallel batch of 5 GET requests per load or refresh, no N+1.
-
-Responsive: two section columns on wide screens, one column ≤1280px, rows stacked ≤560px. Measured at 1920 / 1440 / 1280 / 1024 / 768 / 390: no page overflow, no clipped controls. There is no drawer.
-
-Browser QA: real dev DB, GET-only (the only writes were `POST /api/admin/login`, each writing one `admin.login` audit row). Fixtures were used only for error, loading and race states.
+Engine wiring: `computeCashback` / earn / `nextTier` / `tierProgress` / `grantExpiryDate(..., ttlDays)` read policy; FIFO expire worker still runs on grant `expires_at`.
 
 Remaining gaps (backend):
-- `ttlDays` (90) is published but not enforced.
-- Tier promotion (`nextTier`) runs only on POS sales.
-- Minimal purchase, delivery fee, tiers and reservation hours are code constants.
+- Welcome bonus, birthday window/extra, delivery fee, reservation hours remain code constants.
+- Tier promotion (`nextTier`) still only on POS / earn paths that call it.
 - No admin read API for payment provider mode, SMS provider, workers, session / OTP / rate-limit parameters.
 - `/integrations/fom/status` needs only `requireAdmin` (no permission).
-- `/admin/branches` spreads the full branch row (masked secrets, phone, merchant IDs) — the page uses booleans only.
 
 Tests: `artifacts/api-server/tests/admin-phase13-14-settings.test.ts`.
 

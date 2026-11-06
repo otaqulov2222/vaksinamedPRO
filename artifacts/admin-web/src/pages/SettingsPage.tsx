@@ -19,8 +19,8 @@ import { ConfirmDialog, ErrorState, LoadingBlock, StatusBadge } from "../ui";
 
 /**
  * Settings console over real server sources.
- * Writable: cashback max spend ratio (PATCH /api/admin/settings/cashback, settings:manage).
- * Other rows remain read-only code constants / status probes.
+ * Writable (settings:manage): cashback max spend %, min purchase, TTL (new grants), fixed 3 tiers.
+ * Welcome / birthday / deliveryFee remain code constants.
  */
 
 const BUSINESS_TZ = "Asia/Tashkent";
@@ -32,16 +32,19 @@ type Source<T> = { data: T | null; error: LoadError | null };
 type SourceKey = "rules" | "branches" | "fom" | "health";
 type SettingsCategory = "all" | "cashback" | "branches" | "delivery" | "integrations";
 
+type TierDraft = { tier: string; ratePercent: string; fromTotal: string };
 type Rules = {
   maxSpendPercent?: number;
   minPurchase?: number;
   ttlDays?: number;
   ttlEnforced?: boolean;
+  ttlAppliesTo?: string;
   deliveryFee?: number;
-  tiers?: Array<{ tier?: string; rate?: string; fromTotal?: number }>;
+  tiers?: Array<{ tier?: string; rate?: string; rateBps?: number; fromTotal?: number }>;
   earnWhen?: string[];
   spendWhen?: string[];
 };
+type ConfirmKind = "spend" | "min" | "ttl" | "tiers" | null;
 type BranchRow = { id: number; name?: string; isOpen?: boolean; is24h?: boolean; hasPayme?: boolean; hasClick?: boolean };
 type FomInfo = { status?: string; ready?: boolean; inventoryWriter?: string; fomPosContract?: string };
 type HealthInfo = { status?: string; database?: string; driver?: string; time?: string };
@@ -140,11 +143,34 @@ export function SettingsPage(props: {
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
   const [activeCat, setActiveCat] = useState<SettingsCategory>("all");
   const [spendDraft, setSpendDraft] = useState("");
-  const [spendBusy, setSpendBusy] = useState(false);
-  const [spendConfirm, setSpendConfirm] = useState(false);
-  const [spendFeedback, setSpendFeedback] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
+  const [minDraft, setMinDraft] = useState("");
+  const [ttlDraft, setTtlDraft] = useState("");
+  const [tierDrafts, setTierDrafts] = useState<TierDraft[]>([]);
+  const [policyBusy, setPolicyBusy] = useState(false);
+  const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
+  const [policyFeedback, setPolicyFeedback] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
   const loadSeq = useRef(0);
   const canManageSettings = Array.isArray(props.permissions) && props.permissions.includes("settings:manage");
+
+  function syncDraftsFromRules(data: Rules | null | undefined) {
+    if (!data) return;
+    if (data.maxSpendPercent != null) setSpendDraft(String(data.maxSpendPercent));
+    if (data.minPurchase != null) setMinDraft(String(data.minPurchase));
+    if (data.ttlDays != null) setTtlDraft(String(data.ttlDays));
+    if (Array.isArray(data.tiers) && data.tiers.length) {
+      setTierDrafts(
+        data.tiers.map((t) => ({
+          tier: String(t.tier || ""),
+          ratePercent: String(
+            t.rateBps != null
+              ? Math.round(Number(t.rateBps) / 100)
+              : Number(String(t.rate || "").replace("%", "")) || "",
+          ),
+          fromTotal: String(t.fromTotal ?? ""),
+        })),
+      );
+    }
+  }
 
   async function load() {
     const seq = ++loadSeq.current;
@@ -166,9 +192,7 @@ export function SettingsPage(props: {
         : { data: null, error: loadError(res.reason, key) };
     const nextRules = pick(r, "rules", (v) => (v && typeof v === "object" ? (v as Rules) : {}));
     setRules(nextRules);
-    if (nextRules.data?.maxSpendPercent != null) {
-      setSpendDraft(String(nextRules.data.maxSpendPercent));
-    }
+    syncDraftsFromRules(nextRules.data);
     setBranches(pick(b, "branches", (v) => (Array.isArray(v?.branches) ? (v.branches as BranchRow[]) : [])));
     setFom(pick(f, "fom", (v) => ({
       status: typeof v?.status === "string" ? v.status : undefined,
@@ -187,33 +211,73 @@ export function SettingsPage(props: {
     setLoading(false);
   }
 
-  async function saveSpendRatio() {
-    if (spendBusy) return;
-    const percent = Number(String(spendDraft).replace(",", ".").trim());
-    if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
-      setSpendFeedback({ tone: "danger", text: "Limit 0 dan katta va 100 dan oshmasligi kerak." });
-      setSpendConfirm(false);
-      return;
-    }
-    setSpendBusy(true);
-    setSpendFeedback(null);
+  async function patchCashback(body: Record<string, unknown>, okText: string) {
+    if (policyBusy) return;
+    setPolicyBusy(true);
+    setPolicyFeedback(null);
     try {
       const res = await request("/api/admin/settings/cashback", props.token || "", {
         method: "PATCH",
-        body: JSON.stringify({ maxSpendRatio: percent / 100 }),
+        body: JSON.stringify(body),
       });
-      const nextPercent = Number(res?.rules?.maxSpendPercent ?? Math.round(Number(res?.next) * 100));
+      const nextRules = (res?.rules && typeof res.rules === "object" ? res.rules : {}) as Rules;
       setRules((prev) => ({
-        data: { ...(prev.data || {}), ...(res?.rules || {}), maxSpendPercent: nextPercent },
+        data: { ...(prev.data || {}), ...nextRules },
         error: null,
       }));
-      setSpendDraft(String(nextPercent));
-      setSpendFeedback({ tone: "ok", text: `Cashback limiti ${nextPercent}% ga yangilandi.` });
+      syncDraftsFromRules(nextRules);
+      setPolicyFeedback({ tone: "ok", text: okText });
     } catch {
-      setSpendFeedback({ tone: "danger", text: "Limitni saqlab bo‘lmadi. Ruxsat va aloqani tekshiring." });
+      setPolicyFeedback({ tone: "danger", text: "Sozlamani saqlab bo‘lmadi. Ruxsat va aloqani tekshiring." });
     } finally {
-      setSpendBusy(false);
-      setSpendConfirm(false);
+      setPolicyBusy(false);
+      setConfirmKind(null);
+    }
+  }
+
+  async function saveConfirm() {
+    if (confirmKind === "spend") {
+      const percent = Number(String(spendDraft).replace(",", ".").trim());
+      if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+        setPolicyFeedback({ tone: "danger", text: "Limit 0 dan katta va 100 dan oshmasligi kerak." });
+        setConfirmKind(null);
+        return;
+      }
+      await patchCashback({ maxSpendRatio: percent / 100 }, `Cashback limiti ${percent}% ga yangilandi.`);
+      return;
+    }
+    if (confirmKind === "min") {
+      const min = Math.floor(Number(String(minDraft).replace(/\s/g, "").replace(",", ".")));
+      if (!Number.isFinite(min) || min <= 0 || min > 10_000_000) {
+        setPolicyFeedback({ tone: "danger", text: "Minimal xarid 1–10 000 000 so‘m oralig‘ida." });
+        setConfirmKind(null);
+        return;
+      }
+      await patchCashback({ minPurchase: min }, `Minimal xarid ${money(min)} ga yangilandi.`);
+      return;
+    }
+    if (confirmKind === "ttl") {
+      const days = Math.floor(Number(String(ttlDraft).replace(",", ".")));
+      if (!Number.isFinite(days) || days < 7 || days > 365) {
+        setPolicyFeedback({ tone: "danger", text: "TTL 7–365 kun oralig‘ida bo‘lishi kerak." });
+        setConfirmKind(null);
+        return;
+      }
+      await patchCashback({ ttlDays: days }, `TTL ${days} kun (faqat yangi grantlar).`);
+      return;
+    }
+    if (confirmKind === "tiers") {
+      if (tierDrafts.length !== 3) {
+        setPolicyFeedback({ tone: "danger", text: "Aniq 3 ta daraja kerak." });
+        setConfirmKind(null);
+        return;
+      }
+      const tiers = tierDrafts.map((t) => ({
+        tier: t.tier,
+        rateBps: Math.round(Number(String(t.ratePercent).replace(",", ".")) * 100),
+        fromTotal: Math.floor(Number(String(t.fromTotal).replace(/\s/g, "").replace(",", "."))),
+      }));
+      await patchCashback({ tiers }, "Loyalty darajalari yangilandi.");
     }
   }
 
@@ -255,11 +319,11 @@ export function SettingsPage(props: {
               className="st-header-hint"
               title={
                 canManageSettings
-                  ? "Cashback ishlatish limitini shu yerdan o‘zgartirish mumkin. Boshqa qiymatlar o‘z server manbasidan o‘qiladi."
-                  : "Ko‘p qiymatlar o‘qish uchun. Cashback limitini o‘zgartirish uchun settings:manage kerak."
+                  ? "Cashback limit, minimal xarid, TTL va 3 darajani shu yerdan o‘zgartirish mumkin (settings:manage)."
+                  : "Ko‘p qiymatlar o‘qish uchun. Cashback sozlamalarini o‘zgartirish uchun settings:manage kerak."
               }
             >
-              {canManageSettings ? "Cashback limitti tahrirlash mumkin" : "Aksariyat qiymatlar faqat ko‘rish"}
+              {canManageSettings ? "Cashback siyosatini tahrirlash mumkin" : "Aksariyat qiymatlar faqat ko‘rish"}
             </span>
             {checkedAt ? (
               <span className="st-intro-time" title="Oxirgi server tekshiruvi (Asia/Tashkent)">
@@ -327,9 +391,15 @@ export function SettingsPage(props: {
                   canManage={canManageSettings}
                   spendDraft={spendDraft}
                   onSpendDraft={setSpendDraft}
-                  onRequestSave={() => setSpendConfirm(true)}
-                  busy={spendBusy}
-                  feedback={spendFeedback}
+                  minDraft={minDraft}
+                  onMinDraft={setMinDraft}
+                  ttlDraft={ttlDraft}
+                  onTtlDraft={setTtlDraft}
+                  tierDrafts={tierDrafts}
+                  onTierDrafts={setTierDrafts}
+                  onRequestSave={(kind) => setConfirmKind(kind)}
+                  busy={policyBusy}
+                  feedback={policyFeedback}
                 />
               ) : null}
             </Section>
@@ -473,15 +543,31 @@ export function SettingsPage(props: {
       )}
 
       <ConfirmDialog
-        open={spendConfirm}
-        title="Cashback limitti saqlash"
-        description={`Ishlatish limiti ${String(spendDraft).trim()}% ga o‘zgartiriladi. Bu barcha yangi buyurtma va kassa hisob-kitoblariga ta’sir qiladi.`}
+        open={confirmKind != null}
+        title={
+          confirmKind === "spend"
+            ? "Cashback limitti saqlash"
+            : confirmKind === "min"
+              ? "Minimal xaridni saqlash"
+              : confirmKind === "ttl"
+                ? "TTL muddatini saqlash"
+                : "Loyalty darajalarini saqlash"
+        }
+        description={
+          confirmKind === "spend"
+            ? `Ishlatish limiti ${String(spendDraft).trim()}% ga o‘zgartiriladi. Yangi buyurtma va kassa hisob-kitoblariga ta’sir qiladi.`
+            : confirmKind === "min"
+              ? `Minimal xarid ${String(minDraft).trim()} so‘m bo‘ladi.`
+              : confirmKind === "ttl"
+                ? `TTL ${String(ttlDraft).trim()} kun. Faqat yangi cashback grantlarga ta’sir qiladi — mavjud muddatlar o‘zgarmaydi.`
+                : "Silver / Gold / Platinum foiz va chegaralari yangilanadi. Yangi daraja qo‘shib bo‘lmaydi."
+        }
         confirmLabel="Saqlash"
-        busy={spendBusy}
+        busy={policyBusy}
         onCancel={() => {
-          if (!spendBusy) setSpendConfirm(false);
+          if (!policyBusy) setConfirmKind(null);
         }}
-        onConfirm={() => void saveSpendRatio()}
+        onConfirm={() => void saveConfirm()}
       />
     </div>
   );
@@ -564,7 +650,13 @@ function CashbackRows(props: {
   canManage?: boolean;
   spendDraft?: string;
   onSpendDraft?: (v: string) => void;
-  onRequestSave?: () => void;
+  minDraft?: string;
+  onMinDraft?: (v: string) => void;
+  ttlDraft?: string;
+  onTtlDraft?: (v: string) => void;
+  tierDrafts?: TierDraft[];
+  onTierDrafts?: (rows: TierDraft[]) => void;
+  onRequestSave?: (kind: Exclude<ConfirmKind, null>) => void;
   busy?: boolean;
   feedback?: { tone: "ok" | "danger"; text: string } | null;
 }) {
@@ -573,6 +665,11 @@ function CashbackRows(props: {
   const minPurchase = finite(r.minPurchase);
   const ttlDays = finite(r.ttlDays);
   const tiers = Array.isArray(r.tiers) ? r.tiers : [];
+  const feedback = props.feedback ? (
+    <span className={`st-edit-feedback is-${props.feedback.tone}`} role="status">
+      {props.feedback.text}
+    </span>
+  ) : null;
   return (
     <>
       <SettingRow
@@ -598,37 +695,99 @@ function CashbackRows(props: {
               disabled={props.busy}
               onChange={(e) => props.onSpendDraft?.(e.target.value)}
             />
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={props.busy}
-              onClick={() => props.onRequestSave?.()}
-            >
+            <button type="button" className="btn-secondary" disabled={props.busy} onClick={() => props.onRequestSave?.("spend")}>
               Saqlash
             </button>
-            {props.feedback ? (
-              <span className={`st-edit-feedback is-${props.feedback.tone}`} role="status">
-                {props.feedback.text}
-              </span>
-            ) : null}
+            {feedback}
           </div>
         ) : null}
       </SettingRow>
       <SettingRow
         icon={<ShoppingBag size={15} aria-hidden="true" />}
         title="Minimal xarid summasi"
-        source="Server kodi · o‘zgarmas qiymat"
+        source="PATCH /api/admin/settings/cashback · system_settings"
         value={minPurchase != null ? money(minPurchase) : null}
-        action={props.openLink("cashback", "Ko‘rish")}
-      />
+        action={props.canManage ? null : props.openLink("cashback", "Ko‘rish")}
+      >
+        {props.canManage ? (
+          <div className="st-edit-row">
+            <label className="st-edit-label" htmlFor="st-min-purchase">
+              So‘m
+            </label>
+            <input
+              id="st-min-purchase"
+              className="st-edit-input"
+              type="number"
+              min={1}
+              max={10000000}
+              step={1000}
+              value={props.minDraft ?? ""}
+              disabled={props.busy}
+              onChange={(e) => props.onMinDraft?.(e.target.value)}
+            />
+            <button type="button" className="btn-secondary" disabled={props.busy} onClick={() => props.onRequestSave?.("min")}>
+              Saqlash
+            </button>
+          </div>
+        ) : null}
+      </SettingRow>
       <SettingRow
         icon={<Sliders size={15} aria-hidden="true" />}
         title="Loyalty darajalari"
-        source="Server kodi · o‘zgarmas qiymat"
+        source="PATCH /api/admin/settings/cashback · fixed Silver/Gold/Platinum"
         value={tiers.length ? `${tiers.length} ta daraja` : null}
-        action={props.openLink("cashback", "Darajalar")}
+        action={props.canManage ? null : props.openLink("cashback", "Darajalar")}
+        desc="Faqat foiz va chegarani o‘zgartirish mumkin — yangi daraja qo‘shib / o‘chirib bo‘lmaydi."
       >
-        {tiers.length ? (
+        {props.canManage && props.tierDrafts?.length ? (
+          <div className="st-tiers-edit">
+            {props.tierDrafts.map((t, i) => (
+              <div key={t.tier || i} className="st-edit-row st-tier-edit-row">
+                <strong className="st-tier-name">{t.tier}</strong>
+                <label className="st-edit-label" htmlFor={`st-tier-rate-${i}`}>
+                  %
+                </label>
+                <input
+                  id={`st-tier-rate-${i}`}
+                  className="st-edit-input"
+                  type="number"
+                  min={1}
+                  max={20}
+                  step={0.1}
+                  value={t.ratePercent}
+                  disabled={props.busy}
+                  onChange={(e) => {
+                    const next = props.tierDrafts!.map((row, idx) =>
+                      idx === i ? { ...row, ratePercent: e.target.value } : row,
+                    );
+                    props.onTierDrafts?.(next);
+                  }}
+                />
+                <label className="st-edit-label" htmlFor={`st-tier-from-${i}`}>
+                  dan (so‘m)
+                </label>
+                <input
+                  id={`st-tier-from-${i}`}
+                  className="st-edit-input"
+                  type="number"
+                  min={0}
+                  step={1000}
+                  value={t.fromTotal}
+                  disabled={props.busy}
+                  onChange={(e) => {
+                    const next = props.tierDrafts!.map((row, idx) =>
+                      idx === i ? { ...row, fromTotal: e.target.value } : row,
+                    );
+                    props.onTierDrafts?.(next);
+                  }}
+                />
+              </div>
+            ))}
+            <button type="button" className="btn-secondary" disabled={props.busy} onClick={() => props.onRequestSave?.("tiers")}>
+              Darajalarni saqlash
+            </button>
+          </div>
+        ) : tiers.length ? (
           <div className="st-tiers-bar">
             {tiers.map((t, i) => (
               <span key={`${t.tier || "tier"}-${i}`} className="st-tier-tag">
@@ -641,21 +800,39 @@ function CashbackRows(props: {
       <SettingRow
         icon={<Clock size={15} aria-hidden="true" />}
         title="Cashback amal qilish muddati"
-        source="Server kodi · FIFO grant + worker"
-        desc={
-          r.ttlEnforced
-            ? "Yangi hisoblangan cashback muddati o‘tgach EXPIRE yozuvi bilan hisobdan chiqadi. Oldingi qoldiq grandfathered."
-            : "Muddati o‘tgan cashbackni hisobdan chiqaradigan server jarayoni hozircha yo‘q."
-        }
+        source="PATCH /api/admin/settings/cashback · yangi grantlar"
+        desc="Faqat yangi cashback grantlarga. Mavjud expires_at qayta hisoblanmaydi. Muddati o‘tgach FIFO worker EXPIRE yozadi."
         value={ttlDays != null ? `${ttlDays} kun` : null}
         status={
           ttlDays != null
             ? r.ttlEnforced
-              ? { tone: "ok", label: "FIFO qo‘llanadi" }
+              ? { tone: "ok", label: "Yangi grantlarga" }
               : { tone: "warn", label: "Serverda qo‘llanmaydi" }
             : undefined
         }
-      />
+      >
+        {props.canManage ? (
+          <div className="st-edit-row">
+            <label className="st-edit-label" htmlFor="st-ttl-days">
+              Kun
+            </label>
+            <input
+              id="st-ttl-days"
+              className="st-edit-input"
+              type="number"
+              min={7}
+              max={365}
+              step={1}
+              value={props.ttlDraft ?? ""}
+              disabled={props.busy}
+              onChange={(e) => props.onTtlDraft?.(e.target.value)}
+            />
+            <button type="button" className="btn-secondary" disabled={props.busy} onClick={() => props.onRequestSave?.("ttl")}>
+              Saqlash
+            </button>
+          </div>
+        ) : null}
+      </SettingRow>
     </>
   );
 }

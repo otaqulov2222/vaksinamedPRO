@@ -37,7 +37,7 @@ import {
   earnCashback,
   useCashback as applyCashbackUse,
   reverseOrderUseOnCancel,
-  getMaxSpendRatio,
+  getCashbackPolicy,
   refundOrderCashback,
   getAuthoritativeBalance,
 } from "../lib/cashbackFinance";
@@ -431,7 +431,8 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
     }
 
     const deliveryFee = fulfillment === "delivery" ? DELIVERY_FEE : 0;
-    const maxSpendRatio = await getMaxSpendRatio();
+    const cashbackPolicy = await getCashbackPolicy();
+    const maxSpendRatio = cashbackPolicy.maxSpendRatio;
     const expiresAt = new Date(Date.now() + RESERVE_HOURS * 60 * 60 * 1000);
     const reservedUntil = fulfillment === "pickup" ? expiresAt : null;
     const axes = initialAxesForCheckout({ fulfillment, paymentMethod });
@@ -488,6 +489,8 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
         deliveryFee,
         maxSpendRatio,
         extraBps,
+        minPurchase: cashbackPolicy.minPurchase,
+        tiers: cashbackPolicy.tiers,
       });
       let cashbackUsed = useCashback ? calc.cashbackUsed : 0;
       let cashbackEarned = calc.cashbackEarned;
@@ -619,6 +622,8 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
             deliveryFee,
             maxSpendRatio,
             extraBps,
+            minPurchase: cashbackPolicy.minPurchase,
+            tiers: cashbackPolicy.tiers,
           });
           cashbackUsed = actualUsed;
           cashbackEarned = recalc.cashbackEarned;

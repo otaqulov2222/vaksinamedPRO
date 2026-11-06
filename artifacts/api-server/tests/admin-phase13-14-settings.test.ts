@@ -1,7 +1,7 @@
 /**
- * Admin Phase 13.14 — Settings console + HQ cashback spend write.
- *   GET /api/cashback/rules (public)        — maxSpendPercent (system_settings), minPurchase / ttlDays / tiers (code constants)
- *   PATCH /api/admin/settings/cashback      — settings:manage; upsert cashback.max_spend_ratio
+ * Admin Phase 13.14 — Settings console + HQ cashback policy write (Phase B).
+ *   GET /api/cashback/rules (public)        — policy from system_settings (spend/min/ttl/tiers)
+ *   PATCH /api/admin/settings/cashback      — settings:manage; partial upsert of policy keys
  *   GET /api/admin/branches (branches:read) — isOpen / is24h / hasPayme / hasClick; merchant secrets masked
  *   GET /api/integrations/fom/status (admin) — CONTRACT_PENDING, inventory writer OFF
  *   GET /api/healthz (public)               — database up/down + driver
@@ -11,7 +11,16 @@ import { describe, it } from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { publicCashbackRules, cashbackRateBps, rateLabel, nextTier } from "../src/lib/cashback";
+import {
+  publicCashbackRules,
+  cashbackRateBps,
+  rateLabel,
+  nextTier,
+  grantExpiryDate,
+  defaultCashbackPolicy,
+  CASHBACK_TTL_DAYS,
+} from "../src/lib/cashback";
+import { normalizeTiersInput } from "../src/lib/cashbackFinance";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(root, "../..");
@@ -56,12 +65,16 @@ const migrations = readdirSync(path.join(repoRoot, "lib/db/migrations"))
   .join("\n");
 
 describe("Admin Phase 13.14 Settings — real server contract", () => {
-  it("HQ cashback spend write upserts system_settings; no generic config API", () => {
+  it("HQ cashback policy write upserts system_settings; no generic config API", () => {
     assert.match(adminRoute, /router\.patch\("\/admin\/settings\/cashback"/);
     assert.match(adminRoute, /requirePermission\(user, "settings:manage"\)/);
     assert.match(adminRoute, /settings\.cashback_update/);
-    assert.match(finance, /export async function setMaxSpendRatio/);
+    assert.match(finance, /export async function setCashbackPolicy/);
+    assert.match(finance, /export async function getCashbackPolicy/);
     assert.match(finance, /insert\(systemSettings\)/);
+    assert.match(finance, /cashback\.min_purchase_uzs/);
+    assert.match(finance, /cashback\.ttl_days/);
+    assert.match(finance, /cashback\.tiers/);
     for (const { f, src } of routeSources) {
       assert.doesNotMatch(src, /router\.\w+\("\/(admin\/)?config\b/, f);
       assert.doesNotMatch(src, /router\.(post|put|patch|delete)\("\/cashback\/rules/, f);
@@ -70,12 +83,12 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
     assert.match(migrations, /'settings:manage'/);
   });
 
-  it("cashback rules: GET only, spend ratio from system_settings with the documented default", () => {
+  it("cashback rules: GET only, full policy from system_settings", () => {
     const route = between(integrations, 'router.get("/cashback/rules"', "\n});");
-    assert.match(route, /const ratio = await getMaxSpendRatio\(\);\s+res\.json\(publicCashbackRules\(ratio\)\);/);
-    const getter = between(finance, "export async function getMaxSpendRatio", "\n}\n");
-    assert.match(getter, /eq\(systemSettings\.key, "cashback\.max_spend_ratio"\)/);
-    assert.match(getter, /return DEFAULT_MAX_SPEND_RATIO;/);
+    assert.match(route, /const policy = await getCashbackPolicy\(\);\s+res\.json\(publicCashbackRules\(policy\)\);/);
+    assert.match(finance, /KEY_MAX_SPEND = "cashback\.max_spend_ratio"/);
+    assert.match(finance, /KEY_MIN_PURCHASE = "cashback\.min_purchase_uzs"/);
+    assert.match(finance, /KEY_TTL_DAYS = "cashback\.ttl_days"/);
   });
 
   it("publicCashbackRules runtime: percent comes from the ratio; tiers match the engine rates and thresholds", () => {
@@ -84,6 +97,8 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
     assert.equal(publicCashbackRules(1.7).maxSpendPercent, 100);
     assert.equal(publicCashbackRules(-1).maxSpendPercent, 30);
     assert.equal(rules.minPurchase, 1000);
+    assert.equal(rules.ttlDays, CASHBACK_TTL_DAYS);
+    assert.equal(rules.ttlAppliesTo, "new_grants_only");
     assert.equal(rules.deliveryFee, 15000);
     for (const t of rules.tiers) {
       assert.equal(t.rate, rateLabel(cashbackRateBps(t.tier)), t.tier);
@@ -94,10 +109,26 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
     }
   });
 
-  it("ttlDays is enforced via FIFO grants; settings page reflects server ttlEnforced", () => {
+  it("tier validation rejects wrong order / non-increasing fromTotal; grantExpiryDate uses injected ttl", () => {
+    assert.equal(normalizeTiersInput([{ tier: "Gold", rateBps: 500, fromTotal: 1 }], { soft: true }), null);
+    assert.throws(() => normalizeTiersInput([
+      { tier: "Silver", rateBps: 300, fromTotal: 200_000 },
+      { tier: "Gold", rateBps: 500, fromTotal: 100_000 },
+      { tier: "Platinum", rateBps: 700, fromTotal: 5_000_000 },
+    ]));
+    const ok = normalizeTiersInput(defaultCashbackPolicy().tiers);
+    assert.ok(ok);
+    assert.equal(ok![2].tier, "Platinum");
+    const from = new Date("2026-01-01T00:00:00.000Z");
+    assert.equal(grantExpiryDate(from, 30).toISOString(), "2026-01-31T00:00:00.000Z");
+    assert.equal(grantExpiryDate(from).getTime() - from.getTime(), CASHBACK_TTL_DAYS * 86400000);
+  });
+
+  it("ttlDays is enforced via FIFO grants on new earns; settings page reflects new-grants-only", () => {
     assert.match(finance, /expireDueCashbackGrants|cashbackGrants|ttl_90_days_expired/);
+    assert.match(finance, /ensureGrantForEarnEntry\(tx, entry, policy\.ttlDays\)/);
     assert.match(code, /ttlEnforced/);
-    assert.match(code, /FIFO qo‘llanadi/);
+    assert.match(code, /Yangi grantlarga|Faqat yangi cashback grantlarga/);
   });
 
   it("branches: branches:read before DB; merchant secrets are masked to booleans / •••• in the DTO", () => {
@@ -151,20 +182,26 @@ describe("Admin Phase 13.14 Settings — page reads only real sources", () => {
     assert.match(code, /request\("\/api\/admin\/settings\/cashback"/);
   });
 
-  it("spend ratio edit uses ConfirmDialog and PATCH; other rows stay view-only", () => {
+  it("spend/min/ttl/tiers edits use ConfirmDialog and PATCH", () => {
     assert.match(code, /ConfirmDialog/);
     assert.match(code, /method: "PATCH"/);
     assert.match(code, /id="st-spend-percent"/);
+    assert.match(code, /id="st-min-purchase"/);
+    assert.match(code, /id="st-ttl-days"/);
+    assert.match(code, /Darajalarni saqlash/);
     assert.match(code, /Saqlash/);
+    assert.match(code, /confirmKind === "ttl"/);
     assert.match(code, /const READ_ONLY = "Faqat ko‘rish — o‘zgartirish API mavjud emas";/);
     assert.match(code, /<span className="st-readonly" title=\{READ_ONLY\}>Faqat ko‘rish<\/span>/);
   });
 
-  it("display percent comes from server rules; PATCH sends ratio = percent / 100", () => {
+  it("display percent comes from server rules; PATCH sends policy fields", () => {
     assert.match(code, /value=\{maxSpendPercent != null \? `\$\{maxSpendPercent\}%` : null\}/);
     assert.match(code, /maxSpendRatio: percent \/ 100/);
+    assert.match(code, /minPurchase: min/);
+    assert.match(code, /ttlDays: days/);
+    assert.match(code, /rateBps: Math\.round/);
     assert.match(code, /money\(minPurchase\)/);
-    assert.match(code, /money\(Number\(t\.fromTotal\)\)/);
   });
 
   it("settings and balances stay separate", () => {
@@ -249,6 +286,6 @@ describe("Admin Phase 13.14 Settings — design system and docs", () => {
     assert.match(section, /system_settings/);
     assert.match(section, /PATCH \/api\/admin\/settings\/cashback/);
     assert.match(section, /settings:manage/);
-    assert.match(section, /read \+ cashback spend write|max_spend_ratio/);
+    assert.match(section, /min_purchase|ttl_days|tiers|Phase B/i);
   });
 });

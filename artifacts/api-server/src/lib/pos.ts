@@ -12,7 +12,8 @@ import {
 } from "./cashback";
 import { logger } from "./logger";
 import { isHqAdminRole, requireConfiguredSecret } from "./securityEnv";
-import { earnCashback, useCashback, reverseCashbackEntry, ensureCashbackAccount, getMaxSpendRatio, getAuthoritativeBalance } from "./cashbackFinance";
+import { earnCashback, useCashback, reverseCashbackEntry, ensureCashbackAccount, getCashbackPolicy, getAuthoritativeBalance } from "./cashbackFinance";
+import type { CashbackTierDef } from "./cashback";
 
 const POS_SECRET = requireConfiguredSecret(
   "POS_SECRET",
@@ -179,9 +180,13 @@ export async function resolveCustomerFromScan(raw: string) {
   throw Object.assign(new Error("QR yoki karta kodi noto‘g‘ri / muddati tugagan"), { status: 404 });
 }
 
-function customerPosView(customer: typeof customers.$inferSelect, authoritativeBalance?: number) {
+function customerPosView(
+  customer: typeof customers.$inferSelect,
+  authoritativeBalance?: number,
+  tiers?: CashbackTierDef[],
+) {
   const extra = birthdayExtraBps(customer.birthDate);
-  const bps = cashbackRateBps(customer.tier) + extra;
+  const bps = cashbackRateBps(customer.tier, tiers) + extra;
   return {
     id: customer.id,
     firstName: customer.firstName,
@@ -207,16 +212,21 @@ export function computePosPreview(input: {
   rateBps: number;
   tier?: string;
   maxSpendRatio?: number;
+  minPurchase?: number;
+  tiers?: CashbackTierDef[];
 }) {
+  const tierName =
+    input.tier || (input.rateBps >= 700 ? "Platinum" : input.rateBps >= 500 ? "Gold" : "Silver");
+  const baseBps = cashbackRateBps(tierName, input.tiers);
   const calc = computeCashback({
     goodsAmount: input.amount,
     cashbackToUse: input.cashbackToUse,
     balance: input.balance,
-    tier: input.tier || (input.rateBps >= 700 ? "Platinum" : input.rateBps >= 500 ? "Gold" : "Silver"),
+    tier: tierName,
     maxSpendRatio: input.maxSpendRatio,
-    extraBps: input.rateBps != null
-      ? Math.max(0, input.rateBps - cashbackRateBps(input.tier || (input.rateBps >= 700 ? "Platinum" : input.rateBps >= 500 ? "Gold" : "Silver")))
-      : 0,
+    minPurchase: input.minPurchase,
+    tiers: input.tiers,
+    extraBps: input.rateBps != null ? Math.max(0, input.rateBps - baseBps) : 0,
   });
   return {
     amount: calc.goodsAmount,
@@ -229,28 +239,31 @@ export function computePosPreview(input: {
     balanceAfter: input.balance - calc.cashbackUsed + calc.cashbackEarned,
     rateBps: calc.rateBps,
     cashbackRateLabel: calc.rateLabel,
-    minPurchase: MIN_PURCHASE_UZS,
+    minPurchase: input.minPurchase ?? MIN_PURCHASE_UZS,
   };
 }
 
 export async function lookupPosCustomer(qrRaw: string) {
   const { customer, source } = await resolveCustomerFromScan(qrRaw);
   const balance = await getAuthoritativeBalance(customer.id);
-  return { customer: customerPosView(customer, balance), scanSource: source };
+  const policy = await getCashbackPolicy();
+  return { customer: customerPosView(customer, balance, policy.tiers), scanSource: source };
 }
 
 export async function previewPosSale(input: { qr: string; amount: number; cashbackToUse?: number }) {
   const { customer, source } = await resolveCustomerFromScan(input.qr);
   const balance = await getAuthoritativeBalance(customer.id);
-  const view = customerPosView(customer, balance);
-  const maxSpendRatio = await getMaxSpendRatio();
+  const policy = await getCashbackPolicy();
+  const view = customerPosView(customer, balance, policy.tiers);
   const preview = computePosPreview({
     amount: input.amount,
     cashbackToUse: input.cashbackToUse ?? 0,
     balance,
     rateBps: view.rateBps,
     tier: customer.tier,
-    maxSpendRatio,
+    maxSpendRatio: policy.maxSpendRatio,
+    minPurchase: policy.minPurchase,
+    tiers: policy.tiers,
   });
   return { customer: view, preview, scanSource: source };
 }
@@ -281,20 +294,21 @@ export async function confirmPosSale(input: {
   const receiptId = String(input.receiptId || "").trim() || makeReceiptId(branchId);
 
   const existing = await db.select().from(posSales).where(eq(posSales.receiptId, receiptId)).limit(1);
+  const policy = await getCashbackPolicy();
   if (existing[0]) {
     const cust = (await db.select().from(customers).where(eq(customers.id, existing[0].customerId)).limit(1))[0];
     const bal = cust ? await getAuthoritativeBalance(cust.id) : undefined;
     return {
       idempotent: true,
       sale: existing[0],
-      customer: cust ? customerPosView(cust, bal) : null,
+      customer: cust ? customerPosView(cust, bal, policy.tiers) : null,
       receipt: serializeReceipt(existing[0], cust, branch, bal),
     };
   }
 
   const { customer } = await resolveCustomerFromScan(input.qr);
   const balance = await getAuthoritativeBalance(customer.id);
-  const view = customerPosView(customer, balance);
+  const view = customerPosView(customer, balance, policy.tiers);
   await ensureCashbackAccount(customer.id);
   const fresh = (await db.select().from(customers).where(eq(customers.id, customer.id)).limit(1))[0];
   if (!fresh) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
@@ -305,7 +319,9 @@ export async function confirmPosSale(input: {
     balance,
     rateBps: view.rateBps,
     tier: customer.tier,
-    maxSpendRatio: await getMaxSpendRatio(),
+    maxSpendRatio: policy.maxSpendRatio,
+    minPurchase: policy.minPurchase,
+    tiers: policy.tiers,
   });
 
   if (balance < preview.cashbackUsed) {
@@ -362,7 +378,7 @@ export async function confirmPosSale(input: {
         purchasesCount: fresh.purchasesCount + 1,
         totalPurchases: fresh.totalPurchases + preview.amount,
         savedAmount: fresh.savedAmount + preview.cashbackEarned,
-        tier: nextTier(fresh.totalPurchases + preview.amount, fresh.tier),
+        tier: nextTier(fresh.totalPurchases + preview.amount, fresh.tier, policy.tiers),
       }).where(eq(customers.id, fresh.id));
 
       await executor.insert(posSales).values({

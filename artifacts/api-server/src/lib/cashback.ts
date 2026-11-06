@@ -28,13 +28,54 @@ export const CASHBACK_RATE = 0.05;
 
 export type CashbackTier = "Silver" | "Gold" | "Platinum";
 
-/** Basis points: 500 = 5.00% */
-export function cashbackRateBps(tier: string): number {
-  const t = String(tier || "").toLowerCase();
-  if (t.includes("platinum") || t.includes("platina")) return 700;
-  if (t.includes("gold") || t.includes("oltin")) return 500;
-  if (t.includes("silver") || t.includes("kumush")) return 300;
-  return 500;
+export type CashbackTierDef = {
+  tier: CashbackTier;
+  rateBps: number;
+  fromTotal: number;
+};
+
+export type CashbackPolicy = {
+  maxSpendRatio: number;
+  minPurchase: number;
+  ttlDays: number;
+  tiers: CashbackTierDef[];
+};
+
+export const FIXED_TIER_NAMES: CashbackTier[] = ["Silver", "Gold", "Platinum"];
+
+export const DEFAULT_TIERS: CashbackTierDef[] = [
+  { tier: "Silver", rateBps: 300, fromTotal: 200_000 },
+  { tier: "Gold", rateBps: 500, fromTotal: 1_000_000 },
+  { tier: "Platinum", rateBps: 700, fromTotal: 5_000_000 },
+];
+
+export function defaultCashbackPolicy(): CashbackPolicy {
+  return {
+    maxSpendRatio: DEFAULT_MAX_SPEND_RATIO,
+    minPurchase: MIN_PURCHASE_UZS,
+    ttlDays: CASHBACK_TTL_DAYS,
+    tiers: DEFAULT_TIERS.map((t) => ({ ...t })),
+  };
+}
+
+/** Basis points: 500 = 5.00%. Optional policy tiers override the built-in rates. */
+export function cashbackRateBps(tier: string, tiers: CashbackTierDef[] = DEFAULT_TIERS): number {
+  const name = String(tier || "").toLowerCase();
+  for (const row of tiers) {
+    const label = row.tier.toLowerCase();
+    if (name === label || name.includes(label)) return row.rateBps;
+  }
+  // Legacy Uzbek aliases when matching against default names
+  if (name.includes("platinum") || name.includes("platina")) {
+    return tiers.find((t) => t.tier === "Platinum")?.rateBps ?? 700;
+  }
+  if (name.includes("gold") || name.includes("oltin")) {
+    return tiers.find((t) => t.tier === "Gold")?.rateBps ?? 500;
+  }
+  if (name.includes("silver") || name.includes("kumush")) {
+    return tiers.find((t) => t.tier === "Silver")?.rateBps ?? 300;
+  }
+  return tiers.find((t) => t.tier === "Gold")?.rateBps ?? 500;
 }
 
 export function rateLabel(bps: number) {
@@ -81,15 +122,21 @@ export function computeCashback(input: {
   deliveryFee?: number;
   maxSpendRatio?: number;
   extraBps?: number;
+  minPurchase?: number;
+  tiers?: CashbackTierDef[];
 }) {
   const goodsAmount = Math.max(0, Math.floor(Number(input.goodsAmount) || 0));
   const deliveryFee = Math.max(0, Math.floor(Number(input.deliveryFee) || 0));
   const extra = Math.max(0, Math.floor(Number(input.extraBps) || 0));
-  const bps = cashbackRateBps(input.tier) + extra;
+  const minPurchase = Math.max(
+    0,
+    Math.floor(Number(input.minPurchase ?? MIN_PURCHASE_UZS) || MIN_PURCHASE_UZS),
+  );
+  const bps = cashbackRateBps(input.tier, input.tiers) + extra;
 
-  if (goodsAmount < MIN_PURCHASE_UZS) {
+  if (goodsAmount < minPurchase) {
     throw Object.assign(
-      new Error(`Minimal xarid: ${MIN_PURCHASE_UZS.toLocaleString("uz-UZ")} so‘m`),
+      new Error(`Minimal xarid: ${minPurchase.toLocaleString("uz-UZ")} so‘m`),
       { status: 400 },
     );
   }
@@ -153,26 +200,33 @@ export function earnTriggerLabel(trigger: EarnTrigger) {
   }
 }
 
-export function publicCashbackRules(maxSpendRatio: number = DEFAULT_MAX_SPEND_RATIO) {
-  const ratio = normalizeSpendRatio(maxSpendRatio);
+/** Accept full policy or legacy maxSpendRatio number. */
+export function publicCashbackRules(policyOrRatio: CashbackPolicy | number = DEFAULT_MAX_SPEND_RATIO) {
+  const policy: CashbackPolicy =
+    typeof policyOrRatio === "number"
+      ? { ...defaultCashbackPolicy(), maxSpendRatio: normalizeSpendRatio(policyOrRatio) }
+      : policyOrRatio;
+  const ratio = normalizeSpendRatio(policy.maxSpendRatio);
   return {
     title: "Vaksina Med — Universal Cashback",
-    ttlDays: CASHBACK_TTL_DAYS,
+    ttlDays: policy.ttlDays,
     ttlEnforced: true,
+    ttlAppliesTo: "new_grants_only" as const,
     fifo: true,
     welcomeBonus: WELCOME_BONUS_UZS,
     birthdayWindowDays: BIRTHDAY_WINDOW_DAYS,
     birthdayExtraBps: BIRTHDAY_EXTRA_BPS,
     birthdayExtraPercent: Math.round(BIRTHDAY_EXTRA_BPS / 100),
-    minPurchase: MIN_PURCHASE_UZS,
+    minPurchase: policy.minPurchase,
     maxSpendRatio: ratio,
     maxSpendPercent: Math.round(ratio * 100),
     deliveryFee: DELIVERY_FEE,
-    tiers: [
-      { tier: "Silver", rate: "3%", fromTotal: 200_000 },
-      { tier: "Gold", rate: "5%", fromTotal: 1_000_000 },
-      { tier: "Platinum", rate: "7%", fromTotal: 5_000_000 },
-    ],
+    tiers: policy.tiers.map((t) => ({
+      tier: t.tier,
+      rate: rateLabel(t.rateBps),
+      rateBps: t.rateBps,
+      fromTotal: t.fromTotal,
+    })),
     earnWhen: [
       "Yakunlangan xaridlar (tijorat tranzaksiyasi) — to‘lov usuli emas, yakunlanish muhim",
       "Dorixona kassasi (POS/FOM): QR bilan xarid tasdiqlanganda",
@@ -201,23 +255,28 @@ export function publicCashbackRules(maxSpendRatio: number = DEFAULT_MAX_SPEND_RA
   };
 }
 
-export function nextTier(totalPurchases: number, current: string) {
-  if (totalPurchases >= 5_000_000) return "Platinum";
-  if (totalPurchases >= 1_000_000) return "Gold";
-  if (totalPurchases >= 200_000) return "Silver";
+export function nextTier(
+  totalPurchases: number,
+  current: string,
+  tiers: CashbackTierDef[] = DEFAULT_TIERS,
+): string {
+  const spent = Math.max(0, Math.floor(Number(totalPurchases) || 0));
+  const sorted = [...tiers].sort((a, b) => b.fromTotal - a.fromTotal);
+  for (const t of sorted) {
+    if (spent >= t.fromTotal) return t.tier;
+  }
   return current || "Silver";
 }
 
-const TIER_THRESHOLDS: Array<{ tier: CashbackTier; fromTotal: number }> = [
-  { tier: "Silver", fromTotal: 200_000 },
-  { tier: "Gold", fromTotal: 1_000_000 },
-  { tier: "Platinum", fromTotal: 5_000_000 },
-];
-
-export function tierProgress(totalPurchases: number, current: string) {
+export function tierProgress(
+  totalPurchases: number,
+  current: string,
+  tiers: CashbackTierDef[] = DEFAULT_TIERS,
+) {
   const spent = Math.max(0, Math.floor(Number(totalPurchases) || 0));
-  const currentTier = nextTier(spent, current);
-  const next = TIER_THRESHOLDS.find((t) => spent < t.fromTotal) || null;
+  const ascending = [...tiers].sort((a, b) => a.fromTotal - b.fromTotal);
+  const currentTier = nextTier(spent, current, tiers);
+  const next = ascending.find((t) => spent < t.fromTotal) || null;
   const remaining = next ? Math.max(0, next.fromTotal - spent) : 0;
   const progress = next ? Math.min(1, Math.max(0, spent / Math.max(1, next.fromTotal))) : 1;
   return {
@@ -263,6 +322,8 @@ export function birthdayExtraBps(birthDate: string | Date | null | undefined, no
   return isBirthdayWindow(birthDate, now) ? BIRTHDAY_EXTRA_BPS : 0;
 }
 
-export function grantExpiryDate(from = new Date()): Date {
-  return new Date(from.getTime() + CASHBACK_TTL_DAYS * 24 * 60 * 60 * 1000);
+/** New grants only — existing expires_at rows are never rewritten by TTL policy changes. */
+export function grantExpiryDate(from = new Date(), ttlDays: number = CASHBACK_TTL_DAYS): Date {
+  const days = Number.isFinite(ttlDays) && ttlDays > 0 ? Math.floor(ttlDays) : CASHBACK_TTL_DAYS;
+  return new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
 }
