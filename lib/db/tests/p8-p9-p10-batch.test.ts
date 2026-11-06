@@ -231,7 +231,8 @@ describe("P8–P10 accelerated batch", () => {
     assert.doesNotMatch(payments, /\/deliveries\/:orderId\/status/);
     const deliveries = readFileSync(path.join(apiRoot, "src/routes/deliveries.ts"), "utf8");
     assert.match(deliveries, /\/deliveries\/:orderId\/status/);
-    assert.match(deliveries, /assertBranchScope/);
+    // Home delivery is disabled network-wide: routes only gate on permission and return DELIVERY_DISABLED.
+    assert.match(deliveries, /DELIVERY_DISABLED|deliveryDisabled/);
     assert.match(deliveries, /delivery:update/);
   });
 });
