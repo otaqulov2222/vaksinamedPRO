@@ -3,7 +3,13 @@ import { eq } from "drizzle-orm";
 import { customers, db, rewards } from "@workspace/db";
 import { requireCustomer } from "../lib/auth";
 import { loyaltyCardNumber, publicQrCode } from "../lib/pos";
-import { earnCashback, useCashback, getAuthoritativeBalance, getCashbackGrantSummary } from "../lib/cashbackFinance";
+import {
+  earnCashback,
+  useCashback,
+  getAuthoritativeBalance,
+  getCashbackGrantSummary,
+  getCashbackPolicy,
+} from "../lib/cashbackFinance";
 import { getCustomerCashbackHistory } from "../lib/cashbackHistory";
 import { birthdayExtraBps, isBirthdayWindow, tierProgress } from "../lib/cashback";
 import { allowDemoCashbackSeed } from "../lib/securityEnv";
@@ -68,7 +74,12 @@ async function profileFor(telegramId: string) {
   const catalog = await db.select().from(rewards);
   const balance = await getAuthoritativeBalance(customer.id);
   const grants = await getCashbackGrantSummary(customer.id);
-  const extraBps = birthdayExtraBps(customer.birthDate);
+  const policy = await getCashbackPolicy();
+  const birthdayOpts = {
+    windowDays: policy.birthdayWindowDays,
+    extraBps: policy.birthdayExtraBps,
+  };
+  const extraBps = birthdayExtraBps(customer.birthDate, new Date(), birthdayOpts);
   return {
     telegramId: customer.telegramId,
     firstName: customer.firstName,
@@ -81,9 +92,9 @@ async function profileFor(telegramId: string) {
     totalPurchases: customer.totalPurchases,
     savedAmount: customer.savedAmount,
     birthDate: customer.birthDate ?? null,
-    birthdayActive: isBirthdayWindow(customer.birthDate),
+    birthdayActive: isBirthdayWindow(customer.birthDate, new Date(), policy.birthdayWindowDays),
     birthdayExtraBps: extraBps,
-    tierProgress: tierProgress(customer.totalPurchases, customer.tier),
+    tierProgress: tierProgress(customer.totalPurchases, customer.tier, policy.tiers),
     grants,
     qrCode: publicQrCode(customer.id),
     cardNumber: loyaltyCardNumber(customer.id),

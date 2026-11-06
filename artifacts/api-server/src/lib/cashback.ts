@@ -39,6 +39,10 @@ export type CashbackPolicy = {
   minPurchase: number;
   ttlDays: number;
   tiers: CashbackTierDef[];
+  welcomeBonus: number;
+  birthdayWindowDays: number;
+  birthdayExtraBps: number;
+  deliveryFee: number;
 };
 
 export const FIXED_TIER_NAMES: CashbackTier[] = ["Silver", "Gold", "Platinum"];
@@ -55,6 +59,10 @@ export function defaultCashbackPolicy(): CashbackPolicy {
     minPurchase: MIN_PURCHASE_UZS,
     ttlDays: CASHBACK_TTL_DAYS,
     tiers: DEFAULT_TIERS.map((t) => ({ ...t })),
+    welcomeBonus: WELCOME_BONUS_UZS,
+    birthdayWindowDays: BIRTHDAY_WINDOW_DAYS,
+    birthdayExtraBps: BIRTHDAY_EXTRA_BPS,
+    deliveryFee: DELIVERY_FEE,
   };
 }
 
@@ -213,14 +221,14 @@ export function publicCashbackRules(policyOrRatio: CashbackPolicy | number = DEF
     ttlEnforced: true,
     ttlAppliesTo: "new_grants_only" as const,
     fifo: true,
-    welcomeBonus: WELCOME_BONUS_UZS,
-    birthdayWindowDays: BIRTHDAY_WINDOW_DAYS,
-    birthdayExtraBps: BIRTHDAY_EXTRA_BPS,
-    birthdayExtraPercent: Math.round(BIRTHDAY_EXTRA_BPS / 100),
+    welcomeBonus: policy.welcomeBonus,
+    birthdayWindowDays: policy.birthdayWindowDays,
+    birthdayExtraBps: policy.birthdayExtraBps,
+    birthdayExtraPercent: Math.round(policy.birthdayExtraBps / 100),
     minPurchase: policy.minPurchase,
     maxSpendRatio: ratio,
     maxSpendPercent: Math.round(ratio * 100),
-    deliveryFee: DELIVERY_FEE,
+    deliveryFee: policy.deliveryFee,
     tiers: policy.tiers.map((t) => ({
       tier: t.tier,
       rate: rateLabel(t.rateBps),
@@ -306,20 +314,32 @@ function parseBirthDate(raw: string | Date | null | undefined): { month: number;
   return { month, day };
 }
 
-export function isBirthdayWindow(birthDate: string | Date | null | undefined, now = new Date()): boolean {
+export function isBirthdayWindow(
+  birthDate: string | Date | null | undefined,
+  now = new Date(),
+  windowDays: number = BIRTHDAY_WINDOW_DAYS,
+): boolean {
   const parsed = parseBirthDate(birthDate);
   if (!parsed) return false;
+  const days =
+    Number.isFinite(windowDays) && windowDays > 0 ? Math.floor(windowDays) : BIRTHDAY_WINDOW_DAYS;
   const startThis = new Date(now.getFullYear(), parsed.month, parsed.day);
   const startLast = new Date(now.getFullYear() - 1, parsed.month, parsed.day);
   const endThis = new Date(startThis);
-  endThis.setDate(endThis.getDate() + BIRTHDAY_WINDOW_DAYS);
+  endThis.setDate(endThis.getDate() + days);
   const endLast = new Date(startLast);
-  endLast.setDate(endLast.getDate() + BIRTHDAY_WINDOW_DAYS);
+  endLast.setDate(endLast.getDate() + days);
   return (now >= startThis && now < endThis) || (now >= startLast && now < endLast);
 }
 
-export function birthdayExtraBps(birthDate: string | Date | null | undefined, now = new Date()): number {
-  return isBirthdayWindow(birthDate, now) ? BIRTHDAY_EXTRA_BPS : 0;
+export function birthdayExtraBps(
+  birthDate: string | Date | null | undefined,
+  now = new Date(),
+  opts?: { windowDays?: number; extraBps?: number },
+): number {
+  const windowDays = opts?.windowDays ?? BIRTHDAY_WINDOW_DAYS;
+  const extra = opts?.extraBps ?? BIRTHDAY_EXTRA_BPS;
+  return isBirthdayWindow(birthDate, now, windowDays) ? Math.max(0, Math.floor(Number(extra) || 0)) : 0;
 }
 
 /** New grants only — existing expires_at rows are never rewritten by TTL policy changes. */

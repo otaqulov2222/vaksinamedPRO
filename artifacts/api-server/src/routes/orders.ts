@@ -18,7 +18,7 @@ import {
   fiscalCheques,
 } from "@workspace/db";
 import { requireAdmin, requireCustomer } from "../lib/auth";
-import { DELIVERY_FEE, RESERVE_HOURS, formatDate, orderCode, computeCashback } from "../lib/money";
+import { RESERVE_HOURS, formatDate, orderCode, computeCashback } from "../lib/money";
 import { birthdayExtraBps } from "../lib/cashback";
 import { createBranchPayment } from "../lib/payments";
 import { confirmFomSale } from "../lib/fom";
@@ -430,8 +430,8 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
       }
     }
 
-    const deliveryFee = fulfillment === "delivery" ? DELIVERY_FEE : 0;
     const cashbackPolicy = await getCashbackPolicy();
+    const deliveryFee = fulfillment === "delivery" ? cashbackPolicy.deliveryFee : 0;
     const maxSpendRatio = cashbackPolicy.maxSpendRatio;
     const expiresAt = new Date(Date.now() + RESERVE_HOURS * 60 * 60 * 1000);
     const reservedUntil = fulfillment === "pickup" ? expiresAt : null;
@@ -480,7 +480,10 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
       }
 
       const balance = await getAuthoritativeBalance(customer.id, tx as unknown as typeof db);
-      const extraBps = birthdayExtraBps(customer.birthDate);
+      const extraBps = birthdayExtraBps(customer.birthDate, new Date(), {
+        windowDays: cashbackPolicy.birthdayWindowDays,
+        extraBps: cashbackPolicy.birthdayExtraBps,
+      });
       const calc = computeCashback({
         goodsAmount: subtotal,
         cashbackToUse: useCashback ? balance : 0,

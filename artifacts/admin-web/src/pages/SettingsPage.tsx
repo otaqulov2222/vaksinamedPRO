@@ -19,8 +19,8 @@ import { ConfirmDialog, ErrorState, LoadingBlock, StatusBadge } from "../ui";
 
 /**
  * Settings console over real server sources.
- * Writable (settings:manage): cashback max spend %, min purchase, TTL (new grants), fixed 3 tiers.
- * Welcome / birthday / deliveryFee remain code constants.
+ * Writable (settings:manage): full cashback policy via PATCH /admin/settings/cashback
+ * (spend, min, TTL, tiers, welcome, birthday, deliveryFee).
  */
 
 const BUSINESS_TZ = "Asia/Tashkent";
@@ -40,11 +40,15 @@ type Rules = {
   ttlEnforced?: boolean;
   ttlAppliesTo?: string;
   deliveryFee?: number;
+  welcomeBonus?: number;
+  birthdayWindowDays?: number;
+  birthdayExtraBps?: number;
+  birthdayExtraPercent?: number;
   tiers?: Array<{ tier?: string; rate?: string; rateBps?: number; fromTotal?: number }>;
   earnWhen?: string[];
   spendWhen?: string[];
 };
-type ConfirmKind = "spend" | "min" | "ttl" | "tiers" | null;
+type ConfirmKind = "spend" | "min" | "ttl" | "tiers" | "welcome" | "birthday" | "deliveryFee" | null;
 type BranchRow = { id: number; name?: string; isOpen?: boolean; is24h?: boolean; hasPayme?: boolean; hasClick?: boolean };
 type FomInfo = { status?: string; ready?: boolean; inventoryWriter?: string; fomPosContract?: string };
 type HealthInfo = { status?: string; database?: string; driver?: string; time?: string };
@@ -145,6 +149,10 @@ export function SettingsPage(props: {
   const [spendDraft, setSpendDraft] = useState("");
   const [minDraft, setMinDraft] = useState("");
   const [ttlDraft, setTtlDraft] = useState("");
+  const [welcomeDraft, setWelcomeDraft] = useState("");
+  const [birthdayWindowDraft, setBirthdayWindowDraft] = useState("");
+  const [birthdayExtraDraft, setBirthdayExtraDraft] = useState("");
+  const [deliveryFeeDraft, setDeliveryFeeDraft] = useState("");
   const [tierDrafts, setTierDrafts] = useState<TierDraft[]>([]);
   const [policyBusy, setPolicyBusy] = useState(false);
   const [confirmKind, setConfirmKind] = useState<ConfirmKind>(null);
@@ -157,6 +165,11 @@ export function SettingsPage(props: {
     if (data.maxSpendPercent != null) setSpendDraft(String(data.maxSpendPercent));
     if (data.minPurchase != null) setMinDraft(String(data.minPurchase));
     if (data.ttlDays != null) setTtlDraft(String(data.ttlDays));
+    if (data.welcomeBonus != null) setWelcomeDraft(String(data.welcomeBonus));
+    if (data.birthdayWindowDays != null) setBirthdayWindowDraft(String(data.birthdayWindowDays));
+    if (data.birthdayExtraPercent != null) setBirthdayExtraDraft(String(data.birthdayExtraPercent));
+    else if (data.birthdayExtraBps != null) setBirthdayExtraDraft(String(Math.round(Number(data.birthdayExtraBps) / 100)));
+    if (data.deliveryFee != null) setDeliveryFeeDraft(String(data.deliveryFee));
     if (Array.isArray(data.tiers) && data.tiers.length) {
       setTierDrafts(
         data.tiers.map((t) => ({
@@ -278,6 +291,45 @@ export function SettingsPage(props: {
         fromTotal: Math.floor(Number(String(t.fromTotal).replace(/\s/g, "").replace(",", "."))),
       }));
       await patchCashback({ tiers }, "Loyalty darajalari yangilandi.");
+      return;
+    }
+    if (confirmKind === "welcome") {
+      const amount = Math.floor(Number(String(welcomeDraft).replace(/\s/g, "").replace(",", ".")));
+      if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000) {
+        setPolicyFeedback({ tone: "danger", text: "Welcome bonus 0–1 000 000 so‘m oralig‘ida." });
+        setConfirmKind(null);
+        return;
+      }
+      await patchCashback({ welcomeBonus: amount }, `Welcome bonus ${money(amount)}.`);
+      return;
+    }
+    if (confirmKind === "birthday") {
+      const days = Math.floor(Number(String(birthdayWindowDraft).replace(",", ".")));
+      const pct = Number(String(birthdayExtraDraft).replace(",", ".").trim());
+      if (!Number.isFinite(days) || days < 1 || days > 30) {
+        setPolicyFeedback({ tone: "danger", text: "Tug‘ilgan kun oynasi 1–30 kun." });
+        setConfirmKind(null);
+        return;
+      }
+      if (!Number.isFinite(pct) || pct < 0 || pct > 20) {
+        setPolicyFeedback({ tone: "danger", text: "Qo‘shimcha foiz 0–20% oralig‘ida." });
+        setConfirmKind(null);
+        return;
+      }
+      await patchCashback(
+        { birthdayWindowDays: days, birthdayExtraBps: Math.round(pct * 100) },
+        `Tug‘ilgan kun: ${days} kun, +${pct}%.`,
+      );
+      return;
+    }
+    if (confirmKind === "deliveryFee") {
+      const fee = Math.floor(Number(String(deliveryFeeDraft).replace(/\s/g, "").replace(",", ".")));
+      if (!Number.isFinite(fee) || fee < 0 || fee > 500_000) {
+        setPolicyFeedback({ tone: "danger", text: "Yetkazish haqi 0–500 000 so‘m." });
+        setConfirmKind(null);
+        return;
+      }
+      await patchCashback({ deliveryFee: fee }, `Yetkazish haqi ${money(fee)} (hozir DELIVERY_DISABLED).`);
     }
   }
 
@@ -395,6 +447,14 @@ export function SettingsPage(props: {
                   onMinDraft={setMinDraft}
                   ttlDraft={ttlDraft}
                   onTtlDraft={setTtlDraft}
+                  welcomeDraft={welcomeDraft}
+                  onWelcomeDraft={setWelcomeDraft}
+                  birthdayWindowDraft={birthdayWindowDraft}
+                  onBirthdayWindowDraft={setBirthdayWindowDraft}
+                  birthdayExtraDraft={birthdayExtraDraft}
+                  onBirthdayExtraDraft={setBirthdayExtraDraft}
+                  deliveryFeeDraft={deliveryFeeDraft}
+                  onDeliveryFeeDraft={setDeliveryFeeDraft}
                   tierDrafts={tierDrafts}
                   onTierDrafts={setTierDrafts}
                   onRequestSave={(kind) => setConfirmKind(kind)}
@@ -551,7 +611,13 @@ export function SettingsPage(props: {
               ? "Minimal xaridni saqlash"
               : confirmKind === "ttl"
                 ? "TTL muddatini saqlash"
-                : "Loyalty darajalarini saqlash"
+                : confirmKind === "welcome"
+                  ? "Welcome bonusni saqlash"
+                  : confirmKind === "birthday"
+                    ? "Tug‘ilgan kun bonusini saqlash"
+                    : confirmKind === "deliveryFee"
+                      ? "Yetkazish haqini saqlash"
+                      : "Loyalty darajalarini saqlash"
         }
         description={
           confirmKind === "spend"
@@ -560,7 +626,13 @@ export function SettingsPage(props: {
               ? `Minimal xarid ${String(minDraft).trim()} so‘m bo‘ladi.`
               : confirmKind === "ttl"
                 ? `TTL ${String(ttlDraft).trim()} kun. Faqat yangi cashback grantlarga ta’sir qiladi — mavjud muddatlar o‘zgarmaydi.`
-                : "Silver / Gold / Platinum foiz va chegaralari yangilanadi. Yangi daraja qo‘shib bo‘lmaydi."
+                : confirmKind === "welcome"
+                  ? `Yangi mijozlarga ${String(welcomeDraft).trim()} so‘m welcome bonus beriladi.`
+                  : confirmKind === "birthday"
+                    ? `Oyna ${String(birthdayWindowDraft).trim()} kun, qo‘shimcha +${String(birthdayExtraDraft).trim()}%.`
+                    : confirmKind === "deliveryFee"
+                      ? `Yetkazish haqi ${String(deliveryFeeDraft).trim()} so‘m. Hozir DELIVERY_DISABLED — faqat qoida sifatida saqlanadi.`
+                      : "Silver / Gold / Platinum foiz va chegaralari yangilanadi. Yangi daraja qo‘shib bo‘lmaydi."
         }
         confirmLabel="Saqlash"
         busy={policyBusy}
@@ -654,6 +726,14 @@ function CashbackRows(props: {
   onMinDraft?: (v: string) => void;
   ttlDraft?: string;
   onTtlDraft?: (v: string) => void;
+  welcomeDraft?: string;
+  onWelcomeDraft?: (v: string) => void;
+  birthdayWindowDraft?: string;
+  onBirthdayWindowDraft?: (v: string) => void;
+  birthdayExtraDraft?: string;
+  onBirthdayExtraDraft?: (v: string) => void;
+  deliveryFeeDraft?: string;
+  onDeliveryFeeDraft?: (v: string) => void;
   tierDrafts?: TierDraft[];
   onTierDrafts?: (rows: TierDraft[]) => void;
   onRequestSave?: (kind: Exclude<ConfirmKind, null>) => void;
@@ -664,6 +744,12 @@ function CashbackRows(props: {
   const maxSpendPercent = finite(r.maxSpendPercent);
   const minPurchase = finite(r.minPurchase);
   const ttlDays = finite(r.ttlDays);
+  const welcomeBonus = finite(r.welcomeBonus);
+  const birthdayWindowDays = finite(r.birthdayWindowDays);
+  const birthdayExtraPercent =
+    finite(r.birthdayExtraPercent) ??
+    (finite(r.birthdayExtraBps) != null ? Math.round(Number(r.birthdayExtraBps) / 100) : null);
+  const deliveryFee = finite(r.deliveryFee);
   const tiers = Array.isArray(r.tiers) ? r.tiers : [];
   const feedback = props.feedback ? (
     <span className={`st-edit-feedback is-${props.feedback.tone}`} role="status">
@@ -828,6 +914,112 @@ function CashbackRows(props: {
               onChange={(e) => props.onTtlDraft?.(e.target.value)}
             />
             <button type="button" className="btn-secondary" disabled={props.busy} onClick={() => props.onRequestSave?.("ttl")}>
+              Saqlash
+            </button>
+          </div>
+        ) : null}
+      </SettingRow>
+      <SettingRow
+        icon={<Coins size={15} aria-hidden="true" />}
+        title="Welcome bonus"
+        source="PATCH /api/admin/settings/cashback · yangi ro‘yxatdan o‘tish"
+        desc="Faqat yangi mijozlarga (idempotent welcome:customer:{id})."
+        value={welcomeBonus != null ? money(welcomeBonus) : null}
+      >
+        {props.canManage ? (
+          <div className="st-edit-row">
+            <label className="st-edit-label" htmlFor="st-welcome-bonus">
+              So‘m
+            </label>
+            <input
+              id="st-welcome-bonus"
+              className="st-edit-input"
+              type="number"
+              min={0}
+              max={1000000}
+              step={500}
+              value={props.welcomeDraft ?? ""}
+              disabled={props.busy}
+              onChange={(e) => props.onWelcomeDraft?.(e.target.value)}
+            />
+            <button type="button" className="btn-secondary" disabled={props.busy} onClick={() => props.onRequestSave?.("welcome")}>
+              Saqlash
+            </button>
+          </div>
+        ) : null}
+      </SettingRow>
+      <SettingRow
+        icon={<Clock size={15} aria-hidden="true" />}
+        title="Tug‘ilgan kun bonusi"
+        source="PATCH /api/admin/settings/cashback · earn foiziga qo‘shimcha"
+        desc="Oyna ichida earn rateBps ga qo‘shimcha foiz qo‘llanadi."
+        value={
+          birthdayWindowDays != null && birthdayExtraPercent != null
+            ? `${birthdayWindowDays} kun · +${birthdayExtraPercent}%`
+            : null
+        }
+      >
+        {props.canManage ? (
+          <div className="st-edit-row">
+            <label className="st-edit-label" htmlFor="st-birthday-window">
+              Kun
+            </label>
+            <input
+              id="st-birthday-window"
+              className="st-edit-input"
+              type="number"
+              min={1}
+              max={30}
+              step={1}
+              value={props.birthdayWindowDraft ?? ""}
+              disabled={props.busy}
+              onChange={(e) => props.onBirthdayWindowDraft?.(e.target.value)}
+            />
+            <label className="st-edit-label" htmlFor="st-birthday-extra">
+              +%
+            </label>
+            <input
+              id="st-birthday-extra"
+              className="st-edit-input"
+              type="number"
+              min={0}
+              max={20}
+              step={1}
+              value={props.birthdayExtraDraft ?? ""}
+              disabled={props.busy}
+              onChange={(e) => props.onBirthdayExtraDraft?.(e.target.value)}
+            />
+            <button type="button" className="btn-secondary" disabled={props.busy} onClick={() => props.onRequestSave?.("birthday")}>
+              Saqlash
+            </button>
+          </div>
+        ) : null}
+      </SettingRow>
+      <SettingRow
+        icon={<Truck size={15} aria-hidden="true" />}
+        title="Yetkazish haqi (qoida)"
+        source="PATCH /api/admin/settings/cashback · DELIVERY_DISABLED"
+        desc="Hozir pickup-only: buyurtmada 0 so‘m. Qiymat faqat qoida / kelajak uchun saqlanadi."
+        value={deliveryFee != null ? money(deliveryFee) : null}
+        status={{ tone: "warn", label: "Ishlatilmaydi" }}
+      >
+        {props.canManage ? (
+          <div className="st-edit-row">
+            <label className="st-edit-label" htmlFor="st-delivery-fee">
+              So‘m
+            </label>
+            <input
+              id="st-delivery-fee"
+              className="st-edit-input"
+              type="number"
+              min={0}
+              max={500000}
+              step={1000}
+              value={props.deliveryFeeDraft ?? ""}
+              disabled={props.busy}
+              onChange={(e) => props.onDeliveryFeeDraft?.(e.target.value)}
+            />
+            <button type="button" className="btn-secondary" disabled={props.busy} onClick={() => props.onRequestSave?.("deliveryFee")}>
               Saqlash
             </button>
           </div>

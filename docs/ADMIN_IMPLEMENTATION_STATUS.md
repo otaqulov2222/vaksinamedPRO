@@ -704,12 +704,12 @@ Faqat vizual kompozitsiya o‘zgardi; API, filtrlar, KPI hisoblari va endpointla
 
 ## Phase 13.14 — Sozlamalar (Settings)
 
-**Status: IMPLEMENTED (read + cashback policy write — Phase B).** Settings console over the real server read sources. HQ write path: `PATCH /api/admin/settings/cashback` with optional `{ maxSpendRatio?, minPurchase?, ttlDays?, tiers? }` (`settings:manage`, HQ) upserts `system_settings` keys and audits `settings.cashback_update` (`previous` / `next` / `changed`). TTL applies to **new grants only** (`ttlAppliesTo: new_grants_only`); existing `expires_at` is never rewritten. Tiers are fixed Silver → Gold → Platinum (rateBps + fromTotal only; no CRUD). Welcome bonus / birthday / deliveryFee remain code constants. Migration `0022_admin_settings_permissions.sql` seeds `settings:manage` (no new migration for Phase B).
+**Status: IMPLEMENTED (read + full cashback policy write — Phase B + C).** Settings console over the real server read sources. HQ write path: `PATCH /api/admin/settings/cashback` with optional `{ maxSpendRatio?, minPurchase?, ttlDays?, tiers?, welcomeBonus?, birthdayWindowDays?, birthdayExtraBps?, deliveryFee? }` (`settings:manage`, HQ) upserts `system_settings` keys and audits `settings.cashback_update` (`previous` / `next` / `changed`). TTL applies to **new grants only** (`ttlAppliesTo: new_grants_only`); existing `expires_at` is never rewritten. Tiers are fixed Silver → Gold → Platinum (rateBps + fromTotal only; no CRUD). Welcome / birthday / deliveryFee are Phase C DB keys (defaults on miss). Migration `0022_admin_settings_permissions.sql` seeds `settings:manage` (no new migration for Phase B/C).
 
 | Source | Permission | Values used | Value source |
 | --- | --- | --- | --- |
-| `GET /api/cashback/rules` | public (app / kassa / FOM) | `maxSpendPercent`, `minPurchase`, `ttlDays`, `tiers` | DB via `getCashbackPolicy()` — keys `cashback.max_spend_ratio`, `cashback.min_purchase_uzs`, `cashback.ttl_days`, `cashback.tiers` (defaults on miss: 0.30 / 1 000 / 90 / DEFAULT_TIERS) |
-| ″ | ″ | `deliveryFee`, welcome / birthday, `earnWhen` / `spendWhen` | code constants in `lib/cashback.ts` |
+| `GET /api/cashback/rules` | public (app / kassa / FOM) | `maxSpendPercent`, `minPurchase`, `ttlDays`, `tiers`, `welcomeBonus`, `birthdayWindowDays`, `birthdayExtraBps`, `deliveryFee` | DB via `getCashbackPolicy()` — keys `cashback.max_spend_ratio`, `.min_purchase_uzs`, `.ttl_days`, `.tiers`, `.welcome_bonus_uzs`, `.birthday_window_days`, `.birthday_extra_bps`, `.delivery_fee_uzs` |
+| ″ | ″ | `earnWhen` / `spendWhen` | code constants in `lib/cashback.ts` |
 | `PATCH /api/admin/settings/cashback` | `settings:manage` (HQ) | partial policy upsert | `setCashbackPolicy` → `system_settings` |
 | `GET /api/admin/settings/cashback` | `settings:manage` (HQ) | `{ rules, policy }` | same policy + `publicCashbackRules` |
 | `GET /api/admin/branches` | `branches:read` (HQ; cashier 403) | `isOpen`, `is24h`, `hasPayme`, `hasClick` | branch records; secrets masked by `toAdminBranchPaymentDto` (`paymeKey` / `clickSecret` → `••••` or empty) |
@@ -721,24 +721,25 @@ Permissions: `settings:manage` is HQ fallback + seed. The nav item is HQ-only (`
 
 UI (`SettingsPage.tsx`):
 - Header chips + Yangilash; last read time in Asia/Tashkent.
-- **Cashback / Loyalty (editable with ConfirmDialog):** max spend %, min purchase, TTL days (honesty copy: faqat yangi grantlarga), fixed 3-tier table (rate % + fromTotal). Welcome / birthday rows stay read-only («Server kodi · o‘zgarmas»).
+- **Cashback / Loyalty (editable with ConfirmDialog):** max spend %, min purchase, TTL (yangi grantlarga), fixed 3 tiers, welcome bonus, birthday window/+%, deliveryFee (qoida; `DELIVERY_DISABLED` da ishlatilmaydi).
 - **Filiallar va to‘lov kabinetlari:** Payme / Click configured counts from `hasPayme` / `hasClick`; secrets never rendered.
-- **Yetkazib berish:** static disabled (`DELIVERY_DISABLED`).
+- **Yetkazib berish:** static disabled (`DELIVERY_DISABLED`); fee still editable under Cashback as published rule.
 - **FOM / Kirish / Tizim / Admin API orqali ko‘rinmaydi:** unchanged from Phase A read model.
 
 Security / secrets: no secret, token, password, KEK, connection string or env value is read or rendered. Server error `message` is never shown.
 
-Engine wiring: `computeCashback` / earn / `nextTier` / `tierProgress` / `grantExpiryDate(..., ttlDays)` read policy; FIFO expire worker still runs on grant `expires_at`.
+Engine wiring: `computeCashback` / earn / welcome register / birthday / `nextTier` / `tierProgress` / `grantExpiryDate(..., ttlDays)` / order delivery fee read policy; FIFO expire worker still runs on grant `expires_at`.
 
 Remaining gaps (backend):
-- Welcome bonus, birthday window/extra, delivery fee, reservation hours remain code constants.
+- Reservation hours remain code constants.
 - Tier promotion (`nextTier`) still only on POS / earn paths that call it.
+- Delivery fee is stored but not charged while `DELIVERY_DISABLED`.
 - No admin read API for payment provider mode, SMS provider, workers, session / OTP / rate-limit parameters.
 - `/integrations/fom/status` needs only `requireAdmin` (no permission).
 
 Tests: `artifacts/api-server/tests/admin-phase13-14-settings.test.ts`.
 
-Next phase: Phase 13.15.
+Next phase: OPS production gates / Phase 13.15 docs already shipped.
 
 ---
 

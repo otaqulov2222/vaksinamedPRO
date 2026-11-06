@@ -184,8 +184,9 @@ function customerPosView(
   customer: typeof customers.$inferSelect,
   authoritativeBalance?: number,
   tiers?: CashbackTierDef[],
+  birthday?: { windowDays: number; extraBps: number },
 ) {
-  const extra = birthdayExtraBps(customer.birthDate);
+  const extra = birthdayExtraBps(customer.birthDate, new Date(), birthday);
   const bps = cashbackRateBps(customer.tier, tiers) + extra;
   return {
     id: customer.id,
@@ -247,14 +248,16 @@ export async function lookupPosCustomer(qrRaw: string) {
   const { customer, source } = await resolveCustomerFromScan(qrRaw);
   const balance = await getAuthoritativeBalance(customer.id);
   const policy = await getCashbackPolicy();
-  return { customer: customerPosView(customer, balance, policy.tiers), scanSource: source };
+  const birthday = { windowDays: policy.birthdayWindowDays, extraBps: policy.birthdayExtraBps };
+  return { customer: customerPosView(customer, balance, policy.tiers, birthday), scanSource: source };
 }
 
 export async function previewPosSale(input: { qr: string; amount: number; cashbackToUse?: number }) {
   const { customer, source } = await resolveCustomerFromScan(input.qr);
   const balance = await getAuthoritativeBalance(customer.id);
   const policy = await getCashbackPolicy();
-  const view = customerPosView(customer, balance, policy.tiers);
+  const birthday = { windowDays: policy.birthdayWindowDays, extraBps: policy.birthdayExtraBps };
+  const view = customerPosView(customer, balance, policy.tiers, birthday);
   const preview = computePosPreview({
     amount: input.amount,
     cashbackToUse: input.cashbackToUse ?? 0,
@@ -295,20 +298,21 @@ export async function confirmPosSale(input: {
 
   const existing = await db.select().from(posSales).where(eq(posSales.receiptId, receiptId)).limit(1);
   const policy = await getCashbackPolicy();
+  const birthday = { windowDays: policy.birthdayWindowDays, extraBps: policy.birthdayExtraBps };
   if (existing[0]) {
     const cust = (await db.select().from(customers).where(eq(customers.id, existing[0].customerId)).limit(1))[0];
     const bal = cust ? await getAuthoritativeBalance(cust.id) : undefined;
     return {
       idempotent: true,
       sale: existing[0],
-      customer: cust ? customerPosView(cust, bal, policy.tiers) : null,
+      customer: cust ? customerPosView(cust, bal, policy.tiers, birthday) : null,
       receipt: serializeReceipt(existing[0], cust, branch, bal),
     };
   }
 
   const { customer } = await resolveCustomerFromScan(input.qr);
   const balance = await getAuthoritativeBalance(customer.id);
-  const view = customerPosView(customer, balance, policy.tiers);
+  const view = customerPosView(customer, balance, policy.tiers, birthday);
   await ensureCashbackAccount(customer.id);
   const fresh = (await db.select().from(customers).where(eq(customers.id, customer.id)).limit(1))[0];
   if (!fresh) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
@@ -457,7 +461,7 @@ export async function confirmPosSale(input: {
         return {
           idempotent: true,
           sale: raced[0],
-          customer: cust ? customerPosView(cust, bal) : null,
+          customer: cust ? customerPosView(cust, bal, policy.tiers, birthday) : null,
           receipt: serializeReceipt(raced[0], cust, branch, bal),
         };
       }
@@ -473,7 +477,7 @@ export async function confirmPosSale(input: {
   return {
     idempotent: false,
     sale,
-    customer: updated ? customerPosView(updated, afterBal) : view,
+    customer: updated ? customerPosView(updated, afterBal, policy.tiers, birthday) : view,
     receipt: serializeReceipt(sale, updated, branch, afterBal),
   };
 }
@@ -627,7 +631,9 @@ export async function issueCustomerPosCard(customerId: number) {
   if (!customer) throw Object.assign(new Error("Mijoz topilmadi"), { status: 404 });
   const token = issuePosToken(customer.id);
   const balance = await getAuthoritativeBalance(customer.id);
-  const view = customerPosView(customer, balance);
+  const policy = await getCashbackPolicy();
+  const birthday = { windowDays: policy.birthdayWindowDays, extraBps: policy.birthdayExtraBps };
+  const view = customerPosView(customer, balance, policy.tiers, birthday);
   return {
     ...token,
     balance: view.balance,

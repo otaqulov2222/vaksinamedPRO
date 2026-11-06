@@ -1,6 +1,6 @@
 /**
- * Admin Phase 13.14 — Settings console + HQ cashback policy write (Phase B).
- *   GET /api/cashback/rules (public)        — policy from system_settings (spend/min/ttl/tiers)
+ * Admin Phase 13.14 — Settings console + HQ cashback policy write (Phase B+C).
+ *   GET /api/cashback/rules (public)        — full policy from system_settings
  *   PATCH /api/admin/settings/cashback      — settings:manage; partial upsert of policy keys
  *   GET /api/admin/branches (branches:read) — isOpen / is24h / hasPayme / hasClick; merchant secrets masked
  *   GET /api/integrations/fom/status (admin) — CONTRACT_PENDING, inventory writer OFF
@@ -75,6 +75,10 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
     assert.match(finance, /cashback\.min_purchase_uzs/);
     assert.match(finance, /cashback\.ttl_days/);
     assert.match(finance, /cashback\.tiers/);
+    assert.match(finance, /cashback\.welcome_bonus_uzs/);
+    assert.match(finance, /cashback\.birthday_window_days/);
+    assert.match(finance, /cashback\.birthday_extra_bps/);
+    assert.match(finance, /cashback\.delivery_fee_uzs/);
     for (const { f, src } of routeSources) {
       assert.doesNotMatch(src, /router\.\w+\("\/(admin\/)?config\b/, f);
       assert.doesNotMatch(src, /router\.(post|put|patch|delete)\("\/cashback\/rules/, f);
@@ -99,7 +103,21 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
     assert.equal(rules.minPurchase, 1000);
     assert.equal(rules.ttlDays, CASHBACK_TTL_DAYS);
     assert.equal(rules.ttlAppliesTo, "new_grants_only");
+    assert.equal(rules.welcomeBonus, 5000);
+    assert.equal(rules.birthdayWindowDays, 7);
+    assert.equal(rules.birthdayExtraBps, 500);
     assert.equal(rules.deliveryFee, 15000);
+    const custom = publicCashbackRules({
+      ...defaultCashbackPolicy(),
+      welcomeBonus: 2500,
+      birthdayWindowDays: 10,
+      birthdayExtraBps: 800,
+      deliveryFee: 20_000,
+    });
+    assert.equal(custom.welcomeBonus, 2500);
+    assert.equal(custom.birthdayWindowDays, 10);
+    assert.equal(custom.birthdayExtraPercent, 8);
+    assert.equal(custom.deliveryFee, 20_000);
     for (const t of rules.tiers) {
       assert.equal(t.rate, rateLabel(cashbackRateBps(t.tier)), t.tier);
       assert.equal(nextTier(t.fromTotal, ""), t.tier, t.tier);
@@ -182,15 +200,20 @@ describe("Admin Phase 13.14 Settings — page reads only real sources", () => {
     assert.match(code, /request\("\/api\/admin\/settings\/cashback"/);
   });
 
-  it("spend/min/ttl/tiers edits use ConfirmDialog and PATCH", () => {
+  it("spend/min/ttl/tiers/welcome/birthday/fee edits use ConfirmDialog and PATCH", () => {
     assert.match(code, /ConfirmDialog/);
     assert.match(code, /method: "PATCH"/);
     assert.match(code, /id="st-spend-percent"/);
     assert.match(code, /id="st-min-purchase"/);
     assert.match(code, /id="st-ttl-days"/);
+    assert.match(code, /id="st-welcome-bonus"/);
+    assert.match(code, /id="st-birthday-window"/);
+    assert.match(code, /id="st-birthday-extra"/);
+    assert.match(code, /id="st-delivery-fee"/);
     assert.match(code, /Darajalarni saqlash/);
     assert.match(code, /Saqlash/);
     assert.match(code, /confirmKind === "ttl"/);
+    assert.match(code, /confirmKind === "welcome"/);
     assert.match(code, /const READ_ONLY = "Faqat ko‘rish — o‘zgartirish API mavjud emas";/);
     assert.match(code, /<span className="st-readonly" title=\{READ_ONLY\}>Faqat ko‘rish<\/span>/);
   });
@@ -200,6 +223,10 @@ describe("Admin Phase 13.14 Settings — page reads only real sources", () => {
     assert.match(code, /maxSpendRatio: percent \/ 100/);
     assert.match(code, /minPurchase: min/);
     assert.match(code, /ttlDays: days/);
+    assert.match(code, /welcomeBonus: amount/);
+    assert.match(code, /birthdayWindowDays: days/);
+    assert.match(code, /birthdayExtraBps: Math\.round/);
+    assert.match(code, /deliveryFee: fee/);
     assert.match(code, /rateBps: Math\.round/);
     assert.match(code, /money\(minPurchase\)/);
   });
@@ -287,5 +314,6 @@ describe("Admin Phase 13.14 Settings — design system and docs", () => {
     assert.match(section, /PATCH \/api\/admin\/settings\/cashback/);
     assert.match(section, /settings:manage/);
     assert.match(section, /min_purchase|ttl_days|tiers|Phase B/i);
+    assert.match(section, /welcome_bonus|birthday_window|delivery_fee|Phase C/i);
   });
 });

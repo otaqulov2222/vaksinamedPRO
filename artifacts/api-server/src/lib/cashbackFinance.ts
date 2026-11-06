@@ -60,6 +60,10 @@ const KEY_MAX_SPEND = "cashback.max_spend_ratio";
 const KEY_MIN_PURCHASE = "cashback.min_purchase_uzs";
 const KEY_TTL_DAYS = "cashback.ttl_days";
 const KEY_TIERS = "cashback.tiers";
+const KEY_WELCOME = "cashback.welcome_bonus_uzs";
+const KEY_BIRTHDAY_WINDOW = "cashback.birthday_window_days";
+const KEY_BIRTHDAY_EXTRA = "cashback.birthday_extra_bps";
+const KEY_DELIVERY_FEE = "cashback.delivery_fee_uzs";
 
 export type CommercialSourceType = "ORDER" | "POS" | "FOM_POS" | "SYSTEM";
 
@@ -133,6 +137,20 @@ function parseTtlDays(raw: string | null): number {
   return v;
 }
 
+function parseNonNegInt(raw: string | null, fallback: number, max: number): number {
+  if (raw == null) return fallback;
+  const v = Math.floor(Number(raw));
+  if (!Number.isFinite(v) || v < 0 || v > max) return fallback;
+  return v;
+}
+
+function parsePositiveDays(raw: string | null, fallback: number, min: number, max: number): number {
+  if (raw == null) return fallback;
+  const v = Math.floor(Number(raw));
+  if (!Number.isFinite(v) || v < min || v > max) return fallback;
+  return v;
+}
+
 function parseTiers(raw: string | null): CashbackTierDef[] {
   if (raw == null || !raw.trim()) return DEFAULT_TIERS.map((t) => ({ ...t }));
   try {
@@ -186,17 +204,27 @@ export function normalizeTiersInput(
 
 /** Full HQ cashback policy from system_settings (defaults on miss). */
 export async function getCashbackPolicy(executor: DbLike = db): Promise<CashbackPolicy> {
-  const [ratioRaw, minRaw, ttlRaw, tiersRaw] = await Promise.all([
-    readSetting(KEY_MAX_SPEND, executor),
-    readSetting(KEY_MIN_PURCHASE, executor),
-    readSetting(KEY_TTL_DAYS, executor),
-    readSetting(KEY_TIERS, executor),
-  ]);
+  const defaults = defaultCashbackPolicy();
+  const [ratioRaw, minRaw, ttlRaw, tiersRaw, welcomeRaw, bdayWinRaw, bdayExtraRaw, feeRaw] =
+    await Promise.all([
+      readSetting(KEY_MAX_SPEND, executor),
+      readSetting(KEY_MIN_PURCHASE, executor),
+      readSetting(KEY_TTL_DAYS, executor),
+      readSetting(KEY_TIERS, executor),
+      readSetting(KEY_WELCOME, executor),
+      readSetting(KEY_BIRTHDAY_WINDOW, executor),
+      readSetting(KEY_BIRTHDAY_EXTRA, executor),
+      readSetting(KEY_DELIVERY_FEE, executor),
+    ]);
   return {
     maxSpendRatio: ratioRaw != null ? normalizeSpendRatio(ratioRaw) : DEFAULT_MAX_SPEND_RATIO,
     minPurchase: parseMinPurchase(minRaw),
     ttlDays: parseTtlDays(ttlRaw),
     tiers: parseTiers(tiersRaw),
+    welcomeBonus: parseNonNegInt(welcomeRaw, defaults.welcomeBonus, 1_000_000),
+    birthdayWindowDays: parsePositiveDays(bdayWinRaw, defaults.birthdayWindowDays, 1, 30),
+    birthdayExtraBps: parseNonNegInt(bdayExtraRaw, defaults.birthdayExtraBps, 2000),
+    deliveryFee: parseNonNegInt(feeRaw, defaults.deliveryFee, 500_000),
   };
 }
 
@@ -205,6 +233,10 @@ export type CashbackPolicyPatch = {
   minPurchase?: unknown;
   ttlDays?: unknown;
   tiers?: unknown;
+  welcomeBonus?: unknown;
+  birthdayWindowDays?: unknown;
+  birthdayExtraBps?: unknown;
+  deliveryFee?: unknown;
 };
 
 /**
@@ -219,7 +251,11 @@ export async function setCashbackPolicy(
     patch.maxSpendRatio !== undefined ||
     patch.minPurchase !== undefined ||
     patch.ttlDays !== undefined ||
-    patch.tiers !== undefined;
+    patch.tiers !== undefined ||
+    patch.welcomeBonus !== undefined ||
+    patch.birthdayWindowDays !== undefined ||
+    patch.birthdayExtraBps !== undefined ||
+    patch.deliveryFee !== undefined;
   if (!has) {
     throw Object.assign(new Error("Hech qanday sozlama yuborilmadi"), {
       status: 400,
@@ -276,6 +312,54 @@ export async function setCashbackPolicy(
     if (JSON.stringify(next.tiers) !== JSON.stringify(previous.tiers)) changed.push("tiers");
   }
 
+  if (patch.welcomeBonus !== undefined) {
+    const v = Math.floor(Number(patch.welcomeBonus));
+    if (!Number.isFinite(v) || v < 0 || v > 1_000_000) {
+      throw Object.assign(new Error("welcomeBonus 0–1_000_000 so‘m oralig‘ida bo‘lishi kerak"), {
+        status: 400,
+        code: "INVALID_WELCOME_BONUS",
+      });
+    }
+    next.welcomeBonus = v;
+    if (next.welcomeBonus !== previous.welcomeBonus) changed.push("welcomeBonus");
+  }
+
+  if (patch.birthdayWindowDays !== undefined) {
+    const v = Math.floor(Number(patch.birthdayWindowDays));
+    if (!Number.isFinite(v) || v < 1 || v > 30) {
+      throw Object.assign(new Error("birthdayWindowDays 1–30 oralig‘ida bo‘lishi kerak"), {
+        status: 400,
+        code: "INVALID_BIRTHDAY_WINDOW",
+      });
+    }
+    next.birthdayWindowDays = v;
+    if (next.birthdayWindowDays !== previous.birthdayWindowDays) changed.push("birthdayWindowDays");
+  }
+
+  if (patch.birthdayExtraBps !== undefined) {
+    const v = Math.floor(Number(patch.birthdayExtraBps));
+    if (!Number.isFinite(v) || v < 0 || v > 2000) {
+      throw Object.assign(new Error("birthdayExtraBps 0–2000 oralig‘ida bo‘lishi kerak"), {
+        status: 400,
+        code: "INVALID_BIRTHDAY_EXTRA",
+      });
+    }
+    next.birthdayExtraBps = v;
+    if (next.birthdayExtraBps !== previous.birthdayExtraBps) changed.push("birthdayExtraBps");
+  }
+
+  if (patch.deliveryFee !== undefined) {
+    const v = Math.floor(Number(patch.deliveryFee));
+    if (!Number.isFinite(v) || v < 0 || v > 500_000) {
+      throw Object.assign(new Error("deliveryFee 0–500_000 so‘m oralig‘ida bo‘lishi kerak"), {
+        status: 400,
+        code: "INVALID_DELIVERY_FEE",
+      });
+    }
+    next.deliveryFee = v;
+    if (next.deliveryFee !== previous.deliveryFee) changed.push("deliveryFee");
+  }
+
   if (changed.includes("maxSpendRatio") || patch.maxSpendRatio !== undefined) {
     await upsertSetting(
       KEY_MAX_SPEND,
@@ -305,6 +389,38 @@ export async function setCashbackPolicy(
       KEY_TIERS,
       JSON.stringify(next.tiers),
       "Fixed Silver/Gold/Platinum rateBps + fromTotal thresholds",
+      executor,
+    );
+  }
+  if (changed.includes("welcomeBonus") || patch.welcomeBonus !== undefined) {
+    await upsertSetting(
+      KEY_WELCOME,
+      String(next.welcomeBonus),
+      "Welcome cashback bonus (UZS) for new customer registration",
+      executor,
+    );
+  }
+  if (changed.includes("birthdayWindowDays") || patch.birthdayWindowDays !== undefined) {
+    await upsertSetting(
+      KEY_BIRTHDAY_WINDOW,
+      String(next.birthdayWindowDays),
+      "Birthday cashback boost window in days",
+      executor,
+    );
+  }
+  if (changed.includes("birthdayExtraBps") || patch.birthdayExtraBps !== undefined) {
+    await upsertSetting(
+      KEY_BIRTHDAY_EXTRA,
+      String(next.birthdayExtraBps),
+      "Extra cashback basis points during birthday window",
+      executor,
+    );
+  }
+  if (changed.includes("deliveryFee") || patch.deliveryFee !== undefined) {
+    await upsertSetting(
+      KEY_DELIVERY_FEE,
+      String(next.deliveryFee),
+      "Delivery fee (UZS); unused while DELIVERY_DISABLED",
       executor,
     );
   }

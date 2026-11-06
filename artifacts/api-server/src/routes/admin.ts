@@ -1026,9 +1026,10 @@ router.get("/admin/customers/:id", async (req, res, next) => {
       purchasesCount: row.purchasesCount,
       cashbackBalance: acct?.balance ?? 0,
     });
-    const { getCashbackGrantSummary } = await import("../lib/cashbackFinance");
+    const { getCashbackGrantSummary, getCashbackPolicy } = await import("../lib/cashbackFinance");
     const { isBirthdayWindow, tierProgress } = await import("../lib/cashback");
     const grants = await getCashbackGrantSummary(id);
+    const policy = await getCashbackPolicy();
     return res.json({
       customer: {
         ...listItem,
@@ -1037,8 +1038,8 @@ router.get("/admin/customers/:id", async (req, res, next) => {
         savedAmount: row.savedAmount,
         createdAt: row.createdAt,
         birthDate: row.birthDate ?? null,
-        birthdayActive: isBirthdayWindow(row.birthDate),
-        tierProgress: tierProgress(row.totalPurchases, row.tier),
+        birthdayActive: isBirthdayWindow(row.birthDate, new Date(), policy.birthdayWindowDays),
+        tierProgress: tierProgress(row.totalPurchases, row.tier, policy.tiers),
         grants,
         cashbackSource: "cashback_accounts",
       },
@@ -1562,7 +1563,8 @@ router.post("/admin/inventory/expire-due", async (req, res, next) => {
 /**
  * HQ — update cashback policy stored in system_settings.
  * Body (all optional, at least one required):
- *   { maxSpendRatio?, minPurchase?, ttlDays?, tiers? }
+ *   { maxSpendRatio?, minPurchase?, ttlDays?, tiers?,
+ *     welcomeBonus?, birthdayWindowDays?, birthdayExtraBps?, deliveryFee? }
  * TTL applies to new grants only; existing expires_at is never rewritten.
  */
 router.patch("/admin/settings/cashback", async (req, res, next) => {
@@ -1578,6 +1580,10 @@ router.patch("/admin/settings/cashback", async (req, res, next) => {
       minPurchase: body.minPurchase,
       ttlDays: body.ttlDays,
       tiers: body.tiers,
+      welcomeBonus: body.welcomeBonus,
+      birthdayWindowDays: body.birthdayWindowDays,
+      birthdayExtraBps: body.birthdayExtraBps,
+      deliveryFee: body.deliveryFee,
     });
     await db.insert(auditLog).values({
       actor: user.email,

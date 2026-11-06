@@ -21,8 +21,7 @@ import { createSession, isSessionToken, validateSessionToken, type SessionMeta }
 import { recordAuthEvent } from "./authEvents";
 import { normalizeIp } from "./requestTelemetry";
 import { normalizeAdminRole } from "./securityEnv";
-import { earnCashback } from "./cashbackFinance";
-import { WELCOME_BONUS_UZS } from "./cashback";
+import { earnCashback, getCashbackPolicy } from "./cashbackFinance";
 import {
   createPendingAdminLogin,
   deleteWebauthnCredentials,
@@ -31,7 +30,6 @@ import {
   type WebauthnAssertionBody,
 } from "./adminWebauthn";
 
-const WELCOME_CASHBACK = WELCOME_BONUS_UZS;
 const SECRET = requireConfiguredSecret("ADMIN_SECRET", "vaksinamed-admin-secret");
 const CUSTOMER_SECRET = requireConfiguredSecret("CUSTOMER_SECRET", "vaksinamed-customer-secret");
 
@@ -204,19 +202,22 @@ export async function registerCustomer(input: {
   }).returning();
 
   const user = inserted[0];
-  await earnCashback({
-    customerId: user.id,
-    amount: WELCOME_CASHBACK,
-    commercial: {
-      sourceType: "SYSTEM",
-      sourceKey: `welcome:customer:${user.id}`,
+  const welcomeBonus = (await getCashbackPolicy()).welcomeBonus;
+  if (welcomeBonus > 0) {
+    await earnCashback({
       customerId: user.id,
-      amount: WELCOME_CASHBACK,
-    },
-    actor: "auth:register",
-    reason: "welcome_bonus",
-    idempotencyKey: `welcome:customer:${user.id}`,
-  });
+      amount: welcomeBonus,
+      commercial: {
+        sourceType: "SYSTEM",
+        sourceKey: `welcome:customer:${user.id}`,
+        customerId: user.id,
+        amount: welcomeBonus,
+      },
+      actor: "auth:register",
+      reason: "welcome_bonus",
+      idempotencyKey: `welcome:customer:${user.id}`,
+    });
+  }
   await recordAuthEvent({
     actorType: "customer",
     actorId: user.id,
@@ -381,19 +382,22 @@ export async function verifyOtpAndAuth(input: {
       tier: "Silver",
     }).returning();
     user = inserted[0];
-    await earnCashback({
-      customerId: user.id,
-      amount: WELCOME_CASHBACK,
-      commercial: {
-        sourceType: "SYSTEM",
-        sourceKey: `welcome:customer:${user.id}`,
+    const welcomeBonus = (await getCashbackPolicy()).welcomeBonus;
+    if (welcomeBonus > 0) {
+      await earnCashback({
         customerId: user.id,
-        amount: WELCOME_CASHBACK,
-      },
-      actor: "auth:otp_register",
-      reason: "welcome_bonus",
-      idempotencyKey: `welcome:customer:${user.id}`,
-    });
+        amount: welcomeBonus,
+        commercial: {
+          sourceType: "SYSTEM",
+          sourceKey: `welcome:customer:${user.id}`,
+          customerId: user.id,
+          amount: welcomeBonus,
+        },
+        actor: "auth:otp_register",
+        reason: "welcome_bonus",
+        idempotencyKey: `welcome:customer:${user.id}`,
+      });
+    }
     user = (await db.select().from(customers).where(eq(customers.id, user.id)).limit(1))[0];
   } else if (!user) {
     throw Object.assign(new Error("Foydalanuvchi topilmadi"), { status: 404 });
