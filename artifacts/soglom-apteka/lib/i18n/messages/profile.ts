@@ -166,6 +166,9 @@ export default defineMessages({
 
     addressesTitle: 'Manzillarim',
     addressesDesc: 'Yetkazib berish manzillarini boshqarish',
+    addressesDisabledTitle: 'Yetkazib berish yo‘q',
+    addressesDisabledBody:
+      'Uyga yetkazib berish mavjud emas. Buyurtmani tanlangan dorixonadan olib ketasiz.',
     addAddress: 'Yangi manzil qo‘shish',
     noAddresses: 'Hozircha saqlangan manzillar yo‘q',
     noAddressesHint: 'Buyurtmalarni tezroq rasmiylashtirish uchun manzilingizni saqlang.',
@@ -394,6 +397,9 @@ export default defineMessages({
 
     addressesTitle: 'Мои адреса',
     addressesDesc: 'Управление адресами доставки',
+    addressesDisabledTitle: 'Доставки нет',
+    addressesDisabledBody:
+      'Доставка на дом недоступна. Заказ нужно забрать в выбранной аптеке.',
     addAddress: 'Добавить новый адрес',
     noAddresses: 'Пока нет сохранённых адресов',
     noAddressesHint: 'Сохраните адрес для быстрого оформления заказов.',
@@ -622,6 +628,9 @@ export default defineMessages({
 
     addressesTitle: 'My addresses',
     addressesDesc: 'Manage delivery addresses',
+    addressesDisabledTitle: 'No delivery',
+    addressesDisabledBody:
+      'Home delivery is not available. Pick up your order at the selected pharmacy.',
     addAddress: 'Add new address',
     noAddresses: 'No saved addresses yet',
     noAddressesHint: 'Save your address for faster checkout on delivery orders.',

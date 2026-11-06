@@ -64,7 +64,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Tarmoq",
     items: [
       { id: "branches", label: "Filiallar", permission: "branches:read", weight: "secondary" },
-      { id: "delivery", label: "Yetkazib berish", permission: "delivery:update", weight: "secondary" },
     ],
   },
   {
@@ -125,7 +124,7 @@ export const PAGE_TITLES: Record<string, string> = {
   payments: "To‘lovlar",
   promos: "Aksiyalar",
   ratings: "Baholar",
-  delivery: "Yetkazib berish",
+  delivery: "Yetkazib berish (o‘chirilgan)",
   reports: "Hisobotlar",
   audit: "Audit",
   fom: "FOM",
@@ -146,7 +145,7 @@ export const PAGE_DESCRIPTIONS: Record<string, string> = {
   payments: "To‘lovlarni kuzatish va holatini boshqarish.",
   promos: "Mijoz ilovasidagi marketing bannerlari va cashback sovg‘alari katalogi.",
   ratings: "Mijozlar yakunlangan buyurtma bo‘yicha filial xizmatiga qo‘ygan baholar va izohlarni kuzatish.",
-  delivery: "Ichki kuryer yetkazishlarini kuzatish: kuryer biriktirish va yetkazish holatini yuritish.",
+  delivery: "Yetkazib berish o‘chirilgan — faqat filialdan olib ketish.",
   reports: "Tanlangan davr va filial bo‘yicha buyurtmalar, tushum va ombor holati.",
   audit: "Xodim amallari jurnali: kim, qachon va nimani o‘zgartirgan. Faqat o‘qish.",
   fom: "FOM integratsiyasi va operatsion holati.",

@@ -1,6 +1,5 @@
 /**
- * Admin Phase 12.18 — Delivery / Yetkazib berish product reconstruction.
- * UI-only: no delivery engine / API / DB changes.
+ * Admin Phase 12.18 — Delivery console retired (pickup-only).
  */
 
 import assert from "node:assert/strict";
@@ -13,34 +12,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const adminWeb = path.resolve(root, "../admin-web/src");
 const docs = path.resolve(root, "../../docs");
 
-describe("Admin Phase 12.18 — Delivery operations console", () => {
-  it("Delivery IA: DetailDrawer + ConfirmDialog + server list filters", () => {
+describe("Admin Phase 12.18 — Delivery disabled", () => {
+  it("DeliveryPage shows disabled notice only", () => {
     const page = readFileSync(path.join(adminWeb, "pages/DeliveryPage.tsx"), "utf8");
-    assert.match(page, /DetailDrawer/);
-    assert.match(page, /DrawerSection/);
-    assert.match(page, /ConfirmDialog/);
-    assert.match(page, /title="Yetkazib berish"/);
-    assert.match(page, /\/api\/admin\/deliveries/);
-    assert.match(page, /\/api\/deliveries\/\$\{.*\}\/assign/);
-    assert.match(page, /\/api\/deliveries\/\$\{.*\}\/status/);
-    assert.match(page, /\/api\/deliveries\/\$\{.*\}\/external\/sync/);
-    assert.match(page, /<th>Buyurtma<\/th>/);
-    assert.match(page, /<th>Holat<\/th>/);
+    assert.match(page, /Yetkazib berish o‘chirilgan/);
+    assert.match(page, /delivery-disabled/);
+    assert.doesNotMatch(page, /\/api\/admin\/deliveries|ConfirmDialog|DetailDrawer/);
   });
 
-  it("ETA/courier/tracking honesty; no invent; no window.confirm", () => {
-    const page = readFileSync(path.join(adminWeb, "pages/DeliveryPage.tsx"), "utf8");
-    assert.match(page, /Yetkazish vaqti hali aniqlanmagan/);
-    assert.match(page, /Kuryer hali biriktirilmagan|Biriktirilmagan/);
-    assert.match(page, /Jonli kuzatuv mavjud emas/);
-    assert.match(page, /operatorCapabilityLabel/);
-    assert.doesNotMatch(page, /window\.confirm/);
-    assert.doesNotMatch(page, /30 daqiqa|15 daqiqada|fake.?eta|tracking.?url|google.?map/i);
-    assert.doesNotMatch(page, /StatCard|Amallar<\/button>/);
-    assert.doesNotMatch(page, /Courier #12|Haydovchi Ali/);
-  });
-
-  it("Phase 12.18 docs updated", () => {
+  it("Phase 12.18 docs still referenced", () => {
     assert.match(
       readFileSync(path.join(docs, "ADMIN_IMPLEMENTATION_STATUS.md"), "utf8"),
       /Phase 12\.18/,

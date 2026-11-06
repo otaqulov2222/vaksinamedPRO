@@ -364,15 +364,6 @@ export default function ProfileScreen() {
               testID="profile-branches"
               iconBg="#D1FAE5"
               iconColor="#047857"
-            />
-            <MenuRow
-              icon="home"
-              title={t('common.navAddresses')}
-              a11y={t('profile.addressesDesc')}
-              onPress={() => router.push('/addresses')}
-              testID="profile-addresses"
-              iconBg="#E0E7FF"
-              iconColor="#4338CA"
               last
             />
           </View>

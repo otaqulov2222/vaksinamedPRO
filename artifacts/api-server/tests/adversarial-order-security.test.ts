@@ -39,22 +39,18 @@ describe("Phase B.0.5 Adversarial Customer and Order Security QA Contracts", () 
   });
 
   describe("2. Delivery and Pickup Payment Method Backend Validation", () => {
-    it("rejects pay_at_branch and cod for delivery orders on backend", () => {
-      assert.match(
-        ordersCode,
-        /fulfillment === "delivery" && \(paymentMethod === "pay_at_branch" \|\| paymentMethod === "cod"\)/,
-      );
-      assert.match(ordersCode, /INVALID_PAYMENT_METHOD/);
+    it("rejects delivery fulfillment entirely (DELIVERY_DISABLED)", () => {
+      assert.match(ordersCode, /req\.body\?\.fulfillment === "delivery"/);
+      assert.match(ordersCode, /code: "DELIVERY_DISABLED"/);
+      assert.match(ordersCode, /const fulfillment = "pickup"/);
     });
 
     it("rejects cod for pickup orders on backend", () => {
-      assert.match(
-        ordersCode,
-        /fulfillment === "pickup" && paymentMethod === "cod"/,
-      );
+      assert.match(ordersCode, /if \(paymentMethod === "cod"\)/);
+      assert.match(ordersCode, /INVALID_PAYMENT_METHOD/);
     });
 
-    it("enforces address minimum length for delivery orders", () => {
+    it("keeps address guard for legacy delivery channel checks", () => {
       assert.match(ordersCode, /fulfillment === "delivery" && address\.length < 8/);
       assert.match(ordersCode, /ADDRESS_REQUIRED/);
     });
@@ -274,8 +270,9 @@ describe("Phase B.0.5 Adversarial Customer and Order Security QA Contracts", () 
       assert.match(ordersCode, /void req\.body\.paymentStatus/);
     });
 
-    it("CASE F, G, H: Delivery rejects pay_at_branch and COD with HTTP 400 INVALID_PAYMENT_METHOD", () => {
-      assert.match(ordersCode, /fulfillment === "delivery" && \(paymentMethod === "pay_at_branch" \|\| paymentMethod === "cod"\)/);
+    it("CASE F, G, H: Delivery channel disabled; COD rejected for pickup", () => {
+      assert.match(ordersCode, /code: "DELIVERY_DISABLED"/);
+      assert.match(ordersCode, /if \(paymentMethod === "cod"\)/);
       assert.match(ordersCode, /INVALID_PAYMENT_METHOD/);
     });
 

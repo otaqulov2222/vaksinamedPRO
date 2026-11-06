@@ -46,11 +46,12 @@ describe("Admin Phase 12.8 — IA + operator copy", () => {
     assert.match(nav, /if \(ids\.has\("dashboard"\)\) return "dashboard"/);
     for (const id of [
       "dashboard", "kassa", "orders", "payments", "inventory", "products",
-      "promos", "customers", "cashback", "ratings", "branches", "delivery",
+      "promos", "customers", "cashback", "ratings", "branches",
       "reports", "audit", "fom", "admins", "settings",
     ]) {
       assert.match(nav, new RegExp(`id:\\s*"${id}"`));
     }
+    assert.doesNotMatch(nav, /id:\s*"delivery"/);
   });
 
   it("operator label helpers cover fulfillment/payment/reservation/capability", () => {

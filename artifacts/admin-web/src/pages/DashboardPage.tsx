@@ -982,10 +982,10 @@ export function DashboardPage(props: {
     attentionItems.push({
       id: "delivering",
       tone: "info",
-      title: "Yetkazib berish",
+      title: "Yetkazib berish (eski)",
       detail: `${deliveringCount} ta jarayonda`,
-      actionLabel: (props.onOpenDelivery || props.onOpenOrders) ? "Ko‘rish" : undefined,
-      onAction: props.onOpenDelivery || props.onOpenOrders,
+      actionLabel: props.onOpenOrders ? "Ko‘rish" : undefined,
+      onAction: props.onOpenOrders,
     });
   }
 

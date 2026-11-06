@@ -28,7 +28,7 @@ const READ_ONLY = "Faqat ko‘rish — o‘zgartirish API mavjud emas";
 type Tone = "ok" | "warn" | "danger" | "neutral" | "info";
 type LoadError = { kind: "session" | "forbidden" | "notfound" | "network" | "failed"; message: string };
 type Source<T> = { data: T | null; error: LoadError | null };
-type SourceKey = "rules" | "branches" | "delivery" | "fom" | "health";
+type SourceKey = "rules" | "branches" | "fom" | "health";
 type SettingsCategory = "all" | "cashback" | "branches" | "delivery" | "integrations";
 
 type Rules = {
@@ -42,14 +42,12 @@ type Rules = {
   spendWhen?: string[];
 };
 type BranchRow = { id: number; name?: string; isOpen?: boolean; is24h?: boolean; hasPayme?: boolean; hasClick?: boolean };
-type DeliveryInfo = { externalProvider?: string };
 type FomInfo = { status?: string; ready?: boolean; inventoryWriter?: string; fomPosContract?: string };
 type HealthInfo = { status?: string; database?: string; driver?: string; time?: string };
 
 const SOURCE_LABELS: Record<SourceKey, string> = {
   rules: "Cashback qoidalari",
   branches: "Filiallar ro‘yxati",
-  delivery: "Yetkazib berish holati",
   fom: "FOM holati",
   health: "Server tekshiruvi",
 };
@@ -82,7 +80,7 @@ const CATEGORY_TABS: Array<{ id: SettingsCategory; label: string; icon: typeof S
   { id: "all", label: "Barchasi", icon: Sliders },
   { id: "cashback", label: "Cashback & Qoidalar", icon: Coins },
   { id: "branches", label: "Filiallar & To‘lovlar", icon: Store },
-  { id: "delivery", label: "Yetkazib berish", icon: Truck },
+  { id: "delivery", label: "Yetkazib berish (o‘chirilgan)", icon: Truck },
   { id: "integrations", label: "FOM & Tizim", icon: Cpu },
 ];
 
@@ -134,7 +132,6 @@ export function SettingsPage(props: {
 }) {
   const [rules, setRules] = useState<Source<Rules>>(EMPTY);
   const [branches, setBranches] = useState<Source<BranchRow[]>>(EMPTY);
-  const [delivery, setDelivery] = useState<Source<DeliveryInfo>>(EMPTY);
   const [fom, setFom] = useState<Source<FomInfo>>(EMPTY);
   const [health, setHealth] = useState<Source<HealthInfo>>(EMPTY);
   const [loading, setLoading] = useState(true);
@@ -147,10 +144,9 @@ export function SettingsPage(props: {
     const seq = ++loadSeq.current;
     const token = props.token || "";
     setLoading(true);
-    const [r, b, d, f, h] = await Promise.allSettled([
+    const [r, b, f, h] = await Promise.allSettled([
       request("/api/cashback/rules", token),
       request("/api/admin/branches", token),
-      request("/api/admin/deliveries?limit=1", token),
       request("/api/integrations/fom/status", token),
       request("/api/healthz", token).catch((err) => {
         if (statusOf(err) === 503) return { status: "not_ready", database: "down" };
@@ -164,7 +160,6 @@ export function SettingsPage(props: {
         : { data: null, error: loadError(res.reason, key) };
     setRules(pick(r, "rules", (v) => (v && typeof v === "object" ? (v as Rules) : {})));
     setBranches(pick(b, "branches", (v) => (Array.isArray(v?.branches) ? (v.branches as BranchRow[]) : [])));
-    setDelivery(pick(d, "delivery", (v) => ({ externalProvider: typeof v?.externalProvider === "string" ? v.externalProvider : undefined })));
     setFom(pick(f, "fom", (v) => ({
       status: typeof v?.status === "string" ? v.status : undefined,
       ready: typeof v?.ready === "boolean" ? v.ready : undefined,
@@ -187,7 +182,7 @@ export function SettingsPage(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.token]);
 
-  const sources = [rules, branches, delivery, fom, health];
+  const sources = [rules, branches, fom, health];
   const sessionExpired = sources.some((s) => s.error?.kind === "session");
   const allNetwork = loaded && sources.every((s) => s.error?.kind === "network");
   const pageError: LoadError | null = sessionExpired
@@ -337,32 +332,21 @@ export function SettingsPage(props: {
               id="st-delivery"
               icon={<Truck size={16} aria-hidden="true" />}
               title="Yetkazib berish"
-              lead="Yetkazib berish haqi va provayder holati"
-              source="GET /api/cashback/rules · GET /api/admin/deliveries"
-              error={delivery.error && rules.error ? delivery.error : null}
-              onRetry={() => void load()}
-              footer={openLink("delivery", "Yetkazishlar — Yetkazib berish bo‘limi")}
+              lead="Uyga yetkazib berish tarmoq bo‘ylab o‘chirilgan"
+              source="Business rule · DELIVERY_DISABLED"
             >
               <SettingRow
                 icon={<Truck size={15} aria-hidden="true" />}
-                title="Yetkazib berish haqi"
-                source="Server kodi · o‘zgarmas qiymat"
-                value={finite(rules.data?.deliveryFee) != null ? money(Number(rules.data?.deliveryFee)) : null}
-                missing={rules.error ? rules.error.message : undefined}
-                action={openLink("delivery", "Ko‘rish")}
+                title="Xizmat holati"
+                source="Buyurtma API · fulfillment=pickup only"
+                desc="Mijozlar faqat filialdan olib ketish orqali buyurtma beradi. Kuryer va manzil kerak emas."
+                value="O‘chirilgan"
               />
               <SettingRow
                 icon={<Layers size={15} aria-hidden="true" />}
-                title="Tashqi provayder"
-                source="Yetkazib berish API · externalProvider"
-                desc="Hali ulanmagan — tashqi provider contract mavjud emas."
-                value={
-                  delivery.data?.externalProvider === "CONTRACT_PENDING"
-                    ? "Hali ulanmagan"
-                    : delivery.data?.externalProvider || null
-                }
-                missing={delivery.error ? delivery.error.message : undefined}
-                action={openLink("delivery", "Sozlash")}
+                title="Yetkazib berish haqi"
+                source="Server kodi · ishlatilmaydi"
+                value="0 so‘m (pickup)"
               />
             </Section>
           ) : null}

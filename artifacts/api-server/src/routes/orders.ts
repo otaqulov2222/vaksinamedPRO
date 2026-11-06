@@ -325,21 +325,19 @@ router.get("/orders/:id/fiscal-cheque", async (req, res, next) => {
 router.post("/orders", orderCreateLimiter, async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
-    const fulfillment = (req.body.fulfillment === "delivery" ? "delivery" : "pickup") as OrderChannel;
-    const paymentMethod = ["payme", "click", "pay_at_branch", "cod"].includes(req.body.paymentMethod)
-      ? req.body.paymentMethod
-      : fulfillment === "delivery"
-        ? "payme"
-        : "pay_at_branch";
-
-    if (fulfillment === "delivery" && (paymentMethod === "pay_at_branch" || paymentMethod === "cod")) {
+    // Business rule: medicine home delivery is not offered — pickup only.
+    if (req.body?.fulfillment === "delivery") {
       return res.status(400).json({
-        message: "Yetkazib berish uchun faqat onlayn to‘lov (Payme / Click) mavjud",
-        code: "INVALID_PAYMENT_METHOD",
+        message: "Yetkazib berish mavjud emas. Faqat filialdan olib ketish mumkin.",
+        code: "DELIVERY_DISABLED",
       });
     }
+    const fulfillment = "pickup" as OrderChannel;
+    const paymentMethod = ["payme", "click", "pay_at_branch"].includes(req.body.paymentMethod)
+      ? req.body.paymentMethod
+      : "pay_at_branch";
 
-    if (fulfillment === "pickup" && paymentMethod === "cod") {
+    if (paymentMethod === "cod") {
       return res.status(400).json({
         message: "Filialdan olib ketishda COD mavjud emas",
         code: "INVALID_PAYMENT_METHOD",
@@ -914,13 +912,11 @@ router.post("/orders/:id/ready", async (req, res, next) => {
   }
 });
 
-router.post("/orders/:id/out-for-delivery", async (req, res, next) => {
-  try {
-    const result = await staffTransition(req, Number(req.params.id), "OUT_FOR_DELIVERY", "staff_out_for_delivery");
-    return res.json({ order: await serializeOrder(result.order), idempotent: result.idempotent });
-  } catch (error) {
-    return next(error);
-  }
+router.post("/orders/:id/out-for-delivery", async (_req, res) => {
+  return res.status(400).json({
+    message: "Yetkazib berish o‘chirilgan. Faqat filialdan olib ketish.",
+    code: "DELIVERY_DISABLED",
+  });
 });
 
 router.post("/orders/:id/complete", async (req, res, next) => {

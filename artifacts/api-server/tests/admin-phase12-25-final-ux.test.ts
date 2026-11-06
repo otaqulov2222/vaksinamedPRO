@@ -23,13 +23,15 @@ describe("Admin Phase 12.25 — final UX consolidation", () => {
     const app = read("App.tsx");
     const ids = [
       "dashboard", "kassa", "orders", "payments", "inventory", "products",
-      "promos", "customers", "cashback", "ratings", "branches", "delivery",
+      "promos", "customers", "cashback", "ratings", "branches",
       "reports", "audit", "fom", "admins", "settings",
     ];
     for (const id of ids) {
       assert.match(nav, new RegExp(`id:\\s*"${id}"`));
       assert.match(app, new RegExp(`tab === "${id}"`));
     }
+    assert.doesNotMatch(nav, /id:\s*"delivery"/);
+    assert.match(app, /tab === "delivery"/);
     assert.match(nav, /label:\s*"Boshqaruv"/);
     assert.match(nav, /label:\s*"Tizim"/);
     assert.doesNotMatch(nav, /soon\?:/);

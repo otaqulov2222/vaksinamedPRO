@@ -225,8 +225,8 @@ function maskPhone(phone: string): string {
 
 function nextSteps(status: string, channel: string): string[] {
   return (NEXT_STEPS[status] || []).filter((to) => {
-    if (to === "READY_FOR_PICKUP") return channel === "pickup";
-    if (to === "OUT_FOR_DELIVERY") return channel === "delivery";
+    if (to === "OUT_FOR_DELIVERY") return false; // home delivery disabled
+    if (to === "READY_FOR_PICKUP") return channel !== "delivery";
     return true;
   });
 }
@@ -603,7 +603,7 @@ export function OrdersPage(props: {
                 <th>Mijoz</th>
                 <th>Buyurtma holati</th>
                 <th>To‘lov</th>
-                <th>Yetkazish</th>
+                <th>Tur</th>
                 <th className="num">Summa</th>
                 <th>Vaqt</th>
               </tr>

@@ -577,7 +577,6 @@ export default function App() {
               onOpenInventory={() => setTab("inventory")}
               onOpenOrders={() => setTab("orders")}
               onOpenPos={() => setTab("kassa")}
-              onOpenDelivery={() => setTab("delivery")}
               onOpenCustomers={() => setTab("customers")}
               onOpenCashback={() => setTab("cashback")}
               onOpenBranches={() => setTab("branches")}

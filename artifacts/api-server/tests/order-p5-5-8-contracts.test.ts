@@ -42,12 +42,12 @@ describe("P5.5–P5.8 staff endpoints + serializers + compatibility", () => {
     assert.doesNotMatch(prepareBlock.split("export default")[0], /requireCustomer/);
   });
 
-  it("confirm-pos and delivery completion remain AuthZ gated", () => {
+  it("confirm-pos remains AuthZ gated; delivery mutations are disabled", () => {
     const orders = readFileSync(path.join(root, "src/routes/orders.ts"), "utf8");
     const deliveries = readFileSync(path.join(root, "src/routes/deliveries.ts"), "utf8");
     assert.match(orders, /orders:confirm_pos/);
     assert.match(deliveries, /delivery:update/);
-    assert.match(deliveries, /assertBranchScope/);
+    assert.match(deliveries, /DELIVERY_DISABLED|deliveryDisabled/);
   });
 
   it("P5.8 compatibility document exists and names Expo legacy consumers", () => {

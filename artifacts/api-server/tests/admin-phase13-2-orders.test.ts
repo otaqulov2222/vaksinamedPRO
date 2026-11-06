@@ -121,11 +121,11 @@ describe("Admin Phase 13.2 Orders — actions follow the server graph and capabi
     }
   });
 
-  it("channel rules match the transition service", () => {
+  it("channel rules match the transition service; UI hides delivery dispatch", () => {
     assert.match(transitions, /to === "READY_FOR_PICKUP" && channel !== "pickup"/);
     assert.match(transitions, /to === "OUT_FOR_DELIVERY" && channel !== "delivery"/);
-    assert.match(page, /if \(to === "READY_FOR_PICKUP"\) return channel === "pickup";/);
-    assert.match(page, /if \(to === "OUT_FOR_DELIVERY"\) return channel === "delivery";/);
+    assert.match(page, /if \(to === "OUT_FOR_DELIVERY"\) return false;/);
+    assert.match(page, /if \(to === "READY_FOR_PICKUP"\) return channel !== "delivery";/);
   });
 
   it("each action is gated by its server capability", () => {

@@ -865,6 +865,8 @@ Tests: `artifacts/api-server/tests/admin-phase13-12-reports.test.ts`.
 
 ## Phase 13.11 — Yetkazib berish
 
+**DISABLED (pickup-only):** uyga yetkazib berish tarmoq bo‘ylab o‘chirilgan. `POST /orders` `fulfillment=delivery` ni `DELIVERY_DISABLED` bilan rad etadi; `GET/POST /admin/deliveries*` va `POST /orders/:id/out-for-delivery` ham `DELIVERY_DISABLED` qaytaradi. Admin nav’dan «Yetkazib berish» olib tashlangan; `DeliveryPage` faqat o‘chirilganlik haqida xabar ko‘rsatadi. Legacy lifecycle kutubxonasi (GRAPH) eski qatorlar uchun saqlangan.
+
 Operator console for internal-courier deliveries over the existing delivery lifecycle. One minimal backend change on the list route (server search + customer name / timestamps on rows). DB sxemasi va migratsiyalar o‘zgartirilmadi; RBAC kodlari, mutation route’lari, delivery/order/cashback logikasi o‘zgarmadi.
 
 | Area | Status | Source |

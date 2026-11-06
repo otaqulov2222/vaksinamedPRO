@@ -46,13 +46,15 @@ describe("Admin Phase 12.25.1 — sidebar icons", () => {
     const app = readFileSync(path.join(adminWeb, "App.tsx"), "utf8");
     const ids = [
       "dashboard", "kassa", "orders", "payments", "inventory", "products",
-      "promos", "customers", "cashback", "ratings", "branches", "delivery",
+      "promos", "customers", "cashback", "ratings", "branches",
       "reports", "audit", "fom", "admins", "settings",
     ];
     for (const id of ids) {
       assert.match(nav, new RegExp(`id:\\s*"${id}"`));
       assert.match(icons, new RegExp(`${id}:\\s*[A-Z]`));
     }
+    assert.doesNotMatch(nav, /id:\s*"delivery"/);
+    assert.match(icons, /delivery:\s*[A-Z]/);
     assert.match(nav, /permission:\s*"dashboard:read"/);
     assert.match(nav, /hqOnly:\s*true/);
     assert.match(app, /from "\.\/navIcons"/);

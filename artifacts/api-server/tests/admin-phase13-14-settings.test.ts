@@ -108,11 +108,11 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
     assert.match(dto, /hasPayme: flags\.hasPayme,\s+hasClick: flags\.hasClick,/);
   });
 
-  it("delivery: external provider is CONTRACT_PENDING in the admin list contract", () => {
+  it("delivery admin list is disabled (DELIVERY_DISABLED)", () => {
     const list = between(deliveriesRoute, 'router.get("/admin/deliveries"', "\n});");
     assert.match(list, /requirePermission\(admin, "delivery:update"\)/);
-    assert.match(list, /externalProvider: "CONTRACT_PENDING"/);
-    assert.match(list, /Math\.min\(100, Math\.floor\(limitRaw\)\)/);
+    assert.match(list, /DELIVERY_DISABLED|deliveryDisabled/);
+    assert.doesNotMatch(list, /externalProvider: "CONTRACT_PENDING"/);
   });
 
   it("FOM status and health: admin-only topology, no env values, no DB error text", () => {
@@ -134,16 +134,16 @@ describe("Admin Phase 13.14 Settings — real server contract", () => {
 });
 
 describe("Admin Phase 13.14 Settings — page reads only real sources", () => {
-  it("five GET sources in one parallel batch; no other endpoint", () => {
+  it("four GET sources in one parallel batch; delivery not fetched (disabled)", () => {
     const urls = [...code.matchAll(/request\("([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(urls, [
       "/api/cashback/rules",
       "/api/admin/branches",
-      "/api/admin/deliveries?limit=1",
       "/api/integrations/fom/status",
       "/api/healthz",
     ]);
     assert.equal(code.match(/Promise\.allSettled\(/g)?.length, 1);
+    assert.doesNotMatch(code, /\/api\/admin\/deliveries/);
     assert.doesNotMatch(code, /\/api\/(admin\/)?(settings|config)|softRequest|\.map\(\s*async/);
   });
 
@@ -158,7 +158,6 @@ describe("Admin Phase 13.14 Settings — page reads only real sources", () => {
     assert.match(code, /value=\{maxSpendPercent != null \? `\$\{maxSpendPercent\}%` : null\}/);
     assert.doesNotMatch(code, /maxSpendRatio|\* 100|\/ 100/);
     assert.match(code, /money\(minPurchase\)/);
-    assert.match(code, /money\(Number\(rules\.data\?\.deliveryFee\)\)/);
     assert.match(code, /money\(Number\(t\.fromTotal\)\)/);
   });
 
@@ -174,9 +173,9 @@ describe("Admin Phase 13.14 Settings — page reads only real sources", () => {
     assert.match(code, /Kalit qiymatlari hech qachon ko‘rsatilmaydi\./);
   });
 
-  it("delivery / FOM / health only from API fields; no invented online status", () => {
-    assert.match(code, /delivery\.data\?\.externalProvider === "CONTRACT_PENDING"/);
-    assert.match(code, /Hali ulanmagan — tashqi provider contract mavjud emas\./);
+  it("delivery section is static disabled; FOM / health from API fields", () => {
+    assert.match(code, /Business rule · DELIVERY_DISABLED/);
+    assert.match(code, /value="O‘chirilgan"/);
     assert.match(code, /health\.data\.database === "up"/);
     assert.match(code, /health\.data\.database === "down"/);
     assert.match(code, /if \(statusOf\(err\) === 503\) return \{ status: "not_ready", database: "down" \};/);
