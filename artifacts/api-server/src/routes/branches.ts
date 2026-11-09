@@ -7,10 +7,21 @@ const router = Router();
 
 function serializeBranch(branch: typeof branches.$inferSelect, origin?: { lat: number; lng: number }) {
   const distanceKm = origin ? Number(haversineKm(origin.lat, origin.lng, branch.lat, branch.lng).toFixed(2)) : null;
+  // Public DTO only — never expose merchant IDs or secret material.
   return {
-    ...branch,
-    paymeKey: branch.paymeKey ? "••••" : "",
-    clickSecret: branch.clickSecret ? "••••" : "",
+    id: branch.id,
+    code: branch.code,
+    name: branch.name,
+    city: branch.city,
+    region: branch.region,
+    district: branch.district,
+    address: branch.address,
+    phone: branch.phone,
+    hours: branch.hours,
+    lat: branch.lat,
+    lng: branch.lng,
+    isOpen: branch.isOpen,
+    is24h: branch.is24h,
     distanceKm,
     hasPayme: Boolean(branch.paymeMerchantId && branch.paymeKey),
     hasClick: Boolean(branch.clickMerchantId && branch.clickSecret),

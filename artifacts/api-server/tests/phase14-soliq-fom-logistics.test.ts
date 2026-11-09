@@ -13,6 +13,7 @@ import {
   refundFiscalCheque,
 } from "../src/lib/fiscalService";
 import {
+  applyBranchInventorySync,
   syncBranchInventoryFromFom,
   findAlternativeBranchesWithStock,
 } from "../src/lib/fomInventoryService";
@@ -218,8 +219,24 @@ describe("Phase 14 — Soliq OFD, FOM Inventory Sync, and Regional Logistics", (
   });
 
   describe("Module 2: FOM Inventory Reconciliation & Stock Discrepancy Prevention", () => {
+    it("public syncBranchInventoryFromFom is blocked while writer kill-switch is OFF", async () => {
+      await assert.rejects(
+        () =>
+          syncBranchInventoryFromFom(
+            {
+              branchId: 101,
+              batchId: "BATCH-BLOCKED",
+              syncMode: "SNAPSHOT",
+              items: [{ productId: 201, physicalQuantity: 1 }],
+            },
+            db as any,
+          ),
+        (err: any) => err?.code === "FOM_INVENTORY_WRITER_DISABLED" || err?.status === 503,
+      );
+    });
+
     it("synchronizes physical stock safely in SNAPSHOT mode", async () => {
-      const syncResult = await syncBranchInventoryFromFom(
+      const syncResult = await applyBranchInventorySync(
         {
           branchId: 101,
           batchId: "BATCH-TEST-01",
@@ -248,7 +265,7 @@ describe("Phase 14 — Soliq OFD, FOM Inventory Sync, and Regional Logistics", (
     });
 
     it("synchronizes stock in DELTA mode", async () => {
-      const deltaResult = await syncBranchInventoryFromFom(
+      const deltaResult = await applyBranchInventorySync(
         {
           branchId: 101,
           batchId: "BATCH-TEST-02",
@@ -277,7 +294,7 @@ describe("Phase 14 — Soliq OFD, FOM Inventory Sync, and Regional Logistics", (
 
       // FOM reports that store only physically has 10 units!
       // (10 < 20 reserved -> discrepancy!)
-      const result = await syncBranchInventoryFromFom(
+      const result = await applyBranchInventorySync(
         {
           branchId: 101,
           batchId: "BATCH-DISCREPANCY-01",

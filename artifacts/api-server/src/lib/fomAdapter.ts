@@ -15,6 +15,16 @@ export function assertFomInventoryWriterDisabled(): void {
   }
 }
 
+/** Refuse inventory-sync writes while the kill-switch is off. */
+export function assertFomInventoryWriterAllowed(): void {
+  if (!FOM_INVENTORY_WRITER_ENABLED) {
+    throw Object.assign(new Error("FOM inventory writer disabled — stock sync blocked"), {
+      status: 503,
+      code: "FOM_INVENTORY_WRITER_DISABLED",
+    });
+  }
+}
+
 export type FomCommercialResult = {
   mode: "order" | "walk_in";
   inventoryWriter: "DISABLED";

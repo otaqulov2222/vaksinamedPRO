@@ -55,8 +55,13 @@ describe("Admin Phase 13.4 Inventory — backend contract (unchanged)", () => {
 
   it("FOM inventory writer stays OFF in code and in the status endpoint", () => {
     assert.match(fomAdapter, /FOM_INVENTORY_WRITER_ENABLED = false/);
+    assert.match(fomAdapter, /assertFomInventoryWriterAllowed/);
     assert.match(integrations, /inventoryWriter: "OFF"/);
     assert.match(integrations, /fomInventoryWriterEnabled: false/);
+    const fomInv = readFileSync(path.join(root, "src/lib/fomInventoryService.ts"), "utf8");
+    const fomRoute = readFileSync(path.join(root, "src/routes/fomInventory.ts"), "utf8");
+    assert.match(fomInv, /assertFomInventoryWriterAllowed\(\)/);
+    assert.match(fomRoute, /assertFomInventoryWriterAllowed\(\)/);
   });
 });
 

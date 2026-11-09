@@ -54,6 +54,8 @@ describe("Loyalty FIFO / birthday / welcome", () => {
     assert.match(finance, /consumeGrantsFifo/);
     assert.match(finance, /expireDueCashbackGrants/);
     assert.match(finance, /entryType: "EXPIRE"/);
+    assert.match(finance, /INSUFFICIENT_ACTIVE_GRANTS/);
+    assert.doesNotMatch(finance, /gap_cover/);
     assert.match(workers, /CASHBACK_TTL_SWEEP/);
     assert.match(loyalty, /birthDate/);
     assert.match(loyalty, /tierProgress/);

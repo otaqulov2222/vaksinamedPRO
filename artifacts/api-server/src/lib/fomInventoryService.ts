@@ -18,6 +18,7 @@ import {
   type ProductStock,
 } from "@workspace/db";
 import { emitAlert, ALERT } from "./alerts";
+import { assertFomInventoryWriterAllowed } from "./fomAdapter";
 import { logger } from "./logger";
 
 type DbLike = typeof db;
@@ -92,9 +93,22 @@ async function resolveBranch(
 }
 
 /**
- * Execute audited, reservation-safe inventory synchronization from FOM
+ * Execute audited, reservation-safe inventory synchronization from FOM.
+ * Gated by FOM_INVENTORY_WRITER_ENABLED — refuse writes while the kill-switch is off.
  */
 export async function syncBranchInventoryFromFom(
+  input: FomInventorySyncInput,
+  executor: DbLike = db,
+): Promise<FomSyncResult> {
+  assertFomInventoryWriterAllowed();
+  return applyBranchInventorySync(input, executor);
+}
+
+/**
+ * Ungated sync body — production callers must use syncBranchInventoryFromFom.
+ * Exported only so algorithm tests can run while the kill-switch stays OFF.
+ */
+export async function applyBranchInventorySync(
   input: FomInventorySyncInput,
   executor: DbLike = db,
 ): Promise<FomSyncResult> {

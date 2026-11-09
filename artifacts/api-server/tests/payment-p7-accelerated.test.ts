@@ -23,13 +23,16 @@ describe("P7.6.5–P7.9 accelerated batch contracts", () => {
     assert.match(click, /isProductionLike\(\)/);
   });
 
-  it("P7.7 requestRefund — no cashback/inventory; provider CONTRACT_PENDING", () => {
+  it("P7.7 requestRefund — no cashback/inventory; provider CONTRACT_PENDING stays PENDING", () => {
     const svc = readFileSync(path.join(root, "src/lib/paymentService.ts"), "utf8");
     assert.match(svc, /export async function requestRefund/);
     assert.match(svc, /REFUND_EXCEEDS_CAPTURE/);
     assert.match(svc, /OPEN_NOT_AUTO/);
+    assert.match(svc, /getCommittedRefundTotal/);
+    assert.match(svc, /settlesNow/);
     const refundSlice = svc.slice(svc.indexOf("export async function requestRefund"));
-    assert.doesNotMatch(refundSlice.slice(0, 3500), /earnCashback|completeOrderCashback|adjustStock|consumeReservation/);
+    assert.doesNotMatch(refundSlice.slice(0, 4500), /earnCashback|completeOrderCashback|adjustStock|consumeReservation/);
+    assert.match(refundSlice, /refundStatus = settlesNow \? "SUCCEEDED" : "PENDING"/);
     const adapters = readFileSync(path.join(root, "src/lib/paymentAdapters.ts"), "utf8");
     const paymeRefund = adapters.slice(adapters.indexOf("class PaymeAdapter"), adapters.indexOf("class ClickAdapter"));
     assert.match(paymeRefund, /refund[\s\S]*CONTRACT_PENDING/);

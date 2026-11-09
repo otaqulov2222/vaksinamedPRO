@@ -621,21 +621,12 @@ async function consumeGrantsFifo(tx: DbLike, account: CashbackAccount, amount: n
   }
 
   if (remaining > 0) {
-    const inserted = await tx.execute(sql`
-      INSERT INTO cashback_grants (
-        account_id, customer_id, original_amount, unconsumed_amount, expires_at, status, meta
-      ) VALUES (
-        ${account.id}, ${account.customerId}, ${remaining}, ${remaining}, NULL, 'ACTIVE',
-        '{"legacy_strategy":"gap_cover"}'
-      )
-      RETURNING id
-    `);
-    const gid = Number(rowsOf(inserted)[0]?.id);
-    if (Number.isFinite(gid) && gid > 0) {
-      await tx.execute(sql`
-        UPDATE cashback_grants SET unconsumed_amount = 0, status = 'EXHAUSTED' WHERE id = ${gid}
-      `);
-    }
+    // Never invent synthetic grants to cover FIFO shortfalls — that bypassed TTL.
+    throw badRequest(
+      "Faol (muddati o‘tmagan) cashback grant yetarli emas",
+      409,
+      "INSUFFICIENT_ACTIVE_GRANTS",
+    );
   }
 }
 

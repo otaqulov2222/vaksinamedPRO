@@ -47,6 +47,17 @@ describe("Phase 12.27 — P0 gate verification", () => {
 
     const fom = readFileSync(path.join(apiRoot, "src/lib/fomAdapter.ts"), "utf8");
     assert.match(fom, /FOM_INVENTORY_WRITER_ENABLED\s*=\s*false/);
+    assert.match(fom, /assertFomInventoryWriterAllowed/);
+    const fomInv = readFileSync(path.join(apiRoot, "src/lib/fomInventoryService.ts"), "utf8");
+    assert.match(fomInv, /assertFomInventoryWriterAllowed\(\)/);
+
+    const publicBranches = readFileSync(path.join(apiRoot, "src/routes/branches.ts"), "utf8");
+    assert.doesNotMatch(publicBranches, /\.\.\.branch/);
+    assert.doesNotMatch(publicBranches, /paymeMerchantId:\s*branch/);
+    assert.doesNotMatch(publicBranches, /clickMerchantId:\s*branch/);
+    assert.doesNotMatch(publicBranches, /clickServiceId:\s*branch/);
+    assert.match(publicBranches, /hasPayme:/);
+    assert.match(publicBranches, /hasClick:/);
   });
 
   it("sandbox harness without credentials returns PENDING (not PASS)", () => {

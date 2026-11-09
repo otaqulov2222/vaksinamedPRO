@@ -9,6 +9,7 @@
 import { Router } from "express";
 import { assertFomWebhookAuthorized } from "../lib/securityEnv";
 import { requireAdmin } from "../lib/auth";
+import { assertFomInventoryWriterAllowed } from "../lib/fomAdapter";
 import {
   syncBranchInventoryFromFom,
   findAlternativeBranchesWithStock,
@@ -21,12 +22,14 @@ const router = Router();
 /**
  * FOM kassa ombor sinxronizatsiyasi
  * Auth: header `x-fom-secret` yoki `Authorization: Bearer <FOM_WEBHOOK_SECRET>`
+ * Kill-switch: FOM_INVENTORY_WRITER_ENABLED must be true (currently hardcoded false).
  */
 router.post("/integrations/fom/inventory-sync", async (req, res, next) => {
   try {
     const headerSecret =
       req.header("x-fom-secret") || req.header("authorization")?.replace(/^Bearer\s+/i, "");
     assertFomWebhookAuthorized(headerSecret);
+    assertFomInventoryWriterAllowed();
 
     const body = req.body || {};
     const items = Array.isArray(body.items) ? body.items : [];

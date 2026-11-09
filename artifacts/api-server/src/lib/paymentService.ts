@@ -6,7 +6,7 @@
  * Refund does NOT auto-reverse cashback (P6/Q5 OPEN).
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   paymentAttempts,
@@ -671,6 +671,26 @@ export async function getSucceededRefundTotal(
   return rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
 }
 
+/**
+ * SUCCEEDED + PENDING — reserves refundable capacity so CONTRACT_PENDING rows
+ * cannot be double-booked while PSP outbound remains unexecuted.
+ */
+export async function getCommittedRefundTotal(
+  intentId: number,
+  executor: DbLike = db,
+): Promise<number> {
+  const rows = await executor
+    .select()
+    .from(paymentRefunds)
+    .where(
+      and(
+        eq(paymentRefunds.intentId, intentId),
+        inArray(paymentRefunds.status, ["SUCCEEDED", "PENDING"]),
+      ),
+    );
+  return rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+}
+
 export async function getRefundableAmount(
   intentId: number,
   executor: DbLike = db,
@@ -685,7 +705,7 @@ export async function getRefundableAmount(
   const capture = (
     await executor.select().from(paymentCaptures).where(eq(paymentCaptures.intentId, intentId)).limit(1)
   )[0] || null;
-  const refundedTotal = await getSucceededRefundTotal(intentId, executor);
+  const refundedTotal = await getCommittedRefundTotal(intentId, executor);
   const captured = capture ? Number(capture.amount) : 0;
   const refundableAmount = Math.max(0, captured - refundedTotal);
   return { intent, capture, refundedTotal, refundableAmount };
@@ -701,11 +721,12 @@ export type RefundRequestInput = {
 };
 
 /**
- * P7.7 — internal refund against a capture.
- * Provider outbound refund remains CONTRACT_PENDING (Payme/Click not inventively called).
+ * P7.7 — refund against a capture.
+ * Payme/Click outbound refund is CONTRACT_PENDING — row stays PENDING and intent is NOT
+ * marked REFUNDED until providerExecution is EXECUTED or NOT_APPLICABLE (simulate/COD).
  * Does NOT reverse cashback or mutate inventory (P6 policy OPEN).
  *
- * Schema statuses: PENDING → SUCCEEDED | FAILED (PENDING = requested/processing).
+ * Schema statuses: PENDING → SUCCEEDED | FAILED.
  */
 export async function requestRefund(
   input: RefundRequestInput,
@@ -784,8 +805,8 @@ export async function requestRefund(
       throw badRequest("Capture topilmadi — refund faqat capture dan keyin", 409, "CAPTURE_REQUIRED");
     }
 
-    const refundedTotal = await getSucceededRefundTotal(intent.id, tx);
-    const refundable = Math.max(0, Number(capture.amount) - refundedTotal);
+    const committedTotal = await getCommittedRefundTotal(intent.id, tx);
+    const refundable = Math.max(0, Number(capture.amount) - committedTotal);
     if (refundable <= 0) {
       throw badRequest("Refundable miqdor qolmagan", 409, "NOTHING_TO_REFUND");
     }
@@ -824,6 +845,9 @@ export async function requestRefund(
       }
     }
 
+    const settlesNow = providerExecution === "EXECUTED" || providerExecution === "NOT_APPLICABLE";
+    const refundStatus = settlesNow ? "SUCCEEDED" : "PENDING";
+
     let refundRow: PaymentRefund;
     try {
       const inserted = await tx
@@ -834,7 +858,7 @@ export async function requestRefund(
           orderId: intent.orderId,
           amount,
           currency: intent.currency,
-          status: "SUCCEEDED",
+          status: refundStatus,
           idempotencyKey,
           providerRefundId,
           actor: input.actor || "payment:refund",
@@ -874,9 +898,19 @@ export async function requestRefund(
       throw error;
     }
 
-    const newRefundedTotal = refundedTotal + amount;
+    // CONTRACT_PENDING: keep intent PAID — do not pretend money left the PSP.
+    if (!settlesNow) {
+      return {
+        refund: refundRow,
+        intent,
+        idempotent: false,
+        providerExecution,
+      };
+    }
+
+    const succeededTotal = await getSucceededRefundTotal(intent.id, tx);
     const nextStatus: IntentStatus =
-      newRefundedTotal >= Number(capture.amount) ? "REFUNDED" : "PARTIALLY_REFUNDED";
+      succeededTotal >= Number(capture.amount) ? "REFUNDED" : "PARTIALLY_REFUNDED";
     assertIntentTransition(intent.status as IntentStatus, nextStatus);
 
     const updated = await tx

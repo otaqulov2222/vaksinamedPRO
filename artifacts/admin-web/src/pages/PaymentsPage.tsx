@@ -161,7 +161,7 @@ function refundResultFeedback(data: any, amountText: string): Feedback {
   }
   return {
     tone: "warn",
-    text: `Ichki qaytarish yozildi: ${amountText}. Provayder orqali qaytarish hozircha ulanmagan — pul mijozga avtomatik qaytmaydi. ${cashback}`,
+    text: `Qaytarish so‘rovi PENDING holatda yozildi: ${amountText}. Provayder orqali qaytarish hali ulanmagan — to‘lov REFUNDED deb belgilanmaydi va pul mijozga avtomatik qaytmaydi. ${cashback}`,
   };
 }
 
