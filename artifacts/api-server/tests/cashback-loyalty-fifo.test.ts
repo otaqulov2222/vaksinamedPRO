@@ -62,9 +62,9 @@ describe("Loyalty FIFO / birthday / welcome", () => {
     assert.match(cart, /router.post\("\/cart\/repeat"/);
   });
 
-  it("register welcome bonus uses the published constant", () => {
+  it("register welcome bonus uses the published cashback policy", () => {
     const auth = read("src/lib/auth.ts");
-    assert.match(auth, /WELCOME_BONUS_UZS/);
+    assert.match(auth, /\(await getCashbackPolicy\(\)\)\.welcomeBonus/);
     assert.match(auth, /reason: "welcome_bonus"/);
   });
 });

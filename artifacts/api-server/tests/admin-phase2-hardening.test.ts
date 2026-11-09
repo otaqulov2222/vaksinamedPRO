@@ -26,7 +26,7 @@ describe("Admin Phase 2 HIGH hardening", () => {
     const pos = readFileSync(path.join(root, "src/lib/pos.ts"), "utf8");
     assert.match(pos, /maxSpend:\s*calc\.maxSpend/);
     assert.match(pos, /maxSpendRatio:\s*calc\.maxSpendRatio/);
-    assert.match(pos, /getMaxSpendRatio/);
+    assert.match(pos, /getCashbackPolicy/);
     assert.match(pos, /getAuthoritativeBalance/);
   });
 

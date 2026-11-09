@@ -60,8 +60,8 @@ describe("Admin Phase 13.8 Cashback — backend contract (unchanged)", () => {
 
   it("rules come from the server (max spend ratio from settings)", () => {
     const route = between(integrations, 'router.get("/cashback/rules"', "\n});");
-    assert.match(route, /getMaxSpendRatio\(\)/);
-    assert.match(route, /publicCashbackRules\(ratio\)/);
+    assert.match(route, /getCashbackPolicy\(\)/);
+    assert.match(route, /publicCashbackRules\(/);
   });
 
   it("history is a read-only ledger projection scoped to the customer", () => {
