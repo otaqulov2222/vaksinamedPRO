@@ -256,6 +256,8 @@ export default function BranchesScreen() {
           router.replace('/checkout');
         } else if (from === 'cart') {
           router.replace('/cart');
+        } else if (from === 'home') {
+          router.replace('/(tabs)');
         } else if (from === 'product' && /^\d+$/.test(productIdParam)) {
           router.replace(`/product/${productIdParam}`);
         } else {

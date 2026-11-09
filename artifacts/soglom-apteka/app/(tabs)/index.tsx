@@ -22,6 +22,7 @@ import { api } from '@/lib/api';
 import { notify } from '@/lib/dialogs';
 import type { TFunction, TranslationKey } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
+import { isFulfillmentCancelled } from '@/lib/orderLabels';
 
 const PURPLE = '#6A22D6';
 const PURPLE_DEEP = '#1A1040';
@@ -30,6 +31,21 @@ const MUTED = '#8B93A7';
 const BORDER = '#E9E6F0';
 const CARD_BG = '#FFFFFF';
 const LAVENDER = '#F1EBFF';
+const OK = '#3D7A55';
+const STOCK_BAD = '#B45309';
+
+/** Most recent non-cancelled order with at least one line — safe for /cart/repeat. */
+function pickRepeatableOrder(orders: any[] | null | undefined): any | null {
+  if (!Array.isArray(orders) || orders.length === 0) return null;
+  for (const order of orders) {
+    if (!order || order.id == null) continue;
+    if (isFulfillmentCancelled(order.fulfillmentStatus, order.status)) continue;
+    const items = Array.isArray(order.items) ? order.items : [];
+    if (items.length === 0) continue;
+    return order;
+  }
+  return null;
+}
 
 /** Approved user banner: home-hero-final.png (1825×862). Full visual — no text overlay. */
 const HERO_AR = 1825 / 862;
@@ -74,7 +90,7 @@ const CATEGORY_FILTERS: { key: CategoryFilterKey; labelKey: TranslationKey; icon
 ];
 
 export default function HomeScreen() {
-  const { t, fmt, language, user, cartCount, refresh } = useApp();
+  const { t, fmt, language, user, cartCount, balance, refresh, syncCartCount, isAuthenticated } = useApp();
   const { width: windowW } = useWindowDimensions();
   const contentW = Math.max(280, Math.round(windowW - SCREEN_PAD * 2));
   const colGap = contentW < 340 ? 8 : 12;
@@ -88,13 +104,48 @@ export default function HomeScreen() {
   const [addedIds, setAddedIds] = useState<Record<string, boolean>>({});
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilterKey>('all');
   const [query, setQuery] = useState('');
+  const [cartBranch, setCartBranch] = useState<{ id: number; name: string } | null>(null);
+  const [repeatOrder, setRepeatOrder] = useState<any | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [repeating, setRepeating] = useState(false);
   const heroHeight = Math.max(140, Math.round(contentW / HERO_AR));
+  const branchId = cartBranch?.id ?? null;
+
+  const loadHomeContext = useCallback(async () => {
+    if (!isAuthenticated) {
+      setCartBranch(null);
+      setRepeatOrder(null);
+      setContextLoading(false);
+      return;
+    }
+    setContextLoading(true);
+    try {
+      const [cartRes, ordersRes] = await Promise.all([
+        api.cart().catch(() => null),
+        api.orders().catch(() => null),
+      ]);
+      const branchRow = cartRes?.branch;
+      const bid = Number(branchRow?.id);
+      if (Number.isFinite(bid) && bid > 0 && branchRow?.name) {
+        setCartBranch({ id: bid, name: String(branchRow.name).trim() || t('home.branchesFallback') });
+      } else {
+        setCartBranch(null);
+      }
+      setRepeatOrder(pickRepeatableOrder(ordersRes?.orders));
+    } finally {
+      setContextLoading(false);
+    }
+  }, [isAuthenticated, t]);
 
   const loadProducts = useCallback(() => {
     setProductsLoading(true);
     setProductsError(false);
+    const qs =
+      branchId != null && Number.isFinite(branchId) && branchId > 0
+        ? `?limit=50&offset=0&branchId=${branchId}`
+        : '?limit=50&offset=0';
     void api
-      .products('?limit=50&offset=0')
+      .products(qs)
       .then((data) => {
         setProducts(data.products || []);
         setProductsError(false);
@@ -107,7 +158,7 @@ export default function HomeScreen() {
         setProductsLoading(false);
         setRefreshing(false);
       });
-  }, []);
+  }, [branchId]);
 
   useEffect(() => {
     loadProducts();
@@ -115,15 +166,50 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      void loadHomeContext();
       loadProducts();
-    }, [loadProducts]),
+    }, [loadHomeContext, loadProducts]),
   );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    void loadHomeContext();
     loadProducts();
     void refresh();
-  }, [loadProducts, refresh]);
+  }, [loadHomeContext, loadProducts, refresh]);
+
+  const onRepeatLastOrder = useCallback(async () => {
+    if (!repeatOrder?.id || repeating) return;
+    setRepeating(true);
+    try {
+      const payload = await api.repeatOrder(Number(repeatOrder.id));
+      const added = Number(payload?.repeat?.added ?? 0);
+      const skipped = Array.isArray(payload?.repeat?.skipped) ? payload.repeat.skipped.length : 0;
+      const count = Array.isArray(payload?.items) ? payload.items.length : 0;
+      const subtotal = Number(payload?.subtotal);
+      syncCartCount(count, Number.isFinite(subtotal) ? subtotal : undefined);
+
+      const nextBranch = payload?.branch;
+      const nextId = Number(nextBranch?.id);
+      if (Number.isFinite(nextId) && nextId > 0 && nextBranch?.name) {
+        setCartBranch({ id: nextId, name: String(nextBranch.name).trim() || t('home.branchesFallback') });
+      }
+
+      if (added <= 0) {
+        notify(t('common.errorTitle'), t('home.repeatNothingAdded'));
+        return;
+      }
+      notify(
+        t('orders.repeatSuccess'),
+        skipped > 0 ? t('home.repeatPartial') : t('orders.repeatOrder'),
+      );
+      router.push('/cart');
+    } catch (e) {
+      notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'orders.repeatFailed' }));
+    } finally {
+      setRepeating(false);
+    }
+  }, [repeatOrder, repeating, syncCartCount, t]);
 
   const onSearch = () => {
     const q = query.trim();
@@ -200,6 +286,9 @@ export default function HomeScreen() {
         const cleanName = rawName.replace(/\s*\(Demo\)/gi, '').trim();
         const rawMan = String(p.manufacturer || '').trim();
         const cleanMan = rawMan.replace(/\s*\(Demo\)/gi, '').trim() || String(p.category || '').trim();
+        const availabilityKnown = p.availabilityKnown === true || (branchId != null && p.availableQuantity != null);
+        const availableRaw = Number(p.availableQuantity ?? p.stock);
+        const available = Number.isFinite(availableRaw) ? Math.max(0, Math.floor(availableRaw)) : 0;
         return {
           id: p.id,
           name: cleanName,
@@ -208,9 +297,11 @@ export default function HomeScreen() {
           manufacturer: cleanMan,
           analogGroup: String(p.analogGroup || ''),
           image: getProductImage(p),
+          availabilityKnown,
+          inStock: availabilityKnown ? available > 0 : null,
         };
       });
-  }, [products, selectedCategory, language]);
+  }, [products, selectedCategory, language, branchId]);
 
   return (
     <Screen
@@ -234,6 +325,21 @@ export default function HomeScreen() {
         />
 
         <View style={styles.headerActions}>
+          {isAuthenticated ? (
+            <Pressable
+              style={({ pressed }) => [styles.cashbackChip, pressed && styles.pressed]}
+              onPress={() => router.push('/cashback')}
+              accessibilityRole="button"
+              accessibilityLabel={t('home.cashbackChipA11y', { amount: fmt.money(balance) })}
+              hitSlop={4}
+              testID="home-cashback-chip"
+            >
+              <MaterialCommunityIcons name="wallet-outline" size={15} color={PURPLE} />
+              <Text style={styles.cashbackChipText} numberOfLines={1}>
+                {fmt.money(balance)}
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable
             style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
             onPress={() => router.push('/notifications')}
@@ -285,6 +391,83 @@ export default function HomeScreen() {
           accessibilityLabel={t('home.searchA11y')}
         />
       </View>
+
+      {/* BRANCH CONTEXT — pickup honesty: stock only meaningful with a selected branch */}
+      <Pressable
+        style={({ pressed }) => [styles.branchChip, pressed && styles.pressed]}
+        onPress={() => {
+          // Auth: pick updates cart branch and returns home. Guest: browse-only map.
+          if (isAuthenticated) {
+            router.push({ pathname: '/branches', params: { from: 'home' } } as any);
+          } else {
+            router.push('/branches');
+          }
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={
+          cartBranch?.name
+            ? t('home.branchChipA11y', { name: cartBranch.name })
+            : t('home.branchChipChooseA11y')
+        }
+        testID="home-branch-chip"
+      >
+        <View style={styles.branchChipIcon}>
+          <MaterialCommunityIcons name="storefront-outline" size={16} color={PURPLE} />
+        </View>
+        <View style={styles.branchChipBody}>
+          <Text style={styles.branchChipLabel}>{t('home.branchLabel')}</Text>
+          <Text style={styles.branchChipName} numberOfLines={1}>
+            {contextLoading && isAuthenticated
+              ? t('home.branchLoading')
+              : cartBranch?.name || t('home.branchChoose')}
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={18} color={MUTED} />
+      </Pressable>
+
+      {/* REPEAT ORDER — only when authenticated + a real prior order exists */}
+      {isAuthenticated && repeatOrder ? (
+        <View style={styles.repeatCard} testID="home-repeat-card">
+          <Pressable
+            style={({ pressed }) => [styles.repeatMain, pressed && styles.pressed]}
+            onPress={() => router.push(`/order/${repeatOrder.id}` as any)}
+            accessibilityRole="button"
+            accessibilityLabel={t('home.repeatOpenOrderA11y')}
+          >
+            <View style={styles.repeatIconWrap}>
+              <MaterialCommunityIcons name="history" size={20} color={PURPLE} />
+            </View>
+            <View style={styles.repeatTextWrap}>
+              <Text style={styles.repeatTitle}>{t('home.repeatTitle')}</Text>
+              <Text style={styles.repeatSub} numberOfLines={1}>
+                {t('home.repeatSubtitle', {
+                  code: String(repeatOrder.code || `#${repeatOrder.id}`),
+                  count: Array.isArray(repeatOrder.items) ? repeatOrder.items.length : 0,
+                })}
+              </Text>
+            </View>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.repeatBtn,
+              (repeating || addingId != null) && { opacity: 0.55 },
+              pressed && styles.pressed,
+            ]}
+            disabled={repeating || addingId != null}
+            onPress={() => void onRepeatLastOrder()}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: repeating || addingId != null }}
+            accessibilityLabel={t('home.repeatActionA11y')}
+            testID="home-repeat-action"
+          >
+            {repeating ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.repeatBtnText}>{t('home.repeatAction')}</Text>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* HERO 3D BANNER — Apple Store widescreen artwork with crisp vector typography */}
       <Pressable
@@ -464,6 +647,22 @@ export default function HomeScreen() {
                   <Text style={styles.productName} numberOfLines={2}>
                     {p.name}
                   </Text>
+                  {p.inStock != null ? (
+                    <View style={styles.stockRow}>
+                      <View
+                        style={[
+                          styles.stockDot,
+                          p.inStock ? styles.stockDotOk : styles.stockDotBad,
+                        ]}
+                      />
+                      <Text
+                        style={[styles.stockText, p.inStock ? styles.stockOk : styles.stockBad]}
+                        numberOfLines={1}
+                      >
+                        {p.inStock ? t('home.stockInBranch') : t('home.stockOutBranch')}
+                      </Text>
+                    </View>
+                  ) : null}
                 </Pressable>
 
                 <View style={styles.productBottom}>
@@ -519,7 +718,27 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   headerLogo: { width: 42, height: 42 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  cashbackChip: {
+    maxWidth: 128,
+    minHeight: 36,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: LAVENDER,
+    borderWidth: 1,
+    borderColor: '#E4D9FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  cashbackChipText: {
+    flexShrink: 1,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    lineHeight: 15,
+    color: PURPLE_DEEP,
+  },
   roundBtn: {
     width: 44,
     height: 44,
@@ -595,6 +814,97 @@ const styles = StyleSheet.create({
     color: PURPLE_DEEP,
     paddingVertical: 0,
     outlineStyle: 'none' as any,
+  },
+
+  branchChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#ECE7F6',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: SPACE,
+  },
+  branchChipIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  branchChipBody: { flex: 1, minWidth: 0 },
+  branchChipLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    lineHeight: 14,
+    color: MUTED,
+  },
+  branchChipName: {
+    marginTop: 1,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
+  },
+
+  repeatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E4D9FF',
+    padding: 10,
+    marginBottom: SPACE,
+  },
+  repeatMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  repeatIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: LAVENDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  repeatTextWrap: { flex: 1, minWidth: 0 },
+  repeatTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    lineHeight: 18,
+    color: PURPLE_DEEP,
+  },
+  repeatSub: {
+    marginTop: 2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 16,
+    color: MUTED,
+  },
+  repeatBtn: {
+    backgroundColor: PURPLE,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    minHeight: 40,
+    minWidth: 88,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  repeatBtnText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#FFFFFF',
   },
 
   heroWrap: {
@@ -866,6 +1176,30 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     color: MUTED,
   },
+  stockRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minHeight: 16,
+  },
+  stockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: MUTED,
+  },
+  stockDotOk: { backgroundColor: OK },
+  stockDotBad: { backgroundColor: STOCK_BAD },
+  stockText: {
+    flex: 1,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10.5,
+    lineHeight: 13,
+    color: MUTED,
+  },
+  stockOk: { color: OK },
+  stockBad: { color: STOCK_BAD },
   productBottom: {
     marginTop: 8,
     flexDirection: 'row',
