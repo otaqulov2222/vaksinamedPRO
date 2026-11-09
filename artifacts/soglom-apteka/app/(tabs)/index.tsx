@@ -325,21 +325,6 @@ export default function HomeScreen() {
         />
 
         <View style={styles.headerActions}>
-          {isAuthenticated ? (
-            <Pressable
-              style={({ pressed }) => [styles.cashbackChip, pressed && styles.pressed]}
-              onPress={() => router.push('/cashback')}
-              accessibilityRole="button"
-              accessibilityLabel={t('home.cashbackChipA11y', { amount: fmt.money(balance) })}
-              hitSlop={4}
-              testID="home-cashback-chip"
-            >
-              <MaterialCommunityIcons name="wallet-outline" size={15} color={PURPLE} />
-              <Text style={styles.cashbackChipText} numberOfLines={1}>
-                {fmt.money(balance)}
-              </Text>
-            </Pressable>
-          ) : null}
           <Pressable
             style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
             onPress={() => router.push('/notifications')}
@@ -368,15 +353,32 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* GREETING */}
+      {/* GREETING — cashback lives here as quiet meta, not a third header control */}
       <View style={styles.greetWrap}>
         <Text style={styles.greet} numberOfLines={1}>
           {t('home.greeting', { name: user.name?.trim() || t('home.guestName') })}
         </Text>
-        <Text style={styles.greetSub}>{t('home.greetingSubtitle')}</Text>
+        {isAuthenticated ? (
+          <Pressable
+            onPress={() => router.push('/cashback')}
+            style={({ pressed }) => [styles.greetMetaRow, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={t('home.greetCashbackA11y', { amount: fmt.money(balance) })}
+            hitSlop={6}
+            testID="home-cashback-chip"
+          >
+            <Text style={styles.greetSub}>{t('home.greetingSubtitle')}</Text>
+            <Text style={styles.greetMetaSep}>·</Text>
+            <Text style={styles.greetCashback} numberOfLines={1}>
+              {fmt.money(balance)}
+            </Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.greetSub}>{t('home.greetingSubtitle')}</Text>
+        )}
       </View>
 
-      {/* SEARCH BOX */}
+      {/* SEARCH + BRANCH — one control; no separate filial card */}
       <View style={styles.searchBox}>
         <Feather name="search" size={20} color={MUTED} />
         <TextInput
@@ -390,66 +392,76 @@ export default function HomeScreen() {
           underlineColorAndroid="transparent"
           accessibilityLabel={t('home.searchA11y')}
         />
+        <View style={styles.searchDivider} />
+        <Pressable
+          style={({ pressed }) => [styles.searchBranchBtn, pressed && styles.pressed]}
+          onPress={() => {
+            if (isAuthenticated) {
+              router.push({ pathname: '/branches', params: { from: 'home' } } as any);
+            } else {
+              router.push('/branches');
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={
+            cartBranch?.name
+              ? t('home.branchChipA11y', { name: cartBranch.name })
+              : t('home.branchChipChooseA11y')
+          }
+          hitSlop={4}
+          testID="home-branch-chip"
+        >
+          <MaterialCommunityIcons
+            name="storefront-outline"
+            size={20}
+            color={cartBranch?.name ? PURPLE : MUTED}
+          />
+        </Pressable>
       </View>
-
-      {/* BRANCH CONTEXT — pickup honesty: stock only meaningful with a selected branch */}
       <Pressable
-        style={({ pressed }) => [styles.branchChip, pressed && styles.pressed]}
         onPress={() => {
-          // Auth: pick updates cart branch and returns home. Guest: browse-only map.
           if (isAuthenticated) {
             router.push({ pathname: '/branches', params: { from: 'home' } } as any);
           } else {
             router.push('/branches');
           }
         }}
+        style={({ pressed }) => [styles.branchCaptionHit, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel={
           cartBranch?.name
             ? t('home.branchChipA11y', { name: cartBranch.name })
             : t('home.branchChipChooseA11y')
         }
-        testID="home-branch-chip"
       >
-        <View style={styles.branchChipIcon}>
-          <MaterialCommunityIcons name="storefront-outline" size={16} color={PURPLE} />
-        </View>
-        <View style={styles.branchChipBody}>
-          <Text style={styles.branchChipLabel}>{t('home.branchLabel')}</Text>
-          <Text style={styles.branchChipName} numberOfLines={1}>
-            {contextLoading && isAuthenticated
-              ? t('home.branchLoading')
-              : cartBranch?.name || t('home.branchChoose')}
-          </Text>
-        </View>
-        <Feather name="chevron-right" size={18} color={MUTED} />
+        <Text style={styles.branchCaption} numberOfLines={1}>
+          {contextLoading && isAuthenticated && !cartBranch?.name
+            ? t('home.branchLoading')
+            : cartBranch?.name
+              ? t('home.branchUnderSearch', { name: cartBranch.name })
+              : t('home.branchChoose')}
+        </Text>
       </Pressable>
 
-      {/* REPEAT ORDER — only when authenticated + a real prior order exists */}
+      {/* REPEAT — single quiet strip; only when a real prior order exists */}
       {isAuthenticated && repeatOrder ? (
-        <View style={styles.repeatCard} testID="home-repeat-card">
+        <View style={styles.repeatStrip} testID="home-repeat-card">
           <Pressable
-            style={({ pressed }) => [styles.repeatMain, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.repeatStripMain, pressed && styles.pressed]}
             onPress={() => router.push(`/order/${repeatOrder.id}` as any)}
             accessibilityRole="button"
             accessibilityLabel={t('home.repeatOpenOrderA11y')}
           >
-            <View style={styles.repeatIconWrap}>
-              <MaterialCommunityIcons name="history" size={20} color={PURPLE} />
-            </View>
-            <View style={styles.repeatTextWrap}>
-              <Text style={styles.repeatTitle}>{t('home.repeatTitle')}</Text>
-              <Text style={styles.repeatSub} numberOfLines={1}>
-                {t('home.repeatSubtitle', {
-                  code: String(repeatOrder.code || `#${repeatOrder.id}`),
-                  count: Array.isArray(repeatOrder.items) ? repeatOrder.items.length : 0,
-                })}
-              </Text>
-            </View>
+            <MaterialCommunityIcons name="history" size={16} color={PURPLE} />
+            <Text style={styles.repeatStripText} numberOfLines={1}>
+              {t('home.repeatStrip', {
+                code: String(repeatOrder.code || `#${repeatOrder.id}`),
+              })}
+            </Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
-              styles.repeatBtn,
+              styles.repeatStripAction,
               (repeating || addingId != null) && { opacity: 0.55 },
               pressed && styles.pressed,
             ]}
@@ -461,9 +473,9 @@ export default function HomeScreen() {
             testID="home-repeat-action"
           >
             {repeating ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={PURPLE} />
             ) : (
-              <Text style={styles.repeatBtnText}>{t('home.repeatAction')}</Text>
+              <Text style={styles.repeatStripActionText}>{t('home.repeatAction')}</Text>
             )}
           </Pressable>
         </View>
@@ -718,27 +730,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   headerLogo: { width: 42, height: 42 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
-  cashbackChip: {
-    maxWidth: 128,
-    minHeight: 36,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    backgroundColor: LAVENDER,
-    borderWidth: 1,
-    borderColor: '#E4D9FF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  cashbackChipText: {
-    flexShrink: 1,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    lineHeight: 15,
-    color: PURPLE_DEEP,
-  },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   roundBtn: {
     width: 44,
     height: 44,
@@ -781,12 +773,30 @@ const styles = StyleSheet.create({
     color: PURPLE_DEEP,
     letterSpacing: -0.3,
   },
-  greetSub: {
+  greetMetaRow: {
     marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  greetSub: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     lineHeight: 19,
     color: MUTED,
+  },
+  greetMetaSep: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 19,
+    color: '#C4BDCF',
+  },
+  greetCashback: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 19,
+    color: PURPLE,
   },
 
   searchBox: {
@@ -796,10 +806,11 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderRadius: 16,
     height: 52,
-    paddingHorizontal: 14,
+    paddingLeft: 14,
+    paddingRight: 6,
     borderWidth: 1,
     borderColor: '#ECE7F6',
-    marginBottom: SPACE,
+    marginBottom: 6,
     shadowColor: '#1A1040',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -815,96 +826,64 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     outlineStyle: 'none' as any,
   },
-
-  branchChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#ECE7F6',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: SPACE,
+  searchDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: '#E8E3F0',
   },
-  branchChipIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: LAVENDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  branchChipBody: { flex: 1, minWidth: 0 },
-  branchChipLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    lineHeight: 14,
-    color: MUTED,
-  },
-  branchChipName: {
-    marginTop: 1,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    lineHeight: 18,
-    color: PURPLE_DEEP,
-  },
-
-  repeatCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: CARD_BG,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E4D9FF',
-    padding: 10,
-    marginBottom: SPACE,
-  },
-  repeatMain: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  repeatIconWrap: {
+  searchBranchBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: LAVENDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  repeatTextWrap: { flex: 1, minWidth: 0 },
-  repeatTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 18,
-    color: PURPLE_DEEP,
+  branchCaptionHit: {
+    marginBottom: SPACE,
+    paddingHorizontal: 2,
   },
-  repeatSub: {
-    marginTop: 2,
-    fontFamily: 'Inter_400Regular',
+  branchCaption: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
     lineHeight: 16,
     color: MUTED,
   },
-  repeatBtn: {
-    backgroundColor: PURPLE,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    minHeight: 40,
-    minWidth: 88,
+
+  repeatStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: SPACE,
+    paddingVertical: 2,
+  },
+  repeatStripMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  repeatStripText: {
+    flex: 1,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    lineHeight: 17,
+    color: PURPLE_DEEP,
+  },
+  repeatStripAction: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: LAVENDER,
+    minWidth: 72,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  repeatBtnText: {
+  repeatStripActionText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 13,
-    lineHeight: 16,
-    color: '#FFFFFF',
+    fontSize: 12,
+    lineHeight: 15,
+    color: PURPLE,
   },
 
   heroWrap: {
