@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily VaksinaMed PostgreSQL backup at 02:15 Asia/Tashkent-ish (UTC 21:15 previous day ≈ local winter; host TZ used)
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
