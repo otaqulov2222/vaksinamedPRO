@@ -73,9 +73,9 @@ Technical code readiness (P1–P13.1, typecheck, API/admin build, security tests
 | Evidence to close | Provider console/API status; retention days; PITR window |
 | Owner | Database / platform ops |
 | Rollback | N/A (enable backups; do not disable without replacement) |
-| Current | **NOT_PROVEN** / **OPS_REQUIRED** |
-| Phase 12.29 workspace check | `DATABASE_URL=MISSING`; local `5432`/`55432` **CLOSED**; no managed provider selected; no IaC |
-| Phase 12.37 workspace check | Re-verified 2026-09-28 — still **MISSING** URL/provider; TCP closed; PGlite local; restore drill **NOT RUN**; RPO/RTO **NOT_ESTABLISHED** |
+| Current | **OPS_REQUIRED** for **managed cloud** PITR (selected provider: DigitalOcean) |
+| Eskiz VPS self-managed (2026-11-09) | Hosting is **Eskiz** (`vps12618`), not Hetzner. Logical dump timer + restore drill **PASS**; local WAL archive (`archive_mode=on`) **PASS**. This is **not** equivalent to managed PITR and does **not** close P0-1 managed gate. |
+| Phase 12.29 / 12.37 workspace check | Historical MISSING notes remain for local-dev workspaces; live Eskiz has host Postgres |
 
 ### 1.2 Restore drill
 

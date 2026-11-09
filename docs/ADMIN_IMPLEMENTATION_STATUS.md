@@ -47,19 +47,23 @@ Delivery history/ETA/filters intentionally **not** done (`DELIVERY_DISABLED` pic
 | Staging HTTP role smoke | **PASS** on Eskiz `APP_ENV=staging` (`https://77-83-206-192.sslip.io`, 2026-11-06): HQ GET matrix 200; cashier 403 on dashboard/reports/audit/settings; foreign `branchId` IDOR 403; anon audit 401; HQ settings spend ratio write round-trip 30→31→30. Password login blocked by WebAuthn — sessions minted via `admin-staging-role-smoke-mint.ts` (`SMOKE_MINT_ENABLED=1`). |
 | Live deploy Phase B+C | **PASS** Eskiz VPS `491486e` (2026-11-06): `GET /api/healthz` HTTPS 200 `database:up` postgres; `GET /api/cashback/rules` publishes `ttlAppliesTo=new_grants_only` + welcome/birthday/deliveryFee fields |
 
-### OPS gates snapshot (2026-11-09, Eskiz live)
+### OPS gates snapshot (2026-11-09, Eskiz VPS `vps12618` / `77.83.206.192`)
+
+> Hosting: **Eskiz VPS** (Ubuntu 24.04) — not Hetzner, not cloud managed DB. Self-managed hardening below does **not** close DigitalOcean Managed PG/Valkey/KMS gates.
 
 | Gate | Live Eskiz status |
 |------|-------------------|
 | HTTPS edge | **PASS** — nginx TLS on `https://77-83-206-192.sslip.io` (sslip.io, not custom domen) |
 | Custom domen | **OPS_REQUIRED** — haqiqiy domen hali yo‘q (DNS A/AAAA + certbot) |
-| API + Postgres | **PASS** — healthz `database:up` / `driver:postgres` (`vaksinamed_staging`) |
-| Redis live verify (P0-4) | **PASS (local)** — `REDIS_URL=redis://127.0.0.1`, `PING=PONG`, admin login probes write `rl:v1:*` keys. Not managed/`rediss://` |
-| Payme/Click sandbox E2E (P0-3) | **PARTIAL** — `PAYME_MERCHANT_API_ENABLED=1`, `CLICK_MERCHANT_API_ENABLED=1`, `MERCHANT_SECRET_KEK` set; full sandbox E2E still needs provider sandbox evidence / `pnpm sandbox:e2e` |
-| Host PG logical backup + restore (P0-1 local) | **PASS** — `vaksinamed-pg-backup.timer` daily 02:15; dump ~793KB; restore drill → 47 public tables then dropped. Managed cloud PITR still **OPS_REQUIRED** |
-| Merchant KMS (P0-2) | **PARTIAL** — app KEK present on host; managed KMS still **OPS_REQUIRED** |
+| API + Postgres | **PASS** — healthz `database:up` / `driver:postgres` (`vaksinamed_staging`); PG+Redis bind `127.0.0.1` only |
+| Redis live verify (P0-4 local) | **PASS (self-managed)** — `requirepass` SET; `REDIS_URL` auth=yes localhost; `PING=PONG`; healthz 200 after restart. Not managed/`rediss://` |
+| Payme/Click sandbox E2E (P0-3) | **PARTIAL** — flags ON; Termiz pilot; full sandbox E2E still needs provider evidence |
+| Host PG logical backup + restore | **PASS** — daily timer 02:15; dump ~814KB; restore drill → **47** public tables then dropped |
+| Host PG WAL archive (local continuous) | **PASS (self-managed)** — `archive_mode=on`, `wal_level=replica`, `/var/lib/postgresql/wal_archive` (proved via `pg_switch_wal`). **Not** cloud PITR |
+| Merchant KEK (P0-2 ENVIRONMENT_KEK) | **PASS (self-managed)** — `MERCHANT_SECRET_KEK` SET; branches `payme_enc=1` / `click_enc=1` / plaintext=0. Managed cloud KMS still **OPS_REQUIRED** |
+| Managed cloud PG PITR / Valkey / KMS | **OPS_REQUIRED** — provider decision remains DigitalOcean; Eskiz VPS cannot provide managed products |
 
-Artifacts: `infra/scripts/backup-live-pg.sh`, `infra/systemd/vaksinamed-pg-backup.{service,timer}`, `infra/scripts/ops-redis-verify.sh`.
+Artifacts: `infra/scripts/backup-live-pg.sh`, `infra/systemd/vaksinamed-pg-backup.{service,timer}`, `infra/scripts/ops-redis-verify.sh`, `infra/scripts/ops-eskiz-harden-audit.sh`, `infra/scripts/ops-eskiz-harden-apply.sh`.
 
 ---
 
