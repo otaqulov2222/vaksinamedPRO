@@ -15,6 +15,7 @@
     "seed:staging-catalog": "tsx src/scripts/seed-staging-catalog.ts",
     "sync:official-branches": "tsx src/scripts/sync-official-branches.ts",
     "sync:official-branch-hours": "tsx src/scripts/sync-official-branch-hours.ts",
+    "sync:official-branch-geo": "tsx src/scripts/sync-official-branch-geo.ts",
     "cleanup:junk-catalog": "tsx src/scripts/cleanup-junk-catalog.ts",
     "set-admin-password": "tsx src/scripts/set-admin-password.ts",
     "push": "node ./scripts/push-guard.mjs",
