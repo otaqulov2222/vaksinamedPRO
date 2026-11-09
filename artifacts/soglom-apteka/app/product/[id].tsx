@@ -395,10 +395,6 @@ export default function ProductScreen() {
           <View style={styles.cashbackBadge}>
             <Text style={styles.cashbackBadgeText}>{t('catalog.cashbackBadge')}</Text>
           </View>
-          <View style={styles.ratingBadge}>
-            <MaterialCommunityIcons name="star" size={13} color="#F59E0B" />
-            <Text style={styles.ratingBadgeText}>{/* i18n-ignore */}4.9</Text>
-          </View>
 
           {productImg ? (
             <Image

@@ -213,6 +213,102 @@ export function AppProvider({ children }: PropsWithChildren) {
   const fmt = useMemo(() => createFormatters(language), [language]);
   const loading = !languageReady || !sessionReady;
 
+  // Profile-derived fields are independent of language — keep them stable across setLanguage
+  // so language switches only pay for t/fmt consumers, not a full transactions remap.
+  const balance = useMemo(
+    () => (profile != null && Number.isFinite(Number(profile.balance)) ? Number(profile.balance) : 0),
+    [profile],
+  );
+
+  const user = useMemo<AppContextValue['user']>(() => ({
+    name: [profile?.firstName, profile?.lastName].filter(Boolean).join(' '),
+    phone: profile?.phone ? String(profile.phone) : '',
+    tier: profile?.tier != null && String(profile.tier).trim() ? String(profile.tier).trim() : '',
+    purchases: profile != null && Number.isFinite(Number(profile.purchasesCount))
+      ? Math.max(0, Math.floor(Number(profile.purchasesCount)))
+      : 0,
+    total: profile != null && Number.isFinite(Number(profile.totalPurchases))
+      ? Math.max(0, Math.floor(Number(profile.totalPurchases)))
+      : 0,
+    saved: profile != null && Number.isFinite(Number(profile.savedAmount))
+      ? Math.max(0, Math.floor(Number(profile.savedAmount)))
+      : 0,
+    qrCode: profile?.qrCode ? String(profile.qrCode) : '',
+    birthDate: profile?.birthDate ? String(profile.birthDate).slice(0, 10) : null,
+    birthdayActive: Boolean(profile?.birthdayActive),
+    birthdayExtraBps: Number.isFinite(Number(profile?.birthdayExtraBps))
+      ? Math.max(0, Math.floor(Number(profile.birthdayExtraBps)))
+      : 0,
+    grants: profile?.grants && typeof profile.grants === 'object'
+      ? {
+          ttlDays: Math.max(0, Math.floor(Number(profile.grants.ttlDays) || 0)),
+          expiringAmount: Math.max(0, Math.floor(Number(profile.grants.expiringAmount) || 0)),
+          nextExpiresAt: profile.grants.nextExpiresAt ? String(profile.grants.nextExpiresAt) : null,
+        }
+      : null,
+  }), [profile]);
+
+  const transactions = useMemo<Transaction[]>(() => {
+    if (!Array.isArray(profile?.transactions)) return [];
+    return profile.transactions.map((item: any) => {
+      const sourceTypeRaw = item?.sourceType != null ? String(item.sourceType).toUpperCase() : '';
+      const sourceType =
+        sourceTypeRaw === 'ORDER' ||
+        sourceTypeRaw === 'POS' ||
+        sourceTypeRaw === 'SYSTEM' ||
+        sourceTypeRaw === 'FOM_POS'
+          ? (sourceTypeRaw as Transaction['sourceType'])
+          : item?.sourceType === null
+            ? null
+            : undefined;
+      const branchName =
+        item?.branchName != null && String(item.branchName).trim()
+          ? String(item.branchName).trim()
+          : item?.branch != null && String(item.branch).trim()
+            ? String(item.branch).trim()
+            : '';
+      return {
+        id: String(item?.id ?? item?.ledgerId ?? ''),
+        date: item?.date != null ? String(item.date) : item?.createdAt != null ? String(item.createdAt).slice(0, 10) : '',
+        title: item?.title != null ? String(item.title) : '',
+        branch: branchName,
+        amount: Number(item?.amount) || 0,
+        cashback: Number(item?.cashback) || 0,
+        kind: item?.kind === 'use' ? 'use' : item?.kind === 'void' ? 'void' : 'earn',
+        entryType: item?.entryType != null ? String(item.entryType) : undefined,
+        createdAt: item?.createdAt != null ? String(item.createdAt) : undefined,
+        sourceType,
+        sourceKey: item?.sourceKey != null ? String(item.sourceKey) : item?.sourceKey === null ? null : undefined,
+        sourceLabel: item?.sourceLabel != null ? String(item.sourceLabel) : undefined,
+        sourceContract: item?.sourceContract === 'CONTRACT_PENDING' ? 'CONTRACT_PENDING' : undefined,
+        orderId:
+          item?.orderId != null && Number.isFinite(Number(item.orderId))
+            ? Number(item.orderId)
+            : item?.orderId === null
+              ? null
+              : undefined,
+        orderCode: item?.orderCode != null ? String(item.orderCode) : item?.orderCode === null ? null : undefined,
+        receiptId: item?.receiptId != null ? String(item.receiptId) : item?.receiptId === null ? null : undefined,
+        branchId:
+          item?.branchId != null && Number.isFinite(Number(item.branchId))
+            ? Number(item.branchId)
+            : item?.branchId === null
+              ? null
+              : undefined,
+        branchName: branchName || null,
+        commercialTransactionId:
+          item?.commercialTransactionId != null && Number.isFinite(Number(item.commercialTransactionId))
+            ? Number(item.commercialTransactionId)
+            : item?.commercialTransactionId === null
+              ? null
+              : undefined,
+      } satisfies Transaction;
+    });
+  }, [profile]);
+
+  const rewards = profile?.rewards ?? [];
+  const redeemedRewards = profile?.redeemedRewards ?? [];
+
   const value = useMemo<AppContextValue>(() => ({
     language,
     setLanguage,
@@ -220,102 +316,36 @@ export function AppProvider({ children }: PropsWithChildren) {
     fmt,
     loading,
     isAuthenticated,
-    // balance = getAuthoritativeBalance (spendable cashback). Never invent money.
-    balance: profile != null && Number.isFinite(Number(profile.balance)) ? Number(profile.balance) : 0,
-    user: {
-      // Empty when unknown — screens must not invent demo names/tiers.
-      name: [profile?.firstName, profile?.lastName].filter(Boolean).join(' '),
-      phone: profile?.phone ? String(profile.phone) : '',
-      tier: profile?.tier != null && String(profile.tier).trim() ? String(profile.tier).trim() : '',
-      purchases: profile != null && Number.isFinite(Number(profile.purchasesCount))
-        ? Math.max(0, Math.floor(Number(profile.purchasesCount)))
-        : 0,
-      total: profile != null && Number.isFinite(Number(profile.totalPurchases))
-        ? Math.max(0, Math.floor(Number(profile.totalPurchases)))
-        : 0,
-      // savedAmount = cumulative saved field (NOT spendable balance). Do not treat as wallet.
-      saved: profile != null && Number.isFinite(Number(profile.savedAmount))
-        ? Math.max(0, Math.floor(Number(profile.savedAmount)))
-        : 0,
-      qrCode: profile?.qrCode ? String(profile.qrCode) : '',
-      birthDate: profile?.birthDate ? String(profile.birthDate).slice(0, 10) : null,
-      birthdayActive: Boolean(profile?.birthdayActive),
-      birthdayExtraBps: Number.isFinite(Number(profile?.birthdayExtraBps))
-        ? Math.max(0, Math.floor(Number(profile.birthdayExtraBps)))
-        : 0,
-      grants: profile?.grants && typeof profile.grants === 'object'
-        ? {
-            ttlDays: Math.max(0, Math.floor(Number(profile.grants.ttlDays) || 0)),
-            expiringAmount: Math.max(0, Math.floor(Number(profile.grants.expiringAmount) || 0)),
-            nextExpiresAt: profile.grants.nextExpiresAt ? String(profile.grants.nextExpiresAt) : null,
-          }
-        : null,
-    },
-    transactions: Array.isArray(profile?.transactions)
-      ? profile.transactions.map((item: any) => {
-          const sourceTypeRaw = item?.sourceType != null ? String(item.sourceType).toUpperCase() : '';
-          const sourceType =
-            sourceTypeRaw === 'ORDER' ||
-            sourceTypeRaw === 'POS' ||
-            sourceTypeRaw === 'SYSTEM' ||
-            sourceTypeRaw === 'FOM_POS'
-              ? (sourceTypeRaw as Transaction['sourceType'])
-              : item?.sourceType === null
-                ? null
-                : undefined;
-          const branchName =
-            item?.branchName != null && String(item.branchName).trim()
-              ? String(item.branchName).trim()
-              : item?.branch != null && String(item.branch).trim()
-                ? String(item.branch).trim()
-                : '';
-          return {
-            id: String(item?.id ?? item?.ledgerId ?? ''),
-            date: item?.date != null ? String(item.date) : item?.createdAt != null ? String(item.createdAt).slice(0, 10) : '',
-            title: item?.title != null ? String(item.title) : '',
-            branch: branchName,
-            amount: Number(item?.amount) || 0,
-            cashback: Number(item?.cashback) || 0,
-            kind: item?.kind === 'use' ? 'use' : item?.kind === 'void' ? 'void' : 'earn',
-            entryType: item?.entryType != null ? String(item.entryType) : undefined,
-            createdAt: item?.createdAt != null ? String(item.createdAt) : undefined,
-            sourceType,
-            sourceKey: item?.sourceKey != null ? String(item.sourceKey) : item?.sourceKey === null ? null : undefined,
-            sourceLabel: item?.sourceLabel != null ? String(item.sourceLabel) : undefined,
-            sourceContract: item?.sourceContract === 'CONTRACT_PENDING' ? 'CONTRACT_PENDING' : undefined,
-            orderId:
-              item?.orderId != null && Number.isFinite(Number(item.orderId))
-                ? Number(item.orderId)
-                : item?.orderId === null
-                  ? null
-                  : undefined,
-            orderCode: item?.orderCode != null ? String(item.orderCode) : item?.orderCode === null ? null : undefined,
-            receiptId: item?.receiptId != null ? String(item.receiptId) : item?.receiptId === null ? null : undefined,
-            branchId:
-              item?.branchId != null && Number.isFinite(Number(item.branchId))
-                ? Number(item.branchId)
-                : item?.branchId === null
-                  ? null
-                  : undefined,
-            branchName: branchName || null,
-            commercialTransactionId:
-              item?.commercialTransactionId != null && Number.isFinite(Number(item.commercialTransactionId))
-                ? Number(item.commercialTransactionId)
-                : item?.commercialTransactionId === null
-                  ? null
-                  : undefined,
-          } satisfies Transaction;
-        })
-      : [],
-    rewards: profile?.rewards ?? [],
-    redeemedRewards: profile?.redeemedRewards ?? [],
+    balance,
+    user,
+    transactions,
+    rewards,
+    redeemedRewards,
     cartCount,
     cartSubtotal,
     refresh,
     syncCartCount,
     logout,
     redeemReward,
-  }), [profile, language, t, fmt, loading, cartCount, cartSubtotal, isAuthenticated, refresh, setLanguage, syncCartCount, logout, redeemReward]);
+  }), [
+    language,
+    setLanguage,
+    t,
+    fmt,
+    loading,
+    isAuthenticated,
+    balance,
+    user,
+    transactions,
+    rewards,
+    redeemedRewards,
+    cartCount,
+    cartSubtotal,
+    refresh,
+    syncCartCount,
+    logout,
+    redeemReward,
+  ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

@@ -101,42 +101,44 @@ router.get("/catalog/products", async (req, res, next) => {
       }
     })();
 
-    const totalRow = await db
-      .select({ value: count() })
-      .from(products)
-      .where(whereClause);
-    const total = Number(totalRow[0]?.value || 0);
-
     let rows: Array<typeof products.$inferSelect & { availableQuantity?: number | null }>;
+    let total = 0;
 
     if (branchId) {
-      const joined = await db
-        .select({
-          product: products,
-          availableQuantity: availableExpr(),
-        })
-        .from(products)
-        .leftJoin(
-          productStocks,
-          and(eq(productStocks.productId, products.id), eq(productStocks.branchId, branchId)),
-        )
-        .where(whereClause)
-        .orderBy(...orderBy)
-        .limit(limit)
-        .offset(offset);
-
+      const [totalRow, joined] = await Promise.all([
+        db.select({ value: count() }).from(products).where(whereClause),
+        db
+          .select({
+            product: products,
+            availableQuantity: availableExpr(),
+          })
+          .from(products)
+          .leftJoin(
+            productStocks,
+            and(eq(productStocks.productId, products.id), eq(productStocks.branchId, branchId)),
+          )
+          .where(whereClause)
+          .orderBy(...orderBy)
+          .limit(limit)
+          .offset(offset),
+      ]);
+      total = Number(totalRow[0]?.value || 0);
       rows = joined.map((row) => ({
         ...row.product,
         availableQuantity: row.availableQuantity == null ? 0 : Number(row.availableQuantity),
       }));
     } else {
-      const plain = await db
-        .select()
-        .from(products)
-        .where(whereClause)
-        .orderBy(...orderBy)
-        .limit(limit)
-        .offset(offset);
+      const [totalRow, plain] = await Promise.all([
+        db.select({ value: count() }).from(products).where(whereClause),
+        db
+          .select()
+          .from(products)
+          .where(whereClause)
+          .orderBy(...orderBy)
+          .limit(limit)
+          .offset(offset),
+      ]);
+      total = Number(totalRow[0]?.value || 0);
       rows = plain;
     }
 
@@ -197,14 +199,19 @@ router.get("/catalog/products/:id", async (req, res, next) => {
     }
 
     const analogs = rows[0].analogGroup
-      ? await db.select().from(products).where(eq(products.analogGroup, rows[0].analogGroup))
+      ? await db
+          .select()
+          .from(products)
+          .where(and(eq(products.analogGroup, rows[0].analogGroup), sql`${products.id} != ${id}`))
+          .orderBy(asc(products.price))
+          .limit(8)
       : [];
 
     const stockQuery = db.select().from(productStocks).where(
       branchId
         ? and(eq(productStocks.productId, id), eq(productStocks.branchId, branchId))
         : eq(productStocks.productId, id),
-    );
+    ).limit(branchId ? 1 : 40);
     const stockRows = await stockQuery;
     const availability = stockRows.map((row) => {
       const available =
@@ -271,7 +278,8 @@ router.get(["/catalog/products/:id/analogs", "/api/catalog/products/:id/analogs"
         .select()
         .from(products)
         .where(and(eq(products.analogGroup, product.analogGroup), sql`${products.id} != ${product.id}`))
-        .orderBy(asc(products.price));
+        .orderBy(asc(products.price))
+        .limit(8);
     } else {
       analogRows = await db
         .select()
@@ -412,7 +420,8 @@ router.post("/catalog/prescription/scan", async (req, res, next) => {
     const candidates: CatalogProductCandidate[] = allProducts.map((p) => ({
       ...p,
       analogGroup: p.analogGroup || undefined,
-      availableQuantity: branchStocksMap.has(p.id) ? branchStocksMap.get(p.id) : 10,
+      // Unknown stock must stay unknown — never invent demo quantity=10.
+      availableQuantity: branchStocksMap.has(p.id) ? branchStocksMap.get(p.id) : undefined,
     }));
 
     const result = scanAndMatchPrescriptionText(extractedText, candidates);
@@ -461,7 +470,7 @@ router.post("/catalog/prescription/chat", async (req, res, next) => {
     const candidates: CatalogProductCandidate[] = allProducts.map((p) => ({
       ...p,
       analogGroup: p.analogGroup || undefined,
-      availableQuantity: branchStocksMap.has(p.id) ? branchStocksMap.get(p.id) : 10,
+      availableQuantity: branchStocksMap.has(p.id) ? branchStocksMap.get(p.id) : undefined,
     }));
 
     const history = Array.isArray(req.body?.history) ? req.body.history : undefined;

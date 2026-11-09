@@ -264,18 +264,11 @@ function ProductCard({
             <Text style={styles.cashbackBadgeText}>{t('catalog.cashbackBadge')}</Text>
           </View>
 
-          {/* Floating rating or Rx badge */}
           {showRx ? (
             <View style={styles.rxCorner}>
               <Text style={styles.rxChipText}>{t('catalog.rxShort')}</Text>
             </View>
-          ) : (
-            <View style={styles.ratingBadge}>
-              <Feather name="star" size={10} color="#D97706" />
-              {/* i18n-ignore */}
-              <Text style={styles.ratingBadgeText}>4.9</Text>
-            </View>
-          )}
+          ) : null}
 
           {item.image ? (
             <Image
@@ -420,8 +413,9 @@ export default function CatalogScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ q?: string | string[] }>();
-  const { refresh, cartCount, cartSubtotal, t, fmt, language } = useApp();
+  const { syncCartCount, cartCount, cartSubtotal, t, fmt, language } = useApp();
   const narrow = width < 380;
+  const branchFetchedAt = useRef(0);
 
   const initialQ = routeQueryValue(params);
   const [query, setQuery] = useState(initialQ);
@@ -503,16 +497,20 @@ export default function CatalogScreen() {
       .finally(() => setCatLoading(false));
   }, []);
 
-  const refreshBranchFromCart = useCallback(async () => {
+  const refreshBranchFromCart = useCallback(async (opts?: { force?: boolean }) => {
+    if (!opts?.force && Date.now() - branchFetchedAt.current < 20_000 && branchId != null) {
+      return;
+    }
     try {
       const c = await api.cart();
       const id = c?.branch?.id ?? c?.cart?.branchId ?? null;
       const next = id != null && Number.isFinite(Number(id)) ? Number(id) : null;
       setBranchId((prev) => (prev === next ? prev : next));
+      branchFetchedAt.current = Date.now();
     } catch {
       setBranchId(null);
     }
-  }, []);
+  }, [branchId]);
 
   useEffect(() => {
     loadCategories();
@@ -692,8 +690,13 @@ export default function CatalogScreen() {
       }
       setAddingId(key);
       try {
-        await api.addToCart(Number(p.id));
-        await refresh();
+        const cartRes = await api.addToCart(Number(p.id));
+        const qty = Array.isArray(cartRes?.items)
+          ? cartRes.items.reduce((sum: number, item: any) => sum + Math.max(0, Number(item.quantity) || 0), 0)
+          : Number(cartRes?.items?.length) || 0;
+        const subtotal = Number(cartRes?.subtotal);
+        syncCartCount(qty, Number.isFinite(subtotal) ? subtotal : undefined);
+        branchFetchedAt.current = 0;
         setRecentlyAddedId(key);
         setTimeout(() => {
           setRecentlyAddedId((cur) => (cur === key ? null : cur));
@@ -714,7 +717,7 @@ export default function CatalogScreen() {
         setAddingId(null);
       }
     },
-    [hasBranch, refresh, t],
+    [hasBranch, syncCartCount, t],
   );
 
   const clearSearch = () => {

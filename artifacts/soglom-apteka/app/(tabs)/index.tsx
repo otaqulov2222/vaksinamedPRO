@@ -1,7 +1,7 @@
 import { Feather } from '@/components/AppIcon';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -110,19 +110,26 @@ export default function HomeScreen() {
   const [repeating, setRepeating] = useState(false);
   const heroHeight = Math.max(140, Math.round(contentW / HERO_AR));
   const branchId = cartBranch?.id ?? null;
+  const contextFetchedAt = useRef(0);
+  const productsFetchedAt = useRef(0);
+  const FOCUS_FRESH_MS = 20_000;
 
-  const loadHomeContext = useCallback(async () => {
+  const loadHomeContext = useCallback(async (opts?: { force?: boolean }) => {
     if (!isAuthenticated) {
       setCartBranch(null);
       setRepeatOrder(null);
       setContextLoading(false);
+      contextFetchedAt.current = 0;
+      return;
+    }
+    if (!opts?.force && Date.now() - contextFetchedAt.current < FOCUS_FRESH_MS) {
       return;
     }
     setContextLoading(true);
     try {
       const [cartRes, ordersRes] = await Promise.all([
         api.cart().catch(() => null),
-        api.orders().catch(() => null),
+        api.orders('?limit=10&offset=0').catch(() => null),
       ]);
       const branchRow = cartRes?.branch;
       const bid = Number(branchRow?.id);
@@ -132,23 +139,28 @@ export default function HomeScreen() {
         setCartBranch(null);
       }
       setRepeatOrder(pickRepeatableOrder(ordersRes?.orders));
+      contextFetchedAt.current = Date.now();
     } finally {
       setContextLoading(false);
     }
   }, [isAuthenticated, t]);
 
-  const loadProducts = useCallback(() => {
-    setProductsLoading(true);
+  const loadProducts = useCallback((opts?: { force?: boolean }) => {
+    if (!opts?.force && products.length > 0 && Date.now() - productsFetchedAt.current < FOCUS_FRESH_MS) {
+      return;
+    }
+    setProductsLoading(products.length === 0);
     setProductsError(false);
     const qs =
       branchId != null && Number.isFinite(branchId) && branchId > 0
-        ? `?limit=50&offset=0&branchId=${branchId}`
-        : '?limit=50&offset=0';
+        ? `?limit=24&offset=0&branchId=${branchId}`
+        : '?limit=24&offset=0';
     void api
       .products(qs)
       .then((data) => {
         setProducts(data.products || []);
         setProductsError(false);
+        productsFetchedAt.current = Date.now();
       })
       .catch(() => {
         setProducts([]);
@@ -158,11 +170,11 @@ export default function HomeScreen() {
         setProductsLoading(false);
         setRefreshing(false);
       });
-  }, [branchId]);
+  }, [branchId, products.length]);
 
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    loadProducts({ force: true });
+  }, [branchId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -173,8 +185,8 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    void loadHomeContext();
-    loadProducts();
+    void loadHomeContext({ force: true });
+    loadProducts({ force: true });
     void refresh();
   }, [loadHomeContext, loadProducts, refresh]);
 
@@ -222,8 +234,13 @@ export default function HomeScreen() {
       if (addingId) return;
       setAddingId(key);
       try {
-        await api.addToCart(productId, 1);
-        await refresh();
+        const cartRes = await api.addToCart(productId, 1);
+        const qty = Array.isArray(cartRes?.items)
+          ? cartRes.items.reduce((sum: number, item: any) => sum + Math.max(0, Number(item.quantity) || 0), 0)
+          : Number(cartRes?.items?.length) || 0;
+        const subtotal = Number(cartRes?.subtotal);
+        syncCartCount(qty, Number.isFinite(subtotal) ? subtotal : undefined);
+        contextFetchedAt.current = 0;
         setAddedIds((prev) => ({ ...prev, [key]: true }));
         setTimeout(() => {
           setAddedIds((prev) => {
@@ -234,13 +251,12 @@ export default function HomeScreen() {
         }, 1600);
         notify(t('common.navCart'), t('home.addedToCart', { name: productName || t('common.navProduct') }));
       } catch (e) {
-        // Badge unchanged — refresh only ran on success above.
         notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'home.addToCartFailed' }));
       } finally {
         setAddingId(null);
       }
     },
-    [addingId, refresh, t],
+    [addingId, syncCartCount, t],
   );
 
   const displayProducts = useMemo(() => {
@@ -475,7 +491,9 @@ export default function HomeScreen() {
             {repeating ? (
               <ActivityIndicator size="small" color={PURPLE} />
             ) : (
-              <Text style={styles.repeatStripActionText}>{t('home.repeatAction')}</Text>
+              <Text style={styles.repeatStripActionText} numberOfLines={1}>
+                {t('home.repeatAction')}
+              </Text>
             )}
           </Pressable>
         </View>
@@ -550,7 +568,9 @@ export default function HomeScreen() {
           onPress={() => router.push({ pathname: '/(tabs)/catalog', params: { q: '' } } as any)}
           hitSlop={8}
         >
-          <Text style={styles.link}>{t('common.showAll')} →</Text>
+          <Text style={styles.link} numberOfLines={1}>
+            {t('common.showAll')} →
+          </Text>
         </Pressable>
       </View>
 
@@ -578,7 +598,10 @@ export default function HomeScreen() {
                 size={15}
                 color={active ? '#FFFFFF' : PURPLE}
               />
-              <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>
+              <Text
+                style={[styles.categoryChipText, active && styles.categoryChipTextActive]}
+                numberOfLines={1}
+              >
                 {t(cat.labelKey)}
               </Text>
             </Pressable>
@@ -606,7 +629,7 @@ export default function HomeScreen() {
         <View style={styles.productsState}>
           <MaterialCommunityIcons name="cloud-off-outline" size={32} color="#94A3B8" />
           <Text style={styles.productsStateTitle}>{t('home.productsLoadFailed')}</Text>
-          <Pressable style={styles.retryBtn} onPress={loadProducts}>
+          <Pressable style={styles.retryBtn} onPress={() => loadProducts({ force: true })}>
             <Text style={styles.retryBtnText}>{t('common.retry')}</Text>
           </Pressable>
         </View>
@@ -636,11 +659,6 @@ export default function HomeScreen() {
                   <View style={styles.gridImgWrap}>
                     <View style={styles.cashbackBadge}>
                       <Text style={styles.cashbackBadgeText}>{t('home.cashbackBadge')}</Text>
-                    </View>
-                    <View style={styles.ratingBadge}>
-                      <MaterialCommunityIcons name="star" size={11} color="#F59E0B" />
-                      {/* i18n-ignore */}
-                      <Text style={styles.ratingBadgeText}>4.9</Text>
                     </View>
                     {p.image ? (
                       <Image
@@ -871,11 +889,12 @@ const styles = StyleSheet.create({
     color: PURPLE_DEEP,
   },
   repeatStripAction: {
+    flexShrink: 0,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
     backgroundColor: LAVENDER,
-    minWidth: 72,
+    maxWidth: '42%',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -941,6 +960,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   quickLabel: {
+    width: '100%',
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
     lineHeight: 15,
@@ -990,6 +1010,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   link: {
+    flexShrink: 0,
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
     lineHeight: 18,

@@ -21,9 +21,9 @@ export default defineMessages({
 
     reservation_NONE: 'Band qilinmagan',
     reservation_ACTIVE: 'Mahsulotlar band qilindi',
-    reservation_EXPIRED: 'Mahsulot band qilish muddati tugagan',
-    reservation_CANCELLED: 'Mahsulot band qilinishi bekor qilingan',
-    reservation_FULFILLED: 'Mahsulotlar buyurtmaga berilgan',
+    reservation_EXPIRED: 'Band qilish muddati tugagan',
+    reservation_CANCELLED: 'Mahsulot bandi bekor qilingan',
+    reservation_FULFILLED: 'Mahsulotlar buyurtmaga berildi',
     reservation_unknown: 'Zaxira holati noma’lum',
 
     reservationShort_ACTIVE: 'Band qilingan',

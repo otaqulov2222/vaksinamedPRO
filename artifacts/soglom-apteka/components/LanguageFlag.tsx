@@ -14,23 +14,6 @@ type Props = {
  * Windows/web often render 🇺🇿 as the letters "UZ", which collides with shortCode "UZ".
  * Uzbekistan includes crescent + 12 stars — state emblem details must stay intact.
  */
-export function LanguageFlag({ language, size = 16 }: Props) {
-  const h = Math.round(size);
-  const w = Math.round(size * 1.6);
-
-  return (
-    <View
-      style={[styles.frame, { width: w, height: h, borderRadius: Math.max(2, Math.round(size * 0.14)) }]}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-    >
-      {language === 'uz' ? <UzFlag w={w} h={h} /> : null}
-      {language === 'ru' ? <RuFlag w={w} h={h} /> : null}
-      {language === 'en' ? <EnFlag /> : null}
-    </View>
-  );
-}
-
 /** Official UZ layout: blue / white / green, red fimbriations, crescent + 12 stars (3·4·5). */
 function UzFlag({ w, h }: { w: number; h: number }) {
   const band = h / 3;
@@ -106,7 +89,7 @@ function RuFlag({ w, h }: { w: number; h: number }) {
   );
 }
 
-function EnFlag() {
+function EnFlag(_props: { w: number; h: number }) {
   // Simplified UK cross — readable at badge size without image assets.
   return (
     <View style={[styles.fill, { backgroundColor: '#012169' }]}>
@@ -118,6 +101,28 @@ function EnFlag() {
       <View style={styles.ukCrossWhiteV} />
       <View style={styles.ukCrossRedH} />
       <View style={styles.ukCrossRedV} />
+    </View>
+  );
+}
+
+const FLAG_BY_LANG: Record<Language, (props: { w: number; h: number }) => React.ReactElement> = {
+  uz: UzFlag,
+  ru: RuFlag,
+  en: EnFlag,
+};
+
+export function LanguageFlag({ language, size = 16 }: Props) {
+  const h = Math.round(size);
+  const w = Math.round(size * 1.6);
+  const Flag = FLAG_BY_LANG[language] ?? FLAG_BY_LANG.uz;
+
+  return (
+    <View
+      style={[styles.frame, { width: w, height: h, borderRadius: Math.max(2, Math.round(size * 0.14)) }]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Flag w={w} h={h} />
     </View>
   );
 }

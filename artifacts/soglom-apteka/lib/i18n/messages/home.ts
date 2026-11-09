@@ -13,7 +13,7 @@ export default defineMessages({
     heroBannerType: 'baked',
 
     quickSearch: 'Dori qidirish',
-    quickPrescription: 'Retseptni aniqlash',
+    quickPrescription: 'Retsept skani',
     quickDelivery: 'Yetkazib berish',
     quickDeliveryA11y: 'Yetkazib berish — avval savatni ochish',
 
@@ -71,7 +71,7 @@ export default defineMessages({
     otcBadge: 'Retseptsiz',
     categoryAll: 'Barchasi',
     categoryVitamins: 'Vitaminlar',
-    categoryPain: 'Og‘riq va isitma',
+    categoryPain: 'Og‘riqqa',
     categoryCold: 'Shamollash',
 
     promosTitle: 'Maxsus takliflar',
@@ -297,7 +297,7 @@ export default defineMessages({
     heroBannerType: 'overlay',
 
     quickSearch: 'Find medicine',
-    quickPrescription: 'Scan prescription',
+    quickPrescription: 'Rx scan',
     quickDelivery: 'Delivery',
     quickDeliveryA11y: 'Delivery — open the cart first',
 
@@ -334,14 +334,14 @@ export default defineMessages({
     repeatTitle: 'Reorder',
     repeatSubtitle: '{code} · {count} items',
     repeatStrip: 'Again · {code}',
-    repeatAction: 'Add to cart',
+    repeatAction: 'To cart',
     repeatActionA11y: 'Add the last order to the cart',
     repeatOpenOrderA11y: 'Order details',
     repeatNothingAdded: 'Items from this order are not in the catalog right now',
     repeatPartial: 'Some items were skipped — available ones were added to the cart',
 
-    stockInBranch: 'In stock at branch',
-    stockOutBranch: 'Not at this branch',
+    stockInBranch: 'In stock',
+    stockOutBranch: 'Out of stock',
 
     featuredProducts: 'Featured products',
     productsLoadFailed: 'Could not load products',

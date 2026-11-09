@@ -15,7 +15,7 @@ export default defineMessages({
     checkInternetHint: 'Internetni tekshirib, qayta urinib ko‘ring.',
     goToOrders: 'Buyurtmalarga o‘tish',
 
-    listSubtitle: 'Buyurtmalaringiz va ularning holati shu yerda',
+    listSubtitle: 'Buyurtmalar va holati shu yerda',
     listLoadFailed: 'Buyurtmalarni yuklab bo‘lmadi',
     listRefreshFailed: 'Yangilashda xatolik. Pastga tortib qayta urinib ko‘ring.',
     filterProgress: 'Jarayonda',

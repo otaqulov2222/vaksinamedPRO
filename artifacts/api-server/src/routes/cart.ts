@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { branches, cartItems, carts, db, orderItems, orders, productStocks, products } from "@workspace/db";
 import { requireCustomer } from "../lib/auth";
 
@@ -21,13 +21,57 @@ function availableFromStock(stock: typeof productStocks.$inferSelect | undefined
 export async function cartPayload(customerId: number) {
   const cart = await getOrCreateCart(customerId);
   const items = await db.select().from(cartItems).where(eq(cartItems.cartId, cart.id));
-  const detailed = [];
   const notices: Array<{ code: string; message: string; productId?: number; cartItemId?: number }> = [];
+  const detailed: Array<{
+    id: number;
+    cartId: number;
+    productId: number;
+    quantity: number;
+    product: typeof products.$inferSelect;
+    unitPrice: number;
+    lineTotal: number;
+    available: number | null;
+    availabilityKnown: boolean;
+    stockInsufficient: boolean;
+  }> = [];
+
+  if (items.length === 0) {
+    const branch = cart.branchId
+      ? (await db.select().from(branches).where(eq(branches.id, cart.branchId)).limit(1))[0]
+      : null;
+    return {
+      cart,
+      items: detailed,
+      subtotal: 0,
+      branch: branch || null,
+      branchRequired: true,
+      notices,
+      priceAuthority: "catalog_current" as const,
+    };
+  }
+
+  const productIds = [...new Set(items.map((item) => item.productId))];
+  const [productRows, stockRows, branch] = await Promise.all([
+    db.select().from(products).where(inArray(products.id, productIds)),
+    cart.branchId
+      ? db
+          .select()
+          .from(productStocks)
+          .where(and(eq(productStocks.branchId, cart.branchId), inArray(productStocks.productId, productIds)))
+      : Promise.resolve([] as Array<typeof productStocks.$inferSelect>),
+    cart.branchId
+      ? db.select().from(branches).where(eq(branches.id, cart.branchId)).limit(1).then((rows) => rows[0] ?? null)
+      : Promise.resolve(null),
+  ]);
+
+  const productById = new Map(productRows.map((product) => [product.id, product]));
+  const stockByProductId = new Map(stockRows.map((stock) => [stock.productId, stock]));
+  const orphanIds: number[] = [];
 
   for (const item of items) {
-    const product = (await db.select().from(products).where(eq(products.id, item.productId)).limit(1))[0];
+    const product = productById.get(item.productId);
     if (!product) {
-      await db.delete(cartItems).where(and(eq(cartItems.id, item.id), eq(cartItems.cartId, cart.id)));
+      orphanIds.push(item.id);
       notices.push({
         code: "PRODUCT_REMOVED",
         message: "Mahsulot katalogdan olib tashlangan — savatdan o‘chirildi",
@@ -36,13 +80,10 @@ export async function cartPayload(customerId: number) {
       });
       continue;
     }
+
     let available: number | null = null;
     if (cart.branchId) {
-      const stock = (await db.select().from(productStocks).where(and(
-        eq(productStocks.productId, item.productId),
-        eq(productStocks.branchId, cart.branchId),
-      )).limit(1))[0];
-      available = availableFromStock(stock);
+      available = availableFromStock(stockByProductId.get(item.productId));
       if (available < item.quantity) {
         notices.push({
           code: "STOCK_CHANGED",
@@ -52,6 +93,7 @@ export async function cartPayload(customerId: number) {
         });
       }
     }
+
     detailed.push({
       ...item,
       product,
@@ -63,10 +105,12 @@ export async function cartPayload(customerId: number) {
       stockInsufficient: cart.branchId != null && available != null && available < item.quantity,
     });
   }
+
+  if (orphanIds.length > 0) {
+    await db.delete(cartItems).where(and(eq(cartItems.cartId, cart.id), inArray(cartItems.id, orphanIds)));
+  }
+
   const subtotal = detailed.reduce((sum, item) => sum + item.lineTotal, 0);
-  const branch = cart.branchId
-    ? (await db.select().from(branches).where(eq(branches.id, cart.branchId)).limit(1))[0]
-    : null;
   return {
     cart,
     items: detailed,

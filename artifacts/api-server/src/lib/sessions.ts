@@ -88,10 +88,16 @@ export async function validateSessionToken(token: string | undefined): Promise<V
   if (new Date(session.expiresAt).getTime() <= Date.now()) return null;
   if (!secretsEqualHex(session.tokenHash, hashTokenSecret(publicId, secret))) return null;
 
-  await db
-    .update(authSessions)
-    .set({ lastSeenAt: new Date() })
-    .where(and(eq(authSessions.id, session.id), isNull(authSessions.revokedAt)));
+  // Throttle last_seen writes — every authenticated request used to UPDATE sessions.
+  const LAST_SEEN_MIN_INTERVAL_MS = 5 * 60_000;
+  const lastSeenAt = session.lastSeenAt ? new Date(session.lastSeenAt).getTime() : 0;
+  if (!Number.isFinite(lastSeenAt) || Date.now() - lastSeenAt >= LAST_SEEN_MIN_INTERVAL_MS) {
+    void db
+      .update(authSessions)
+      .set({ lastSeenAt: new Date() })
+      .where(and(eq(authSessions.id, session.id), isNull(authSessions.revokedAt)))
+      .catch(() => undefined);
+  }
 
   return {
     id: session.id,

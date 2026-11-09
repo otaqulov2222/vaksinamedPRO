@@ -202,8 +202,19 @@ export function normalizeTiersInput(
   return out;
 }
 
+const POLICY_CACHE_TTL_MS = 30_000;
+let policyCache: { at: number; value: CashbackPolicy } | null = null;
+
+export function invalidateCashbackPolicyCache() {
+  policyCache = null;
+}
+
 /** Full HQ cashback policy from system_settings (defaults on miss). */
 export async function getCashbackPolicy(executor: DbLike = db): Promise<CashbackPolicy> {
+  // Default db reads are hot-path (profile/checkout); short TTL avoids 8 settings roundtrips.
+  if (executor === db && policyCache && Date.now() - policyCache.at < POLICY_CACHE_TTL_MS) {
+    return policyCache.value;
+  }
   const defaults = defaultCashbackPolicy();
   const [ratioRaw, minRaw, ttlRaw, tiersRaw, welcomeRaw, bdayWinRaw, bdayExtraRaw, feeRaw] =
     await Promise.all([
@@ -216,7 +227,7 @@ export async function getCashbackPolicy(executor: DbLike = db): Promise<Cashback
       readSetting(KEY_BIRTHDAY_EXTRA, executor),
       readSetting(KEY_DELIVERY_FEE, executor),
     ]);
-  return {
+  const value: CashbackPolicy = {
     maxSpendRatio: ratioRaw != null ? normalizeSpendRatio(ratioRaw) : DEFAULT_MAX_SPEND_RATIO,
     minPurchase: parseMinPurchase(minRaw),
     ttlDays: parseTtlDays(ttlRaw),
@@ -226,6 +237,8 @@ export async function getCashbackPolicy(executor: DbLike = db): Promise<Cashback
     birthdayExtraBps: parseNonNegInt(bdayExtraRaw, defaults.birthdayExtraBps, 2000),
     deliveryFee: parseNonNegInt(feeRaw, defaults.deliveryFee, 500_000),
   };
+  if (executor === db) policyCache = { at: Date.now(), value };
+  return value;
 }
 
 export type CashbackPolicyPatch = {
@@ -425,6 +438,7 @@ export async function setCashbackPolicy(
     );
   }
 
+  invalidateCashbackPolicyCache();
   return { previous, next, changed };
 }
 

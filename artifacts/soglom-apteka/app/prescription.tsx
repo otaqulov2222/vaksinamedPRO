@@ -40,29 +40,30 @@ function inferChatLanguage(text: string, fallback: ChatLang): ChatLang {
     .trim();
   if (!q) return fallback;
 
+  // Heuristics for chat-locale detection (detector patterns, not UI copy).
   if (
-    /(?:o['`]?zbek|uzbek|узбек).{0,24}(?:til|язык|cha)|(?:tilida|по-узбек|in uzbek).{0,24}(?:gap\w*|javob|speak)|o['`]?zbekcha\s*(?:gap\w*|javob)/i.test(
+    /(?:o['`]?zbek|uzbek|узбек).{0,24}(?:til|язык|cha)|(?:tilida|по-узбек|in uzbek).{0,24}(?:gap\w*|javob|speak)|o['`]?zbekcha\s*(?:gap\w*|javob)/i.test( // i18n-ignore
       q,
     )
   ) {
     return 'uz';
   }
   if (
-    /(?:rus(?:cha)?|русск|russian).{0,24}(?:til|язык|gap\w*|javob)|(?:по-русски|in russian|на русском).{0,24}(?:gap\w*|javob|speak)|ruscha\s*(?:gap\w*|javob)/i.test(
+    /(?:rus(?:cha)?|русск|russian).{0,24}(?:til|язык|gap\w*|javob)|(?:по-русски|in russian|на русском).{0,24}(?:gap\w*|javob|speak)|ruscha\s*(?:gap\w*|javob)/i.test( // i18n-ignore
       q,
     )
   ) {
     return 'ru';
   }
   if (
-    /(?:ingliz|english|англ).{0,24}(?:til|язык|gap\w*|javob)|(?:in english|на английском|по-английски)/i.test(
+    /(?:ingliz|english|англ).{0,24}(?:til|язык|gap\w*|javob)|(?:in english|на английском|по-английски)/i.test( // i18n-ignore
       q,
     )
   ) {
     return 'en';
   }
 
-  const cyr = (q.match(/[а-яё]/gi) || []).length;
+  const cyr = (q.match(/[а-яё]/gi) || []).length; // i18n-ignore
   const lat = (q.match(/[a-z']/gi) || []).length;
   if (cyr >= 4 && cyr > lat * 1.2) return 'ru';
   if (

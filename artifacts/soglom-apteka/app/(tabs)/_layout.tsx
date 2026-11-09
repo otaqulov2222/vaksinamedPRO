@@ -142,16 +142,17 @@ export default function TabLayout() {
               } as any)
             : {}),
         },
+        tabBarAllowFontScaling: false,
         tabBarLabelStyle: {
           fontFamily: 'Inter_600SemiBold',
           fontSize: 10,
-          lineHeight: 13,
+          lineHeight: 12,
           marginBottom: isWeb ? 4 : 2,
           alignSelf: 'stretch',
-          marginHorizontal: -5,
+          marginHorizontal: -6,
           maxWidth: 200,
           textAlign: 'center',
-          letterSpacing: -0.1,
+          letterSpacing: -0.15,
         },
         tabBarIconStyle: {
           marginTop: 2,

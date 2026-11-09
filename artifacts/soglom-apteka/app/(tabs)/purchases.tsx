@@ -155,7 +155,7 @@ function SkeletonCard() {
   );
 }
 
-function OrderCard({ order }: { order: any }) {
+function OrderCard({ order, nowMs }: { order: any; nowMs: number }) {
   const { t, fmt } = useApp();
   const items: any[] = Array.isArray(order.items) ? order.items : [];
   const itemCount = items.length;
@@ -185,28 +185,13 @@ function OrderCard({ order }: { order: any }) {
 
   const placeLine = [branchName, methodLabel].filter(Boolean).join(' · ');
 
-  const [msLeft, setMsLeft] = useState<number | null>(() => {
+  const msLeft = useMemo(() => {
     if (!order.reservationActive || !order.reservedUntil) return null;
-    const diff = new Date(order.reservedUntil).getTime() - Date.now();
-    return diff > 0 ? diff : 0;
-  });
-
-  useEffect(() => {
-    if (!order.reservationActive || !order.reservedUntil) {
-      setMsLeft(null);
-      return;
-    }
     const target = new Date(order.reservedUntil).getTime();
-    if (!Number.isFinite(target)) return;
-
-    const tick = () => {
-      const left = target - Date.now();
-      setMsLeft(left > 0 ? left : 0);
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [order.reservationActive, order.reservedUntil]);
+    if (!Number.isFinite(target)) return null;
+    const left = target - nowMs;
+    return left > 0 ? left : 0;
+  }, [order.reservationActive, order.reservedUntil, nowMs]);
 
   const cancelled = isCancelled(order);
   const completed = isCompleted(order);
@@ -366,11 +351,23 @@ export default function PurchasesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const loadGen = useRef(0);
   const loadingRef = useRef(false);
   const ordersRef = useRef<any[]>([]);
   ordersRef.current = orders;
+
+  const hasActiveReservation = useMemo(
+    () => orders.some((o) => Boolean(o?.reservationActive && o?.reservedUntil)),
+    [orders],
+  );
+
+  useEffect(() => {
+    if (!hasActiveReservation) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [hasActiveReservation]);
 
   const load = useCallback(async (opts?: { silent?: boolean; pull?: boolean }) => {
     if (loadingRef.current && opts?.silent) return;
@@ -387,7 +384,7 @@ export default function PurchasesScreen() {
     }
 
     try {
-      const data = await api.orders();
+      const data = await api.orders('?limit=30&offset=0');
       if (gen !== loadGen.current) return;
       setOrders(Array.isArray(data.orders) ? data.orders : []);
       setLoadError(null);
@@ -451,7 +448,7 @@ export default function PurchasesScreen() {
         <Text style={styles.pageTitle} accessibilityRole="header">
           {t('common.navOrders')}
         </Text>
-        <Text style={styles.pageSubtitle}>
+        <Text style={styles.pageSubtitle} numberOfLines={2}>
           {t('orders.listSubtitle')}
         </Text>
       </View>
@@ -592,7 +589,7 @@ export default function PurchasesScreen() {
             ) : (
               <View style={styles.list}>
                 {visible.map((o) => (
-                  <OrderCard key={String(o.id)} order={o} />
+                  <OrderCard key={String(o.id)} order={o} nowMs={nowMs} />
                 ))}
               </View>
             )}

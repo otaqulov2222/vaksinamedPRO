@@ -49,7 +49,7 @@ function cleanText(text: string | null | undefined): string {
 }
 
 const PRICE_SNAP_KEY = 'vaksinamed-cart-price-snap';
-const FOCUS_FRESH_MS = 400;
+const FOCUS_FRESH_MS = 15_000;
 
 /** Localized fallback per checkout error code; Uzbek UI still shows the server message when present. */
 const CHECKOUT_ERROR_FALLBACK: Record<string, TranslationKey> = {
@@ -103,7 +103,11 @@ export default function CheckoutScreen() {
       setCart(c);
       const id = c?.branch?.id ?? c?.cart?.branchId ?? null;
       setBranchId(id != null && Number.isFinite(Number(id)) ? Number(id) : null);
-      syncCartCount(Array.isArray(c?.items) ? c.items.length : 0);
+      const qty = Array.isArray(c?.items)
+        ? c.items.reduce((sum: number, item: any) => sum + Math.max(0, Number(item.quantity) || 0), 0)
+        : 0;
+      const subtotal = Number(c?.subtotal);
+      syncCartCount(qty, Number.isFinite(subtotal) ? subtotal : undefined);
     },
     [syncCartCount],
   );
@@ -123,8 +127,7 @@ export default function CheckoutScreen() {
       setLoadError(null);
 
       try {
-        const [, c, r] = await Promise.all([
-          refresh(),
+        const [c, r] = await Promise.all([
           api.cart(),
           api.cashbackRules().catch(() => null),
         ]);
@@ -144,12 +147,12 @@ export default function CheckoutScreen() {
         if (gen === loadGen.current) setLoading(false);
       }
     },
-    [applyCart, refresh, t],
+    [applyCart, t],
   );
 
   useFocusEffect(
     useCallback(() => {
-      void loadCheckout({ force: true });
+      void loadCheckout();
       return () => {
         loadGen.current += 1;
       };

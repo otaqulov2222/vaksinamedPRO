@@ -308,7 +308,7 @@ export const api = {
     request<any>('/api/cart/repeat', { method: 'POST', body: JSON.stringify({ orderId }) }),
   updateCartItem: (id: number, quantity: number) => request<any>(`/api/cart/items/${id}`, { method: 'PATCH', body: JSON.stringify({ quantity }) }),
   removeCartItem: (id: number) => request<any>(`/api/cart/items/${id}`, { method: 'DELETE' }),
-  orders: () => request<{ orders: any[] }>('/api/orders'),
+  orders: (qs = '') => request<{ orders: any[]; limit?: number; offset?: number; hasMore?: boolean }>(`/api/orders${qs}`),
   order: (id: number) => request<any>(`/api/orders/${id}`),
   orderPayment: (orderId: number) => request<any>(`/api/orders/${orderId}/payment`),
   paymentMethods: (branchId?: number | null) => {

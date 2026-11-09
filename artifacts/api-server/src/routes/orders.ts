@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import {
   branches,
   cartItems,
@@ -99,37 +99,33 @@ export async function completeOrderCashback(order: typeof orders.$inferSelect) {
   return order;
 }
 
-export async function serializeOrder(order: typeof orders.$inferSelect) {
-  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
-  const branch = (await db.select().from(branches).where(eq(branches.id, order.branchId)).limit(1))[0];
-  const delivery = (await db.select().from(deliveries).where(eq(deliveries.orderId, order.id)).limit(1))[0] ?? null;
-  const existingRating = (
-    await db.select().from(staffRatings).where(eq(staffRatings.orderId, order.id)).limit(1)
-  )[0];
-  const chequeRow = (
-    await db.select().from(fiscalCheques).where(eq(fiscalCheques.orderId, order.id)).limit(1)
-  )[0];
+function shapeSerializedOrder(args: {
+  order: typeof orders.$inferSelect;
+  items: Array<typeof orderItems.$inferSelect>;
+  branch: typeof branches.$inferSelect | null | undefined;
+  delivery: typeof deliveries.$inferSelect | null | undefined;
+  existingRating: typeof staffRatings.$inferSelect | null | undefined;
+  chequeRow: typeof fiscalCheques.$inferSelect | null | undefined;
+  reservationStatus: string;
+  reservedUntil: Date | null | undefined;
+  serverTime: string;
+}) {
+  const {
+    order,
+    items,
+    branch,
+    delivery,
+    existingRating,
+    chequeRow,
+    reservationStatus,
+    reservedUntil,
+    serverTime,
+  } = args;
   const completed =
     order.fulfillmentStatus === "COMPLETED" || String(order.status).toLowerCase() === "completed";
-
-  let reservationStatus = order.reservationStatus;
-  let reservedUntil = order.reservedUntil;
-  if (order.reservationId) {
-    const live = (await db.select().from(reservations).where(eq(reservations.id, order.reservationId)).limit(1))[0];
-    if (live) {
-      reservationStatus = live.status;
-      if (live.expiresAt) reservedUntil = live.expiresAt;
-      // Heal denormalized mirror when worker expiry drifted (Batch 3F).
-      if (live.status !== order.reservationStatus) {
-        await db.update(orders).set({ reservationStatus: live.status }).where(eq(orders.id, order.id));
-      }
-    }
-  }
-
   const canCancel =
     order.fulfillmentStatus !== "COMPLETED"
     && order.fulfillmentStatus !== "CANCELLED";
-
   const reservationActive = reservationStatus === "ACTIVE";
   const reservationExpired =
     reservationStatus === "EXPIRED"
@@ -162,7 +158,7 @@ export async function serializeOrder(order: typeof orders.$inferSelect) {
     payment_status: order.paymentStatus,
     reservation_status: reservationStatus,
     /** Clock skew helper for countdown UX only — expiry remains server-authoritative. */
-    serverTime: new Date().toISOString(),
+    serverTime,
     canCancel,
     /** Customer cancel does not capture/refund PSP; do not promise money returned. */
     cancelRefundsPayment: false,
@@ -172,7 +168,7 @@ export async function serializeOrder(order: typeof orders.$inferSelect) {
     canRetryPayment: false,
     items,
     branch: branch ? publicBranch(branch as unknown as Record<string, unknown>) : null,
-    delivery,
+    delivery: delivery ?? null,
     qrPayload: `VAKSINA-${order.code}`,
     alreadyRated: Boolean(existingRating),
     canRate: completed && !existingRating,
@@ -191,6 +187,91 @@ export async function serializeOrder(order: typeof orders.$inferSelect) {
         }
       : null,
   };
+}
+
+export async function serializeOrders(orderRows: Array<typeof orders.$inferSelect>) {
+  if (orderRows.length === 0) return [];
+
+  const orderIds = orderRows.map((order) => order.id);
+  const branchIds = [...new Set(orderRows.map((order) => order.branchId).filter((id) => Number.isFinite(id)))];
+  const reservationIds = [
+    ...new Set(
+      orderRows
+        .map((order) => order.reservationId)
+        .filter((id): id is number => id != null && Number.isFinite(id)),
+    ),
+  ];
+
+  const [itemRows, branchRows, deliveryRows, ratingRows, chequeRows, reservationRows] = await Promise.all([
+    db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds)),
+    branchIds.length
+      ? db.select().from(branches).where(inArray(branches.id, branchIds))
+      : Promise.resolve([] as Array<typeof branches.$inferSelect>),
+    db.select().from(deliveries).where(inArray(deliveries.orderId, orderIds)),
+    db.select().from(staffRatings).where(inArray(staffRatings.orderId, orderIds)),
+    db.select().from(fiscalCheques).where(inArray(fiscalCheques.orderId, orderIds)),
+    reservationIds.length
+      ? db.select().from(reservations).where(inArray(reservations.id, reservationIds))
+      : Promise.resolve([] as Array<typeof reservations.$inferSelect>),
+  ]);
+
+  const itemsByOrder = new Map<number, Array<typeof orderItems.$inferSelect>>();
+  for (const item of itemRows) {
+    const list = itemsByOrder.get(item.orderId) ?? [];
+    list.push(item);
+    itemsByOrder.set(item.orderId, list);
+  }
+  const branchById = new Map(branchRows.map((branch) => [branch.id, branch]));
+  const deliveryByOrder = new Map(deliveryRows.map((row) => [row.orderId, row]));
+  const ratingByOrder = new Map(ratingRows.map((row) => [row.orderId, row]));
+  const chequeByOrder = new Map(chequeRows.map((row) => [row.orderId, row]));
+  const reservationById = new Map(reservationRows.map((row) => [row.id, row]));
+
+  const healUpdates: Array<{ orderId: number; reservationStatus: string }> = [];
+  const serverTime = new Date().toISOString();
+
+  const serialized = orderRows.map((order) => {
+    let reservationStatus = order.reservationStatus;
+    let reservedUntil = order.reservedUntil;
+    if (order.reservationId) {
+      const live = reservationById.get(order.reservationId);
+      if (live) {
+        reservationStatus = live.status;
+        if (live.expiresAt) reservedUntil = live.expiresAt;
+        if (live.status !== order.reservationStatus) {
+          healUpdates.push({ orderId: order.id, reservationStatus: live.status });
+        }
+      }
+    }
+
+    return shapeSerializedOrder({
+      order,
+      items: itemsByOrder.get(order.id) ?? [],
+      branch: branchById.get(order.branchId),
+      delivery: deliveryByOrder.get(order.id),
+      existingRating: ratingByOrder.get(order.id),
+      chequeRow: chequeByOrder.get(order.id),
+      reservationStatus,
+      reservedUntil,
+      serverTime,
+    });
+  });
+
+  // Heal denormalized mirrors off the list critical path (one write per drifted row).
+  if (healUpdates.length > 0) {
+    void Promise.all(
+      healUpdates.map((row) =>
+        db.update(orders).set({ reservationStatus: row.reservationStatus }).where(eq(orders.id, row.orderId)),
+      ),
+    ).catch(() => undefined);
+  }
+
+  return serialized;
+}
+
+export async function serializeOrder(order: typeof orders.$inferSelect) {
+  const [serialized] = await serializeOrders([order]);
+  return serialized;
 }
 
 async function staffTransition(
@@ -245,8 +326,23 @@ async function staffTransition(
 router.get("/orders", async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
-    const rows = await db.select().from(orders).where(eq(orders.customerId, customer.id)).orderBy(desc(orders.createdAt));
-    return res.json({ orders: await Promise.all(rows.map(serializeOrder)) });
+    const limitRaw = Number(req.query.limit);
+    const offsetRaw = Number(req.query.offset);
+    const limit = Number.isFinite(limitRaw) ? Math.min(50, Math.max(1, Math.floor(limitRaw))) : 30;
+    const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
+    const rows = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.customerId, customer.id))
+      .orderBy(desc(orders.createdAt))
+      .limit(limit)
+      .offset(offset);
+    return res.json({
+      orders: await serializeOrders(rows),
+      limit,
+      offset,
+      hasMore: rows.length === limit,
+    });
   } catch (error) {
     return next(error);
   }

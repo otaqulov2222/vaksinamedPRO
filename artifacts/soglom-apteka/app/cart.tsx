@@ -45,7 +45,7 @@ function cleanText(text: string | null | undefined): string {
 }
 
 const PRICE_SNAP_KEY = 'vaksinamed-cart-price-snap';
-const FOCUS_FRESH_MS = 400;
+const FOCUS_FRESH_MS = 15_000;
 
 type PriceSnap = Record<string, number>;
 type BusyAction = 'inc' | 'dec' | 'remove';
@@ -124,7 +124,11 @@ export default function CartScreen() {
       setNotices(Array.isArray(data.notices) ? data.notices : []);
       setCart(data);
       setError(null);
-      syncCartCount(Array.isArray(data.items) ? data.items.length : 0);
+      const qty = Array.isArray(data.items)
+        ? data.items.reduce((sum: number, item: any) => sum + Math.max(0, Number(item.quantity) || 0), 0)
+        : 0;
+      const subtotal = Number(data.subtotal);
+      syncCartCount(qty, Number.isFinite(subtotal) ? subtotal : undefined);
       lastFetchAt.current = Date.now();
       await writeSnap(data.items || []);
     },
@@ -164,7 +168,7 @@ export default function CartScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void load({ force: true });
+      void load();
       return () => {
         loadGen.current += 1;
       };
