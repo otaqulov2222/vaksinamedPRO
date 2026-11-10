@@ -7,7 +7,7 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "test": "pnpm --filter @workspace/db run test && pnpm --filter @workspace/api-server run test",
+    "test": "pnpm --filter @workspace/db run test && pnpm --filter @workspace/api-server run test && pnpm --filter @workspace/soglom-apteka run test",
     "test:security": "pnpm --filter @workspace/api-server run test:security",
     "db:migrate": "pnpm --filter @workspace/db run migrate",
     "db:migrate:status": "pnpm --filter @workspace/db run migrate:status",
