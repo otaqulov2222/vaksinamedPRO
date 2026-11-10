@@ -377,32 +377,22 @@ export default function ProfileScreen() {
             />
             <MenuRow
               icon="map-pin"
-              title={t('profile.selectedBranchTitle')}
+              title={t('common.navBranches')}
+              a11y={t('profile.branchesA11y')}
+              onPress={() => router.push('/branches')}
+              testID="profile-branches"
+              iconBg="#D1FAE5"
+              iconColor="#047857"
+            />
+            <MenuRow
+              icon="home"
+              title={t('common.navAddresses')}
               subtitle={selectedBranch?.name || t('profile.selectedBranchNone')}
               a11y={
                 selectedBranch?.name
                   ? t('profile.selectedBranchA11y', { name: selectedBranch.name })
                   : t('profile.selectedBranchPickA11y')
               }
-              onPress={() => router.push({ pathname: '/branches', params: { from: 'profile' } })}
-              testID="profile-selected-branch"
-              iconBg="#D1FAE5"
-              iconColor="#047857"
-            />
-            <MenuRow
-              icon="map-pin"
-              title={t('common.navBranches')}
-              a11y={t('profile.branchesA11y')}
-              onPress={() => router.push('/branches')}
-              testID="profile-branches"
-              iconBg="#ECFDF5"
-              iconColor="#047857"
-            />
-            <MenuRow
-              icon="home"
-              title={t('common.navAddresses')}
-              subtitle={t('profile.addressesDesc')}
-              a11y={t('profile.addressesDesc')}
               onPress={() => router.push('/addresses')}
               testID="profile-addresses"
               iconBg="#E0E7FF"

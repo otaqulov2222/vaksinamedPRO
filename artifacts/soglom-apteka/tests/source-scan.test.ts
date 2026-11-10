@@ -251,7 +251,7 @@ describe('profile screen entry points', () => {
       '/(tabs)/purchases': 1,
       '/notifications': 1,
       '/help': 1,
-      '/branches': 2,
+      '/branches': 1,
       '/addresses': 1,
       '/devices': 1,
       '/rating': 1,
@@ -260,16 +260,14 @@ describe('profile screen entry points', () => {
     for (const [route, expected] of Object.entries(routes)) {
       assert.equal(profile.split(`'${route}'`).length - 1, expected, route);
     }
-    assert.match(profile, /pathname:\s*'\/branches'/);
-    assert.match(profile, /testID="profile-selected-branch"/);
     assert.match(profile, /testID="profile-addresses"/);
     assert.match(profile, /router\.push\('\/addresses'\)/);
+    assert.doesNotMatch(profile, /testID="profile-selected-branch"/);
     assert.doesNotMatch(profile, /router\.push\('\/qr'\)|'\/\(tabs\)\/qr'/, 'QR stays in the tab bar only');
     for (const id of [
       'profile-cashback',
       'profile-tier',
       'profile-orders',
-      'profile-selected-branch',
       'profile-branches',
       'profile-addresses',
       'profile-devices',
@@ -288,7 +286,6 @@ describe('profile screen entry points', () => {
     const order = [
       'profile-cashback',
       'profile-orders',
-      'profile-selected-branch',
       'profile-branches',
       'profile-addresses',
       'profile-notifications',
@@ -332,7 +329,7 @@ describe('profile screen entry points', () => {
     assert.match(profile, /onConfirm=\{\(\) => void onLogoutConfirm\(\)\}/);
   });
 
-  it('addresses screen is disabled notice; devices screen is wired', () => {
+  it('addresses screen shows selected pickup branch; devices screen is wired', () => {
     const layout = read('app/_layout.tsx');
     assert.match(layout, /name="addresses"/);
     assert.match(layout, /name="devices"/);
@@ -340,8 +337,8 @@ describe('profile screen entry points', () => {
     assert.match(layout, /t\('common\.navDevices'\)/);
     const addresses = read('app/addresses.tsx');
     const devices = read('app/devices.tsx');
-    assert.match(addresses, /addressesDisabledTitle/);
-    assert.match(addresses, /addresses-disabled-branches/);
+    assert.match(addresses, /selectedBranchTitle/);
+    assert.match(addresses, /addresses-selected-branch-cta/);
     assert.doesNotMatch(addresses, /api\.getAddresses\(|api\.createAddress\(/);
     assert.match(devices, /api\.getDevices\(/);
     assert.match(devices, /#4B248A/);
