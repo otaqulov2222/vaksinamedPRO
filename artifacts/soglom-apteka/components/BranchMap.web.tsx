@@ -24,6 +24,9 @@ type Props = {
   onSelect: (branch: Branch) => void;
   onRequestRoute: (branch: Branch) => void;
   onPickBranch?: (branch: Branch) => void;
+  /** When true, next map click sets the route origin (desktop / no GPS fallback). */
+  pickOriginActive?: boolean;
+  onPickOrigin?: (point: LatLng) => void;
   height?: number;
   countryView?: boolean;
 };
@@ -158,6 +161,8 @@ export default function BranchMap({
   onSelect,
   onRequestRoute,
   onPickBranch,
+  pickOriginActive = false,
+  onPickOrigin,
   height = 320,
 }: Props) {
   const { t } = useApp();
@@ -175,6 +180,10 @@ export default function BranchMap({
   onRequestRouteRef.current = onRequestRoute;
   const onPickBranchRef = useRef(onPickBranch);
   onPickBranchRef.current = onPickBranch;
+  const pickOriginActiveRef = useRef(pickOriginActive);
+  pickOriginActiveRef.current = pickOriginActive;
+  const onPickOriginRef = useRef(onPickOrigin);
+  onPickOriginRef.current = onPickOrigin;
 
   const mappable = useMemo(() => branches.filter((b) => hasValidCoords(b)), [branches]);
 
@@ -220,6 +229,14 @@ export default function BranchMap({
       mapRef.current = map;
       layerRef.current = L.layerGroup().addTo(map);
       routeRef.current = L.layerGroup().addTo(map);
+
+      map.on('click', (event: any) => {
+        if (!pickOriginActiveRef.current) return;
+        const lat = Number(event?.latlng?.lat);
+        const lng = Number(event?.latlng?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        onPickOriginRef.current?.({ lat, lng });
+      });
 
       map.fitBounds(UZ_BOUNDS, { padding: [10, 10] });
       setTimeout(() => {
@@ -331,7 +348,15 @@ export default function BranchMap({
           autoPan: true,
         });
 
-        marker.on('click', () => {
+        marker.on('click', (event: any) => {
+          if (pickOriginActiveRef.current) {
+            const lat = Number(event?.latlng?.lat ?? branch.lat);
+            const lng = Number(event?.latlng?.lng ?? branch.lng);
+            if (Number.isFinite(lat) && Number.isFinite(lng)) {
+              onPickOriginRef.current?.({ lat, lng });
+            }
+            return;
+          }
           map.flyTo([branch.lat, branch.lng], 15, { duration: 0.5 });
           marker.openPopup();
           onSelectRef.current?.(branch);
@@ -445,6 +470,14 @@ export default function BranchMap({
     void syncRoute();
   }, [route]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    const el = containerRef.current;
+    if (!map || !el) return;
+    el.style.cursor = pickOriginActive ? 'crosshair' : '';
+    map.getContainer().style.cursor = pickOriginActive ? 'crosshair' : '';
+  }, [pickOriginActive]);
+
   return (
     <View ref={wrapRef} style={[styles.wrap, { height }]}>
       <div ref={containerRef as any} style={{ width: '100%', height: '100%', borderRadius: 18 }} />
@@ -463,6 +496,11 @@ export default function BranchMap({
           <Text style={styles.uzbBadgeText}>{t('branches.overviewUzbekistan')}</Text>
         </Pressable>
       )}
+      {pickOriginActive ? (
+        <View style={styles.pickOriginBanner} pointerEvents="none">
+          <Text style={styles.pickOriginText}>{t('branches.pickOriginHint')}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -500,5 +538,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize: 12,
     color: '#2A104E',
+  },
+  pickOriginBanner: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    zIndex: 450,
+    backgroundColor: 'rgba(42,16,78,0.92)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  pickOriginText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });

@@ -15,6 +15,16 @@ describe('Device location hardening', () => {
     assert.match(src, /unavailable/);
     assert.match(src, /timeout/);
     assert.match(src, /Never conflate|never conflate|Permission may be granted/i);
+    assert.match(src, /enableHighAccuracy:\s*true/);
+  });
+
+  it('branches screen uses getDeviceLocation and map pick-origin fallback', () => {
+    const src = read('app/branches.tsx');
+    assert.match(src, /getDeviceLocation/);
+    assert.match(src, /pickOriginActive/);
+    assert.match(src, /onPickOrigin/);
+    assert.doesNotMatch(src, /expo-location/);
+    assert.doesNotMatch(src, /openYandexRoute/);
   });
 
   it('map picker no longer marks all GPS failures as permission denied', () => {

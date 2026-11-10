@@ -22,6 +22,8 @@ type Props = {
   onSelect: (branch: Branch) => void;
   onRequestRoute?: (branch: Branch) => void;
   onPickBranch?: (branch: Branch) => void;
+  pickOriginActive?: boolean;
+  onPickOrigin?: (point: LatLng) => void;
   height?: number;
   countryView?: boolean;
 };

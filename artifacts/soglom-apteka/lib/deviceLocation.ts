@@ -9,7 +9,7 @@ export type DeviceLocationResult =
   | { ok: true; coords: LatLng }
   | { ok: false; error: DeviceLocationError };
 
-function webGeolocation(): Promise<DeviceLocationResult> {
+function webGeolocation(options: PositionOptions): Promise<DeviceLocationResult> {
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
     return Promise.resolve({ ok: false, error: 'unsupported' });
   }
@@ -30,18 +30,14 @@ function webGeolocation(): Promise<DeviceLocationResult> {
         else if (err?.code === 3) resolve({ ok: false, error: 'timeout' });
         else resolve({ ok: false, error: 'unavailable' });
       },
-      {
-        enableHighAccuracy: false,
-        timeout: 15000,
-        maximumAge: 60000,
-      },
+      options,
     );
   });
 }
 
 /**
  * Resolve current device coordinates for map pickers.
- * Web: prefer browser Geolocation API (more reliable than expo-location on Chrome).
+ * Web: prefer browser Geolocation API (more reliable than expo-location on Chrome/desktop).
  * Native: expo-location.
  * Never conflate GPS/timeout failures with permission denial.
  */
@@ -62,7 +58,22 @@ export async function getDeviceLocation(opts?: {
           // permissions.query(geolocation) unsupported in some browsers — continue
         }
       }
-      return await webGeolocation();
+
+      const first = await webGeolocation({
+        enableHighAccuracy: false,
+        timeout: 12000,
+        maximumAge: 60000,
+      });
+      if (first.ok || first.error === 'denied' || first.error === 'unsupported') {
+        return first;
+      }
+
+      // Desktop / weak GPS: retry once with high accuracy and a longer timeout.
+      return await webGeolocation({
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0,
+      });
     } catch {
       return { ok: false, error: 'unavailable' };
     }

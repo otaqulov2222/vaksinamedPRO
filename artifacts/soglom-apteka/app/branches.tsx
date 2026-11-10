@@ -1,6 +1,5 @@
 import { Feather } from '@/components/AppIcon';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -18,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BranchMap from '@/components/BranchMap';
 import { useApp } from '@/context/AppContext';
 import { api, type ApiError } from '@/lib/api';
+import { getDeviceLocation, type DeviceLocationError } from '@/lib/deviceLocation';
 import { notify } from '@/lib/dialogs';
 import type { TFunction } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
@@ -74,6 +74,8 @@ export default function BranchesScreen() {
   const [loadError, setLoadError] = useState<{ err: unknown } | null>(null);
   const [picking, setPicking] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
+  const [pickOriginActive, setPickOriginActive] = useState(false);
+  const [routeTargetId, setRouteTargetId] = useState<number | null>(null);
   const pickingRef = useRef(false);
   const detectedRegionDoneRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -113,31 +115,28 @@ export default function BranchesScreen() {
 
   const hiddenListCount = Math.max(0, displayedBranches.length - listBranches.length);
 
+  const applyLocationError = useCallback((error: DeviceLocationError) => {
+    setUserLocation(null);
+    if (error === 'denied') setLocStatus('denied');
+    else setLocStatus('unavailable');
+  }, []);
+
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (!alive) return;
-        if (status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          if (!alive) return;
-          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-          setLocStatus('granted');
-        } else {
-          setUserLocation(null);
-          setLocStatus('denied');
-        }
-      } catch {
-        if (!alive) return;
-        setUserLocation(null);
-        setLocStatus('unavailable');
+      const result = await getDeviceLocation({ requestPermission: true });
+      if (!alive) return;
+      if (result.ok) {
+        setUserLocation(result.coords);
+        setLocStatus('granted');
+        return;
       }
+      applyLocationError(result.error);
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [applyLocationError]);
 
   // Infer viloyat/hudud from the nearest branch once GPS + catalog are ready.
   useEffect(() => {
@@ -190,47 +189,63 @@ export default function BranchesScreen() {
 
   const ensureUserLocation = useCallback(async (): Promise<LatLng | null> => {
     if (userLocation && hasValidCoords(userLocation)) return userLocation;
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLocStatus('denied');
-        return null;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setUserLocation(loc);
+    const result = await getDeviceLocation({ requestPermission: true });
+    if (result.ok) {
+      setUserLocation(result.coords);
       setLocStatus('granted');
-      return loc;
-    } catch {
-      setLocStatus('unavailable');
-      return null;
+      return result.coords;
     }
-  }, [userLocation]);
+    applyLocationError(result.error);
+    return null;
+  }, [applyLocationError, userLocation]);
+
+  const buildRouteFrom = useCallback(
+    async (from: LatLng, branch: any) => {
+      setRouting(true);
+      setRoute(null);
+      try {
+        const info = await fetchDrivingRoute(from, { lat: Number(branch.lat), lng: Number(branch.lng) });
+        setRoute(info);
+        setPickOriginActive(false);
+        setRouteTargetId(null);
+      } finally {
+        setRouting(false);
+      }
+    },
+    [],
+  );
 
   /** Always keep routing inside the app map — never open external Yandex/Google. */
   const drawRoute = useCallback(
     async (branch: any, focusRoute = false) => {
       if (!branch?.id) return;
-      setSelectedId(Number(branch.id));
+      const branchId = Number(branch.id);
+      setSelectedId(branchId);
       if (!hasValidCoords(branch)) {
         setRoute(null);
+        setPickOriginActive(false);
         notify(t('branches.mapTitle'), t('branches.noCoordsMessage'));
         return;
       }
 
       if (focusRoute) {
         setMapExpanded(true);
+        setRouteTargetId(branchId);
         scrollRef.current?.scrollTo({ y: 0, animated: true });
         setRouting(true);
         setRoute(null);
         try {
           const loc = await ensureUserLocation();
           if (!loc) {
+            // Stay in-app: focus pin + let user tap a start point on the map.
+            setPickOriginActive(true);
             notify(t('branches.locationTitle'), t('branches.locationRequiredForRoute'));
             return;
           }
           const info = await fetchDrivingRoute(loc, { lat: Number(branch.lat), lng: Number(branch.lng) });
           setRoute(info);
+          setPickOriginActive(false);
+          setRouteTargetId(null);
         } finally {
           setRouting(false);
         }
@@ -238,6 +253,7 @@ export default function BranchesScreen() {
       }
 
       // Selection only — keep existing route if same destination, otherwise clear.
+      setPickOriginActive(false);
       setRoute((prev) => {
         if (!prev?.coordinates?.length) return null;
         const last = prev.coordinates[prev.coordinates.length - 1];
@@ -249,6 +265,36 @@ export default function BranchesScreen() {
     },
     [ensureUserLocation, t],
   );
+
+  const onPickOrigin = useCallback(
+    (point: LatLng) => {
+      if (!hasValidCoords(point)) return;
+      setUserLocation(point);
+      setLocStatus('granted');
+      const target =
+        (routeTargetId != null && branches.find((b) => Number(b.id) === Number(routeTargetId))) ||
+        selected ||
+        null;
+      if (!target || !hasValidCoords(target)) {
+        setPickOriginActive(false);
+        return;
+      }
+      void buildRouteFrom(point, target);
+    },
+    [branches, buildRouteFrom, routeTargetId, selected],
+  );
+
+  const retryLocation = useCallback(async () => {
+    setLocStatus('pending');
+    const result = await getDeviceLocation({ requestPermission: true });
+    if (result.ok) {
+      setUserLocation(result.coords);
+      setLocStatus('granted');
+      setPickOriginActive(false);
+      return;
+    }
+    applyLocationError(result.error);
+  }, [applyLocationError]);
 
   // Deep-link from order detail: open that branch and draw the in-app route once.
   useEffect(() => {
@@ -265,6 +311,8 @@ export default function BranchesScreen() {
   const clearRoute = useCallback(() => {
     setRoute(null);
     setMapExpanded(false);
+    setPickOriginActive(false);
+    setRouteTargetId(null);
   }, []);
 
   const goNearest = useCallback(async () => {
@@ -378,10 +426,21 @@ export default function BranchesScreen() {
           <Text style={styles.nearestBtnText}>{t('branches.nearestBranch')}</Text>
         </Pressable>
 
-        {locBanner ? (
+        {locBanner || pickOriginActive ? (
           <View style={styles.locBannerWrap}>
             <Feather name="info" size={13} color="#64748B" />
-            <Text style={styles.locBanner}>{locBanner}</Text>
+            <Text style={styles.locBanner}>
+              {pickOriginActive ? t('branches.pickOriginHint') : locBanner}
+            </Text>
+            {pickOriginActive ? (
+              <Pressable onPress={clearRoute} style={styles.locRetryBtn} accessibilityRole="button">
+                <Text style={styles.locRetryText}>{t('branches.pickOriginCancel')}</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => void retryLocation()} style={styles.locRetryBtn} accessibilityRole="button">
+                <Text style={styles.locRetryText}>{t('branches.locationRetry')}</Text>
+              </Pressable>
+            )}
           </View>
         ) : null}
 
@@ -394,7 +453,9 @@ export default function BranchesScreen() {
             onSelect={(branch) => void drawRoute(branch, false)}
             onRequestRoute={(branch) => void drawRoute(branch, true)}
             onPickBranch={(branch) => void pickForCart(branch)}
-            height={mapExpanded || route ? 440 : 360}
+            pickOriginActive={pickOriginActive}
+            onPickOrigin={onPickOrigin}
+            height={mapExpanded || route || pickOriginActive ? 440 : 360}
             countryView={!selected && !route}
           />
           {routing ? (
@@ -766,6 +827,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     lineHeight: 16,
+  },
+  locRetryBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EADFF5',
+  },
+  locRetryText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    color: '#5C328E',
   },
   mapFrame: {
     borderRadius: 18,
