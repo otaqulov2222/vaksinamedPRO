@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@/components/AppIcon';
 import { useApp } from '@/context/AppContext';
 import type { LatLng, RouteInfo } from '@/lib/maps';
-import { hasValidCoords, openYandexRoute } from '@/lib/maps';
+import { hasValidCoords } from '@/lib/maps';
 
 type Branch = {
   id: number;
@@ -28,12 +28,12 @@ type Props = {
 
 /**
  * Native: no react-native-maps in the repo — do not fake an interactive map.
- * Web uses BranchMap.web.tsx (Leaflet). Native shows real branch list + external maps.
+ * Web uses BranchMap.web.tsx (Leaflet) with in-app polyline routing.
+ * Native keeps selection + route meta inside the app (no external map redirect).
  */
 export default function BranchMap({
   branches,
   selectedId,
-  userLocation,
   route,
   onSelect,
   onRequestRoute,
@@ -92,16 +92,12 @@ export default function BranchMap({
               {route.durationMin != null ? ` · ${t('branches.routeDurationMin', { min: route.durationMin })}` : ''}
             </Text>
           ) : null}
-          <Pressable
-            style={styles.btn}
-            onPress={() => {
-              if (onRequestRoute) onRequestRoute(selected);
-              else void openYandexRoute(userLocation, { lat: selected.lat, lng: selected.lng });
-            }}
-          >
-            <Feather name="navigation" size={16} color="#120724" />
-            <Text style={styles.btnText}>{t('common.openMap')}</Text>
-          </Pressable>
+          {onRequestRoute ? (
+            <Pressable style={styles.btn} onPress={() => onRequestRoute(selected)}>
+              <Feather name="navigation" size={16} color="#120724" />
+              <Text style={styles.btnText}>{t('branches.showRoute')}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>

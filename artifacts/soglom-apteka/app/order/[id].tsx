@@ -543,8 +543,10 @@ export default function OrderScreen() {
                   <Pressable
                     style={styles.branchActionBtn}
                     onPress={() => {
-                      const url = `https://yandex.com/maps/?rtext=~${order.branch.lat},${order.branch.lng}&rtt=auto`;
-                      void Linking.openURL(url);
+                      router.push({
+                        pathname: '/branches',
+                        params: { from: 'order', focusBranchId: String(order.branchId || order.branch?.id || '') },
+                      } as any);
                     }}
                     accessibilityRole="link"
                     accessibilityLabel={t('orders.branchOpenMap')}

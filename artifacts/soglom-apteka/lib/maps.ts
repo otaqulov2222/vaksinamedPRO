@@ -40,7 +40,10 @@ export function yandexRouteUrl(from: LatLng, to: LatLng) {
   return `https://yandex.ru/maps/?rtext=${from.lat},${from.lng}~${to.lat},${to.lng}&rtt=auto&z=14`;
 }
 
-/** Open external maps. Without a real user origin, open destination point only — never invent from. */
+/**
+ * @deprecated Branches / orders keep routing inside the app map (Leaflet + OSRM).
+ * Do not call from pharmacy UX — external maps leave the app and pin wrongly when origin is missing.
+ */
 export async function openYandexRoute(from: LatLng | null, to: LatLng) {
   const url = from && hasValidCoords(from) ? yandexRouteUrl(from, to) : yandexPointUrl(to);
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {

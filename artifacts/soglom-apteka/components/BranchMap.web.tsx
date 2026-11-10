@@ -308,6 +308,11 @@ export default function BranchMap({
         const selBtn = popupContent.querySelector('.vm-popup-btn-select');
         navBtn?.addEventListener('click', (e) => {
           e.stopPropagation();
+          try {
+            marker.closePopup();
+          } catch {
+            // ignore
+          }
           onRequestRouteRef.current?.(branch);
         });
         selBtn?.addEventListener('click', (e) => {
@@ -340,8 +345,11 @@ export default function BranchMap({
         setTimeout(() => map.invalidateSize(), 50);
       }
 
+      // While an in-app route is drawn, leave camera to the route layer effect.
+      if (route?.coordinates?.length) return;
+
       const selected = selectedId ? mappable.find((item) => item.id === selectedId) : null;
-      if (selected && !route?.coordinates?.length) {
+      if (selected) {
         const targetZoom = Math.max(map.getZoom(), 15);
         map.flyTo([selected.lat, selected.lng], targetZoom, { duration: 0.5 });
         const marker = markersRef.current.get(selected.id);
@@ -409,7 +417,30 @@ export default function BranchMap({
       const latlngs = route.coordinates.map((point) => [point.lat, point.lng] as [number, number]);
       L.polyline(latlngs, { color: '#5C328E', weight: 6, opacity: 0.9, lineJoin: 'round' }).addTo(routeLayer);
       L.polyline(latlngs, { color: '#FFCC00', weight: 3, opacity: 0.95 }).addTo(routeLayer);
-      map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40], maxZoom: 14 });
+
+      const start = latlngs[0];
+      const end = latlngs[latlngs.length - 1];
+      if (start) {
+        L.circleMarker(start, {
+          radius: 7,
+          color: '#FFFFFF',
+          weight: 2,
+          fillColor: '#2563EB',
+          fillOpacity: 1,
+        }).addTo(routeLayer);
+      }
+      if (end) {
+        L.circleMarker(end, {
+          radius: 8,
+          color: '#FFCC00',
+          weight: 3,
+          fillColor: '#5C328E',
+          fillOpacity: 1,
+        }).addTo(routeLayer);
+      }
+
+      map.fitBounds(L.latLngBounds(latlngs), { padding: [48, 48], maxZoom: 15, animate: true });
+      setTimeout(() => map.invalidateSize(), 60);
     }
     void syncRoute();
   }, [route]);

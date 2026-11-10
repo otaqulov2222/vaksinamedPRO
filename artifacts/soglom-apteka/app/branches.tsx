@@ -21,7 +21,7 @@ import { api, type ApiError } from '@/lib/api';
 import { notify } from '@/lib/dialogs';
 import type { TFunction } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
-import { fetchDrivingRoute, hasValidCoords, openYandexRoute, type LatLng, type RouteInfo } from '@/lib/maps';
+import { fetchDrivingRoute, hasValidCoords, type LatLng, type RouteInfo } from '@/lib/maps';
 
 function pickError(err: unknown, t: TFunction) {
   return localizeError(err, t, {
@@ -49,9 +49,11 @@ type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable';
 const NEARBY_LIST_LIMIT = 20;
 
 export default function BranchesScreen() {
-  const params = useLocalSearchParams<{ from?: string; productId?: string }>();
+  const params = useLocalSearchParams<{ from?: string; productId?: string; focusBranchId?: string }>();
   const from = String(params.from || '').toLowerCase();
   const productIdParam = String(params.productId || '');
+  const focusBranchIdParam = String(params.focusBranchId || '');
+  const focusBranchHandledRef = useRef(false);
   const insets = useSafeAreaInsets();
   const { refresh, t } = useApp();
   const [query, setQuery] = useState('');
@@ -71,8 +73,10 @@ export default function BranchesScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<{ err: unknown } | null>(null);
   const [picking, setPicking] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
   const pickingRef = useRef(false);
   const detectedRegionDoneRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -184,59 +188,100 @@ export default function BranchesScreen() {
     loadBranches();
   }, [locStatus, loadBranches]);
 
+  const ensureUserLocation = useCallback(async (): Promise<LatLng | null> => {
+    if (userLocation && hasValidCoords(userLocation)) return userLocation;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocStatus('denied');
+        return null;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setUserLocation(loc);
+      setLocStatus('granted');
+      return loc;
+    } catch {
+      setLocStatus('unavailable');
+      return null;
+    }
+  }, [userLocation]);
+
+  /** Always keep routing inside the app map — never open external Yandex/Google. */
   const drawRoute = useCallback(
-    async (branch: any, openExternal = false) => {
+    async (branch: any, focusRoute = false) => {
       if (!branch?.id) return;
       setSelectedId(Number(branch.id));
-      setRoute(null);
       if (!hasValidCoords(branch)) {
+        setRoute(null);
         notify(t('branches.mapTitle'), t('branches.noCoordsMessage'));
         return;
       }
-      setRouting(true);
-      try {
-        if (userLocation) {
-          const info = await fetchDrivingRoute(userLocation, { lat: branch.lat, lng: branch.lng });
+
+      if (focusRoute) {
+        setMapExpanded(true);
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+        setRouting(true);
+        setRoute(null);
+        try {
+          const loc = await ensureUserLocation();
+          if (!loc) {
+            notify(t('branches.locationTitle'), t('branches.locationRequiredForRoute'));
+            return;
+          }
+          const info = await fetchDrivingRoute(loc, { lat: Number(branch.lat), lng: Number(branch.lng) });
           setRoute(info);
+        } finally {
+          setRouting(false);
         }
-        if (openExternal) {
-          await openYandexRoute(userLocation, { lat: branch.lat, lng: branch.lng });
-        }
-      } finally {
-        setRouting(false);
+        return;
       }
+
+      // Selection only — keep existing route if same destination, otherwise clear.
+      setRoute((prev) => {
+        if (!prev?.coordinates?.length) return null;
+        const last = prev.coordinates[prev.coordinates.length - 1];
+        if (last && Math.abs(last.lat - Number(branch.lat)) < 1e-5 && Math.abs(last.lng - Number(branch.lng)) < 1e-5) {
+          return prev;
+        }
+        return null;
+      });
     },
-    [userLocation, t],
+    [ensureUserLocation, t],
   );
 
+  // Deep-link from order detail: open that branch and draw the in-app route once.
+  useEffect(() => {
+    if (focusBranchHandledRef.current) return;
+    if (!focusBranchIdParam || loading || !branches.length) return;
+    const id = Number(focusBranchIdParam);
+    if (!Number.isFinite(id) || id <= 0) return;
+    const branch = branches.find((b) => Number(b.id) === id);
+    if (!branch) return;
+    focusBranchHandledRef.current = true;
+    void drawRoute(branch, true);
+  }, [focusBranchIdParam, loading, branches, drawRoute]);
+
+  const clearRoute = useCallback(() => {
+    setRoute(null);
+    setMapExpanded(false);
+  }, []);
+
   const goNearest = useCallback(async () => {
-    let loc = userLocation;
-    if (!loc) {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setUserLocation(loc);
-          setLocStatus('granted');
-        } else {
-          setLocStatus('denied');
-        }
-      } catch {
-        setLocStatus('unavailable');
-      }
-    }
+    const loc = await ensureUserLocation();
     if (!loc) {
       notify(t('branches.locationTitle'), t('branches.locationRequiredMessage'));
       return;
     }
-    const nearest = branches.find((b) => b.distanceKm != null && hasValidCoords(b)) || branches.find((b) => hasValidCoords(b));
+    const nearest =
+      branches.find((b) => b.distanceKm != null && hasValidCoords(b)) ||
+      branches.find((b) => hasValidCoords(b));
     if (!nearest) {
       notify(t('branches.branchTitle'), t('branches.nearestNotFound'));
       return;
     }
     await drawRoute(nearest, true);
-  }, [branches, drawRoute, userLocation, t]);
+  }, [branches, drawRoute, ensureUserLocation, t]);
 
   const pickForCart = useCallback(
     async (branch: any) => {
@@ -311,6 +356,7 @@ export default function BranchesScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.page}
         contentContainerStyle={[styles.pageContent, { paddingBottom: Math.max(insets.bottom, 24) }]}
         horizontal={false}
@@ -348,10 +394,37 @@ export default function BranchesScreen() {
             onSelect={(branch) => void drawRoute(branch, false)}
             onRequestRoute={(branch) => void drawRoute(branch, true)}
             onPickBranch={(branch) => void pickForCart(branch)}
-            height={360}
-            countryView={!selected}
+            height={mapExpanded || route ? 440 : 360}
+            countryView={!selected && !route}
           />
+          {routing ? (
+            <View style={styles.routeBusyOverlay} pointerEvents="none">
+              <ActivityIndicator color="#5C328E" />
+              <Text style={styles.routeBusyText}>{t('branches.routeBuilding')}</Text>
+            </View>
+          ) : null}
         </View>
+        {route?.distanceKm != null ? (
+          <View style={styles.routePanel}>
+            <View style={styles.routePanelCopy}>
+              <Feather name="navigation" size={14} color="#5C328E" />
+              <Text style={styles.routePanelText}>
+                {route.source === 'osrm'
+                  ? t('branches.routeByRoad', { km: route.distanceKm })
+                  : t('branches.routeStraight', { km: route.distanceKm })}
+                {route.durationMin != null ? ` · ${t('branches.routeDurationMin', { min: route.durationMin })}` : ''}
+              </Text>
+            </View>
+            <Pressable
+              onPress={clearRoute}
+              style={styles.routeClearBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t('branches.clearRoute')}
+            >
+              <Text style={styles.routeClearText}>{t('branches.clearRoute')}</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {displayedBranches.length > 0 && mappableCount === 0 ? (
           <Text style={styles.locBanner}>{t('branches.mapNoCoords')}</Text>
         ) : null}
@@ -500,25 +573,23 @@ export default function BranchesScreen() {
               <Text style={styles.selectedKm}>{formatDistance(t, selected.distanceKm)}</Text>
             ) : null}
           </View>
-          {route?.distanceKm != null ? (
-            <Text style={styles.routeHint}>
-              {route.source === 'osrm'
-                ? t('branches.routeByRoad', { km: route.distanceKm })
-                : t('branches.routeStraight', { km: route.distanceKm })}
-              {route.durationMin != null ? ` · ${t('branches.routeDurationMin', { min: route.durationMin })}` : ''}
-            </Text>
-          ) : null}
           <View style={styles.ctaRow}>
             <Pressable
               disabled={routing || !hasValidCoords(selected)}
               onPress={() => void drawRoute(selected, true)}
               style={[styles.ctaYellow, { opacity: routing || !hasValidCoords(selected) ? 0.55 : 1 }]}
               accessibilityRole="button"
-              accessibilityState={{ disabled: routing || !hasValidCoords(selected) }}
+              accessibilityState={{ disabled: routing || !hasValidCoords(selected), busy: routing }}
               accessibilityLabel={t('branches.routeA11y', { name: shortName(selected.name) })}
             >
-              <Feather name="navigation" size={15} color="#120724" />
-              <Text style={styles.ctaYellowText}>{t('branches.showRoute')}</Text>
+              {routing ? (
+                <ActivityIndicator color="#120724" />
+              ) : (
+                <Feather name="navigation" size={15} color="#120724" />
+              )}
+              <Text style={styles.ctaYellowText}>
+                {routing ? t('branches.routeBuilding') : t('branches.showRoute')}
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => void pickForCart(selected)}
@@ -701,6 +772,57 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(42,16,78,0.06)',
+    position: 'relative',
+  },
+  routeBusyOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    zIndex: 20,
+  },
+  routeBusyText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#2A104E',
+  },
+  routePanel: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: '#F1EBFF',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(92,50,142,0.12)',
+  },
+  routePanelCopy: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  routePanelText: {
+    flex: 1,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#2A104E',
+  },
+  routeClearBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+  },
+  routeClearText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    color: '#5C328E',
   },
   searchWrap: {
     flexDirection: 'row',

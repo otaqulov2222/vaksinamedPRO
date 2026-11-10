@@ -28,7 +28,6 @@ router.get("/maps/route", async (req, res, next) => {
       durationMin: Math.max(1, Math.round(route.duration / 60)),
       coordinates: route.geometry.coordinates.map(([lng, lat]: [number, number]) => ({ lat, lng })),
       provider: "osrm",
-      yandexUrl: `https://yandex.ru/maps/?rtext=${fromLat},${fromLng}~${toLat},${toLng}&rtt=auto`,
     });
   } catch (error) {
     return next(error);

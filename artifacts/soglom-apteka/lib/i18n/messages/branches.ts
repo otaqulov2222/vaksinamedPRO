@@ -27,14 +27,18 @@ export default defineMessages({
     routeDurationMin: '~{min} daqiqa',
 
     showRoute: 'Yo‘lni ko‘rsatish',
+    routeBuilding: 'Marshrut chizilmoqda…',
+    clearRoute: 'Tozalash',
     select: 'Tanlash',
-    routeA11y: '{name} — yo‘nalishni ko‘rsatish',
+    routeA11y: '{name} — yo‘nalishni xaritada ko‘rsatish',
     selectA11y: '{name} filialini tanlash',
     callA11y: '{name} ga qo‘ng‘iroq qilish',
 
     mapTitle: 'Xarita',
     noCoordsMessage: 'Bu filialning koordinatasi mavjud emas.',
     locationTitle: 'Joylashuv',
+    locationRequiredForRoute:
+      'Yo‘lni xaritada chizish uchun joylashuv ruxsatini yoqing. Filial pinini xaritada ko‘rishingiz mumkin.',
     locationRequiredMessage:
       'Eng yaqin filialni aniqlash uchun joylashuv ruxsati kerak. Filiallar ro‘yxatidan tanlashingiz mumkin.',
     branchTitle: 'Filial',
@@ -85,14 +89,18 @@ export default defineMessages({
     routeDurationMin: '~{min} мин',
 
     showRoute: 'Маршрут',
+    routeBuilding: 'Строим маршрут…',
+    clearRoute: 'Очистить',
     select: 'Выбрать',
-    routeA11y: '{name} — показать маршрут',
+    routeA11y: '{name} — показать маршрут на карте',
     selectA11y: 'Выбрать аптеку {name}',
     callA11y: 'Позвонить в аптеку {name}',
 
     mapTitle: 'Карта',
     noCoordsMessage: 'У этой аптеки нет координат.',
     locationTitle: 'Геолокация',
+    locationRequiredForRoute:
+      'Чтобы нарисовать маршрут на карте, включите доступ к геолокации. Пин аптеки уже виден на карте.',
     locationRequiredMessage:
       'Чтобы найти ближайшую аптеку, нужен доступ к геолокации. Вы можете выбрать аптеку из списка.',
     branchTitle: 'Аптека',
@@ -143,14 +151,18 @@ export default defineMessages({
     routeDurationMin: '~{min} min',
 
     showRoute: 'Show route',
+    routeBuilding: 'Drawing route…',
+    clearRoute: 'Clear',
     select: 'Select',
-    routeA11y: '{name} — show route',
+    routeA11y: '{name} — show route on the map',
     selectA11y: 'Select pharmacy {name}',
     callA11y: 'Call {name}',
 
     mapTitle: 'Map',
     noCoordsMessage: 'This pharmacy has no coordinates.',
     locationTitle: 'Location',
+    locationRequiredForRoute:
+      'Enable location access to draw the route on the map. You can still see the pharmacy pin.',
     locationRequiredMessage:
       'Location access is needed to find the nearest pharmacy. You can choose one from the list.',
     branchTitle: 'Pharmacy',
