@@ -251,7 +251,8 @@ describe('profile screen entry points', () => {
       '/(tabs)/purchases': 1,
       '/notifications': 1,
       '/help': 1,
-      '/branches': 1,
+      '/branches': 2,
+      '/addresses': 1,
       '/devices': 1,
       '/rating': 1,
       '/about': 1,
@@ -259,13 +260,18 @@ describe('profile screen entry points', () => {
     for (const [route, expected] of Object.entries(routes)) {
       assert.equal(profile.split(`'${route}'`).length - 1, expected, route);
     }
-    assert.doesNotMatch(profile, /router\.push\('\/addresses'\)|profile-addresses/, 'delivery addresses removed');
+    assert.match(profile, /pathname:\s*'\/branches'/);
+    assert.match(profile, /testID="profile-selected-branch"/);
+    assert.match(profile, /testID="profile-addresses"/);
+    assert.match(profile, /router\.push\('\/addresses'\)/);
     assert.doesNotMatch(profile, /router\.push\('\/qr'\)|'\/\(tabs\)\/qr'/, 'QR stays in the tab bar only');
     for (const id of [
       'profile-cashback',
       'profile-tier',
       'profile-orders',
+      'profile-selected-branch',
       'profile-branches',
+      'profile-addresses',
       'profile-devices',
       'profile-bell',
       'profile-logout',
@@ -282,7 +288,9 @@ describe('profile screen entry points', () => {
     const order = [
       'profile-cashback',
       'profile-orders',
+      'profile-selected-branch',
       'profile-branches',
+      'profile-addresses',
       'profile-notifications',
       'profile-devices',
       'profile-help',

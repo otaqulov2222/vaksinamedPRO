@@ -117,6 +117,7 @@ export default function ProfileScreen() {
   const [logoutSheetOpen, setLogoutSheetOpen] = useState(false);
   const [profileRefreshing, setProfileRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [selectedBranch, setSelectedBranch] = useState<{ id: number; name: string } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -136,6 +137,24 @@ export default function ProfileScreen() {
           if (alive) setTierRate(null);
         }
         try {
+          if (isAuthenticated) {
+            const cartRes = await api.cart().catch(() => null);
+            const branchRow = cartRes?.branch;
+            const bid = Number(branchRow?.id);
+            if (alive) {
+              if (Number.isFinite(bid) && bid > 0 && branchRow?.name) {
+                setSelectedBranch({ id: bid, name: String(branchRow.name).trim() });
+              } else {
+                setSelectedBranch(null);
+              }
+            }
+          } else if (alive) {
+            setSelectedBranch(null);
+          }
+        } catch {
+          if (alive) setSelectedBranch(null);
+        }
+        try {
           const n = await getCachedUnreadCount();
           if (alive) setUnreadCount(n);
         } catch {
@@ -146,7 +165,7 @@ export default function ProfileScreen() {
       return () => {
         alive = false;
       };
-    }, [refresh, user?.tier]),
+    }, [refresh, user?.tier, isAuthenticated]),
   );
 
   const ready = isAuthenticated && !loading;
@@ -358,12 +377,36 @@ export default function ProfileScreen() {
             />
             <MenuRow
               icon="map-pin"
+              title={t('profile.selectedBranchTitle')}
+              subtitle={selectedBranch?.name || t('profile.selectedBranchNone')}
+              a11y={
+                selectedBranch?.name
+                  ? t('profile.selectedBranchA11y', { name: selectedBranch.name })
+                  : t('profile.selectedBranchPickA11y')
+              }
+              onPress={() => router.push({ pathname: '/branches', params: { from: 'profile' } })}
+              testID="profile-selected-branch"
+              iconBg="#D1FAE5"
+              iconColor="#047857"
+            />
+            <MenuRow
+              icon="map-pin"
               title={t('common.navBranches')}
               a11y={t('profile.branchesA11y')}
               onPress={() => router.push('/branches')}
               testID="profile-branches"
-              iconBg="#D1FAE5"
+              iconBg="#ECFDF5"
               iconColor="#047857"
+            />
+            <MenuRow
+              icon="home"
+              title={t('common.navAddresses')}
+              subtitle={t('profile.addressesDesc')}
+              a11y={t('profile.addressesDesc')}
+              onPress={() => router.push('/addresses')}
+              testID="profile-addresses"
+              iconBg="#E0E7FF"
+              iconColor="#4338CA"
               last
             />
           </View>

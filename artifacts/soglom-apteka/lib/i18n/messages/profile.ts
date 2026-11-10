@@ -13,6 +13,10 @@ export default defineMessages({
     notificationsA11y: 'Bildirishnomalarni ko‘rish',
     helpA11y: 'Yordam markazini ochish',
     branchesA11y: 'Dorixonalarni ko‘rish',
+    selectedBranchTitle: 'Tanlangan filial',
+    selectedBranchNone: 'Hali tanlanmagan',
+    selectedBranchA11y: 'Tanlangan filial: {name}',
+    selectedBranchPickA11y: 'Olib ketish filialini tanlash',
 
     editLoadFailed: 'Profilni yuklab bo‘lmadi',
     editLoadFailedTitle: 'Profil ochilmadi',
@@ -165,7 +169,7 @@ export default defineMessages({
     notFoundHome: 'Bosh sahifaga qaytish',
 
     addressesTitle: 'Manzillarim',
-    addressesDesc: 'Yetkazib berish manzillarini boshqarish',
+    addressesDesc: 'Yetkazib berish hozircha yo‘q — olib ketish filialini tanlang',
     addressesDisabledTitle: 'Yetkazib berish yo‘q',
     addressesDisabledBody:
       'Uyga yetkazib berish mavjud emas. Buyurtmani tanlangan dorixonadan olib ketasiz.',
@@ -244,6 +248,10 @@ export default defineMessages({
     notificationsA11y: 'Открыть уведомления',
     helpA11y: 'Открыть центр помощи',
     branchesA11y: 'Открыть аптеки',
+    selectedBranchTitle: 'Выбранный филиал',
+    selectedBranchNone: 'Ещё не выбран',
+    selectedBranchA11y: 'Выбранный филиал: {name}',
+    selectedBranchPickA11y: 'Выбрать аптеку для самовывоза',
 
     editLoadFailed: 'Не удалось загрузить профиль',
     editLoadFailedTitle: 'Не удалось открыть профиль',
@@ -396,7 +404,7 @@ export default defineMessages({
     notFoundHome: 'Вернуться на главную',
 
     addressesTitle: 'Мои адреса',
-    addressesDesc: 'Управление адресами доставки',
+    addressesDesc: 'Доставки пока нет — выберите аптеку для самовывоза',
     addressesDisabledTitle: 'Доставки нет',
     addressesDisabledBody:
       'Доставка на дом недоступна. Заказ нужно забрать в выбранной аптеке.',
@@ -475,6 +483,10 @@ export default defineMessages({
     notificationsA11y: 'View notifications',
     helpA11y: 'Open Help Center',
     branchesA11y: 'View pharmacies',
+    selectedBranchTitle: 'Selected pharmacy',
+    selectedBranchNone: 'Not selected yet',
+    selectedBranchA11y: 'Selected pharmacy: {name}',
+    selectedBranchPickA11y: 'Choose a pickup pharmacy',
 
     editLoadFailed: 'Could not load your profile',
     editLoadFailedTitle: 'Could not open profile',
@@ -627,7 +639,7 @@ export default defineMessages({
     notFoundHome: 'Back to Home',
 
     addressesTitle: 'My addresses',
-    addressesDesc: 'Manage delivery addresses',
+    addressesDesc: 'Delivery is off for now — choose a pickup pharmacy',
     addressesDisabledTitle: 'No delivery',
     addressesDisabledBody:
       'Home delivery is not available. Pick up your order at the selected pharmacy.',
