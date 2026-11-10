@@ -73,6 +73,22 @@ log "building admin-web"
   fi
 )
 
+log "syncing official branch geo from catalog"
+(
+  cd "$ROOT"
+  if [[ -f "$ROOT/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    . "$ROOT/.env"
+    set +a
+  fi
+  if [[ -n "${DATABASE_URL:-}" ]]; then
+    pnpm --filter @workspace/db run sync:official-branch-geo || log "WARN: official branch geo sync failed"
+  else
+    log "WARN: DATABASE_URL missing — skip official branch geo sync"
+  fi
+)
+
 log "building API"
 (
   cd "$ROOT/artifacts/api-server"
