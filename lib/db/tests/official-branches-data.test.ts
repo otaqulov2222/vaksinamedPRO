@@ -61,5 +61,11 @@ describe("Official Vaksina Med branches catalog", () => {
       "Yangiobod must not share Olmazor coordinates",
     );
   });
+
+  it("exports syncOfficialBranchGeo helper for DB heal", async () => {
+    const src = readFileSync(path.join(root, "src/syncOfficialBranchGeo.ts"), "utf8");
+    assert.match(src, /export async function syncOfficialBranchGeo/);
+    assert.match(src, /NEVER deletes rows/);
+  });
 });
 

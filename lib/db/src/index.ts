@@ -8,6 +8,7 @@ import * as schema from "./schema";
 import { applyMigrations } from "./migrate";
 import { applyPostgresMigrationsLocked } from "./migrationLock";
 import { seedDatabase } from "./seed";
+import { syncOfficialBranchGeo } from "./syncOfficialBranchGeo";
 import {
   assertProductionDatabaseConfig,
   resolveAppEnvironment,
@@ -80,6 +81,17 @@ async function createDatabase(): Promise<DatabaseInstance> {
   await applyMigrations(database, "pglite");
   if (shouldAutoSeed(environment, "pglite")) {
     await seedDatabase(database, { profile: "demo", environment });
+  }
+  // Demo DBs keep seed rows forever — re-apply official lat/lng so site geo fixes show up without wipe.
+  try {
+    const geo = await syncOfficialBranchGeo(database);
+    if (geo.updated || geo.inserted) {
+      console.log(
+        `[db] Official branch geo sync (pglite): updated=${geo.updated} inserted=${geo.inserted}`,
+      );
+    }
+  } catch (err) {
+    console.warn("[db] Official branch geo sync skipped:", err);
   }
   return { db: database, pool: null, driver: "pglite", environment };
 }
