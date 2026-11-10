@@ -46,5 +46,20 @@ describe("Official Vaksina Med branches catalog", () => {
     assert.equal(mapped.length, 7);
     assert.ok(mapped.every((b) => /24\s*\/\s*7/i.test(b.hours)));
   });
+
+  it("keeps Yangiobod Korzinka on Katta Yangiobod (not Olmazor coords)", () => {
+    const yangiobod = raw.find((b) => String(b.code) === "123");
+    const olmazor = raw.find((b) => String(b.code) === "124");
+    assert.ok(yangiobod, "branch 123 must exist");
+    assert.ok(olmazor, "branch 124 must exist");
+    assert.match(String(yangiobod?.name || ""), /ЯНГИОБОД КОРЗИНКА/i);
+    assert.ok(Math.abs(Number(yangiobod?.lat) - 41.265035) < 1e-5);
+    assert.ok(Math.abs(Number(yangiobod?.lng) - 69.35351) < 1e-5);
+    assert.ok(
+      Math.abs(Number(yangiobod?.lat) - Number(olmazor?.lat)) > 0.01 ||
+        Math.abs(Number(yangiobod?.lng) - Number(olmazor?.lng)) > 0.01,
+      "Yangiobod must not share Olmazor coordinates",
+    );
+  });
 });
 
