@@ -1,22 +1,21 @@
 /**
  * FOM Ombor Integratsiyasi Marshrutlari
  *
- * - POST /api/integrations/fom/inventory-sync: Kassa / FOM dan qoldiq sinxronizatsiyasi
- * - GET /api/integrations/fom/stock-status: Admin ombor monitoringi
+ * - POST /api/integrations/fom/catalog-sync: FOM mahsulot katalogi → app products (stock yozilmaydi)
+ * - POST /api/integrations/fom/inventory-shadow: qoldiq farq hisobot
+ * - POST /api/integrations/fom/inventory-sync: Kassa / FOM dan qoldiq sinxronizatsiyasi (writer OFF)
  * - GET /api/catalog/products/:id/alternative-branches: Muqobil filiallar ro'yxati
  */
 
 import { Router } from "express";
 import { assertFomWebhookAuthorized } from "../lib/securityEnv";
-import { requireAdmin } from "../lib/auth";
 import { assertFomInventoryWriterAllowed } from "../lib/fomAdapter";
 import {
   syncBranchInventoryFromFom,
   shadowReconcileBranchInventoryFromFom,
   findAlternativeBranchesWithStock,
 } from "../lib/fomInventoryService";
-import { db, productStocks, branches, products } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { syncCatalogFromFom } from "../lib/fomCatalogService";
 
 const router = Router();
 
@@ -30,6 +29,32 @@ function parseFomInventoryBody(body: Record<string, unknown>) {
     items,
   };
 }
+
+/**
+ * Catalog sync — FOM master products → app catalog (no stock writes).
+ * Auth: header `x-fom-secret` yoki `Authorization: Bearer <FOM_WEBHOOK_SECRET>`
+ * Body: { items: [{ sku, nameUz|name, price?, barcode?, gtin?, ... }], dryRun?: boolean }
+ */
+router.post("/integrations/fom/catalog-sync", async (req, res, next) => {
+  try {
+    const headerSecret =
+      req.header("x-fom-secret") || req.header("authorization")?.replace(/^Bearer\s+/i, "");
+    assertFomWebhookAuthorized(headerSecret);
+
+    const body = req.body || {};
+    const items = Array.isArray(body.items) ? body.items : [];
+    const result = await syncCatalogFromFom({
+      items,
+      batchId: body.batchId || body.syncId,
+      dryRun: Boolean(body.dryRun),
+      actor: "fom-webhook-catalog",
+    });
+
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+});
 
 /**
  * Phase 1 — shadow recon (no product_stocks writes).

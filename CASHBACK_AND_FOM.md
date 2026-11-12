@@ -22,10 +22,11 @@ FOM o‘zgarmaydi — u kassa sifatida ishlayveradi. Biz unga **kontrakt asosida
 | Phase | Nima | Holat |
 |-------|------|--------|
 | **1** | Shadow recon + `fom_product_links` quarantine (stock yozilmaydi) | **READY_IN_REPO** |
-| **2** | Vendor kontrakt: branch map, SKU/barcode, miqdor semantikasi, idempotency, auth | **CONTRACT_PENDING** |
-| **3** | Dual-run: shadow farq hisobotlari PASS bo‘lguncha | **NOT_STARTED** |
-| **4** | Inventory writer cutover (+ rollback) | **BLOCKED** (kill-switch OFF) |
-| **5** | Markirovka / VHK / Soliq — alohida | **SEPARATE** |
+| **2** | Katalog sync: FOM mahsulotlari → `products` (qo‘lda ikki marta kiritmaslik) | **READY_IN_REPO** |
+| **3** | Vendor kontrakt: branch map, SKU/barcode, miqdor semantikasi, idempotency, auth | **CONTRACT_PENDING** |
+| **4** | Dual-run: shadow farq hisobotlari PASS bo‘lguncha | **NOT_STARTED** |
+| **5** | Inventory writer cutover (+ rollback) | **BLOCKED** (kill-switch OFF) |
+| **6** | Markirovka / VHK / Soliq — alohida | **SEPARATE** |
 
 Writer: `FOM_INVENTORY_WRITER_ENABLED = false` — kontrakt + cutover ticketsiz **yoqilmaydi**.
 
@@ -61,9 +62,28 @@ Online to‘lovning o‘zi cashback bermaydi.
 | Endpoint | Ma’nosi |
 |----------|---------|
 | `POST /api/integrations/fom/sale` | Chek yopish (tijorat) |
+| `POST /api/integrations/fom/catalog-sync` | **Phase 2** — FOM katalog → ilova mahsulotlari (stock yozilmaydi) |
 | `POST /api/integrations/fom/inventory-shadow` | **Phase 1** — farq hisobot, stock yozilmaydi |
 | `POST /api/integrations/fom/inventory-sync` | Writer ON bo‘lganda (hozir 503) |
 | `GET /api/integrations/fom/status` | Honest holat + roadmap |
+
+### Catalog sync namunasi
+
+```json
+{
+  "dryRun": false,
+  "items": [
+    {
+      "sku": "FOM-PARA-500",
+      "nameUz": "Paracetamol 500 mg",
+      "nameRu": "Парацетамол 500 мг",
+      "price": 12000,
+      "barcode": "4780123456789",
+      "category": "Analgetiklar"
+    }
+  ]
+}
+```
 
 ### Shadow payload namunasi
 

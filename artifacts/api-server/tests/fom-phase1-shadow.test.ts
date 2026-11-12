@@ -51,7 +51,19 @@ describe("FOM Phase 1 — standard shadow + map (writer OFF)", () => {
     const integrations = readFileSync(path.join(apiRoot, "routes/integrations.ts"), "utf8");
     assert.match(integrations, /inventoryShadow/);
     assert.match(integrations, /SHADOW_MAP/);
+    assert.match(integrations, /CATALOG_SYNC/);
+    assert.match(integrations, /catalogSync/);
     assert.match(integrations, /WRITER_CUTOVER/);
-    assert.match(integrations, /catalogRule:\s*"explicit_map_only_never_auto_create"/);
+    assert.match(integrations, /fom_catalog_sync_upsert_by_sku_no_stock_write/);
+  });
+
+  it("catalog-sync upserts products without touching stock writer", () => {
+    const routes = readFileSync(path.join(apiRoot, "routes/fomInventory.ts"), "utf8");
+    const svc = readFileSync(path.join(apiRoot, "lib/fomCatalogService.ts"), "utf8");
+    assert.match(routes, /\/integrations\/fom\/catalog-sync/);
+    assert.match(routes, /syncCatalogFromFom/);
+    assert.match(svc, /export async function syncCatalogFromFom/);
+    assert.match(svc, /inventoryWrites:\s*false/);
+    assert.doesNotMatch(svc, /productStocks|assertFomInventoryWriterAllowed/);
   });
 });

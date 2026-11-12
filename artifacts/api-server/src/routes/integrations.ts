@@ -100,7 +100,7 @@ router.get("/integrations/fom/status", async (req, res, next) => {
       architecture: {
         fomSoT: "physical_pos_stock_and_checkout",
         appSoT: "orders_reservations_cashback_customer",
-        catalogRule: "explicit_map_only_never_auto_create",
+        catalogRule: "fom_catalog_sync_upsert_by_sku_no_stock_write",
         markirovkaVhkSoliq: "separate_compliance_rails",
       },
       roadmap: [
@@ -113,24 +113,31 @@ router.get("/integrations/fom/status", async (req, res, next) => {
         },
         {
           phase: 2,
+          id: "CATALOG_SYNC",
+          status: "READY_IN_REPO",
+          title: "FOM catalog → app products (no dual manual entry; no stock write)",
+          endpoint: "POST /api/integrations/fom/catalog-sync",
+        },
+        {
+          phase: 3,
           id: "VENDOR_CONTRACT",
           status: "CONTRACT_PENDING",
           title: "Signed FOM stock/SKU/barcode/idempotency contract",
         },
         {
-          phase: 3,
+          phase: 4,
           id: "DUAL_RUN",
           status: "NOT_STARTED",
           title: "Shadow dual-run until mapped% and discrepancy gates PASS",
         },
         {
-          phase: 4,
+          phase: 5,
           id: "WRITER_CUTOVER",
           status: "BLOCKED",
           title: "Enable inventory writer only after cutover ticket",
         },
         {
-          phase: 5,
+          phase: 6,
           id: "COMPLIANCE_RAILS",
           status: "SEPARATE",
           title: "Markirovka / VHK / Soliq OFD — not free via sale webhook",
@@ -149,6 +156,7 @@ router.get("/integrations/fom/status", async (req, res, next) => {
       },
       endpoints: {
         sale: "POST /api/integrations/fom/sale",
+        catalogSync: "POST /api/integrations/fom/catalog-sync",
         inventoryShadow: "POST /api/integrations/fom/inventory-shadow",
         inventorySync: "POST /api/integrations/fom/inventory-sync (writer OFF)",
         rules: "GET /api/cashback/rules",
@@ -158,7 +166,7 @@ router.get("/integrations/fom/status", async (req, res, next) => {
       },
       cashback: rules,
       openDependency: "FOM vendor receipt identity beyond receiptId/orderCode aliases is not invented",
-      note: "Inventory writer DISABLED. Phase 1 shadow+map ready. FOM_POS CONTRACT_PENDING. confirm-pos maps to ORDER commercial identity.",
+      note: "Inventory writer DISABLED. Catalog-sync + shadow ready. FOM_POS CONTRACT_PENDING. confirm-pos maps to ORDER commercial identity.",
     });
   } catch (error) {
     next(error);
