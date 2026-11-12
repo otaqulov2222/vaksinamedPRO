@@ -342,17 +342,29 @@ export default function RegisterScreen() {
             />
           </View>
 
-          <Text style={styles.legal}>
-            {t('auth.registerLegal')}
-            <Text style={styles.legalLink} onPress={() => router.push('/privacy')}>
-              {t('auth.registerLegalPrivacy')}
-            </Text>
-            {t('auth.registerLegalAnd')}
-            <Text style={styles.legalLink} onPress={() => router.push('/terms')}>
-              {t('auth.registerLegalTerms')}
-            </Text>
-            {t('auth.registerLegalSuffix')}
-          </Text>
+          <View style={styles.legal} accessibilityRole="text">
+            <Text style={styles.legalText}>{t('auth.registerLegal')}</Text>
+            <Pressable
+              onPress={() => router.push('/privacy')}
+              accessibilityRole="link"
+              accessibilityLabel={t('auth.registerLegalPrivacy')}
+              testID="register-legal-privacy"
+              hitSlop={6}
+            >
+              <Text style={styles.legalLink}>{t('auth.registerLegalPrivacy')}</Text>
+            </Pressable>
+            <Text style={styles.legalText}>{t('auth.registerLegalAnd')}</Text>
+            <Pressable
+              onPress={() => router.push('/terms')}
+              accessibilityRole="link"
+              accessibilityLabel={t('auth.registerLegalTerms')}
+              testID="register-legal-terms"
+              hitSlop={6}
+            >
+              <Text style={styles.legalLink}>{t('auth.registerLegalTerms')}</Text>
+            </Pressable>
+            <Text style={styles.legalText}>{t('auth.registerLegalSuffix')}</Text>
+          </View>
         </Animated.View>
       </KeyboardAwareScrollViewCompat>
     </View>
@@ -410,14 +422,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
     alignSelf: 'center',
     maxWidth: 320,
-    textAlign: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  legalText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 11.5,
     lineHeight: 16,
     color: C.secondary,
+    textAlign: 'center',
   },
   legalLink: {
     fontFamily: 'Inter_600SemiBold',
+    fontSize: 11.5,
+    lineHeight: 16,
     color: C.primary,
     textDecorationLine: 'underline',
   },

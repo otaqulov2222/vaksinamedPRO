@@ -329,6 +329,7 @@ export const api = {
         online?: boolean;
         apiEnabled?: boolean;
         configured?: boolean;
+        checkoutHostConfigured?: boolean;
       }>;
       notes?: Record<string, string>;
     }>(`/api/payments/methods${q}`, undefined, false);

@@ -71,9 +71,16 @@ describe('Customer feature locks (must not silently disappear)', () => {
 
   it('locks register legal pages as public (AuthGate) + native pick-origin', () => {
     const layout = read('app/_layout.tsx');
+    const register = read('app/register.tsx');
+    const legal = read('components/LegalDocumentScreen.tsx');
     const nativeMap = read('components/BranchMap.tsx');
     assert.match(layout, /segments\[0\] === 'privacy'/);
     assert.match(layout, /segments\[0\] === 'terms'/);
+    assert.match(register, /testID="register-legal-privacy"/);
+    assert.match(register, /testID="register-legal-terms"/);
+    assert.match(register, /router\.push\('\/privacy'\)/);
+    assert.match(register, /router\.push\('\/terms'\)/);
+    assert.match(legal, /isAuthenticated \? '\/\(tabs\)\/profile' : '\/welcome'/);
     assert.match(nativeMap, /pickOriginActive/);
     assert.match(nativeMap, /onPickOrigin/);
     assert.match(nativeMap, /pickOriginNativeHint/);

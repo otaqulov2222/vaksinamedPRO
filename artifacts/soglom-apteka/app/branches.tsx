@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -430,7 +431,9 @@ export default function BranchesScreen() {
           <View style={styles.locBannerWrap}>
             <Feather name="info" size={13} color="#64748B" />
             <Text style={styles.locBanner}>
-              {pickOriginActive ? t('branches.pickOriginHint') : locBanner}
+              {pickOriginActive
+                ? t(Platform.OS === 'web' ? 'branches.pickOriginHint' : 'branches.pickOriginNativeHint')
+                : locBanner}
             </Text>
             {pickOriginActive ? (
               <Pressable onPress={clearRoute} style={styles.locRetryBtn} accessibilityRole="button">

@@ -85,7 +85,9 @@ export default function CheckoutScreen() {
   const [useCashback, setUseCashback] = useState(false);
   const [cart, setCart] = useState<any>(null);
   const [rules, setRules] = useState<any>(null);
-  const [paymentAvailability, setPaymentAvailability] = useState<Record<string, { available: boolean; apiEnabled?: boolean; configured?: boolean }>>({});
+  const [paymentAvailability, setPaymentAvailability] = useState<
+    Record<string, { available: boolean; apiEnabled?: boolean; configured?: boolean; checkoutHostConfigured?: boolean }>
+  >({});
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -165,12 +167,16 @@ export default function CheckoutScreen() {
       try {
         const data = await api.paymentMethods(branchId);
         if (!alive) return;
-        const map: Record<string, { available: boolean; apiEnabled?: boolean; configured?: boolean }> = {};
+        const map: Record<
+          string,
+          { available: boolean; apiEnabled?: boolean; configured?: boolean; checkoutHostConfigured?: boolean }
+        > = {};
         for (const m of data.methods || []) {
           map[m.id] = {
             available: Boolean(m.available),
             apiEnabled: m.apiEnabled,
             configured: m.configured,
+            checkoutHostConfigured: m.checkoutHostConfigured,
           };
         }
         setPaymentAvailability(map);
@@ -229,6 +235,7 @@ export default function CheckoutScreen() {
     if (!meta) return t(`cart.checkout${id === 'payme' ? 'Payme' : 'Click'}Desc`);
     if (meta.available) return t(`cart.checkout${id === 'payme' ? 'Payme' : 'Click'}Desc`);
     if (meta.apiEnabled === false) return t('cart.checkoutOnlineApiOff');
+    if (meta.checkoutHostConfigured === false) return t('cart.checkoutOnlineHostMissing');
     return t('cart.checkoutOnlineNeedsKeys');
   };
 

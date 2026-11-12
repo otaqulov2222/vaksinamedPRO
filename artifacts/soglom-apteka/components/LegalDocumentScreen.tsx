@@ -14,7 +14,7 @@ const MUTED = '#64748B';
 
 export default function LegalDocumentScreen({ doc }: { doc: LegalDoc }) {
   const insets = useSafeAreaInsets();
-  const { t } = useApp();
+  const { t, isAuthenticated } = useApp();
 
   return (
     <View style={styles.root}>
@@ -23,7 +23,7 @@ export default function LegalDocumentScreen({ doc }: { doc: LegalDoc }) {
         <Pressable
           onPress={() => {
             if (router.canGoBack()) router.back();
-            else router.replace('/(tabs)/profile');
+            else router.replace(isAuthenticated ? '/(tabs)/profile' : '/welcome');
           }}
           style={styles.back}
           accessibilityRole="button"
