@@ -311,6 +311,15 @@ export const api = {
   orders: (qs = '') => request<{ orders: any[]; limit?: number; offset?: number; hasMore?: boolean }>(`/api/orders${qs}`),
   order: (id: number) => request<any>(`/api/orders/${id}`),
   orderPayment: (orderId: number) => request<any>(`/api/orders/${orderId}/payment`),
+  retryOrderPayment: (orderId: number) =>
+    request<{
+      ok: boolean;
+      checkoutUrl: string | null;
+      provider: string;
+      configured?: boolean;
+      message?: string;
+      orderPaymentStatus?: string;
+    }>(`/api/orders/${orderId}/payment/retry`, { method: 'POST', body: JSON.stringify({}) }),
   paymentMethods: (branchId?: number | null) => {
     const q = branchId != null && Number.isFinite(Number(branchId)) ? `?branchId=${Number(branchId)}` : '';
     return request<{

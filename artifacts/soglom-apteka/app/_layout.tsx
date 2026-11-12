@@ -134,8 +134,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const inAuthGroup = segments[0] === 'welcome' || segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'verify-otp';
-  // Language can be chosen before signing in (Welcome language pill); it holds no account data.
-  const isPublic = segments[0] === 'language';
+  // Public before sign-in: language + legal pages linked from register/login.
+  const isPublic =
+    segments[0] === 'language' || segments[0] === 'privacy' || segments[0] === 'terms';
 
   useEffect(() => {
     if (loading) return;

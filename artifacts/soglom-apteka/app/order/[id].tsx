@@ -18,7 +18,7 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
-import { api } from '@/lib/api';
+import { api, API_URL } from '@/lib/api';
 import { confirmAction, notify } from '@/lib/dialogs';
 import { localizeError } from '@/lib/i18n/errors';
 import {
@@ -103,6 +103,7 @@ export default function OrderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [repeating, setRepeating] = useState(false);
+  const [retryingPayment, setRetryingPayment] = useState(false);
   const [msLeft, setMsLeft] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -241,6 +242,31 @@ export default function OrderScreen() {
       notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'orders.repeatFailed' }));
     } finally {
       setRepeating(false);
+    }
+  };
+
+  const onRetryPayment = async () => {
+    if (!order?.canRetryPayment || retryingPayment) return;
+    setRetryingPayment(true);
+    try {
+      const result = await api.retryOrderPayment(order.id);
+      const checkoutUrl = result?.checkoutUrl;
+      if (!checkoutUrl) {
+        throw Object.assign(new Error(result?.message || 'Checkout URL missing'), {
+          code: 'CHECKOUT_UNAVAILABLE',
+        });
+      }
+      const absolute =
+        /^https?:\/\//i.test(checkoutUrl)
+          ? checkoutUrl
+          : `${API_URL}${checkoutUrl.startsWith('/') ? '' : '/'}${checkoutUrl}`;
+      await Linking.openURL(absolute);
+      await load({ forceSkeleton: false });
+    } catch (e) {
+      notify(t('common.errorTitle'), localizeError(e, t, { fallback: 'orders.retryPaymentFailed' }));
+      await load({ forceSkeleton: false });
+    } finally {
+      setRetryingPayment(false);
     }
   };
 
@@ -653,6 +679,25 @@ export default function OrderScreen() {
                 {t('orders.notePaymentFailed')}
               </Text>
             </View>
+          ) : null}
+          {order.canRetryPayment ? (
+            <Pressable
+              style={[styles.primaryBtn, { marginTop: 12 }, retryingPayment && { opacity: 0.55 }]}
+              disabled={retryingPayment}
+              onPress={() => void onRetryPayment()}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: retryingPayment }}
+              accessibilityLabel={t('orders.retryPaymentA11y')}
+            >
+              {retryingPayment ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Feather name="credit-card" size={16} color="#FFFFFF" />
+                  <Text style={styles.primaryBtnText}>{t('orders.retryPayment')}</Text>
+                </>
+              )}
+            </Pressable>
           ) : null}
         </View>
 
@@ -1427,8 +1472,10 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     backgroundColor: PURPLE,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
     paddingHorizontal: 16,
     boxShadow: '0 3px 12px rgba(106, 34, 214, 0.25)',
   },

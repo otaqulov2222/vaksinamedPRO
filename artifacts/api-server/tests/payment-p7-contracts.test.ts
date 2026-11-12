@@ -71,6 +71,23 @@ describe("P7.1–P7.5 payment contracts (AuthZ / secrets / axes / adapters)", ()
     assert.match(click, /USE_MERCHANT_ENDPOINT|NOT_APPLICABLE/);
   });
 
+  it("Payme/Click never fall back to sim checkout path when host is missing", () => {
+    const svc = readFileSync(path.join(root, "src/lib/paymentService.ts"), "utf8");
+    const facade = readFileSync(path.join(root, "src/lib/payments.ts"), "utf8");
+    const routes = readFileSync(path.join(root, "src/routes/payments.ts"), "utf8");
+    assert.doesNotMatch(
+      svc,
+      /adapter\.checkoutUrl\s*=\s*`\/api\/payments\/\$\{provider\}\/checkout/,
+    );
+    assert.doesNotMatch(
+      facade,
+      /\/api\/payments\/\$\{provider\}\/checkout\/\$\{/,
+    );
+    assert.match(routes, /resolvePaymeCheckoutBaseUrl/);
+    assert.match(routes, /resolveClickCheckoutBaseUrl/);
+    assert.match(routes, /checkout_host_missing/);
+  });
+
   it("I. webhook ingest is idempotent and payme/click do not invent signatures", () => {
     const svc = readFileSync(path.join(root, "src/lib/paymentService.ts"), "utf8");
     const routes = readFileSync(path.join(root, "src/routes/payments.ts"), "utf8");

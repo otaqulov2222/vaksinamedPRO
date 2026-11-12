@@ -26,7 +26,9 @@ describe("Batch 3F order lifecycle contracts", () => {
     assert.match(orders, /serverTime/);
     assert.match(orders, /canCancel/);
     assert.match(orders, /cancelRefundsPayment:\s*false/);
-    assert.match(orders, /canRetryPayment:\s*false/);
+    assert.match(orders, /canRetryPayment/);
+    assert.match(orders, /paymentMethod === "payme"/);
+    assert.match(orders, /paymentStatus === "PENDING"/);
   });
 
   it("payment poll is ownership-scoped and separate from fulfillment", () => {
@@ -34,6 +36,19 @@ describe("Batch 3F order lifecycle contracts", () => {
     assert.match(payments, /\/orders\/:orderId\/payment/);
     assert.match(payments, /order\.customerId !== customer\.id/);
     assert.match(payments, /axes:\s*\{\s*paymentStatus/);
+  });
+
+  it("online payment retry is ownership-scoped and does not invent capture", () => {
+    const payments = readFileSync(path.join(root, "src/routes/payments.ts"), "utf8");
+    const lib = readFileSync(path.join(root, "src/lib/payments.ts"), "utf8");
+    assert.match(payments, /\/orders\/:orderId\/payment\/retry/);
+    assert.match(payments, /retryOrderOnlinePayment/);
+    assert.match(lib, /export async function retryOrderOnlinePayment/);
+    assert.match(lib, /order\.customerId !== customerId/);
+    const retryStart = lib.indexOf("export async function retryOrderOnlinePayment");
+    const retryEnd = lib.indexOf("export async function markPaymentPaid", retryStart);
+    const retryFn = lib.slice(retryStart, retryEnd > 0 ? retryEnd : undefined);
+    assert.doesNotMatch(retryFn, /markPaymentPaid\(|capturePayment\(/);
   });
 
   it("reservation release/expire syncs order reservation mirror", () => {

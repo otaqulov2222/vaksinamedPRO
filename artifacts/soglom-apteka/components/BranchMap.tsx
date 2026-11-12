@@ -31,7 +31,8 @@ type Props = {
 /**
  * Native: no react-native-maps in the repo — do not fake an interactive map.
  * Web uses BranchMap.web.tsx (Leaflet) with in-app polyline routing.
- * Native keeps selection + route meta inside the app (no external map redirect).
+ * When GPS fails, pickOriginActive lets the user set start from a nearby branch chip
+ * (same outcome as web map tap: origin → route).
  */
 export default function BranchMap({
   branches,
@@ -39,6 +40,8 @@ export default function BranchMap({
   route,
   onSelect,
   onRequestRoute,
+  pickOriginActive = false,
+  onPickOrigin,
   height = 300,
 }: Props) {
   const { t } = useApp();
@@ -46,12 +49,21 @@ export default function BranchMap({
   const selected = mappable.find((item) => item.id === selectedId) || null;
 
   return (
-    <View style={[styles.wrap, { minHeight: height }]}>
+    <View style={[styles.wrap, { minHeight: height }, pickOriginActive && styles.wrapPicking]}>
       <View style={styles.header}>
         <Feather name="map" size={28} color="#5C328E" />
         <Text style={styles.title}>{t('branches.mapNativeTitle')}</Text>
-        <Text style={styles.sub}>{t('branches.mapNativeNote')}</Text>
+        <Text style={styles.sub}>
+          {pickOriginActive ? t('branches.pickOriginNativeHint') : t('branches.mapNativeNote')}
+        </Text>
       </View>
+
+      {pickOriginActive ? (
+        <View style={styles.pickBanner}>
+          <Feather name="crosshair" size={14} color="#92400E" />
+          <Text style={styles.pickBannerText}>{t('branches.pickOriginNativeHint')}</Text>
+        </View>
+      ) : null}
 
       {mappable.length === 0 ? (
         <Text style={styles.empty}>{t('branches.mapNoCoords')}</Text>
@@ -66,10 +78,35 @@ export default function BranchMap({
             return (
               <Pressable
                 key={branch.id}
-                onPress={() => onSelect(branch)}
-                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => {
+                  if (pickOriginActive && onPickOrigin && hasValidCoords(branch)) {
+                    onPickOrigin({ lat: Number(branch.lat), lng: Number(branch.lng) });
+                    return;
+                  }
+                  onSelect(branch);
+                }}
+                style={[
+                  styles.chip,
+                  active && !pickOriginActive && styles.chipActive,
+                  pickOriginActive && styles.chipPick,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  pickOriginActive
+                    ? t('branches.pickOriginNativeChipA11y', {
+                        name: branch.name.replace(/^Vaksina Med\s*[·•]\s*/i, ''),
+                      })
+                    : undefined
+                }
               >
-                <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    active && !pickOriginActive && styles.chipTextActive,
+                    pickOriginActive && styles.chipTextPick,
+                  ]}
+                  numberOfLines={1}
+                >
                   {branch.name.replace(/^Vaksina Med\s*[·•]\s*/i, '')}
                 </Text>
               </Pressable>
@@ -94,7 +131,7 @@ export default function BranchMap({
               {route.durationMin != null ? ` · ${t('branches.routeDurationMin', { min: route.durationMin })}` : ''}
             </Text>
           ) : null}
-          {onRequestRoute ? (
+          {onRequestRoute && !pickOriginActive ? (
             <Pressable style={styles.btn} onPress={() => onRequestRoute(selected)}>
               <Feather name="navigation" size={16} color="#120724" />
               <Text style={styles.btnText}>{t('branches.showRoute')}</Text>
@@ -114,6 +151,11 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
+  wrapPicking: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+  },
   header: { alignItems: 'center', gap: 6 },
   title: { fontFamily: 'Inter_700Bold', fontSize: 16, color: '#2A104E', textAlign: 'center' },
   sub: {
@@ -122,6 +164,22 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 15,
+  },
+  pickBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFEDD5',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  pickBannerText: {
+    flex: 1,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#9A3412',
+    lineHeight: 16,
   },
   empty: {
     fontFamily: 'Inter_500Medium',
@@ -141,8 +199,10 @@ const styles = StyleSheet.create({
     maxWidth: 140,
   },
   chipActive: { backgroundColor: '#5C328E', borderColor: '#5C328E' },
+  chipPick: { borderColor: '#EA580C', backgroundColor: '#FFF7ED' },
   chipText: { fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#5C328E' },
   chipTextActive: { color: '#fff' },
+  chipTextPick: { color: '#C2410C' },
   selected: {
     backgroundColor: '#fff',
     borderRadius: 14,

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, branches, orders, payments } from "@workspace/db";
-import { markPaymentPaid } from "../lib/payments";
+import { markPaymentPaid, retryOrderOnlinePayment } from "../lib/payments";
 import { serializeOrder } from "./orders";
 import { requireAdmin, requireCustomer } from "../lib/auth";
 import { allowPaymentSimulate, isProductionLike } from "../lib/securityEnv";
@@ -17,8 +17,8 @@ import {
 import { getPaymentAdapter } from "../lib/paymentAdapters";
 import { handlePaymeMerchantRpc } from "../lib/paymeMerchantApi";
 import { handleClickMerchantRequest } from "../lib/clickMerchantApi";
-import { CLICK_ACTION, isClickMerchantApiEnabled } from "../lib/clickContract";
-import { isPaymeMerchantApiEnabled } from "../lib/paymeContract";
+import { CLICK_ACTION, isClickMerchantApiEnabled, resolveClickCheckoutBaseUrl } from "../lib/clickContract";
+import { isPaymeMerchantApiEnabled, resolvePaymeCheckoutBaseUrl } from "../lib/paymeContract";
 import { resolvePaymentMerchantConfig } from "../lib/branchPaymentMerchant";
 import {
   serializePaymentAttemptPublic,
@@ -37,6 +37,8 @@ router.get("/payments/methods", async (req, res, next) => {
   try {
     const paymeApi = isPaymeMerchantApiEnabled();
     const clickApi = isClickMerchantApiEnabled();
+    const paymeHost = Boolean(resolvePaymeCheckoutBaseUrl());
+    const clickHost = Boolean(resolveClickCheckoutBaseUrl());
     const branchId = Number(req.query.branchId);
     let paymeConfigured = false;
     let clickConfigured = false;
@@ -69,23 +71,44 @@ router.get("/payments/methods", async (req, res, next) => {
       }
     }
 
+    const paymeReady = paymeApi && paymeConfigured && paymeHost;
+    const clickReady = clickApi && clickConfigured && clickHost;
+
     return res.json({
       methods: [
         { id: "pay_at_branch", available: true, online: false },
-        { id: "payme", available: paymeApi && paymeConfigured, online: true, apiEnabled: paymeApi, configured: paymeConfigured },
-        { id: "click", available: clickApi && clickConfigured, online: true, apiEnabled: clickApi, configured: clickConfigured },
+        {
+          id: "payme",
+          available: paymeReady,
+          online: true,
+          apiEnabled: paymeApi,
+          configured: paymeConfigured,
+          checkoutHostConfigured: paymeHost,
+        },
+        {
+          id: "click",
+          available: clickReady,
+          online: true,
+          apiEnabled: clickApi,
+          configured: clickConfigured,
+          checkoutHostConfigured: clickHost,
+        },
       ],
       notes: {
-        payme: paymeApi
-          ? paymeConfigured
-            ? "ready"
-            : "merchant_keys_missing"
-          : "api_disabled",
-        click: clickApi
-          ? clickConfigured
-            ? "ready"
-            : "merchant_keys_missing"
-          : "api_disabled",
+        payme: !paymeApi
+          ? "api_disabled"
+          : !paymeHost
+            ? "checkout_host_missing"
+            : paymeConfigured
+              ? "ready"
+              : "merchant_keys_missing",
+        click: !clickApi
+          ? "api_disabled"
+          : !clickHost
+            ? "checkout_host_missing"
+            : clickConfigured
+              ? "ready"
+              : "merchant_keys_missing",
       },
     });
   } catch (error) {
@@ -185,6 +208,35 @@ router.get("/orders/:orderId/payment", async (req, res, next) => {
     }
     const snap = await getPaymentSnapshot(intent.id);
     return res.json(snapshotBody(snap));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * Re-open Payme/Click checkout after abandon/failure (own unpaid order only).
+ * Never invents capture; never falls back to sim-path when host is missing.
+ */
+router.post("/orders/:orderId/payment/retry", async (req, res, next) => {
+  try {
+    const customer = await requireCustomer(req);
+    const orderId = Number(req.params.orderId);
+    if (!Number.isFinite(orderId) || orderId <= 0) {
+      return res.status(400).json({ message: "Buyurtma ID noto‘g‘ri", code: "INVALID_ORDER_ID" });
+    }
+    const result = await retryOrderOnlinePayment({
+      orderId,
+      customerId: customer.id,
+    });
+    return res.json({
+      ok: true,
+      checkoutUrl: result.checkoutUrl,
+      provider: result.provider,
+      configured: result.configured,
+      message: result.message,
+      orderPaymentStatus: result.orderPaymentStatus,
+      axes: { paymentStatus: result.orderPaymentStatus, note: "payment_axis_only" as const },
+    });
   } catch (error) {
     return next(error);
   }

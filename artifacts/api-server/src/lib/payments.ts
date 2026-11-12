@@ -6,16 +6,23 @@
  */
 
 import { eq } from "drizzle-orm";
-import { db, payments, paymentIntents, type Branch } from "@workspace/db";
+import { db, payments, paymentIntents, orders, branches, type Branch } from "@workspace/db";
 import {
   createPaymentIntent,
   capturePayment,
+  createPaymentAttempt,
+  findIntentByOrderId,
 } from "./paymentService";
+import { getPaymentAdapter } from "./paymentAdapters";
 import {
   isOnlinePaymentProvider,
   resolvePaymentMerchantConfig,
   toPublicMerchantSummary,
 } from "./branchPaymentMerchant";
+
+function paymentError(message: string, status = 400, code?: string) {
+  return Object.assign(new Error(message), { status, code });
+}
 
 export async function createBranchPayment(options: {
   orderId: number;
@@ -73,25 +80,125 @@ export async function createBranchPayment(options: {
     if (updated[0]) result.legacyPayment = updated[0];
   }
 
-  // Legacy/local HTML checkout only — NOT a real Payme/Click URL (P7.6.1/P7.6.2).
-  const checkoutUrl =
-    result.adapter.checkoutUrl
-    || ((provider === "payme" || provider === "click")
-      ? `/api/payments/${provider}/checkout/${result.legacyPayment.id}`
-      : null);
+  // Real Payme/Click host only — never fall back to /api/payments/{payme|click}/checkout sim-path.
+  const checkoutUrl = result.adapter.checkoutUrl || null;
 
   return {
     payment: result.legacyPayment,
     intent: result.intent,
-    configured,
+    configured: configured && Boolean(checkoutUrl),
     checkoutUrl,
-    message: configured
+    message: checkoutUrl
       ? (result.adapter.message || `${branch.name} kassasining ${provider.toUpperCase()} to‘lovi`)
-      : `${branch.name} uchun ${provider.toUpperCase()} kalitlari hali kiritilmagan. Admin paneldan merchant ID/key qo‘shing.`,
+      : configured
+        ? (result.adapter.message || `${provider.toUpperCase()} checkout host sozlanmagan`)
+        : `${branch.name} uchun ${provider.toUpperCase()} kalitlari hali kiritilmagan. Admin paneldan merchant ID/key qo‘shing.`,
     idempotent: result.idempotent,
     adapterCode: result.adapter.code,
     // Public metadata only — never secrets
     merchant: merchantSummary,
+  };
+}
+
+/**
+ * Customer retry after abandoned/failed online checkout.
+ * Re-opens adapter checkout URL; never invents capture or sim-path.
+ */
+export async function retryOrderOnlinePayment(options: {
+  orderId: number;
+  customerId: number;
+}) {
+  const { orderId, customerId } = options;
+  const order = (await db.select().from(orders).where(eq(orders.id, orderId)).limit(1))[0];
+  if (!order || order.customerId !== customerId) {
+    throw paymentError("Buyurtma topilmadi", 404, "ORDER_NOT_FOUND");
+  }
+  if (order.fulfillmentStatus === "CANCELLED") {
+    throw paymentError("Bekor qilingan buyurtmani to‘lab bo‘lmaydi", 409, "ORDER_CANCELLED");
+  }
+  const provider = String(order.paymentMethod || "").toLowerCase();
+  if (provider !== "payme" && provider !== "click") {
+    throw paymentError("Faqat Payme/Click uchun qayta urinish mumkin", 400, "NOT_ONLINE_PAYMENT");
+  }
+  if (order.paymentStatus !== "PENDING" && order.paymentStatus !== "FAILED") {
+    throw paymentError("Bu buyurtma uchun qayta to‘lov ochilmaydi", 409, "PAYMENT_NOT_RETRYABLE");
+  }
+
+  const branch = (await db.select().from(branches).where(eq(branches.id, order.branchId)).limit(1))[0];
+  if (!branch) {
+    throw paymentError("Filial topilmadi", 404, "BRANCH_NOT_FOUND");
+  }
+
+  let intent = await findIntentByOrderId(orderId);
+  if (!intent) {
+    const created = await createBranchPayment({
+      orderId,
+      branch,
+      provider,
+      amount: order.total,
+      idempotencyKey: `order:${orderId}:provider:${provider}:retry:${Date.now()}`,
+    });
+    if (!created.checkoutUrl) {
+      throw paymentError(
+        created.message || "To‘lov sahifasi ochilmadi",
+        503,
+        created.adapterCode || "CHECKOUT_UNAVAILABLE",
+      );
+    }
+    return {
+      checkoutUrl: created.checkoutUrl,
+      provider,
+      configured: created.configured,
+      message: created.message,
+      orderPaymentStatus: order.paymentStatus === "FAILED" ? "PENDING" : order.paymentStatus,
+      intent: created.intent,
+    };
+  }
+
+  if (intent.status === "PAID") {
+    throw paymentError("Buyurtma allaqachon to‘langan", 409, "ALREADY_PAID");
+  }
+
+  if (intent.status === "FAILED") {
+    await createPaymentAttempt({
+      intentId: intent.id,
+      idempotencyKey: `customer-retry:${orderId}:${Date.now()}`,
+      actor: "customer:retry",
+    });
+    intent = (await findIntentByOrderId(orderId)) || intent;
+  }
+
+  const merchant = await resolvePaymentMerchantConfig({
+    branchId: branch.id,
+    provider,
+    expectedBranchId: branch.id,
+    requireConfigured: false,
+  });
+  const merchantSummary = toPublicMerchantSummary(merchant);
+  const adapter = await getPaymentAdapter(provider).initiate({
+    intentId: intent.id,
+    orderId: intent.orderId,
+    amount: intent.amount,
+    currency: intent.currency,
+    merchantId: intent.merchantId || merchant.merchantId || "",
+    merchantSummary,
+  });
+
+  if (!adapter.checkoutUrl) {
+    throw paymentError(
+      adapter.message || "To‘lov sahifasi ochilmadi",
+      503,
+      adapter.code || "CHECKOUT_UNAVAILABLE",
+    );
+  }
+
+  return {
+    checkoutUrl: adapter.checkoutUrl,
+    provider,
+    configured: Boolean(adapter.configured && adapter.checkoutUrl),
+    message: adapter.message,
+    orderPaymentStatus: order.paymentStatus === "FAILED" ? "PENDING" : order.paymentStatus,
+    intent,
   };
 }
 

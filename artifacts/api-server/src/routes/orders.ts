@@ -130,6 +130,13 @@ function shapeSerializedOrder(args: {
   const reservationExpired =
     reservationStatus === "EXPIRED"
     || (reservationActive && reservedUntil != null && new Date(reservedUntil).getTime() <= Date.now());
+  const onlineMethod = order.paymentMethod === "payme" || order.paymentMethod === "click";
+  const unpaidOnline =
+    order.paymentStatus === "PENDING" || order.paymentStatus === "FAILED";
+  const canRetryPayment =
+    onlineMethod
+    && unpaidOnline
+    && order.fulfillmentStatus !== "CANCELLED";
 
   return {
     id: order.id,
@@ -164,8 +171,8 @@ function shapeSerializedOrder(args: {
     cancelRefundsPayment: false,
     reservationActive: reservationActive && !reservationExpired,
     reservationExpired,
-    /** No customer payment-retry capture endpoint for production PSP in this build. */
-    canRetryPayment: false,
+    /** Re-open Payme/Click checkout when unpaid (PENDING/FAILED) — never invents capture. */
+    canRetryPayment,
     items,
     branch: branch ? publicBranch(branch as unknown as Record<string, unknown>) : null,
     delivery: delivery ?? null,

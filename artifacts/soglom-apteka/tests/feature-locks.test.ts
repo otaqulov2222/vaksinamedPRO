@@ -69,6 +69,25 @@ describe('Customer feature locks (must not silently disappear)', () => {
     assert.doesNotMatch(branches, /yandex\.ru\/maps|window\.open\(/);
   });
 
+  it('locks register legal pages as public (AuthGate) + native pick-origin', () => {
+    const layout = read('app/_layout.tsx');
+    const nativeMap = read('components/BranchMap.tsx');
+    assert.match(layout, /segments\[0\] === 'privacy'/);
+    assert.match(layout, /segments\[0\] === 'terms'/);
+    assert.match(nativeMap, /pickOriginActive/);
+    assert.match(nativeMap, /onPickOrigin/);
+    assert.match(nativeMap, /pickOriginNativeHint/);
+  });
+
+  it('locks unpaid online payment retry CTA on order detail', () => {
+    const order = read('app/order/[id].tsx');
+    const api = read('lib/api.ts');
+    assert.match(api, /retryOrderPayment/);
+    assert.match(order, /canRetryPayment/);
+    assert.match(order, /onRetryPayment/);
+    assert.match(order, /orders\.retryPayment/);
+  });
+
   it('locks i18n keys for Manzillarim / selected branch in uz/ru/en', () => {
     const profileI18n = read('lib/i18n/messages/profile.ts');
     for (const key of [

@@ -249,15 +249,8 @@ export async function createPaymentIntent(
       merchantSummary,
     });
 
-    // Local HTML checkout for online methods that are not yet contracted:
-    // keep legacy checkout URL pointing at legacy payment id for Expo compatibility.
-    // NOT a real Payme/Click URL — P7.6 protocol adapters will replace when contracts land.
-    if ((provider === "payme" || provider === "click") && !adapter.checkoutUrl) {
-      adapter.checkoutUrl = `/api/payments/${provider}/checkout/${legacyRows[0].id}`;
-      if (adapter.code === "CONTRACT_PENDING") {
-        adapter.message = `${adapter.message}; local sim checkout available only when ALLOW_PAYMENT_SIMULATE=1`;
-      }
-    }
+    // Payme/Click: never inject /api/payments/{provider}/checkout sim-path when host/keys missing.
+    // SimulateAdapter already returns its own /api/payments/simulate/checkout/:id URL.
 
     return { intent: linked[0], legacyPayment: legacyRows[0], idempotent: false, adapter };
   });
