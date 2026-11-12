@@ -32,6 +32,8 @@ describe("Admin Phase 12.24 — FOM honest console", () => {
     assert.doesNotMatch(page, /successRate|syncPercent|lastSync|Products synced/i);
     assert.doesNotMatch(page, /<button[^>]*>\s*Ulanishni tekshirish\s*</);
     assert.doesNotMatch(page, /<button[^>]*>\s*Sync now\s*</i);
+    assert.match(page, /roadmap|Standart roadmap/);
+    assert.match(page, /inventory-shadow|Shadow/);
   });
 
   it("confirm-pos commercial identity remains ORDER-oriented", () => {

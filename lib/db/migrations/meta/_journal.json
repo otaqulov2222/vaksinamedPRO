@@ -169,6 +169,20 @@
       "when": 1762500000000,
       "tag": "0023_ratings_moderation",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1762600000000,
+      "tag": "0024_cart_order_item_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1762700000000,
+      "tag": "0025_fom_product_links",
+      "breakpoints": true
     }
   ]
 }

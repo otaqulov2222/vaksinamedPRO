@@ -171,15 +171,57 @@ export function FomPage(props: { token: string }) {
                 <div className="settings-row-main">
                   <div className="settings-row-label">Tashqi ombor sinxronlash</div>
                   <p className="meta settings-row-desc">
-                    Sync / last-sync / foiz ko‘rsatkichlari yo‘q — API yo‘q.
+                    Live writer o‘chirilgan. Phase 1: shadow recon stock yozmaydi
+                    (`inventory-shadow`). KPI / “Sync now” yo‘q — soxta ulanish yaratilmaydi.
                   </p>
                 </div>
                 <div className="settings-row-aside">
-                  <StatusBadge tone="warn">{operatorCapabilityLabel("NOT_SUPPORTED")}</StatusBadge>
+                  <StatusBadge tone="warn" title="SHADOW_ONLY">
+                    Shadow
+                  </StatusBadge>
                 </div>
               </div>
             </div>
           </section>
+
+          {Array.isArray(fom.roadmap) && fom.roadmap.length > 0 ? (
+            <section className="settings-section" aria-labelledby="fom-roadmap-title">
+              <div className="settings-section-head">
+                <h2 id="fom-roadmap-title" className="settings-section-title">Standart roadmap</h2>
+                <p className="meta settings-section-lead">
+                  FOM = kassa/ombor SoT; ilova = buyurtma/cashback SoT. Katalog faqat mapping orqali.
+                </p>
+              </div>
+              <div className="settings-surface">
+                {fom.roadmap.map((step: { phase?: number; id?: string; status?: string; title?: string }) => {
+                  const st = String(step?.status || "");
+                  const tone =
+                    st === "READY_IN_REPO"
+                      ? "ok"
+                      : st === "BLOCKED" || st === "CONTRACT_PENDING"
+                        ? "warn"
+                        : "neutral";
+                  return (
+                    <div className="settings-row" key={String(step?.id || step?.phase)}>
+                      <div className="settings-row-main">
+                        <div className="settings-row-label">
+                          Phase {step?.phase}: {step?.title || step?.id}
+                        </div>
+                        <p className="meta settings-row-desc">
+                          <code className="fom-code">{step?.id}</code>
+                        </p>
+                      </div>
+                      <div className="settings-row-aside">
+                        <StatusBadge tone={tone} title={st}>
+                          {fomStateLabel(st)}
+                        </StatusBadge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
 
           <section className="settings-section" aria-labelledby="fom-sale-title">
             <div className="settings-section-head">

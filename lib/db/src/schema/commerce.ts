@@ -115,6 +115,23 @@ export const fomSaleEvents = pgTable("fom_sale_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * Explicit FOM ↔ catalog map. Quarantine unknowns — never invent products.
+ * Stock writes remain gated by FOM_INVENTORY_WRITER_ENABLED.
+ */
+export const fomProductLinks = pgTable("fom_product_links", {
+  id: serial("id").primaryKey(),
+  keyType: text("key_type").notNull(),
+  externalKey: text("external_key").notNull(),
+  productId: integer("product_id"),
+  branchId: integer("branch_id"),
+  status: text("status").notNull().default("QUARANTINE"),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  meta: text("meta").notNull().default("{}"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const workerJobs = pgTable("worker_jobs", {
   id: serial("id").primaryKey(),
   jobType: text("job_type").notNull(),

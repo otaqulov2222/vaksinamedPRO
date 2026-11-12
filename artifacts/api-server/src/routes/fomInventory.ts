@@ -12,6 +12,7 @@ import { requireAdmin } from "../lib/auth";
 import { assertFomInventoryWriterAllowed } from "../lib/fomAdapter";
 import {
   syncBranchInventoryFromFom,
+  shadowReconcileBranchInventoryFromFom,
   findAlternativeBranchesWithStock,
 } from "../lib/fomInventoryService";
 import { db, productStocks, branches, products } from "@workspace/db";
@@ -19,8 +20,42 @@ import { eq, and, sql } from "drizzle-orm";
 
 const router = Router();
 
+function parseFomInventoryBody(body: Record<string, unknown>) {
+  const items = Array.isArray(body.items) ? body.items : [];
+  return {
+    branchId: body.branchId != null ? Number(body.branchId) : undefined,
+    branchCode: (body.branchCode || body.filialCode) as string | undefined,
+    batchId: (body.batchId || body.syncId) as string | undefined,
+    syncMode: body.syncMode === "DELTA" ? ("DELTA" as const) : ("SNAPSHOT" as const),
+    items,
+  };
+}
+
 /**
- * FOM kassa ombor sinxronizatsiyasi
+ * Phase 1 — shadow recon (no product_stocks writes).
+ * Auth: header `x-fom-secret` yoki `Authorization: Bearer <FOM_WEBHOOK_SECRET>`
+ * Quarantines unmapped SKU/barcode into fom_product_links only.
+ */
+router.post("/integrations/fom/inventory-shadow", async (req, res, next) => {
+  try {
+    const headerSecret =
+      req.header("x-fom-secret") || req.header("authorization")?.replace(/^Bearer\s+/i, "");
+    assertFomWebhookAuthorized(headerSecret);
+
+    const parsed = parseFomInventoryBody(req.body || {});
+    const result = await shadowReconcileBranchInventoryFromFom({
+      ...parsed,
+      actor: "fom-webhook-shadow",
+    });
+
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * FOM kassa ombor sinxronizatsiyasi (writer ON bo‘lganda).
  * Auth: header `x-fom-secret` yoki `Authorization: Bearer <FOM_WEBHOOK_SECRET>`
  * Kill-switch: FOM_INVENTORY_WRITER_ENABLED must be true (currently hardcoded false).
  */
@@ -31,16 +66,10 @@ router.post("/integrations/fom/inventory-sync", async (req, res, next) => {
     assertFomWebhookAuthorized(headerSecret);
     assertFomInventoryWriterAllowed();
 
-    const body = req.body || {};
-    const items = Array.isArray(body.items) ? body.items : [];
-
+    const parsed = parseFomInventoryBody(req.body || {});
     const result = await syncBranchInventoryFromFom({
-      branchId: body.branchId != null ? Number(body.branchId) : undefined,
-      branchCode: body.branchCode || body.filialCode,
-      batchId: body.batchId || body.syncId,
-      syncMode: body.syncMode === "DELTA" ? "DELTA" : "SNAPSHOT",
+      ...parsed,
       actor: "fom-webhook-sync",
-      items,
     });
 
     return res.json(result);

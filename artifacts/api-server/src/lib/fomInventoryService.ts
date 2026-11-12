@@ -12,6 +12,7 @@ import { and, eq, sql } from "drizzle-orm";
 import {
   branches,
   db,
+  fomProductLinks,
   inventoryMovements,
   products,
   productStocks,
@@ -26,8 +27,45 @@ type DbLike = typeof db;
 export type FomStockSyncItem = {
   productId?: number;
   sku?: string;
+  /** Optional barcode/GTIN from FOM — mapped via fom_product_links, never invents catalog. */
+  barcode?: string;
+  gtin?: string;
   physicalQuantity?: number;
   deltaQuantity?: number;
+};
+
+export type FomShadowLine = {
+  inputSku: string | null;
+  inputBarcode: string | null;
+  inputGtin: string | null;
+  productId: number | null;
+  productSku: string | null;
+  mapped: boolean;
+  quarantine: boolean;
+  currentPhysical: number | null;
+  currentReserved: number | null;
+  reportedPhysical: number | null;
+  wouldWritePhysical: number | null;
+  wouldViolateReserved: boolean;
+  deltaVsCurrent: number | null;
+};
+
+export type FomShadowResult = {
+  ok: true;
+  mode: "SHADOW";
+  inventoryWriter: "DISABLED";
+  writesApplied: false;
+  branchId: number;
+  branchName: string;
+  batchId: string;
+  syncMode: "SNAPSHOT" | "DELTA";
+  processedCount: number;
+  mappedCount: number;
+  quarantineCount: number;
+  discrepancyPreviewCount: number;
+  lines: FomShadowLine[];
+  timestamp: string;
+  note: string;
 };
 
 export type FomInventorySyncInput = {
@@ -310,6 +348,275 @@ export async function applyBranchInventorySync(
     syncedCount,
     discrepancies,
     timestamp: new Date().toISOString(),
+  };
+}
+
+async function resolveProductForFomItem(
+  item: FomStockSyncItem,
+  branchId: number,
+  executor: DbLike,
+): Promise<{ product: typeof products.$inferSelect | null; via: string | null }> {
+  if (item.productId && Number.isFinite(item.productId) && item.productId > 0) {
+    const product = (
+      await executor.select().from(products).where(eq(products.id, Number(item.productId))).limit(1)
+    )[0];
+    if (product) return { product, via: "productId" };
+  }
+
+  const sku = String(item.sku || "").trim();
+  if (sku) {
+    const bySku = (await executor.select().from(products).where(eq(products.sku, sku)).limit(1))[0];
+    if (bySku) return { product: bySku, via: "sku" };
+
+    const link = (
+      await executor
+        .select()
+        .from(fomProductLinks)
+        .where(
+          and(
+            eq(fomProductLinks.keyType, "SKU"),
+            eq(fomProductLinks.externalKey, sku),
+            eq(fomProductLinks.status, "ACTIVE"),
+          ),
+        )
+        .limit(5)
+    ).find((row) => row.branchId == null || row.branchId === branchId);
+    if (link?.productId) {
+      const product = (
+        await executor.select().from(products).where(eq(products.id, link.productId)).limit(1)
+      )[0];
+      if (product) return { product, via: "fom_product_links:SKU" };
+    }
+  }
+
+  for (const [keyType, raw] of [
+    ["BARCODE", item.barcode],
+    ["GTIN", item.gtin],
+  ] as const) {
+    const key = String(raw || "").trim();
+    if (!key) continue;
+    const link = (
+      await executor
+        .select()
+        .from(fomProductLinks)
+        .where(
+          and(
+            eq(fomProductLinks.keyType, keyType),
+            eq(fomProductLinks.externalKey, key),
+            eq(fomProductLinks.status, "ACTIVE"),
+          ),
+        )
+        .limit(5)
+    ).find((row) => row.branchId == null || row.branchId === branchId);
+    if (link?.productId) {
+      const product = (
+        await executor.select().from(products).where(eq(products.id, link.productId)).limit(1)
+      )[0];
+      if (product) return { product, via: `fom_product_links:${keyType}` };
+    }
+  }
+
+  return { product: null, via: null };
+}
+
+async function quarantineFomKey(input: {
+  keyType: "SKU" | "BARCODE" | "GTIN";
+  externalKey: string;
+  branchId: number;
+  meta?: Record<string, unknown>;
+  executor?: DbLike;
+}) {
+  const executor = input.executor || db;
+  const externalKey = String(input.externalKey || "").trim();
+  if (!externalKey) return;
+
+  const existing = (
+    await executor
+      .select()
+      .from(fomProductLinks)
+      .where(
+        and(
+          eq(fomProductLinks.keyType, input.keyType),
+          eq(fomProductLinks.externalKey, externalKey),
+        ),
+      )
+      .limit(10)
+  ).find((row) => row.branchId == null || row.branchId === input.branchId);
+
+  if (existing) {
+    if (existing.status === "ACTIVE" && existing.productId) return;
+    await executor
+      .update(fomProductLinks)
+      .set({
+        status: existing.status === "REJECTED" ? "REJECTED" : "QUARANTINE",
+        lastSeenAt: new Date(),
+        updatedAt: new Date(),
+        meta: JSON.stringify({
+          ...(input.meta || {}),
+          lastShadowAt: new Date().toISOString(),
+        }),
+      })
+      .where(eq(fomProductLinks.id, existing.id));
+    return;
+  }
+
+  await executor.insert(fomProductLinks).values({
+    keyType: input.keyType,
+    externalKey,
+    productId: null,
+    branchId: input.branchId,
+    status: "QUARANTINE",
+    meta: JSON.stringify(input.meta || {}),
+  });
+}
+
+/**
+ * Phase 1 — shadow reconcile: compare FOM payload to app stock without writing product_stocks.
+ * Unknown keys are quarantined in fom_product_links (mapping table only).
+ */
+export async function shadowReconcileBranchInventoryFromFom(
+  input: FomInventorySyncInput,
+  executor: DbLike = db,
+): Promise<FomShadowResult> {
+  const branch = await resolveBranch(input, executor);
+  if (!branch) {
+    throw Object.assign(new Error("Filial topilmadi"), { status: 404, code: "BRANCH_NOT_FOUND" });
+  }
+
+  const items = Array.isArray(input.items) ? input.items : [];
+  if (!items.length) {
+    throw Object.assign(new Error("Shadow recon uchun tovarlar ro‘yxati bo‘sh"), {
+      status: 400,
+      code: "ITEMS_REQUIRED",
+    });
+  }
+
+  const syncMode = input.syncMode === "DELTA" ? "DELTA" : "SNAPSHOT";
+  const batchId = String(input.batchId || `SHADOW-${Date.now()}`);
+  const lines: FomShadowLine[] = [];
+  let mappedCount = 0;
+  let quarantineCount = 0;
+  let discrepancyPreviewCount = 0;
+
+  for (const item of items) {
+    const inputSku = String(item.sku || "").trim() || null;
+    const inputBarcode = String(item.barcode || "").trim() || null;
+    const inputGtin = String(item.gtin || "").trim() || null;
+    const { product } = await resolveProductForFomItem(item, branch.id, executor);
+
+    if (!product) {
+      quarantineCount++;
+      if (inputSku) {
+        await quarantineFomKey({
+          keyType: "SKU",
+          externalKey: inputSku,
+          branchId: branch.id,
+          meta: { batchId, reason: "UNMAPPED_IN_SHADOW" },
+          executor,
+        });
+      }
+      if (inputBarcode) {
+        await quarantineFomKey({
+          keyType: "BARCODE",
+          externalKey: inputBarcode,
+          branchId: branch.id,
+          meta: { batchId, reason: "UNMAPPED_IN_SHADOW" },
+          executor,
+        });
+      }
+      if (inputGtin) {
+        await quarantineFomKey({
+          keyType: "GTIN",
+          externalKey: inputGtin,
+          branchId: branch.id,
+          meta: { batchId, reason: "UNMAPPED_IN_SHADOW" },
+          executor,
+        });
+      }
+      lines.push({
+        inputSku,
+        inputBarcode,
+        inputGtin,
+        productId: null,
+        productSku: null,
+        mapped: false,
+        quarantine: true,
+        currentPhysical: null,
+        currentReserved: null,
+        reportedPhysical:
+          syncMode === "DELTA" ? null : Math.max(0, Number(item.physicalQuantity) || 0),
+        wouldWritePhysical: null,
+        wouldViolateReserved: false,
+        deltaVsCurrent: null,
+      });
+      continue;
+    }
+
+    mappedCount++;
+    const stock = (
+      await executor
+        .select()
+        .from(productStocks)
+        .where(and(eq(productStocks.branchId, branch.id), eq(productStocks.productId, product.id)))
+        .limit(1)
+    )[0];
+
+    const currentPhysical = stock ? Number(stock.physicalQuantity) : 0;
+    const currentReserved = stock ? Number(stock.reservedQuantity) : 0;
+    let wouldWritePhysical = currentPhysical;
+    if (syncMode === "DELTA") {
+      wouldWritePhysical = Math.max(0, currentPhysical + (Number(item.deltaQuantity) || 0));
+    } else {
+      wouldWritePhysical = Math.max(0, Number(item.physicalQuantity) || 0);
+    }
+    const wouldViolateReserved = wouldWritePhysical < currentReserved;
+    if (wouldViolateReserved) discrepancyPreviewCount++;
+
+    lines.push({
+      inputSku,
+      inputBarcode,
+      inputGtin,
+      productId: product.id,
+      productSku: product.sku,
+      mapped: true,
+      quarantine: false,
+      currentPhysical,
+      currentReserved,
+      reportedPhysical: syncMode === "DELTA" ? null : Math.max(0, Number(item.physicalQuantity) || 0),
+      wouldWritePhysical,
+      wouldViolateReserved,
+      deltaVsCurrent: wouldWritePhysical - currentPhysical,
+    });
+  }
+
+  logger.info(
+    {
+      event: "FOM_SHADOW_RECON",
+      branchId: branch.id,
+      batchId,
+      mappedCount,
+      quarantineCount,
+      discrepancyPreviewCount,
+    },
+    "FOM shadow inventory reconcile (no stock writes)",
+  );
+
+  return {
+    ok: true,
+    mode: "SHADOW",
+    inventoryWriter: "DISABLED",
+    writesApplied: false,
+    branchId: branch.id,
+    branchName: branch.name,
+    batchId,
+    syncMode,
+    processedCount: items.length,
+    mappedCount,
+    quarantineCount,
+    discrepancyPreviewCount,
+    lines,
+    timestamp: new Date().toISOString(),
+    note: "Shadow only — product_stocks not mutated. Map quarantined keys before enabling writer.",
   };
 }
 
