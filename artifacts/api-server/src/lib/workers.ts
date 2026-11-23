@@ -6,12 +6,14 @@
 import { and, eq, lte, sql } from "drizzle-orm";
 import {
   db,
+  orderItems,
   orders,
   paymentIntents,
   workerJobs,
 } from "@workspace/db";
-import { expireDueReservations, releaseReservation } from "./inventory";
+import { expireDueReservations, releaseReservation, reserveStock } from "./inventory";
 import { failPaymentIntent, findIntentByOrderId } from "./paymentService";
+import { applyOrderTransition } from "./orderTransitions";
 import { logger } from "./logger";
 import { backgroundWorkersEnabled } from "./securityEnv";
 import { emitAlert, ALERT } from "./alerts";
@@ -195,8 +197,11 @@ async function runReservationExpiry() {
 }
 
 /**
- * Unpaid payment intents older than TTL → failPaymentIntent.
+ * Unpaid *online* payment intents older than TTL → failPaymentIntent.
  * Then release reservation if order still unpaid (P5 inventory release).
+ *
+ * pay_at_branch / COD intents must NEVER expire here — pickup holds use
+ * reservations.expires_at / reserved_until (typically 24h), not the 30m PSP TTL.
  * Does NOT mark PAID, earn cashback, or consume inventory.
  */
 export async function expireUnpaidPayments(opts: { olderThanMs?: number; limit?: number } = {}) {
@@ -211,6 +216,8 @@ export async function expireUnpaidPayments(opts: { olderThanMs?: number; limit?:
     .where(
       and(
         sql`${paymentIntents.status} IN ('CREATED','REQUIRES_PAYMENT','PROCESSING')`,
+        // Online PSP only — branch/COD collection is not an abandoned checkout.
+        sql`lower(${paymentIntents.provider}) IN ('payme','click','simulate')`,
         lte(paymentIntents.createdAt, cutoff),
       ),
     )
@@ -218,7 +225,13 @@ export async function expireUnpaidPayments(opts: { olderThanMs?: number; limit?:
 
   let failed = 0;
   let released = 0;
+  let skippedBranch = 0;
   for (const intent of candidates) {
+    const provider = String(intent.provider || "").toLowerCase();
+    if (provider === "pay_at_branch" || provider === "cod") {
+      skippedBranch += 1;
+      continue;
+    }
     try {
       await failPaymentIntent(intent.id, {
         actor: "worker:payment_expiry",
@@ -233,6 +246,12 @@ export async function expireUnpaidPayments(opts: { olderThanMs?: number; limit?:
         && order.fulfillmentStatus !== "COMPLETED"
         && order.fulfillmentStatus !== "CANCELLED"
       ) {
+        const method = String(order.paymentMethod || "").toLowerCase();
+        // Double-guard: never release a pickup hold because of PSP TTL.
+        if (method === "pay_at_branch" || method === "cod") {
+          skippedBranch += 1;
+          continue;
+        }
         try {
           await releaseReservation(order.reservationId, {
             actor: "worker:payment_expiry",
@@ -247,7 +266,90 @@ export async function expireUnpaidPayments(opts: { olderThanMs?: number; limit?:
       // Invalid transition / already terminal
     }
   }
-  return { scanned: candidates.length, failed, released, olderThanMs };
+  return { scanned: candidates.length, failed, released, skippedBranch, olderThanMs };
+}
+
+/**
+ * Heal pickup/branch-pay orders wrongly marked FAILED + reservation CANCELLED
+ * by the old payment_intent TTL worker (before online-only filter).
+ * Re-locks stock until reserved_until when still in the future.
+ */
+export async function repairFalseBranchPayExpiries(opts: { limit?: number } = {}) {
+  const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
+  const now = new Date();
+  const due = await db.execute(sql`
+    SELECT id
+    FROM orders
+    WHERE lower(coalesce(payment_method, '')) IN ('pay_at_branch', 'cod')
+      AND payment_status = 'FAILED'
+      AND fulfillment_status IN ('CREATED', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP')
+      AND reservation_status = 'CANCELLED'
+      AND reserved_until IS NOT NULL
+      AND reserved_until > ${now}
+    ORDER BY id ASC
+    LIMIT ${limit}
+  `);
+  const ids = rowsOf(due).map((r) => Number(r.id)).filter((id) => Number.isFinite(id) && id > 0);
+  let repaired = 0;
+  let skipped = 0;
+  for (const orderId of ids) {
+    try {
+      const order = (await db.select().from(orders).where(eq(orders.id, orderId)).limit(1))[0];
+      if (!order?.branchId || !order.reservedUntil) {
+        skipped += 1;
+        continue;
+      }
+      const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+      const reserveItems = items
+        .map((it) => ({
+          productId: Number(it.productId),
+          quantity: Math.floor(Number(it.quantity) || 0),
+        }))
+        .filter((it) => it.productId > 0 && it.quantity > 0);
+      if (!reserveItems.length) {
+        skipped += 1;
+        continue;
+      }
+
+      const reserved = await reserveStock({
+        branchId: order.branchId,
+        customerId: order.customerId,
+        orderId: order.id,
+        items: reserveItems,
+        expiresAt: new Date(order.reservedUntil),
+        idempotencyKey: `heal:branch-pay:${order.id}`,
+        actor: "worker:repair_branch_pay",
+      });
+
+      await db
+        .update(orders)
+        .set({
+          reservationId: reserved.reservation.id,
+          reservationStatus: "ACTIVE",
+        })
+        .where(eq(orders.id, order.id));
+
+      await applyOrderTransition({
+        orderId: order.id,
+        toPayment: "PENDING",
+        actor: "worker:repair_branch_pay",
+        actorType: "system",
+        reason: "repair_false_branch_pay_expiry",
+        inventory: "none",
+      });
+      repaired += 1;
+    } catch (err) {
+      skipped += 1;
+      logger.warn(
+        {
+          orderId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "repairFalseBranchPayExpiries skipped",
+      );
+    }
+  }
+  return { examined: ids.length, repaired, skipped };
 }
 
 async function runNotificationJob(payload: Record<string, unknown>) {
@@ -410,13 +512,21 @@ export async function processWorkerJob(job: typeof workerJobs.$inferSelect) {
   }
 
   switch (job.jobType) {
-    case JOB_TYPES.RESERVATION_EXPIRY:
-      return runReservationExpiry();
-    case JOB_TYPES.PAYMENT_EXPIRY:
-      return expireUnpaidPayments({
+    case JOB_TYPES.RESERVATION_EXPIRY: {
+      const repaired = await repairFalseBranchPayExpiries({ limit: 50 });
+      const expiry = await runReservationExpiry();
+      return { ...expiry, repair: repaired };
+    }
+    case JOB_TYPES.PAYMENT_EXPIRY: {
+      const repaired = await repairFalseBranchPayExpiries({
+        limit: payload.limit != null ? Number(payload.limit) : undefined,
+      });
+      const expired = await expireUnpaidPayments({
         olderThanMs: payload.olderThanMs != null ? Number(payload.olderThanMs) : undefined,
         limit: payload.limit != null ? Number(payload.limit) : undefined,
       });
+      return { ...expired, repair: repaired };
+    }
     case JOB_TYPES.NOTIFICATION:
       return runNotificationJob(payload);
     case JOB_TYPES.FOM_RETRY:

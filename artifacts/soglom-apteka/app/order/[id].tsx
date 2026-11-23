@@ -24,6 +24,7 @@ import { localizeError } from '@/lib/i18n/errors';
 import {
   formatCountdown,
   fulfillmentLabel,
+  paymentDisplayStatus,
   paymentLabel,
   paymentMethodLabel,
   reservationLabel,
@@ -384,6 +385,8 @@ export default function OrderScreen() {
 
   const pay = String(order.paymentStatus || '').toUpperCase();
   const fulfill = String(order.fulfillmentStatus || '').toUpperCase();
+  const payDisplay = paymentDisplayStatus(order.paymentStatus, order.paymentMethod, order.fulfillmentStatus);
+  const branchCollectAwait = payDisplay === 'BRANCH_AWAIT';
   const resExpired =
     Boolean(order.reservationExpired)
     || (msLeft != null && msLeft <= 0 && String(order.reservationStatus).toUpperCase() === 'ACTIVE');
@@ -394,7 +397,15 @@ export default function OrderScreen() {
   const usedCashback = Number(order.cashbackUsed) > 0 ? Number(order.cashbackUsed) : 0;
 
   const payTone: 'ok' | 'warn' | 'bad' | 'muted' | 'purple' =
-    pay === 'PAID' ? 'ok' : pay === 'FAILED' ? 'bad' : pay === 'PENDING' ? 'warn' : 'muted';
+    payDisplay === 'PAID'
+      ? 'ok'
+      : branchCollectAwait
+        ? 'purple'
+        : payDisplay === 'FAILED'
+          ? 'bad'
+          : payDisplay === 'PENDING'
+            ? 'warn'
+            : 'muted';
   const fulfillTone: 'ok' | 'warn' | 'bad' | 'muted' | 'purple' =
     fulfill === 'COMPLETED'
       ? 'ok'
@@ -650,7 +661,7 @@ export default function OrderScreen() {
           {fulfill !== 'CANCELLED' || pay === 'PAID' || pay === 'REFUNDED' || pay === 'PARTIALLY_REFUNDED' ? (
             <StatusRow
               label={t('orders.statusRowPayment')}
-              value={paymentLabel(t, order.paymentStatus)}
+              value={paymentLabel(t, payDisplay)}
               tone={payTone}
             />
           ) : null}
@@ -661,7 +672,15 @@ export default function OrderScreen() {
               tone={resTone}
             />
           ) : null}
-          {pay === 'PENDING' && fulfill !== 'CANCELLED' ? (
+          {branchCollectAwait ? (
+            <View style={styles.infoBanner}>
+              <Feather name="info" size={15} color={WARN} style={{ marginTop: 1 }} />
+              <Text style={styles.infoBannerText}>
+                {t('orders.notePaymentBranchAwait')}
+              </Text>
+            </View>
+          ) : null}
+          {pay === 'PENDING' && !branchCollectAwait && fulfill !== 'CANCELLED' ? (
             <View style={styles.infoBanner}>
               <Feather name="info" size={15} color={WARN} style={{ marginTop: 1 }} />
               <Text style={styles.infoBannerText}>
@@ -669,7 +688,7 @@ export default function OrderScreen() {
               </Text>
             </View>
           ) : null}
-          {pay === 'FAILED' && fulfill !== 'CANCELLED' ? (
+          {pay === 'FAILED' && !branchCollectAwait && fulfill !== 'CANCELLED' ? (
             <View style={styles.badBanner}>
               <Feather name="alert-triangle" size={15} color={BAD} style={{ marginTop: 1 }} />
               <Text style={styles.badBannerText}>

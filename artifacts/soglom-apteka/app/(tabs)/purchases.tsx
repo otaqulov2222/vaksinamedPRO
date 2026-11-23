@@ -195,9 +195,17 @@ function OrderCard({ order, nowMs }: { order: any; nowMs: number }) {
 
   const cancelled = isCancelled(order);
   const completed = isCompleted(order);
-  const needsPaymentAttention = !cancelled && !completed && (pay === 'PENDING' || pay === 'FAILED');
+  const method = String(order.paymentMethod || '').toLowerCase();
+  const branchCollect = method === 'pay_at_branch' || method === 'cod';
+  // Branch-pay unpaid is expected until POS — do not treat as urgent failure.
+  const needsPaymentAttention =
+    !cancelled && !completed && !branchCollect && (pay === 'PENDING' || pay === 'FAILED');
   const payRefundLabel = cancelled && (pay === 'REFUNDED' || pay === 'PARTIALLY_REFUNDED') ? paymentLabelShort(t, order.paymentStatus) : null;
-  const payUrgentLabel = needsPaymentAttention ? paymentLabelShort(t, order.paymentStatus) : payRefundLabel;
+  const payUrgentLabel = needsPaymentAttention
+    ? paymentLabelShort(t, order.paymentStatus)
+    : !cancelled && !completed && branchCollect && (pay === 'PENDING' || pay === 'FAILED')
+      ? paymentLabelShort(t, 'BRANCH_AWAIT')
+      : payRefundLabel;
 
   const a11y = [
     orderTitle,

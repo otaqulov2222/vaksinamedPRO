@@ -14,6 +14,34 @@ export function paymentLabel(t: TFunction, status?: string | null): string {
   return lookup(t, 'payment', String(status || '').toUpperCase(), 'status.payment_unknown');
 }
 
+/** Branch/COD pickup: unpaid is expected until POS capture — not a failed online checkout. */
+export function isBranchCollectMethod(method?: string | null): boolean {
+  const m = String(method || '').toLowerCase();
+  return m === 'pay_at_branch' || m === 'cod';
+}
+
+/**
+ * Display payment axis for UI. Branch-collect PENDING/FAILED while order is still
+ * open → "Filialda to‘lanadi" (not "Amalga oshmadi").
+ */
+export function paymentDisplayStatus(
+  paymentStatus?: string | null,
+  paymentMethod?: string | null,
+  fulfillmentStatus?: string | null,
+): string {
+  const pay = String(paymentStatus || '').toUpperCase();
+  const fulfill = String(fulfillmentStatus || '').toUpperCase();
+  if (
+    isBranchCollectMethod(paymentMethod)
+    && (pay === 'PENDING' || pay === 'FAILED')
+    && fulfill !== 'CANCELLED'
+    && fulfill !== 'COMPLETED'
+  ) {
+    return 'BRANCH_AWAIT';
+  }
+  return pay;
+}
+
 /** Compact payment chip for Purchases list — same wording as paymentLabel. */
 export function paymentLabelShort(t: TFunction, status?: string | null): string {
   const s = String(status || '').toUpperCase();
