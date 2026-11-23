@@ -83,7 +83,9 @@ describe('Customer feature locks (must not silently disappear)', () => {
     assert.match(legal, /isAuthenticated \? '\/\(tabs\)\/profile' : '\/welcome'/);
     assert.match(nativeMap, /pickOriginActive/);
     assert.match(nativeMap, /onPickOrigin/);
-    assert.match(nativeMap, /pickOriginNativeHint/);
+    const branches = read('app/branches.tsx');
+    assert.match(branches, /pickOriginActive/);
+    assert.match(branches, /branches\.pickOriginHint|pickOriginNativeHint/);
   });
 
   it('locks unpaid online payment retry CTA on order detail', () => {

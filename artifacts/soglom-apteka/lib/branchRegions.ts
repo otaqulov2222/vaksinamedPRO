@@ -15,10 +15,10 @@ function norm(value: string): string {
 export function branchRegionKey(region: string): string {
   const raw = norm(region);
   if (!raw) return '';
-  if (raw.startsWith('toshkent shah') || raw === 'toshkent' || /^г\.?\s*ташкент/.test(raw)) {
+  if (raw.startsWith('toshkent shah') || raw === 'toshkent' || /^г\.?\s*ташкент/.test(raw)) { // i18n-ignore — endonym matcher
     return 'toshkent-city';
   }
-  if (raw.startsWith('toshkent viloyat')) {
+  if (raw.startsWith('toshkent viloyat')) { // i18n-ignore — endonym matcher
     return 'toshkent-region';
   }
   return raw.replace(/\s+viloyati$/i, '').trim();
@@ -26,8 +26,8 @@ export function branchRegionKey(region: string): string {
 
 export function branchRegionLabel(region: string): string {
   const key = branchRegionKey(region);
-  if (key === 'toshkent-city') return 'Toshkent shahar';
-  if (key === 'toshkent-region') return 'Toshkent viloyati';
+  if (key === 'toshkent-city') return 'Toshkent shahar'; // i18n-ignore — chip endonym
+  if (key === 'toshkent-region') return 'Toshkent viloyati'; // i18n-ignore — chip endonym
   const trimmed = String(region || '')
     .trim()
     .replace(/\s+viloyati$/i, '')

@@ -53,7 +53,7 @@ function buildMapHtml(labels: { showRoute: string; select: string }) {
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
+  <style><!-- i18n-ignore: leaflet CSS, not UI copy -->
     html, body, #map { margin:0; padding:0; width:100%; height:100%; background:#F3F0EA; touch-action: none; }
     * { -webkit-user-select: none; user-select: none; }
     .vm-pin {
@@ -148,8 +148,8 @@ function buildMapHtml(labels: { showRoute: string; select: string }) {
     }
 
     // Tell RN to lock the outer ScrollView while the map is being dragged.
-    map.on('dragstart zoomstart', function () { post({ type: 'gesture', active: true }); });
-    map.on('dragend zoomend', function () { post({ type: 'gesture', active: false }); });
+    map.on('dragstart zoomstart', function () { post({ type: 'gesture', active: true }); }); // i18n-ignore
+    map.on('dragend zoomend', function () { post({ type: 'gesture', active: false }); }); // i18n-ignore
     document.addEventListener('touchstart', function () { post({ type: 'gesture', active: true }); }, { passive: true });
     document.addEventListener('touchend', function () { post({ type: 'gesture', active: false }); }, { passive: true });
     document.addEventListener('touchcancel', function () { post({ type: 'gesture', active: false }); }, { passive: true });

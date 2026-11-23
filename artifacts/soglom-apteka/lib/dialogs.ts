@@ -65,9 +65,9 @@ function inferTone(title: string, message?: string): AppNotifyTone {
   if (
     head.includes('xato') ||
     head.includes('error') ||
-    head.includes('ошибк') ||
+    head.includes('ошибк') || // i18n-ignore — tone heuristic keyword
     head.includes('failed') ||
-    head.includes('муваффақиятсиз')
+    head.includes('муваффақиятсиз') // i18n-ignore — tone heuristic keyword
   ) {
     return 'error';
   }

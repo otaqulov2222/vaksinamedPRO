@@ -59,7 +59,7 @@ export async function openExternalNavigation(
   from: LatLng | null,
   to: LatLng & { label?: string },
 ) {
-  const label = encodeURIComponent(to.label || 'Vaksina Med');
+  const label = encodeURIComponent(to.label || 'Vaksina Med'); // i18n-ignore — maps deep-link fallback label
   const { Platform, Linking } = await import('react-native');
 
   const candidates: string[] = [];
