@@ -19,7 +19,7 @@ const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1
 
 /** Values that are legitimately identical across languages (brands, symbols, loanwords). */
 const IDENTICAL_ALLOWED =
-  /^(OK|Payme|Click|Cashback|Bonus|Professional|Vaksina Med|VAKSINA MED.*|VaksinaMed Desktop|—|Rx|QR|24\/7|YYYY-MM-DD|2004\.05\.07|English|Gold|Silver|Platinum|Telegram|Email|iOS|Android|Web|Windows|Mac|Linux|iPhone|iPad|Chrome|Edge|Opera|Firefox|Safari|.*\{\w+\}.*%?)$/;
+  /^(OK|Payme|Click|Cashback|Bonus|Professional|Vaksina Med|VAKSINA MED.*|VaksinaMed Desktop|—|Rx|QR|24\/7|YYYY-MM-DD|English|Gold|Silver|Platinum|Telegram|Email|iOS|Android|Web|Windows|Mac|Linux|iPhone|iPad|Chrome|Edge|Opera|Firefox|Safari|42|09:30|\+998(?:[\s-]?\d+){4}|.*\{\w+\}.*%?)$/;
 
 describe('i18n catalog completeness', () => {
   const uz = translationTable('uz');

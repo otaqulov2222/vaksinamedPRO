@@ -392,7 +392,6 @@ export default function EditProfileScreen() {
               editable={!saving}
               maxLength={10}
             />
-            <Text style={styles.hint}>{t('profile.editBirthDateHint')}</Text>
 
             {saveError ? (
               <View style={styles.errorBox}>

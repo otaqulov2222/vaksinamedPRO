@@ -175,7 +175,7 @@ export async function registerCustomer(input: {
 }, req?: Request) {
   const phone = normalizePhone(input.phone);
   if (phone.length !== 12 || !phone.startsWith("998")) {
-    throw Object.assign(new Error("Telefon raqam noto‘g‘ri. Masalan: 90 123 45 67"), { status: 400 });
+    throw Object.assign(new Error("Telefon raqam noto‘g‘ri."), { status: 400 });
   }
   if (!input.firstName?.trim() || input.firstName.trim().length < 2) {
     throw Object.assign(new Error("Ismni kiriting"), { status: 400 });
@@ -274,7 +274,7 @@ export async function loginCustomer(phoneRaw: string, password: string, req?: Re
 export async function createOtp(phoneRaw: string, purpose: "login" | "register" = "login") {
   const phone = normalizePhone(phoneRaw);
   if (phone.length !== 12 || !phone.startsWith("998")) {
-    throw Object.assign(new Error("Telefon raqam noto‘g‘ri. Masalan: 90 123 45 67"), { status: 400 });
+    throw Object.assign(new Error("Telefon raqam noto‘g‘ri."), { status: 400 });
   }
 
   const existing = await findCustomerByPhone(phone);
