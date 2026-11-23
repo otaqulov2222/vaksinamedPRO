@@ -190,8 +190,8 @@
     "hours": "08:00 - 24:00",
     "is24": false,
     "type": "dorixona",
-    "lat": 41.217784,
-    "lng": 69.21946,
+    "lat": 41.251162,
+    "lng": 69.254236,
     "status": "active"
   },
   {
@@ -235,8 +235,8 @@
     "hours": "08:00 - 24:00",
     "is24": false,
     "type": "dorixona",
-    "lat": 41.251162,
-    "lng": 69.254236,
+    "lat": 41.295212,
+    "lng": 69.334987,
     "status": "active"
   },
   {
@@ -340,8 +340,8 @@
     "hours": "08:00 - 24:00",
     "is24": false,
     "type": "dorixona",
-    "lat": 41.266693,
-    "lng": 69.215926,
+    "lat": 41.355166,
+    "lng": 69.357891,
     "status": "active"
   },
   {
