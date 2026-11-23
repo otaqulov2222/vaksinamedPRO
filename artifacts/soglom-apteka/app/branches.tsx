@@ -1,12 +1,10 @@
 import { Feather } from '@/components/AppIcon';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,9 +18,16 @@ import { useApp } from '@/context/AppContext';
 import { api, type ApiError } from '@/lib/api';
 import { getDeviceLocation, type DeviceLocationError } from '@/lib/deviceLocation';
 import { notify } from '@/lib/dialogs';
+import { branchRegionLabel, uniqueBranchRegionChips } from '@/lib/branchRegions';
 import type { TFunction } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
-import { fetchDrivingRoute, hasValidCoords, type LatLng, type RouteInfo } from '@/lib/maps';
+import {
+  fetchDrivingRoute,
+  hasValidCoords,
+  isPlausibleServiceArea,
+  type LatLng,
+  type RouteInfo,
+} from '@/lib/maps';
 
 function pickError(err: unknown, t: TFunction) {
   return localizeError(err, t, {
@@ -44,7 +49,7 @@ function formatDistance(t: TFunction, km: number | null | undefined) {
   return t('branches.distanceKm', { km: Number(km) });
 }
 
-type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable';
+type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable' | 'far';
 
 /** Default bottom list size when browsing nearby (map still shows the full set). */
 const NEARBY_LIST_LIMIT = 20;
@@ -80,6 +85,7 @@ export default function BranchesScreen() {
   const pickingRef = useRef(false);
   const detectedRegionDoneRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
+  const [mapGestureActive, setMapGestureActive] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -127,12 +133,18 @@ export default function BranchesScreen() {
     (async () => {
       const result = await getDeviceLocation({ requestPermission: true });
       if (!alive) return;
-      if (result.ok) {
+      if (result.ok && isPlausibleServiceArea(result.coords)) {
         setUserLocation(result.coords);
         setLocStatus('granted');
         return;
       }
-      applyLocationError(result.error);
+      // Emulator / foreign GPS → don't use for nearby/route (shows 7000+ km).
+      if (result.ok && !isPlausibleServiceArea(result.coords)) {
+        setUserLocation(null);
+        setLocStatus('far');
+        return;
+      }
+      if (!result.ok) applyLocationError(result.error);
     })();
     return () => {
       alive = false;
@@ -149,7 +161,7 @@ export default function BranchesScreen() {
     const area = String(nearest?.region || nearest?.district || nearest?.city || '').trim();
     if (!area) return;
     detectedRegionDoneRef.current = true;
-    setDetectedRegion(area);
+    setDetectedRegion(branchRegionLabel(area));
   }, [branches, locStatus, userLocation]);
 
   const loadBranches = useCallback(() => {
@@ -169,7 +181,9 @@ export default function BranchesScreen() {
           list.length ||
           0;
         setNetworkTotal(catalog);
-        if (Array.isArray(data.regions) && data.regions.length) setRegions(data.regions);
+        if (Array.isArray(data.regions) && data.regions.length) {
+          setRegions(uniqueBranchRegionChips(data.regions));
+        }
         setSelectedId((prev) => {
           if (prev != null && list.some((b: any) => Number(b.id) === Number(prev))) return prev;
           return null;
@@ -189,14 +203,21 @@ export default function BranchesScreen() {
   }, [locStatus, loadBranches]);
 
   const ensureUserLocation = useCallback(async (): Promise<LatLng | null> => {
-    if (userLocation && hasValidCoords(userLocation)) return userLocation;
+    if (userLocation && hasValidCoords(userLocation) && isPlausibleServiceArea(userLocation)) {
+      return userLocation;
+    }
     const result = await getDeviceLocation({ requestPermission: true });
-    if (result.ok) {
+    if (result.ok && isPlausibleServiceArea(result.coords)) {
       setUserLocation(result.coords);
       setLocStatus('granted');
       return result.coords;
     }
-    applyLocationError(result.error);
+    if (result.ok && !isPlausibleServiceArea(result.coords)) {
+      setUserLocation(null);
+      setLocStatus('far');
+      return null;
+    }
+    if (!result.ok) applyLocationError(result.error);
     return null;
   }, [applyLocationError, userLocation]);
 
@@ -205,7 +226,8 @@ export default function BranchesScreen() {
       setRouting(true);
       setRoute(null);
       try {
-        const info = await fetchDrivingRoute(from, { lat: Number(branch.lat), lng: Number(branch.lng) });
+        const dest = { lat: Number(branch.lat), lng: Number(branch.lng) };
+        const info = await fetchDrivingRoute(from, dest);
         setRoute(info);
         setPickOriginActive(false);
         setRouteTargetId(null);
@@ -243,7 +265,8 @@ export default function BranchesScreen() {
             notify(t('branches.locationTitle'), t('branches.locationRequiredForRoute'));
             return;
           }
-          const info = await fetchDrivingRoute(loc, { lat: Number(branch.lat), lng: Number(branch.lng) });
+          const dest = { lat: Number(branch.lat), lng: Number(branch.lng) };
+          const info = await fetchDrivingRoute(loc, dest);
           setRoute(info);
           setPickOriginActive(false);
           setRouteTargetId(null);
@@ -372,9 +395,11 @@ export default function BranchesScreen() {
   const locBanner =
     locStatus === 'denied'
       ? t('branches.locationDenied')
-      : locStatus === 'unavailable'
-        ? t('branches.locationUnavailable')
-        : null;
+      : locStatus === 'far'
+        ? t('branches.locationFarHint')
+        : locStatus === 'unavailable'
+          ? t('branches.locationUnavailable')
+          : null;
 
   return (
     <View style={styles.pageRoot}>
@@ -415,8 +440,10 @@ export default function BranchesScreen() {
         bounces={false}
         directionalLockEnabled
         keyboardShouldPersistTaps="handled"
+        scrollEnabled={!mapGestureActive}
+        nestedScrollEnabled
       >
-      <LinearGradient colors={['#FFF9E6', '#FFFFFF', '#FFFFFF']} style={styles.heroCard}>
+      <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>{t('branches.heroTitle')}</Text>
         <Pressable onPress={() => void goNearest()} style={styles.nearestBtn}>
           {routing ? (
@@ -432,7 +459,7 @@ export default function BranchesScreen() {
             <Feather name="info" size={13} color="#64748B" />
             <Text style={styles.locBanner}>
               {pickOriginActive
-                ? t(Platform.OS === 'web' ? 'branches.pickOriginHint' : 'branches.pickOriginNativeHint')
+                ? t('branches.pickOriginHint')
                 : locBanner}
             </Text>
             {pickOriginActive ? (
@@ -458,7 +485,8 @@ export default function BranchesScreen() {
             onPickBranch={(branch) => void pickForCart(branch)}
             pickOriginActive={pickOriginActive}
             onPickOrigin={onPickOrigin}
-            height={mapExpanded || route || pickOriginActive ? 440 : 360}
+            onMapGestureChange={setMapGestureActive}
+            height={mapExpanded || route || pickOriginActive ? 440 : 380}
             countryView={!selected && !route}
           />
           {routing ? (
@@ -492,7 +520,7 @@ export default function BranchesScreen() {
         {displayedBranches.length > 0 && mappableCount === 0 ? (
           <Text style={styles.locBanner}>{t('branches.mapNoCoords')}</Text>
         ) : null}
-      </LinearGradient>
+      </View>
 
       <View style={styles.searchWrap}>
         <Feather name="search" size={17} color="#5C328E" />
@@ -541,9 +569,10 @@ export default function BranchesScreen() {
           onPress={() => setOnly24h((v) => !v)}
           style={[styles.chip, only24h && styles.chip24hOn]}
           accessibilityRole="button"
+          accessibilityLabel={t('branches.filter24h')}
           accessibilityState={{ selected: only24h }}
         >
-          <View style={styles.chipInner}>
+          <View style={styles.chipInner} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
             <MaterialCommunityIcons
               name="clock-time-four-outline"
               size={14}
@@ -775,20 +804,20 @@ export default function BranchesScreen() {
 const styles = StyleSheet.create({
   pageRoot: {
     flex: 1,
-    backgroundColor: '#F7F5F2',
+    backgroundColor: '#FFFFFF',
     width: '100%',
     maxWidth: '100%',
     overflow: 'hidden',
   },
-  page: { flex: 1, width: '100%', maxWidth: '100%', backgroundColor: '#F7F5F2' },
+  page: { flex: 1, width: '100%', maxWidth: '100%', backgroundColor: '#FFFFFF' },
   pageContent: { padding: 16, gap: 12 },
   heroCard: {
     borderRadius: 24,
     padding: 16,
     paddingBottom: 14,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(92,50,142,0.08)',
-    boxShadow: '0 8px 24px rgba(42,16,78,0.08)',
+    borderColor: '#EDE7F6',
   },
   heroTitle: {
     fontFamily: 'Inter_700Bold',

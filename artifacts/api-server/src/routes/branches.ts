@@ -2,6 +2,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { branches, db } from "@workspace/db";
 import { haversineKm } from "../lib/money";
+import { sameBranchRegion, uniqueBranchRegionChips } from "../lib/branchRegions";
 
 const router = Router();
 
@@ -37,19 +38,27 @@ router.get("/branches", async (req, res, next) => {
     const origin = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : undefined;
     const rows = await db.select().from(branches);
     const filtered = rows.filter((item) => {
-      if (region && item.region !== region && item.district !== region) return false;
+      if (
+        region &&
+        !sameBranchRegion(item.region, region) &&
+        !(item.district && sameBranchRegion(item.district, region)) &&
+        item.region !== region &&
+        item.district !== region
+      ) {
+        return false;
+      }
       if (!q) return true;
       return `${item.name} ${item.district} ${item.region} ${item.address}`.toLowerCase().includes(q);
     }).map((item) => serializeBranch(item, origin));
     filtered.sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
-    const regions = [...new Set(rows.map((item) => item.region))].sort();
+    const regionChips = uniqueBranchRegionChips(rows.map((item) => item.region));
     return res.json({
       branches: filtered,
       total: filtered.length,
-      regions,
+      regions: regionChips,
       network: {
         claimed: String(rows.length),
-        regions: String([...new Set(rows.map((item) => item.region))].length),
+        regions: String(regionChips.length),
         founded: 2015,
         certifications: ["GDP", "GPP"],
         officialCatalog: rows.length,
