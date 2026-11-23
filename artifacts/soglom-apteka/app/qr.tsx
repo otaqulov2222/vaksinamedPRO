@@ -1,6 +1,5 @@
 import { Feather } from '@/components/AppIcon';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -14,7 +13,6 @@ import {
 } from 'react-native';
 import { BrandQrCode } from '@/components/BrandQrCode';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CrownIcon } from '@/components/LineIcons';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
 import type { TFunction } from '@/lib/i18n';
@@ -23,11 +21,10 @@ import { localizeError } from '@/lib/i18n/errors';
 const PURPLE = '#4B248A';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#64748B';
-const BG = '#F7F6FA';
+const BG = '#F4F3F8';
 const CARD = '#FFFFFF';
-const BORDER = '#EFEBF6';
+const BORDER = '#E8E4F0';
 const LAVENDER = '#F1EBFF';
-const GOLD = '#D97706';
 const DEFAULT_TTL = 90;
 
 type CardPayload = {
@@ -95,19 +92,21 @@ const QRExpiryTimer = memo(function QRExpiryTimer({
   const label =
     secondsLeft > 0 ? t('home.qrValidFor', { seconds: secondsLeft }) : t('home.qrRenewing');
 
+  const urgent = secondsLeft > 0 && secondsLeft <= 15;
+
   return (
-    <View
-      style={styles.timerBlock}
-      accessibilityLabel={label}
-    >
+    <View style={styles.timerBlock} accessibilityLabel={label}>
+      <Text style={[styles.timerLabel, urgent && styles.timerLabelUrgent]} numberOfLines={1}>
+        {label}
+      </Text>
       <View style={styles.timerTrack}>
-        <View style={[styles.timerFill, { width: `${Math.max(2, progress * 100)}%` }]} />
-      </View>
-      <View style={styles.timerLabelRow}>
-        <View style={styles.timerLiveDot} />
-        <Text style={styles.timerLabel} numberOfLines={1}>
-          {label}
-        </Text>
+        <View
+          style={[
+            styles.timerFill,
+            urgent && styles.timerFillUrgent,
+            { width: `${Math.max(2, progress * 100)}%` },
+          ]}
+        />
       </View>
     </View>
   );
@@ -117,38 +116,6 @@ function goBack() {
   if (router.canGoBack()) router.back();
   else router.replace('/(tabs)');
 }
-
-const StatTile = memo(function StatTile({
-  label,
-  value,
-  icon,
-  iconBg,
-  iconColor,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-  iconBg?: string;
-  iconColor?: string;
-  highlight?: boolean;
-}) {
-  return (
-    <View style={styles.statTile} accessibilityLabel={`${label}: ${value}`}>
-      <View style={[styles.statIcon, iconBg ? { backgroundColor: iconBg } : null]}>
-        <MaterialCommunityIcons name={icon} size={18} color={iconColor || PURPLE} />
-      </View>
-      <View style={styles.statCopy}>
-        <Text style={styles.statLabel} numberOfLines={1}>
-          {label}
-        </Text>
-        <Text style={[styles.statValue, highlight && styles.statValueHighlight]} numberOfLines={1}>
-          {value}
-        </Text>
-      </View>
-    </View>
-  );
-});
 
 export default function QrScreen() {
   const insets = useSafeAreaInsets();
@@ -301,7 +268,7 @@ export default function QrScreen() {
   const rate = card?.cashbackRateLabel || '—';
   const memberCode = card?.dynamicCode || card?.cardNumber || '';
 
-  const qrSize = narrow ? 184 : 200;
+  const qrSize = narrow ? 200 : 220;
   const sidePad = narrow ? 14 : 18;
   const bottomPad = 28 + Math.max(insets.bottom, 8);
 
@@ -324,17 +291,20 @@ export default function QrScreen() {
             onPress={goBack}
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}
+            hitSlop={8}
           >
-            <Feather name="chevron-left" size={20} color={PURPLE_DEEP} />
-            <Text style={styles.backLabel}>{t('common.back')}</Text>
+            <Feather name="chevron-left" size={22} color={PURPLE_DEEP} />
           </Pressable>
-          <Text style={styles.navTitle} numberOfLines={1}>
-            {t('common.navMyQr')}
-          </Text>
+          <View style={styles.navCopy}>
+            <Text style={styles.navTitle} numberOfLines={1}>
+              {t('common.navMyQr')}
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {t('home.qrSubtitle')}
+            </Text>
+          </View>
           <View style={styles.navSpacer} />
         </View>
-
-        <Text style={styles.subtitle}>{t('home.qrSubtitle')}</Text>
 
         <View style={styles.qrCard}>
           {loading && !card ? (
@@ -359,28 +329,19 @@ export default function QrScreen() {
             </View>
           ) : card ? (
             <>
-              <View style={styles.cardHeader}>
-                <View style={styles.cardBrandBadge}>
-                  <View style={styles.cardBrandDot} />
-                  <Text style={styles.cardBrandText}>VAKSINA MED</Text>
-                </View>
-                {tier && tier !== '—' ? (
-                  <View style={styles.cardTierBadge}>
-                    <CrownIcon size={12} color="#B45309" strokeWidth={2.2} />
-                    <Text style={styles.cardTierText}>{tier}</Text>
-                  </View>
-                ) : null}
+              <View style={styles.qrPad}>
+                <StableQR value={card.qrPayload} size={qrSize} label={t('home.qrImageA11y')} />
               </View>
 
-              <View style={styles.qrPad}>
-                <View style={[styles.scannerCorner, styles.cornerTL]} />
-                <View style={[styles.scannerCorner, styles.cornerTR]} />
-                <View style={[styles.scannerCorner, styles.cornerBL]} />
-                <View style={[styles.scannerCorner, styles.cornerBR]} />
-                <View style={{ width: qrSize, height: qrSize, alignItems: 'center', justifyContent: 'center' }}>
-                  <StableQR value={card.qrPayload} size={qrSize} label={t('home.qrImageA11y')} />
-                </View>
-              </View>
+              {memberCode ? (
+                <Text
+                  style={styles.memberCode}
+                  numberOfLines={1}
+                  accessibilityLabel={t('home.qrMemberCodeA11y', { code: memberCode })}
+                >
+                  {memberCode}
+                </Text>
+              ) : null}
 
               {expiresAtMs > 0 ? (
                 <QRExpiryTimer
@@ -390,59 +351,37 @@ export default function QrScreen() {
                   t={t}
                 />
               ) : null}
-
-              {memberCode ? (
-                <View style={styles.memberCodeBox}>
-                  <View style={styles.memberCodeDot} />
-                  <Text
-                    style={styles.memberCode}
-                    numberOfLines={1}
-                    accessibilityLabel={t('home.qrMemberCodeA11y', { code: memberCode })}
-                  >
-                    {memberCode}
-                  </Text>
-                </View>
-              ) : null}
             </>
           ) : null}
         </View>
 
-        <View style={styles.statsGrid}>
-          <StatTile
-            label={t('home.qrStatCustomer')}
-            value={firstName}
-            icon="account"
-            iconBg="#EEF2FF"
-            iconColor="#4F46E5"
-          />
-          <StatTile
-            label={t('common.navCashback')}
-            value={cash}
-            icon="wallet-outline"
-            iconBg="#ECFDF5"
-            iconColor="#059669"
-            highlight
-          />
-          <StatTile
-            label={t('home.qrStatTier')}
-            value={tier}
-            icon="crown-outline"
-            iconBg="#FFFDF5"
-            iconColor="#D97706"
-          />
-          <StatTile
-            label={t('home.qrStatRate')}
-            value={rate}
-            icon="percent"
-            iconBg="#F5F3FF"
-            iconColor="#7C3AED"
-          />
+        <View style={styles.metaCard}>
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>{t('home.qrStatCustomer')}</Text>
+            <Text style={styles.metaValue} numberOfLines={1}>
+              {firstName}
+            </Text>
+          </View>
+          <View style={styles.metaDivider} />
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>{t('common.navCashback')}</Text>
+            <Text style={[styles.metaValue, styles.metaValueCash]} numberOfLines={1}>
+              {cash}
+            </Text>
+          </View>
+          <View style={styles.metaDivider} />
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>{t('home.qrStatTier')}</Text>
+            <Text style={styles.metaValue} numberOfLines={1}>
+              {tier}
+              {rate && rate !== '—' ? ` · ${rate}` : ''}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.note} accessibilityRole="text">
-          <Feather name="shield" size={16} color={PURPLE} />
-          <Text style={styles.noteText}>{t('home.qrNote')}</Text>
-        </View>
+        <Text style={styles.noteText} accessibilityRole="text">
+          {t('home.qrNote')}
+        </Text>
 
         <Pressable
           onPress={onManualRefresh}
@@ -450,25 +389,18 @@ export default function QrScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('home.qrRefresh')}
           style={({ pressed }) => [
-            styles.refreshBtnWrapper,
-            (pressed || refreshing) && { opacity: 0.88 },
+            styles.refreshBtn,
+            (pressed || refreshing) && { opacity: 0.85 },
           ]}
         >
-          <LinearGradient
-            colors={['#4B248A', '#351765']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.refreshBtnGradient}
-          >
-            {refreshing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Feather name="refresh-cw" size={17} color="#fff" />
-            )}
-            <Text style={styles.refreshText}>
-              {refreshing ? t('home.qrRefreshing') : t('home.qrRefresh')}
-            </Text>
-          </LinearGradient>
+          {refreshing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Feather name="refresh-cw" size={16} color="#fff" />
+          )}
+          <Text style={styles.refreshText}>
+            {refreshing ? t('home.qrRefreshing') : t('home.qrRefresh')}
+          </Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -493,100 +425,50 @@ const styles = StyleSheet.create({
   nav: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: 20,
+    gap: 4,
   },
   backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: CARD,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    paddingVertical: 8,
-    paddingLeft: 6,
-    paddingRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CARD,
     borderWidth: 1,
     borderColor: BORDER,
   },
-  backLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    lineHeight: 18,
-    color: PURPLE_DEEP,
+  navCopy: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
   },
   navTitle: {
-    flex: 1,
-    textAlign: 'center',
     fontFamily: 'Inter_700Bold',
-    fontSize: 16,
+    fontSize: 17,
     lineHeight: 22,
     color: PURPLE_DEEP,
-  },
-  navSpacer: { width: 88 },
-
-  subtitle: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#64748B',
-    marginBottom: 14,
     textAlign: 'center',
   },
+  subtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: MUTED,
+    textAlign: 'center',
+  },
+  navSpacer: { width: 40 },
 
   qrCard: {
     backgroundColor: CARD,
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#EDE8F5',
-    marginBottom: 14,
-    minHeight: 330,
-    boxShadow: '0px 8px 28px rgba(75,36,138,0.08), 0px 1px 3px rgba(23,22,44,0.03)',
-  },
-  cardHeader: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  cardBrandBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    backgroundColor: '#F6F2FC',
-  },
-  cardBrandDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: PURPLE,
-  },
-  cardBrandText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
-    letterSpacing: 0.8,
-    color: PURPLE,
-  },
-  cardTierBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#FFFDF5',
     borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.35)',
-  },
-  cardTierText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    color: GOLD,
+    borderColor: BORDER,
+    marginBottom: 12,
+    minHeight: 300,
   },
   qrCenter: {
     alignItems: 'center',
@@ -619,189 +501,111 @@ const styles = StyleSheet.create({
     color: PURPLE,
   },
   qrPad: {
-    position: 'relative',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1.2,
-    borderColor: '#EBE5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  scannerCorner: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    borderColor: PURPLE,
-  },
-  cornerTL: {
-    top: 6,
-    left: 6,
-    borderTopWidth: 2.5,
-    borderLeftWidth: 2.5,
-    borderTopLeftRadius: 5,
-  },
-  cornerTR: {
-    top: 6,
-    right: 6,
-    borderTopWidth: 2.5,
-    borderRightWidth: 2.5,
-    borderTopRightRadius: 5,
-  },
-  cornerBL: {
-    bottom: 6,
-    left: 6,
-    borderBottomWidth: 2.5,
-    borderLeftWidth: 2.5,
-    borderBottomLeftRadius: 5,
-  },
-  cornerBR: {
-    bottom: 6,
-    right: 6,
-    borderBottomWidth: 2.5,
-    borderRightWidth: 2.5,
-    borderBottomRightRadius: 5,
+  memberCode: {
+    marginTop: 16,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    lineHeight: 20,
+    letterSpacing: 2,
+    color: PURPLE_DEEP,
+    textAlign: 'center',
   },
   timerBlock: {
     marginTop: 18,
-    width: '100%',
+    width: '72%',
+    maxWidth: 220,
     alignItems: 'center',
-    minHeight: 40,
+    gap: 8,
+  },
+  timerLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    lineHeight: 16,
+    color: MUTED,
+    textAlign: 'center',
+  },
+  timerLabelUrgent: {
+    color: '#B45309',
   },
   timerTrack: {
     width: '100%',
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#F1EDF9',
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#EDE9F5',
     overflow: 'hidden',
   },
   timerFill: {
     height: '100%',
-    backgroundColor: '#F59E0B',
-    borderRadius: 3,
+    backgroundColor: PURPLE,
+    borderRadius: 2,
   },
-  timerLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    marginTop: 10,
-  },
-  timerLiveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#16A34A',
-  },
-  timerLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    lineHeight: 18,
-    color: PURPLE_DEEP,
-    textAlign: 'center',
-  },
-  memberCodeBox: {
-    marginTop: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 14,
-    backgroundColor: '#F8F6FC',
-    borderWidth: 1.2,
-    borderColor: '#EDE5F8',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  memberCodeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#16A34A',
-  },
-  memberCode: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    lineHeight: 18,
-    letterSpacing: 1.5,
-    color: PURPLE_DEEP,
+  timerFillUrgent: {
+    backgroundColor: '#D97706',
   },
 
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 10,
-    marginBottom: 14,
-  },
-  statTile: {
-    width: '48.5%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  metaCard: {
     backgroundColor: CARD,
     borderRadius: 16,
-    padding: 13,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: BORDER,
-    boxShadow: '0px 2px 10px rgba(75,36,138,0.03)',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 14,
   },
-  statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: LAVENDER,
+  metaRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    minHeight: 44,
   },
-  statCopy: { flex: 1, minWidth: 0 },
-  statLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    lineHeight: 15,
+  metaDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: BORDER,
+  },
+  metaLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
     color: MUTED,
   },
-  statValue: {
-    marginTop: 2,
-    fontFamily: 'Inter_700Bold',
+  metaValue: {
+    flexShrink: 1,
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     lineHeight: 18,
     color: PURPLE_DEEP,
+    textAlign: 'right',
   },
-  statValueHighlight: {
+  metaValueCash: {
     color: '#059669',
   },
 
-  note: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: '#F8F6FC',
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#EDE8F6',
-  },
   noteText: {
-    flex: 1,
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
     lineHeight: 18,
-    color: '#4B4463',
+    color: MUTED,
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
   },
 
-  refreshBtnWrapper: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    boxShadow: '0px 6px 20px rgba(75,36,138,0.22)',
-  },
-  refreshBtnGradient: {
+  refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 9,
-    minHeight: 52,
+    gap: 8,
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: PURPLE,
     paddingHorizontal: 16,
   },
   refreshText: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
     lineHeight: 20,
     color: '#FFFFFF',
