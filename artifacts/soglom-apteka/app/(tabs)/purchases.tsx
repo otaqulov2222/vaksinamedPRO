@@ -301,22 +301,27 @@ function OrderCard({ order, nowMs }: { order: any; nowMs: number }) {
 
       {order.reservationActive && msLeft != null && msLeft > 0 ? (
         <View style={styles.reservationBar}>
-          <View style={styles.reservationTimerLeft}>
+          <View style={styles.reservationTimerRow}>
             <Feather name="clock" size={12} color={PURPLE} />
-            <Text style={styles.reservationTimerText}>
+            <Text style={styles.reservationTimerText} numberOfLines={1}>
               {t('orders.countdownLabel')}: {formatCountdown(msLeft)}
             </Text>
           </View>
-          <View style={styles.reservationQrPill}>
-            <MaterialCommunityIcons name="qrcode-scan" size={12} color={PURPLE} />
-            <Text style={styles.reservationQrText}>{t('orders.qrScanTitle')}</Text>
+          <View style={styles.reservationQrRow}>
+            <MaterialCommunityIcons name="qrcode-scan" size={13} color={PURPLE} />
+            <Text style={styles.reservationQrText} numberOfLines={2}>
+              {t('orders.qrScanTitle')}
+            </Text>
           </View>
         </View>
       ) : null}
 
       {payUrgentLabel ? (
         <View style={styles.axisRow}>
-          <StatusChip label={payUrgentLabel} tone={paymentTone(pay)} />
+          <StatusChip
+            label={payUrgentLabel}
+            tone={branchCollect ? 'purple' : paymentTone(pay)}
+          />
         </View>
       ) : null}
 
@@ -894,43 +899,51 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   reservationBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     backgroundColor: '#F7F4FD',
     borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 8,
     marginTop: 10,
     borderWidth: 1,
     borderColor: '#E9D5FF',
-    gap: 8,
+    gap: 6,
   },
-  reservationTimerLeft: {
+  reservationTimerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    flex: 1,
+    gap: 6,
+    minWidth: 0,
   },
   reservationTimerText: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 11.5,
+    fontSize: 12,
+    lineHeight: 16,
     color: PURPLE,
   },
-  reservationQrPill: {
+  reservationQrRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    minWidth: 0,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#D8B4FE',
   },
   reservationQrText: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 10.5,
+    fontSize: 11.5,
+    lineHeight: 15,
     color: PURPLE,
   },
   cardActionRow: {
