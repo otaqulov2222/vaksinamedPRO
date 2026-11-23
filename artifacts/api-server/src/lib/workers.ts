@@ -270,9 +270,90 @@ export async function expireUnpaidPayments(opts: { olderThanMs?: number; limit?:
 }
 
 /**
- * Heal pickup/branch-pay orders wrongly marked FAILED + reservation CANCELLED
- * by the old payment_intent TTL worker (before online-only filter).
- * Re-locks stock until reserved_until when still in the future.
+ * Heal one pickup/branch-pay order wrongly marked FAILED + reservation CANCELLED
+ * by the old payment_intent TTL worker. Returns healed order row or null.
+ */
+export async function repairFalseBranchPayOrder(
+  orderId: number,
+  opts: { actor?: string } = {},
+): Promise<{ repaired: boolean; order: typeof orders.$inferSelect | null; reason?: string }> {
+  const actor = opts.actor || "worker:repair_branch_pay";
+  const order = (await db.select().from(orders).where(eq(orders.id, orderId)).limit(1))[0];
+  if (!order) return { repaired: false, order: null, reason: "not_found" };
+
+  const method = String(order.paymentMethod || "").toLowerCase();
+  const openFulfill = ["CREATED", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP"].includes(
+    String(order.fulfillmentStatus || ""),
+  );
+  const needsHeal =
+    (method === "pay_at_branch" || method === "cod")
+    && order.paymentStatus === "FAILED"
+    && openFulfill
+    && order.reservationStatus === "CANCELLED"
+    && order.reservedUntil != null
+    && new Date(order.reservedUntil).getTime() > Date.now();
+
+  if (!needsHeal) return { repaired: false, order, reason: "not_eligible" };
+  if (!order.branchId) return { repaired: false, order, reason: "no_branch" };
+
+  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+  const reserveItems = items
+    .map((it) => ({
+      productId: Number(it.productId),
+      quantity: Math.floor(Number(it.quantity) || 0),
+    }))
+    .filter((it) => it.productId > 0 && it.quantity > 0);
+  if (!reserveItems.length) return { repaired: false, order, reason: "no_items" };
+
+  // Avoid reusing a CANCELLED heal-key reservation (reserveStock returns it idempotently).
+  let idempotencyKey = `heal:branch-pay:${order.id}`;
+  const prior = await db.execute(sql`
+    SELECT id, status FROM reservations
+    WHERE idempotency_key = ${idempotencyKey}
+    LIMIT 1
+  `);
+  const priorRow = rowsOf(prior)[0] as { id?: number; status?: string } | undefined;
+  if (priorRow && String(priorRow.status || "").toUpperCase() !== "ACTIVE") {
+    idempotencyKey = `heal:branch-pay:${order.id}:r2`;
+  }
+
+  const reserved = await reserveStock({
+    branchId: order.branchId,
+    customerId: order.customerId,
+    orderId: order.id,
+    items: reserveItems,
+    expiresAt: new Date(order.reservedUntil!),
+    idempotencyKey,
+    actor,
+  });
+
+  if (String(reserved.reservation.status || "").toUpperCase() !== "ACTIVE") {
+    return { repaired: false, order, reason: "reserve_not_active" };
+  }
+
+  await db
+    .update(orders)
+    .set({
+      reservationId: reserved.reservation.id,
+      reservationStatus: "ACTIVE",
+    })
+    .where(eq(orders.id, order.id));
+
+  await applyOrderTransition({
+    orderId: order.id,
+    toPayment: "PENDING",
+    actor,
+    actorType: "system",
+    reason: "repair_false_branch_pay_expiry",
+    inventory: "none",
+  });
+
+  const fresh = (await db.select().from(orders).where(eq(orders.id, order.id)).limit(1))[0] || null;
+  return { repaired: true, order: fresh };
+}
+
+/**
+ * Batch heal for worker sweeps (workers may be disabled in prod — also called on order GET).
  */
 export async function repairFalseBranchPayExpiries(opts: { limit?: number } = {}) {
   const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
@@ -294,50 +375,9 @@ export async function repairFalseBranchPayExpiries(opts: { limit?: number } = {}
   let skipped = 0;
   for (const orderId of ids) {
     try {
-      const order = (await db.select().from(orders).where(eq(orders.id, orderId)).limit(1))[0];
-      if (!order?.branchId || !order.reservedUntil) {
-        skipped += 1;
-        continue;
-      }
-      const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
-      const reserveItems = items
-        .map((it) => ({
-          productId: Number(it.productId),
-          quantity: Math.floor(Number(it.quantity) || 0),
-        }))
-        .filter((it) => it.productId > 0 && it.quantity > 0);
-      if (!reserveItems.length) {
-        skipped += 1;
-        continue;
-      }
-
-      const reserved = await reserveStock({
-        branchId: order.branchId,
-        customerId: order.customerId,
-        orderId: order.id,
-        items: reserveItems,
-        expiresAt: new Date(order.reservedUntil),
-        idempotencyKey: `heal:branch-pay:${order.id}`,
-        actor: "worker:repair_branch_pay",
-      });
-
-      await db
-        .update(orders)
-        .set({
-          reservationId: reserved.reservation.id,
-          reservationStatus: "ACTIVE",
-        })
-        .where(eq(orders.id, order.id));
-
-      await applyOrderTransition({
-        orderId: order.id,
-        toPayment: "PENDING",
-        actor: "worker:repair_branch_pay",
-        actorType: "system",
-        reason: "repair_false_branch_pay_expiry",
-        inventory: "none",
-      });
-      repaired += 1;
+      const result = await repairFalseBranchPayOrder(orderId);
+      if (result.repaired) repaired += 1;
+      else skipped += 1;
     } catch (err) {
       skipped += 1;
       logger.warn(

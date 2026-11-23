@@ -35,7 +35,7 @@ describe("P8–P10 API contracts", () => {
     const workers = readFileSync(path.join(root, "src/lib/workers.ts"), "utf8");
     assert.match(workers, /workerJobs/);
     assert.match(workers, /expireUnpaidPayments|RESERVATION_EXPIRY/);
-    assert.match(workers, /repairFalseBranchPayExpiries/);
+    assert.match(workers, /repairFalseBranchPayExpiries|repairFalseBranchPayOrder/);
     assert.match(workers, /payme','click','simulate/);
     assert.match(workers, /pay_at_branch/);
     assert.doesNotMatch(workers, /from ["']bullmq["']|from ["']ioredis["']|createQueue\(/);

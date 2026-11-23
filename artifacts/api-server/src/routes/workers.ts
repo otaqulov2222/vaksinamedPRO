@@ -49,11 +49,15 @@ router.post("/workers/payment-expiry", async (req, res, next) => {
   try {
     const admin = await requireAdmin(req);
     await requirePermission(admin, "payments:manage");
+    const { repairFalseBranchPayExpiries } = await import("../lib/workers");
+    const repair = await repairFalseBranchPayExpiries({
+      limit: req.body?.limit != null ? Number(req.body.limit) : undefined,
+    });
     const result = await expireUnpaidPayments({
       olderThanMs: req.body?.olderThanMs != null ? Number(req.body.olderThanMs) : undefined,
       limit: req.body?.limit != null ? Number(req.body.limit) : undefined,
     });
-    return res.json({ ok: true, jobType: JOB_TYPES.PAYMENT_EXPIRY, result });
+    return res.json({ ok: true, jobType: JOB_TYPES.PAYMENT_EXPIRY, result: { ...result, repair } });
   } catch (error) {
     return next(error);
   }

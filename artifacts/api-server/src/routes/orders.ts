@@ -333,6 +333,13 @@ async function staffTransition(
 router.get("/orders", async (req, res, next) => {
   try {
     const customer = await requireCustomer(req);
+    // Best-effort heal so list chips match detail after false branch-pay TTL.
+    try {
+      const { repairFalseBranchPayExpiries } = await import("../lib/workers");
+      await repairFalseBranchPayExpiries({ limit: 20 });
+    } catch {
+      // non-blocking
+    }
     const limitRaw = Number(req.query.limit);
     const offsetRaw = Number(req.query.offset);
     const limit = Number.isFinite(limitRaw) ? Math.min(50, Math.max(1, Math.floor(limitRaw))) : 30;
@@ -362,7 +369,18 @@ router.get("/orders/:id", async (req, res, next) => {
     if (!rows[0] || rows[0].customerId !== customer.id) {
       return res.status(404).json({ message: "Buyurtma topilmadi", code: "ORDER_NOT_FOUND" });
     }
-    return res.json({ order: await serializeOrder(rows[0]) });
+    let orderRow = rows[0];
+    // Workers are often disabled on live — heal false branch-pay TTL damage on read.
+    try {
+      const { repairFalseBranchPayOrder } = await import("../lib/workers");
+      const healed = await repairFalseBranchPayOrder(orderRow.id, {
+        actor: `customer:${customer.id}:order_get_heal`,
+      });
+      if (healed.repaired && healed.order) orderRow = healed.order;
+    } catch {
+      // best-effort; still return current order
+    }
+    return res.json({ order: await serializeOrder(orderRow) });
   } catch (error) {
     return next(error);
   }
