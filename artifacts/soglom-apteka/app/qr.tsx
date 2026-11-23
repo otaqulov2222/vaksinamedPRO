@@ -12,7 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
+import { BrandQrCode } from '@/components/BrandQrCode';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CrownIcon } from '@/components/LineIcons';
 import { useApp } from '@/context/AppContext';
@@ -54,15 +54,7 @@ function qrLog(instanceId: string, event: string, detail?: string) {
 }
 
 const StableQR = memo(function StableQR({ value, size, label }: { value: string; size: number; label: string }) {
-  return (
-    <View
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={label}
-    >
-      <QRCode value={value} size={size} color={PURPLE_DEEP} backgroundColor="#FFFFFF" ecl="M" quietZone={10} />
-    </View>
-  );
+  return <BrandQrCode value={value} size={size} label={label} />;
 });
 
 /** Isolated timer — only this subtree re-renders each second. */

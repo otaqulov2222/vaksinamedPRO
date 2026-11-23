@@ -15,7 +15,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
+import { BrandQrCode } from '@/components/BrandQrCode';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { api, API_URL } from '@/lib/api';
@@ -478,13 +478,10 @@ export default function OrderScreen() {
               </Text>
 
               <View style={styles.qrContainer}>
-                <QRCode
+                <BrandQrCode
                   value={String(order.qrPayload)}
                   size={176}
-                  color={PURPLE_DEEP}
-                  backgroundColor="#FFFFFF"
-                  ecl="M"
-                  quietZone={8}
+                  label={t('orders.qrHint')}
                 />
               </View>
 
