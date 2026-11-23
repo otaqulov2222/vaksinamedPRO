@@ -52,6 +52,17 @@ async function createDatabase(): Promise<DatabaseInstance> {
     if (shouldAutoSeed(environment, "postgres")) {
       await seedDatabase(database, { profile: "demo", environment });
     }
+    // Heal official lat/lng from catalog on boot (never deletes; skips payment secrets).
+    try {
+      const geo = await syncOfficialBranchGeo(database);
+      if (geo.updated || geo.inserted) {
+        console.log(
+          `[db] Official branch geo sync (postgres): updated=${geo.updated} inserted=${geo.inserted}`,
+        );
+      }
+    } catch (err) {
+      console.warn("[db] Official branch geo sync skipped:", err);
+    }
     return { db: database, pool, driver: "postgres", environment };
   }
 

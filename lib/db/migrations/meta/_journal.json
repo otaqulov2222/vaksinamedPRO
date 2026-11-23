@@ -183,6 +183,13 @@
       "when": 1762700000000,
       "tag": "0025_fom_product_links",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1763884800000,
+      "tag": "0026_branch_geo_duboviy_qumariq_gin3",
+      "breakpoints": true
     }
   ]
 }

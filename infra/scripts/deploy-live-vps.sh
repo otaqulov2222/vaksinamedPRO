@@ -76,16 +76,30 @@ log "building admin-web"
 log "syncing official branch geo from catalog"
 (
   cd "$ROOT"
-  if [[ -f "$ROOT/.env" ]]; then
-    set -a
-    # shellcheck disable=SC1091
-    . "$ROOT/.env"
-    set +a
+  # Prefer app .env; fall back to systemd EnvironmentFile if present.
+  for envfile in "$ROOT/.env" /etc/vaksinamed/api.env /etc/vaksinamed.env; do
+    if [[ -f "$envfile" ]]; then
+      set -a
+      # shellcheck disable=SC1090
+      . "$envfile"
+      set +a
+    fi
+  done
+  if [[ -z "${DATABASE_URL:-}" ]] && command -v systemctl >/dev/null 2>&1; then
+    # Last resort: parse Environment= lines from vaksinamed-api unit (no secrets logged).
+    DATABASE_URL="$(
+      systemctl show vaksinamed-api -p Environment --value 2>/dev/null \
+        | tr ' ' '\n' \
+        | sed -n 's/^DATABASE_URL=//p' \
+        | head -n1 \
+      || true
+    )"
+    export DATABASE_URL
   fi
   if [[ -n "${DATABASE_URL:-}" ]]; then
     pnpm --filter @workspace/db run sync:official-branch-geo || log "WARN: official branch geo sync failed"
   else
-    log "WARN: DATABASE_URL missing — skip official branch geo sync"
+    log "WARN: DATABASE_URL missing — skip official branch geo sync (API boot sync will heal on restart)"
   fi
 )
 
