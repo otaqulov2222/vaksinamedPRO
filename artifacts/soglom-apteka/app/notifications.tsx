@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
 import {
+  getNativeNotificationPermission,
   getNotificationPermission,
   requestPushPermissionAndRegister,
   setCachedUnreadCount,
@@ -26,7 +28,7 @@ import {
 const PURPLE = '#4B248A';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#6B7280';
-const BG = '#F8F9FD';
+const BG = '#FFFFFF';
 const CARD = '#FFFFFF';
 const GREEN = '#059669';
 const AMBER = '#D97706';
@@ -75,7 +77,17 @@ export default function NotificationsScreen() {
   const [pushActionLoading, setPushActionLoading] = useState(false);
 
   useEffect(() => {
-    setPushStatus(getNotificationPermission());
+    let alive = true;
+    void (async () => {
+      const status =
+        Platform.OS === 'web'
+          ? getNotificationPermission()
+          : await getNativeNotificationPermission();
+      if (alive) setPushStatus(status);
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const handleEnablePush = async () => {
@@ -543,15 +555,31 @@ export default function NotificationsScreen() {
                 <View style={styles.pushTextWrap}>
                   <Text style={styles.pushTitle}>
                     {pushStatus === 'unsupported'
-                      ? t('profile.pushUnsupportedTitle')
+                      ? t(
+                          Platform.OS === 'web'
+                            ? 'profile.pushUnsupportedTitleWeb'
+                            : 'profile.pushUnsupportedTitle',
+                        )
                       : t('profile.pushPermissionTitle')}
                   </Text>
                   <Text style={styles.pushSubtitle}>
                     {pushStatus === 'denied'
-                      ? t('profile.pushDeniedNote')
+                      ? t(
+                          Platform.OS === 'web'
+                            ? 'profile.pushDeniedNoteWeb'
+                            : 'profile.pushDeniedNote',
+                        )
                       : pushStatus === 'unsupported'
-                        ? t('profile.pushUnsupportedBody')
-                        : t('profile.pushPermissionDesc')}
+                        ? t(
+                            Platform.OS === 'web'
+                              ? 'profile.pushUnsupportedBodyWeb'
+                              : 'profile.pushUnsupportedBody',
+                          )
+                        : t(
+                            Platform.OS === 'web'
+                              ? 'profile.pushPermissionDescWeb'
+                              : 'profile.pushPermissionDesc',
+                          )}
                   </Text>
                 </View>
               </View>

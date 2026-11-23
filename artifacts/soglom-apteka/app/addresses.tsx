@@ -1,4 +1,5 @@
 import { Feather } from '@/components/AppIcon';
+import { AppScreenHeader } from '@/components/AppScreenHeader';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -7,7 +8,7 @@ import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
 
 const PRIMARY = '#4B248A';
-const BG = '#F7F6FA';
+const BG = '#FFFFFF';
 const SURFACE = '#FFFFFF';
 const INK = '#17162C';
 const MUTED = '#64748B';
@@ -58,7 +59,9 @@ export default function AddressesScreen() {
   );
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
+    <View style={[styles.screen, { paddingBottom: insets.bottom + 24 }]}>
+      <AppScreenHeader title={t('common.navAddresses')} />
+      <View style={styles.root}>
       <View style={styles.card}>
         <Text style={styles.eyebrow}>{t('profile.selectedBranchTitle')}</Text>
         {loading ? (
@@ -93,11 +96,13 @@ export default function AddressesScreen() {
         )}
       </View>
       <Text style={styles.footnote}>{t('profile.addressesDisabledTitle')}</Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: BG },
   root: {
     flex: 1,
     backgroundColor: BG,

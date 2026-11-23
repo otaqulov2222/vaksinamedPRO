@@ -1,4 +1,5 @@
 import { Feather } from '@/components/AppIcon';
+import { AppScreenHeader } from '@/components/AppScreenHeader';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -83,6 +84,8 @@ export default function PromosScreen() {
   }, [load]);
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <AppScreenHeader title={t('common.navPromos')} fallback="/(tabs)" />
     <Screen>
       <View style={styles.heading}>
         <Text style={styles.title}>{t('home.promosTitle')}</Text>
@@ -152,6 +155,7 @@ export default function PromosScreen() {
         </ScrollView>
       )}
     </Screen>
+    </View>
   );
 }
 

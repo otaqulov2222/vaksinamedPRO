@@ -194,6 +194,15 @@ const ICONS: Record<string, (p: GlyphProps) => React.ReactElement> = {
       <Path d="M9 20v-6h6v6" />
     </>,
   ),
+  /** Catalog tab — Feather "grid"; without this SVG web falls back to broken icon-font glyphs. */
+  grid: g(
+    <>
+      <Rect x={3} y={3} width={7} height={7} rx={1} fill="none" />
+      <Rect x={14} y={3} width={7} height={7} rx={1} fill="none" />
+      <Rect x={14} y={14} width={7} height={7} rx={1} fill="none" />
+      <Rect x={3} y={14} width={7} height={7} rx={1} fill="none" />
+    </>,
+  ),
   info: g(
     <>
       <Circle cx={12} cy={12} r={9} fill="none" />

@@ -1,0 +1,34 @@
+# Local native / build junk (do not upload to EAS)
+android/
+ios/
+.expo/
+.expo-shared/
+dist/
+web-build/
+coverage/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Deps reinstalled on EAS
+node_modules/
+**/node_modules/
+
+# Monorepo noise outside the app
+../../.git/
+../../.data/
+../../attached_assets/
+../../desktop/
+../../docs/
+../../infra/
+../../scripts/
+../../artifacts/admin-web/
+../../artifacts/api-server/
+../../**/android/app/build/
+../../**/.gradle/
+../../**/.tools/
+../../**/OpenJDK*.zip
+**/*.log
+**/.DS_Store
+**/apk-build-watch*

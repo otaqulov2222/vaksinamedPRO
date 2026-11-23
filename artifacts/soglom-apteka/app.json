@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "vaksinamed",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "uz.vaksinamed.app",
@@ -19,18 +19,25 @@
     },
     "android": {
       "package": "uz.vaksinamed.app",
-      "versionCode": 1,
+      "versionCode": 13,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#F8F5FF"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "CAMERA",
-        "READ_MEDIA_IMAGES"
+        "READ_MEDIA_IMAGES",
+        "POST_NOTIFICATIONS"
       ]
     },
+    "androidNavigationBar": {
+      "backgroundColor": "#FFFFFF",
+      "barStyle": "dark-content"
+    },
+    "newArchEnabled": true,
     "web": {
       "favicon": "./assets/images/icon.png",
       "bundler": "metro",
@@ -41,9 +48,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F8F5FF",
+          "backgroundColor": "#FFFFFF",
           "image": "./assets/images/brand-symbol.png",
-          "imageWidth": 160,
+          "imageWidth": 120,
           "resizeMode": "contain"
         }
       ],
@@ -70,12 +77,12 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
+    "owner": "saydirasulovs-team",
     "extra": {
       "eas": {
-        "projectId": "vaksina-med-loyalty"
+        "projectId": "b151fef6-ede6-4ff4-be2c-f2bff93929ac"
       },
       "telegramMiniApp": true,
       "storeReady": false,

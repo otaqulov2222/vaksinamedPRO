@@ -1,4 +1,5 @@
 import { Feather } from '@/components/AppIcon';
+import { AppScreenHeader } from '@/components/AppScreenHeader';
 import { router, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -23,7 +24,7 @@ const PURPLE = '#4B248A';
 const PURPLE_DEEP = '#1A1040';
 const PURPLE_LIGHT = '#F3E8FF';
 const MUTED = '#8B93A7';
-const BG = '#F7F8FC';
+const BG = '#FFFFFF';
 const CARD = '#FFFFFF';
 const BORDER = '#EEF0F6';
 const DANGER = '#DC2626';
@@ -295,6 +296,8 @@ export default function EditProfileScreen() {
   };
 
   return (
+    <View style={{ flex: 1, backgroundColor: BG }}>
+      <AppScreenHeader title={t('common.navEditProfile')} />
     <KeyboardAvoidingView
       style={[styles.root, { paddingBottom: Math.max(insets.bottom, 12) }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -686,6 +689,7 @@ export default function EditProfileScreen() {
         </ScrollView>
       )}
     </KeyboardAvoidingView>
+    </View>
   );
 }
 

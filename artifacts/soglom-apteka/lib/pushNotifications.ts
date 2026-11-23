@@ -36,6 +36,22 @@ export function getNotificationPermission(): PushPermissionState {
   return 'default';
 }
 
+/** Native: read real OS permission (sync helper stays web-oriented). */
+export async function getNativeNotificationPermission(): Promise<PushPermissionState> {
+  if (Platform.OS === 'web') return getNotificationPermission();
+  try {
+    const token = await getStoredPushToken();
+    if (token) return 'granted';
+    const Notifications = await import('expo-notifications');
+    const current = await Notifications.getPermissionsAsync();
+    if (current.status === 'granted') return 'granted';
+    if (current.status === 'denied') return 'denied';
+    return 'default';
+  } catch {
+    return 'default';
+  }
+}
+
 export async function getStoredPushToken(): Promise<string | null> {
   try {
     return await AsyncStorage.getItem(DEVICE_PUSH_TOKEN_KEY);
@@ -169,7 +185,8 @@ async function registerNativeExpoPush(): Promise<{
     });
     return { granted: true, status: 'granted' };
   } catch {
-    return { granted: false, status: 'unsupported' };
+    // Prefer "default" so the enable button stays available — never show web-browser copy on native.
+    return { granted: false, status: 'default' };
   }
 }
 

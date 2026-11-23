@@ -8,6 +8,7 @@ import {
   View,
   type ColorValue,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@/components/AppIcon';
 import { Tabs } from 'expo-router';
 import { router } from 'expo-router';
@@ -15,8 +16,9 @@ import { QrIcon } from '@/components/LineIcons';
 import { useApp } from '@/context/AppContext';
 
 const PRIMARY = '#6A22D6';
-const DEEP = '#1A1040';
 const INACTIVE = '#8E8E93';
+/** Icon + label row height (without system nav inset). */
+const TAB_BAR_CONTENT = 56;
 
 type IconName = React.ComponentProps<typeof Feather>['name'];
 
@@ -116,13 +118,20 @@ function CenterQrButton() {
 
 export default function TabLayout() {
   const { t } = useApp();
+  const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
+  // Android 3-button / gesture nav + edge-to-edge: lift tab bar above system controls (Soliq/OneID style).
+  const bottomInset = isWeb ? 8 : Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 8);
+  const tabBarHeight = TAB_BAR_CONTENT + bottomInset;
+
   return (
     <Tabs
+      safeAreaInsets={{ bottom: 0, top: 0, left: 0, right: 0 }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: PRIMARY,
         tabBarInactiveTintColor: INACTIVE,
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: isWeb ? 'rgba(255, 255, 255, 0.86)' : '#FFFFFF',
           borderTopColor: 'rgba(0, 0, 0, 0.08)',
@@ -132,9 +141,9 @@ export default function TabLayout() {
           shadowOffset: { width: 0, height: -1 },
           shadowOpacity: 0.04,
           shadowRadius: 10,
-          height: isWeb ? 70 : 60,
+          height: tabBarHeight,
           paddingTop: 6,
-          paddingBottom: isWeb ? 8 : 4,
+          paddingBottom: bottomInset,
           ...(isWeb
             ? ({
                 backdropFilter: 'blur(20px) saturate(180%)',
@@ -147,7 +156,7 @@ export default function TabLayout() {
           fontFamily: 'Inter_600SemiBold',
           fontSize: 10,
           lineHeight: 12,
-          marginBottom: isWeb ? 4 : 2,
+          marginBottom: 0,
           alignSelf: 'stretch',
           marginHorizontal: -6,
           maxWidth: 200,
@@ -210,7 +219,8 @@ const styles = StyleSheet.create({
   centerQrSlot: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 2,
   },
   centerQrTouchTarget: {
     alignItems: 'center',

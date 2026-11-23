@@ -32,6 +32,17 @@ export function hasValidCoords(point: { lat?: unknown; lng?: unknown } | null | 
   return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
 }
 
+/**
+ * GPS for this app only makes sense near Uzbekistan / Central Asia.
+ * Emulator defaults (US / 0,0 ocean) produce 7000+ km routes and hide the blue dot
+ * behind map maxBounds — reject those so we fall back to “pick on map”.
+ */
+export function isPlausibleServiceArea(point: LatLng | null | undefined): boolean {
+  if (!point || !hasValidCoords(point)) return false;
+  const { lat, lng } = point;
+  return lat >= 35.5 && lat <= 46.5 && lng >= 55.5 && lng <= 76.5;
+}
+
 export function yandexPointUrl(to: LatLng) {
   return `https://yandex.ru/maps/?pt=${to.lng},${to.lat}&z=15&l=map`;
 }
@@ -41,17 +52,52 @@ export function yandexRouteUrl(from: LatLng, to: LatLng) {
 }
 
 /**
- * @deprecated Branches / orders keep routing inside the app map (Leaflet + OSRM).
- * Do not call from pharmacy UX — external maps leave the app and pin wrongly when origin is missing.
+ * Open turn-by-turn navigation in the system maps app (Google / Apple / Yandex fallback).
+ * Used on native where in-app Leaflet map is unavailable.
  */
-export async function openYandexRoute(from: LatLng | null, to: LatLng) {
-  const url = from && hasValidCoords(from) ? yandexRouteUrl(from, to) : yandexPointUrl(to);
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    window.open(url, '_blank', 'noopener,noreferrer');
+export async function openExternalNavigation(
+  from: LatLng | null,
+  to: LatLng & { label?: string },
+) {
+  const label = encodeURIComponent(to.label || 'Vaksina Med');
+  const { Platform, Linking } = await import('react-native');
+
+  const candidates: string[] = [];
+  if (from && hasValidCoords(from)) {
+    // Google Maps directions (works on Android + iOS when Maps/Chrome installed)
+    candidates.push(
+      `https://www.google.com/maps/dir/?api=1&origin=${from.lat},${from.lng}&destination=${to.lat},${to.lng}&travelmode=driving`,
+    );
+    candidates.push(yandexRouteUrl(from, to));
+  } else {
+    candidates.push(
+      `https://www.google.com/maps/search/?api=1&query=${to.lat},${to.lng}`,
+    );
+    candidates.push(`geo:${to.lat},${to.lng}?q=${to.lat},${to.lng}(${label})`);
+    candidates.push(yandexPointUrl(to));
+  }
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.open(candidates[0], '_blank', 'noopener,noreferrer');
     return;
   }
-  const { Linking } = await import('react-native');
-  await Linking.openURL(url);
+
+  for (const url of candidates) {
+    try {
+      const can = await Linking.canOpenURL(url);
+      if (can || url.startsWith('https://')) {
+        await Linking.openURL(url);
+        return;
+      }
+    } catch {
+      // try next
+    }
+  }
+}
+
+/** @deprecated Prefer openExternalNavigation on native. */
+export async function openYandexRoute(from: LatLng | null, to: LatLng) {
+  return openExternalNavigation(from, to);
 }
 
 function haversineKm(from: LatLng, to: LatLng): number {

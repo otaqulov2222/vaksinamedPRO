@@ -8,7 +8,7 @@ const colors = {
     text: '#1A1040',
     tint: '#6A22D6',
 
-    background: '#F3F1F7',
+    background: '#FFFFFF',
     foreground: '#1A1040',
 
     card: '#ffffff',

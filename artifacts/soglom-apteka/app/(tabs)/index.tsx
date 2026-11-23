@@ -592,15 +592,21 @@ export default function HomeScreen() {
               ]}
               onPress={() => setSelectedCategory(cat.key)}
               accessibilityRole="button"
+              accessibilityLabel={t(cat.labelKey)}
+              accessibilityState={{ selected: active }}
             >
               <MaterialCommunityIcons
                 name={cat.icon as any}
                 size={15}
                 color={active ? '#FFFFFF' : PURPLE}
+                importantForAccessibility="no-hide-descendants"
+                accessibilityElementsHidden
               />
               <Text
                 style={[styles.categoryChipText, active && styles.categoryChipTextActive]}
                 numberOfLines={1}
+                importantForAccessibility="no-hide-descendants"
+                accessibilityElementsHidden
               >
                 {t(cat.labelKey)}
               </Text>
@@ -747,7 +753,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     minHeight: 44,
   },
-  headerLogo: { width: 42, height: 42 },
+  headerLogo: { width: 32, height: 32 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   roundBtn: {
     width: 44,

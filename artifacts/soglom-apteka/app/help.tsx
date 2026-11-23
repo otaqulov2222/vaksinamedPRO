@@ -1,4 +1,5 @@
 import { Feather } from '@/components/AppIcon';
+import { AppScreenHeader } from '@/components/AppScreenHeader';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -21,7 +22,7 @@ import { SUPPORT_CONTACTS } from '@/lib/supportContacts';
 const PURPLE = '#4B248A';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F7F8FC';
+const BG = '#FFFFFF';
 const CARD = '#FFFFFF';
 const BORDER = '#EEF0F6';
 
@@ -173,6 +174,7 @@ export default function HelpScreen() {
 
   return (
     <View style={styles.screenRoot}>
+      <AppScreenHeader title={t('common.navHelp')} />
       <ScrollView
         style={[styles.root, { paddingBottom: Math.max(insets.bottom, 16) }]}
         contentContainerStyle={styles.content}

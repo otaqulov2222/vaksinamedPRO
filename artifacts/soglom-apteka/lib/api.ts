@@ -5,7 +5,8 @@ import { SESSION_ENDED_KEY } from '@/lib/session';
 
 function resolveApiUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (typeof window !== 'undefined' && window.location) {
+  // React Native may polyfill `window`; only use browser location on web.
+  if (typeof document !== 'undefined' && typeof window !== 'undefined' && window.location) {
     const host = window.location.hostname;
     if ((host === 'localhost' || host === '127.0.0.1') && (!envUrl || envUrl.includes('vaksinamedgps.uz'))) {
       return `http://${host}:5000`;

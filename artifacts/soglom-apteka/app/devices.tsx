@@ -1,4 +1,5 @@
 import { Feather } from '@/components/AppIcon';
+import { AppScreenHeader } from '@/components/AppScreenHeader';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -18,7 +19,7 @@ import type { TFunction } from '@/lib/i18n';
 
 const PRIMARY = '#4B248A';
 const DEEP = '#351765';
-const BG = '#F7F6FA';
+const BG = '#FFFFFF';
 const SURFACE = '#FFFFFF';
 const INK = '#17162C';
 const MUTED = '#64748B';
@@ -175,13 +176,16 @@ export default function DevicesScreen() {
 
   return (
     <View style={[styles.root, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <AppScreenHeader
+        title={t('common.navDevices')}
+        subtitle={t('profile.devicesDesc')}
+      />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={PRIMARY} />
         }
       >
-        <Text style={styles.lead}>{t('profile.devicesDesc')}</Text>
 
         {emulationHint ? (
           <View style={styles.hint} testID="devices-emulation-hint">

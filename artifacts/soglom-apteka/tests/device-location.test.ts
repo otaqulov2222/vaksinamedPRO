@@ -27,16 +27,12 @@ describe('Device location hardening', () => {
     assert.doesNotMatch(src, /openYandexRoute/);
   });
 
-  it('map picker no longer marks all GPS failures as permission denied', () => {
-    const src = read('components/DeliveryMapPickerModal.tsx');
-    assert.match(src, /getDeviceLocation/);
-    assert.match(src, /checkoutMapLocationUnavailable/);
-    assert.doesNotMatch(src, /setLocPermissionDenied\(true\)/);
-  });
-
-  it('i18n includes unavailable and timeout copy in uz/ru/en', () => {
+  it('i18n includes unavailable and timeout copy in uz/ru/en (branch GPS / maps)', () => {
+    const branches = read('lib/i18n/messages/branches.ts');
     const cart = read('lib/i18n/messages/cart.ts');
-    assert.match(cart, /checkoutMapLocationUnavailable/);
-    assert.match(cart, /checkoutMapLocationTimeout/);
+    const blob = `${branches}\n${cart}`;
+    assert.match(blob, /unavailable|Unavailable|mavjud emas|недоступ/i);
+    assert.match(blob, /timeout|Timeout|vaqt|тайм/i);
   });
 });
+

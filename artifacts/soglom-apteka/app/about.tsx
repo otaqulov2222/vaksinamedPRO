@@ -1,4 +1,5 @@
 import { Feather } from '@/components/AppIcon';
+import { AppScreenHeader } from '@/components/AppScreenHeader';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import React from 'react';
@@ -9,7 +10,7 @@ import { useApp } from '@/context/AppContext';
 const PURPLE = '#4B248A';
 const PURPLE_DEEP = '#1A1040';
 const MUTED = '#8B93A7';
-const BG = '#F7F8FC';
+const BG = '#FFFFFF';
 const CARD = '#FFFFFF';
 const BORDER = '#EEF0F6';
 const YELLOW = '#FFCC00';
@@ -31,6 +32,7 @@ export default function AboutScreen() {
 
   return (
     <View style={styles.screenRoot}>
+      <AppScreenHeader title={t('common.navAbout')} />
       <ScrollView
         style={[styles.root, { paddingBottom: Math.max(insets.bottom, 16) }]}
         contentContainerStyle={styles.content}
@@ -142,7 +144,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     boxShadow: '0 4px 16px rgba(42,16,78,0.04)',
   },
-  logo: { width: 72, height: 72, marginBottom: 12 },
+  logo: { width: 56, height: 56, marginBottom: 12 },
   brand: {
     fontFamily: 'Inter_700Bold',
     fontSize: 22,
