@@ -1,9 +1,9 @@
 import React, { memo } from 'react';
-import { Image, StyleSheet, View, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 const PURPLE_DEEP = '#1A1040';
-/** Transparent brand mark rebuilt from brand-symbol.png (512², no plate). */
+/** Transparent brand mark (no plate) — from brand-symbol.png. */
 const LOGO = require('../assets/images/qr-center-logo.png');
 
 type Props = {
@@ -18,8 +18,9 @@ type Props = {
 };
 
 /**
- * Branded QR — mark sits in the geometric center with a quiet white pad
- * so modules never tangle into the logo. ECL H keeps it scannable.
+ * Branded QR — logo is drawn inside the QR SVG (not a sticker on top).
+ * Square clear zone + margin so modules never touch the mark.
+ * No circular white badge. ECL H keeps it scannable.
  */
 export const BrandQrCode = memo(function BrandQrCode({
   value,
@@ -30,10 +31,9 @@ export const BrandQrCode = memo(function BrandQrCode({
   style,
   testID,
 }: Props) {
-  // Mark ~18% of QR; quiet pad ~26% → clear gap around the symbol.
-  const logoSize = Math.max(28, Math.round(size * 0.18));
-  const padSize = Math.max(logoSize + 12, Math.round(size * 0.26));
-  const padOffset = Math.round((size - padSize) / 2);
+  // Mark ~15% of canvas; margin ~38% of mark → clear gap, modules don't touch.
+  const logoSize = Math.max(24, Math.round(size * 0.15));
+  const logoMargin = Math.max(8, Math.round(logoSize * 0.38));
   const quietZone = Math.max(4, Math.round(size * 0.03));
 
   return (
@@ -51,28 +51,12 @@ export const BrandQrCode = memo(function BrandQrCode({
         backgroundColor={backgroundColor}
         ecl="H"
         quietZone={quietZone}
+        logo={LOGO}
+        logoSize={logoSize}
+        logoMargin={logoMargin}
+        logoBackgroundColor={backgroundColor}
+        logoBorderRadius={0}
       />
-      <View
-        pointerEvents="none"
-        style={[
-          styles.logoPad,
-          {
-            width: padSize,
-            height: padSize,
-            borderRadius: padSize / 2,
-            left: padOffset,
-            top: padOffset,
-          },
-        ]}
-      >
-        <Image
-          source={LOGO}
-          style={{ width: logoSize, height: logoSize }}
-          resizeMode="contain"
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
-      </View>
     </View>
   );
 });
@@ -81,14 +65,6 @@ const styles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  logoPad: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
   },
 });
 
