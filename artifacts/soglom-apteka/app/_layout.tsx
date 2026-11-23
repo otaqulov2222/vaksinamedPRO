@@ -1,7 +1,7 @@
+import 'react-native-gesture-handler';
 import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
@@ -15,7 +15,9 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider, useApp } from '@/context/AppContext';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import * as SystemUI from 'expo-system-ui';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { AppDialogHost } from '@/components/AppDialogHost';
 
 SplashScreen.preventAutoHideAsync();
 try {
@@ -24,7 +26,7 @@ try {
   // Older native binaries without setOptions keep the default hide.
 }
 
-const LAUNCH_BG = '#F8F5FF';
+const LAUNCH_BG = '#FFFFFF';
 /** Safety net: never keep the native splash up if the session check stalls. */
 const SPLASH_FALLBACK_MS = 5000;
 
@@ -112,13 +114,14 @@ const queryClient = new QueryClient({
 });
 
 const stackScreenOptions = {
-  headerBackVisible: true,
+  // Custom HeaderBackButton only — system back + custom = double arrow on Android.
+  headerBackVisible: false,
   headerTintColor: '#5C328E',
   headerTitleAlign: 'center' as const,
   headerShadowVisible: false,
   headerStyle: { backgroundColor: '#FFFFFF' },
   headerTitleStyle: { fontFamily: 'Inter_700Bold', color: '#2A104E', fontSize: 17 },
-  contentStyle: { backgroundColor: '#F7F5F2' },
+  contentStyle: { backgroundColor: '#FFFFFF' },
   headerLeft: () => <HeaderBackButton />,
 };
 
@@ -179,46 +182,17 @@ function RootLayoutNav() {
         <Stack.Screen name="qr" options={{ headerShown: false, title: t('common.navMyQr') }} />
         {/* Cashback is a stack child (not a tab) so Back preserves Profile/Help/Home origin. */}
         <Stack.Screen name="cashback" options={{ headerShown: false, title: t('common.navCashback') }} />
-        <Stack.Screen
-          name="branches"
-          options={{ title: t('common.navBranches'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
-        />
-        <Stack.Screen
-          name="promos"
-          options={{ title: t('common.navPromos'), headerLeft: () => <HeaderBackButton fallback="/(tabs)" /> }}
-        />
-        <Stack.Screen
-          name="rating"
-          options={{ title: t('common.navRating'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
-        />
-        <Stack.Screen
-          name="language"
-          options={{ title: t('common.navLanguage'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
-        />
-        <Stack.Screen
-          name="edit-profile"
-          options={{ title: t('common.navEditProfile'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
-        />
-        <Stack.Screen
-          name="addresses"
-          options={{ title: t('common.navAddresses'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
-        />
-        <Stack.Screen
-          name="devices"
-          options={{ title: t('common.navDevices'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
-        />
-        <Stack.Screen
-          name="notifications"
-          options={{ title: t('common.navNotifications'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
-        />
-        <Stack.Screen
-          name="help"
-          options={{ title: t('common.navHelp'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
-        />
-        <Stack.Screen
-          name="about"
-          options={{ title: t('common.navAbout'), headerLeft: () => <HeaderBackButton fallback="/(tabs)/profile" /> }}
-        />
+        {/* headerShown:false — screens use AppScreenHeader / own bar (avoids Android double back). */}
+        <Stack.Screen name="branches" options={{ headerShown: false, title: t('common.navBranches') }} />
+        <Stack.Screen name="promos" options={{ headerShown: false, title: t('common.navPromos') }} />
+        <Stack.Screen name="rating" options={{ headerShown: false, title: t('common.navRating') }} />
+        <Stack.Screen name="language" options={{ headerShown: false, title: t('common.navLanguage') }} />
+        <Stack.Screen name="edit-profile" options={{ headerShown: false, title: t('common.navEditProfile') }} />
+        <Stack.Screen name="addresses" options={{ headerShown: false, title: t('common.navAddresses') }} />
+        <Stack.Screen name="devices" options={{ headerShown: false, title: t('common.navDevices') }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false, title: t('common.navNotifications') }} />
+        <Stack.Screen name="help" options={{ headerShown: false, title: t('common.navHelp') }} />
+        <Stack.Screen name="about" options={{ headerShown: false, title: t('common.navAbout') }} />
         <Stack.Screen name="cart" options={{ headerShown: false, title: t('common.navCart') }} />
         <Stack.Screen name="checkout" options={{ headerShown: false, title: t('common.navCheckout') }} />
         <Stack.Screen name="prescription" options={{ headerShown: false, title: t('catalog.prescriptionTitle') }} />
@@ -241,6 +215,11 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    // Keep system chrome on white so tab bar + Android nav don't clash.
+    void SystemUI.setBackgroundColorAsync('#FFFFFF').catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     const id = setTimeout(hideSplash, SPLASH_FALLBACK_MS);
     return () => clearTimeout(id);
   }, []);
@@ -253,9 +232,8 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AppProvider>
             <GestureHandlerRootView style={{ flex: 1, minWidth: 0, width: '100%' }}>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
+              <RootLayoutNav />
+              <AppDialogHost />
             </GestureHandlerRootView>
           </AppProvider>
         </QueryClientProvider>
