@@ -173,3 +173,204 @@ export function ProfileMenuIcon({
   const Comp = PROFILE_ICONS[name];
   return <Comp size={size} color={color} strokeWidth={strokeWidth} />;
 }
+
+/** Soft-fill + stroke marks for profile edit / notifications tiles. */
+export function ProfileUserMark({ size = 22, color, strokeWidth = 1.75 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={8.2} r={3.6} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={strokeWidth} />
+      <Path
+        d="M5.2 19.2c.7-3.4 3.4-5.2 6.8-5.2s6.1 1.8 6.8 5.2"
+        fill={color}
+        fillOpacity={0.14}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <Path d="M9.2 8.1h.01M14.8 8.1h.01" stroke={color} strokeWidth={strokeWidth + 0.4} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function SecurityLockMark({ size = 22, color, strokeWidth = 1.75 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M7.5 10.5V8.2a4.5 4.5 0 0 1 9 0v2.3"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <Rect
+        x={5.5}
+        y={10.5}
+        width={13}
+        height={9.2}
+        rx={2.4}
+        fill={color}
+        fillOpacity={0.16}
+        stroke={color}
+        strokeWidth={strokeWidth}
+      />
+      <Circle cx={12} cy={14.6} r={1.35} fill={color} />
+      <Path d="M12 15.9v1.6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function ShieldTipMark({ size = 22, color, strokeWidth = 1.75 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 3.2l7.2 2.4v5.6c0 4.5-3 7.8-7.2 9.4-4.2-1.6-7.2-4.9-7.2-9.4V5.6L12 3.2z"
+        fill={color}
+        fillOpacity={0.16}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M9.1 12.1l2.1 2.1 4.1-4.3"
+        stroke={color}
+        strokeWidth={strokeWidth + 0.15}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function CalendarBirthMark({ size = 22, color, strokeWidth = 1.75 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect
+        x={3.5}
+        y={5.5}
+        width={17}
+        height={14}
+        rx={2.6}
+        fill={color}
+        fillOpacity={0.14}
+        stroke={color}
+        strokeWidth={strokeWidth}
+      />
+      <Path d="M3.5 9.5h17" stroke={color} strokeWidth={strokeWidth} />
+      <Path d="M8 3.8v3.2M16 3.8v3.2" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Circle cx={9} cy={14} r={1.05} fill={color} />
+      <Circle cx={12} cy={14} r={1.05} fill={color} fillOpacity={0.55} />
+      <Circle cx={15} cy={14} r={1.05} fill={color} fillOpacity={0.35} />
+    </Svg>
+  );
+}
+
+export function NotifOrderReadyMark({ size = 22, color, strokeWidth = 1.7 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4.5 8.2L12 4.4l7.5 3.8v7.6L12 19.6 4.5 15.8V8.2z"
+        fill={color}
+        fillOpacity={0.14}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Path d="M12 4.4v15.2M4.5 8.2L12 12l7.5-3.8" stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" />
+      <Path d="M9.2 13.2l1.7 1.7 3.4-3.5" stroke={color} strokeWidth={strokeWidth + 0.1} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function NotifOrderCancelMark({ size = 22, color, strokeWidth = 1.7 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={8.2} fill={color} fillOpacity={0.14} stroke={color} strokeWidth={strokeWidth} />
+      <Path d="M9 9l6 6M15 9l-6 6" stroke={color} strokeWidth={strokeWidth + 0.25} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function NotifOrderDoneMark({ size = 22, color, strokeWidth = 1.7 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={8.2} fill={color} fillOpacity={0.14} stroke={color} strokeWidth={strokeWidth} />
+      <Path d="M8.2 12.2l2.6 2.6 5.2-5.4" stroke={color} strokeWidth={strokeWidth + 0.2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function NotifCashbackMark({ size = 22, color, strokeWidth = 1.7 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 3.2l1.55 4.05 4.3.35-3.3 2.85.95 4.2L12 12.9 8.5 14.65l.95-4.2-3.3-2.85 4.3-.35L12 3.2z"
+        fill={color}
+        fillOpacity={0.2}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Path d="M7.2 18.6h9.6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Path d="M9 20.2h6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" opacity={0.55} />
+    </Svg>
+  );
+}
+
+export function NotifPillMark({ size = 22, color, strokeWidth = 1.7 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M8.4 15.6l7.2-7.2a3.2 3.2 0 1 1 4.5 4.5l-7.2 7.2a3.2 3.2 0 1 1-4.5-4.5z"
+        fill={color}
+        fillOpacity={0.16}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Path d="M10.2 13.8l4-4" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function NotifAlertMark({ size = 22, color, strokeWidth = 1.7 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 3.8L20.2 18.5H3.8L12 3.8z"
+        fill={color}
+        fillOpacity={0.16}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Path d="M12 9.2v4.2" stroke={color} strokeWidth={strokeWidth + 0.15} strokeLinecap="round" />
+      <Circle cx={12} cy={15.8} r={0.95} fill={color} />
+    </Svg>
+  );
+}
+
+export type NotifMarkName =
+  | 'order-ready'
+  | 'order-cancel'
+  | 'order-done'
+  | 'cashback'
+  | 'pill'
+  | 'alert';
+
+const NOTIF_MARKS: Record<NotifMarkName, React.ComponentType<IconProps>> = {
+  'order-ready': NotifOrderReadyMark,
+  'order-cancel': NotifOrderCancelMark,
+  'order-done': NotifOrderDoneMark,
+  cashback: NotifCashbackMark,
+  pill: NotifPillMark,
+  alert: NotifAlertMark,
+};
+
+export function NotifMark({
+  name,
+  size = 20,
+  color,
+  strokeWidth = 1.7,
+}: IconProps & { name: NotifMarkName }) {
+  const Comp = NOTIF_MARKS[name];
+  return <Comp size={size} color={color} strokeWidth={strokeWidth} />;
+}

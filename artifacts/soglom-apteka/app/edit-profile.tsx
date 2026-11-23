@@ -1,5 +1,10 @@
 import { Feather } from '@/components/AppIcon';
 import { AppScreenHeader } from '@/components/AppScreenHeader';
+import {
+  ProfileUserMark,
+  SecurityLockMark,
+  ShieldTipMark,
+} from '@/components/LineIcons';
 import { router, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -17,6 +22,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { api } from '@/lib/api';
+import {
+  birthDateToDisplay,
+  formatBirthDateInput,
+  parseBirthDate,
+} from '@/lib/birthDate';
 import { confirmAction, notify } from '@/lib/dialogs';
 import { localizeError } from '@/lib/i18n/errors';
 
@@ -110,7 +120,8 @@ export default function EditProfileScreen() {
         setInitialFirst(fn.trim());
         setInitialLast(ln.trim());
         setPhone(String(data.phone || ''));
-        const bd = data.birthDate ? String(data.birthDate).slice(0, 10) : '';
+        const bdIso = data.birthDate ? String(data.birthDate).slice(0, 10) : '';
+        const bd = birthDateToDisplay(bdIso);
         setBirthDate(bd);
         setInitialBirthDate(bd);
       })
@@ -154,19 +165,7 @@ export default function EditProfileScreen() {
     if (fn.length > 80) return t('profile.editTooLongFirst');
     if (lastName.trim().length > 80) return t('profile.editTooLongLast');
     const bd = birthDate.trim();
-    if (bd) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(bd)) return t('profile.editBirthDateInvalid');
-      const [y, m, d] = bd.split('-').map((x) => Number(x));
-      const dt = new Date(Date.UTC(y, m - 1, d));
-      const ok =
-        Number.isFinite(y) &&
-        y >= 1900 &&
-        y <= new Date().getFullYear() &&
-        dt.getUTCFullYear() === y &&
-        dt.getUTCMonth() === m - 1 &&
-        dt.getUTCDate() === d;
-      if (!ok) return t('profile.editBirthDateInvalid');
-    }
+    if (bd && !parseBirthDate(bd)) return t('profile.editBirthDateInvalid');
     return null;
   };
 
@@ -186,15 +185,18 @@ export default function EditProfileScreen() {
 
     setSaving(true);
     try {
+      const bdIso = birthDate.trim() ? parseBirthDate(birthDate) : null;
       await api.updateProfile({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        birthDate: birthDate.trim() || null,
+        birthDate: bdIso,
       });
       await refresh();
+      const bdDisplay = bdIso ? birthDateToDisplay(bdIso) : '';
+      setBirthDate(bdDisplay);
       setInitialFirst(firstName.trim());
       setInitialLast(lastName.trim());
-      setInitialBirthDate(birthDate.trim());
+      setInitialBirthDate(bdDisplay);
       setSuccess(true);
       allowLeaveRef.current = true;
       setTimeout(() => {
@@ -326,7 +328,7 @@ export default function EditProfileScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardIconWrap}>
-                <Feather name="user" size={16} color={PURPLE} />
+                <ProfileUserMark size={18} color={PURPLE} />
               </View>
               <Text style={styles.cardTitle}>{t('profile.editSectionBasic')}</Text>
             </View>
@@ -374,14 +376,19 @@ export default function EditProfileScreen() {
             <TextInput
               value={birthDate}
               onChangeText={(v) => {
-                setBirthDate(v);
+                setBirthDate(formatBirthDateInput(v));
                 setSuccess(false);
                 setSaveError(null);
+              }}
+              onBlur={() => {
+                const parsed = parseBirthDate(birthDate);
+                if (parsed) setBirthDate(birthDateToDisplay(parsed));
               }}
               placeholder={t('profile.editBirthDatePlaceholder')}
               placeholderTextColor={MUTED}
               style={styles.input}
               autoCapitalize="none"
+              keyboardType="numbers-and-punctuation"
               editable={!saving}
               maxLength={10}
             />
@@ -418,7 +425,7 @@ export default function EditProfileScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardIconWrap}>
-                <Feather name="lock" size={16} color={PURPLE} />
+                <SecurityLockMark size={18} color={PURPLE} />
               </View>
               <View style={styles.cardHeaderTextWrap}>
                 <Text style={styles.cardTitle}>{t('profile.editSecurityTitle')}</Text>
@@ -539,7 +546,7 @@ export default function EditProfileScreen() {
                 <ActivityIndicator color={PURPLE} />
               ) : (
                 <>
-                  <Feather name="shield" size={16} color={PURPLE} />
+                  <ShieldTipMark size={17} color={PURPLE} />
                   <Text style={styles.secondaryActionBtnText}>{t('profile.editChangePasswordBtn')}</Text>
                 </>
               )}
@@ -549,7 +556,7 @@ export default function EditProfileScreen() {
           {/* Section 3: Security Tips */}
           <View style={styles.tipCard}>
             <View style={styles.tipIconWrap}>
-              <Feather name="shield" size={18} color="#059669" />
+              <ShieldTipMark size={18} color="#059669" />
             </View>
             <View style={styles.tipContent}>
               <Text style={styles.tipTitle}>{t('profile.editSecurityTipsTitle')}</Text>
@@ -722,12 +729,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1EFF6',
   },
   cardIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: PURPLE_LIGHT,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
   },
   cardHeaderTextWrap: {
     flex: 1,

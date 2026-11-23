@@ -1,5 +1,6 @@
 import { Feather } from '@/components/AppIcon';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { NotifMark, type NotifMarkName } from '@/components/LineIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -47,7 +48,7 @@ interface NotificationItem {
   codeBadge?: string;
   body: string;
   rawTime: string;
-  icon: string;
+  icon: NotifMarkName;
   iconColor: string;
   iconBg: string;
   route?: string;
@@ -258,7 +259,7 @@ export default function NotificationsScreen() {
             ? t('profile.notifOrderCompletedBody')
             : t('orders.alreadyRatedNote'),
           rawTime: ord.createdAt || new Date().toISOString(),
-          icon: 'check-circle-outline',
+          icon: 'order-done',
           iconColor: GREEN,
           iconBg: '#ECFDF5',
           route: ord.canRate ? '/rating' : `/order/${ord.id}`,
@@ -274,7 +275,7 @@ export default function NotificationsScreen() {
           codeBadge: `#${code}`,
           body: t('profile.notifOrderCancelledBody'),
           rawTime: ord.createdAt || new Date().toISOString(),
-          icon: 'close-circle-outline',
+          icon: 'order-cancel',
           iconColor: ROSE,
           iconBg: '#FFE4E6',
           route: `/order/${ord.id}`,
@@ -289,7 +290,7 @@ export default function NotificationsScreen() {
           codeBadge: `#${code}`,
           body: t('profile.notifOrderReadyBody'),
           rawTime: ord.createdAt || new Date().toISOString(),
-          icon: 'package-variant-closed',
+          icon: 'order-ready',
           iconColor: PURPLE,
           iconBg: '#F3E8FF',
           route: `/order/${ord.id}`,
@@ -307,7 +308,7 @@ export default function NotificationsScreen() {
         title: t('profile.notifReminderStockTitle'),
         body: t('profile.notifReminderStockBody', { name: ref.medicineName, days: ref.daysRemaining }),
         rawTime: new Date().toISOString(),
-        icon: 'alert-decagram-outline',
+        icon: 'alert',
         iconColor: AMBER,
         iconBg: '#FEF3C7',
         route: '/reminders',
@@ -359,7 +360,7 @@ export default function NotificationsScreen() {
           codeBadge: `+${fmt.money(amount)}`,
           body: t('profile.notifCashbackEarnedBody', { amount: fmt.money(amount) }),
           rawTime: cb.createdAt || new Date().toISOString(),
-          icon: 'star-four-points-outline',
+          icon: 'cashback',
           iconColor: '#D97706',
           iconBg: '#FEF3C7',
           route: '/cashback',
@@ -632,11 +633,7 @@ export default function NotificationsScreen() {
                 {!item.isRead ? <View style={styles.unreadLeftBar} /> : null}
 
                 <View style={[styles.notifIconWrap, { backgroundColor: item.iconBg }]}>
-                  <MaterialCommunityIcons
-                    name={item.icon as any}
-                    size={22}
-                    color={item.iconColor}
-                  />
+                  <NotifMark name={item.icon} size={22} color={item.iconColor} />
                 </View>
 
                 <View style={styles.notifCopy}>
