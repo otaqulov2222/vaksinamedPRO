@@ -90,7 +90,7 @@ describe("QR / POS loyalty identity contracts", () => {
       path.join(root, "../soglom-apteka/lib/i18n/messages/home.ts"),
       "utf8",
     );
-    assert.match(homeMessages, /qrValidFor: 'QR amal qiladi: \{seconds\} soniya'/);
+    assert.match(homeMessages, /qrValidFor: '\{seconds\} soniya'/);
     assert.doesNotMatch(homeMessages, /bir martalik|one-time|offline/i);
     // Must not call global AppContext refresh inside focus effect (loop cause).
     const focusBlock = qr.slice(qr.indexOf("useFocusEffect"));
