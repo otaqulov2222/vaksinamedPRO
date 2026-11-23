@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { reportConnectivity } from '@/lib/connectivity';
 import { tr } from '@/lib/i18n';
 import { NETWORK_ERROR_CODE } from '@/lib/i18n/errors';
 import { SESSION_ENDED_KEY } from '@/lib/session';
@@ -103,7 +104,9 @@ async function request<T>(path: string, init: RequestInit = {}, auth = true): Pr
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, { ...init, headers });
+    reportConnectivity(true);
   } catch {
+    reportConnectivity(false);
     const err = new Error(tr('common.errorNetwork')) as ApiError;
     err.code = NETWORK_ERROR_CODE;
     throw err;

@@ -73,6 +73,9 @@ export default defineMessages({
 
     errorGeneric: 'Xatolik yuz berdi. Qayta urinib ko‘ring.',
     errorNetwork: 'Internetga ulanib bo‘lmadi. Aloqani tekshiring.',
+    offlineBannerTitle: 'Aloqa uzildi',
+    offlineBannerHint: 'Internet yo‘q yoki serverga yetib bo‘lmadi. Tekshirib, qayta urinib ko‘ring.',
+    offlineRetry: 'Tekshirish',
     errorTooManyAttempts: 'Juda ko‘p urinish. Birozdan keyin qayta urinib ko‘ring.',
     errorSessionExpired: 'Sessiya muddati tugadi. Qaytadan kiring.',
     errorForbidden: 'Bu amal uchun ruxsat yo‘q.',
@@ -167,6 +170,9 @@ export default defineMessages({
 
     errorGeneric: 'Произошла ошибка. Попробуйте ещё раз.',
     errorNetwork: 'Не удалось подключиться к серверу. Проверьте интернет-соединение.',
+    offlineBannerTitle: 'Нет связи',
+    offlineBannerHint: 'Нет интернета или сервер недоступен. Проверьте соединение и повторите.',
+    offlineRetry: 'Проверить',
     errorTooManyAttempts: 'Слишком много попыток. Попробуйте немного позже.',
     errorSessionExpired: 'Сессия истекла. Войдите снова.',
     errorForbidden: 'Нет доступа к этому действию.',
@@ -261,6 +267,9 @@ export default defineMessages({
 
     errorGeneric: 'Something went wrong. Please try again.',
     errorNetwork: 'Could not connect. Check your internet connection.',
+    offlineBannerTitle: 'Connection lost',
+    offlineBannerHint: 'No internet or the server is unreachable. Check your connection and try again.',
+    offlineRetry: 'Check',
     errorTooManyAttempts: 'Too many attempts. Please try again later.',
     errorSessionExpired: 'Your session has expired. Please log in again.',
     errorForbidden: 'You do not have permission for this action.',

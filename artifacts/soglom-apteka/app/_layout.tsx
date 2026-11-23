@@ -18,6 +18,7 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { AppDialogHost } from '@/components/AppDialogHost';
+import { OfflineBanner } from '@/components/OfflineBanner';
 
 SplashScreen.preventAutoHideAsync();
 try {
@@ -233,6 +234,7 @@ export default function RootLayout() {
           <AppProvider>
             <GestureHandlerRootView style={{ flex: 1, minWidth: 0, width: '100%' }}>
               <RootLayoutNav />
+              <OfflineBanner />
               <AppDialogHost />
             </GestureHandlerRootView>
           </AppProvider>
