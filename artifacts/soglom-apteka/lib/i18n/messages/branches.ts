@@ -44,6 +44,10 @@ export default defineMessages({
     mapTitle: 'Xarita',
     noCoordsMessage: 'Bu filialning koordinatasi mavjud emas.',
     locationTitle: 'Joylashuv',
+    locationPermissionTitle: 'Joylashuvga ruxsat',
+    locationPermissionBody:
+      'Eng yaqin Vaksina Med filialini topish va yo‘lni ko‘rsatish uchun joylashuvingiz kerak. Keyingi oynada ruxsat berishingiz mumkin.',
+    locationPermissionAllow: 'Davom etish',
     locationRequiredForRoute:
       'Joylashuv olinmadi. Filial pinini ko‘ryapsiz — marshrut uchun xaritadan boshlang‘ich nuqtani bosing yoki ruxsatni yoqing.',
     locationRequiredMessage:
@@ -113,6 +117,10 @@ export default defineMessages({
     mapTitle: 'Карта',
     noCoordsMessage: 'У этой аптеки нет координат.',
     locationTitle: 'Геолокация',
+    locationPermissionTitle: 'Доступ к геолокации',
+    locationPermissionBody:
+      'Чтобы найти ближайшую аптеку Vaksina Med и построить маршрут, нужно ваше местоположение. В следующем окне можно разрешить доступ.',
+    locationPermissionAllow: 'Продолжить',
     locationRequiredForRoute:
       'Местоположение не получено. Пин аптеки уже на карте — нажмите начальную точку или включите геолокацию.',
     locationRequiredMessage:
@@ -182,6 +190,10 @@ export default defineMessages({
     mapTitle: 'Map',
     noCoordsMessage: 'This pharmacy has no coordinates.',
     locationTitle: 'Location',
+    locationPermissionTitle: 'Location access',
+    locationPermissionBody:
+      'We use your location to find the nearest Vaksina Med pharmacy and show the route. You can allow access in the next prompt.',
+    locationPermissionAllow: 'Continue',
     locationRequiredForRoute:
       'Location unavailable. The pharmacy pin is on the map — tap a start point or enable location.',
     locationRequiredMessage:

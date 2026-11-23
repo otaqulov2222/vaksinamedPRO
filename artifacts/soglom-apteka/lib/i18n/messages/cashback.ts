@@ -42,7 +42,7 @@ export default defineMessages({
     tierTop: 'Siz eng yuqori darajadasiz',
     tierRemainingLead: '{tier} darajasiga o‘tish uchun',
     tierRemainingAmount: '{amount} qoldi',
-    tierThresholdPending: 'Keyingi daraja chegarasi serverdan',
+    tierThresholdPending: 'Keyingi daraja chegarasi tez orada',
     tierDetailsA11y: 'Daraja tafsilotlari',
     tierA11y: 'Daraja: {tier}',
 
@@ -99,7 +99,7 @@ export default defineMessages({
     tierTop: 'У вас максимальный уровень',
     tierRemainingLead: 'Для перехода на уровень {tier}',
     tierRemainingAmount: 'осталось {amount}',
-    tierThresholdPending: 'Порог следующего уровня задаёт сервер',
+    tierThresholdPending: 'Порог следующего уровня скоро появится',
     tierDetailsA11y: 'Сведения об уровне',
     tierA11y: 'Уровень: {tier}',
 
@@ -156,7 +156,7 @@ export default defineMessages({
     tierTop: 'You are at the highest tier',
     tierRemainingLead: 'To reach {tier}',
     tierRemainingAmount: '{amount} remaining',
-    tierThresholdPending: 'Next tier threshold is set by the server',
+    tierThresholdPending: 'Next tier threshold coming soon',
     tierDetailsA11y: 'Tier details',
     tierA11y: 'Tier: {tier}',
 

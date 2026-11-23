@@ -40,23 +40,35 @@ function webGeolocation(options: PositionOptions): Promise<DeviceLocationResult>
  * Web: prefer browser Geolocation API (more reliable than expo-location on Chrome/desktop).
  * Native: expo-location.
  * Never conflate GPS/timeout failures with permission denial.
+ *
+ * `beforeRequest`: optional in-app rationale (app language) shown before the OS/browser
+ * permission dialog. Return false to abort without prompting the system.
  */
 export async function getDeviceLocation(opts?: {
   requestPermission?: boolean;
+  beforeRequest?: () => Promise<boolean>;
 }): Promise<DeviceLocationResult> {
   const requestPermission = opts?.requestPermission !== false;
+  const beforeRequest = opts?.beforeRequest;
 
   if (Platform.OS === 'web') {
     try {
+      let needsPrompt = true;
       if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
         try {
           const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
           if (perm.state === 'denied') {
             return { ok: false, error: 'denied' };
           }
+          needsPrompt = perm.state === 'prompt';
         } catch {
           // permissions.query(geolocation) unsupported in some browsers — continue
         }
+      }
+
+      if (requestPermission && needsPrompt && beforeRequest) {
+        const proceed = await beforeRequest();
+        if (!proceed) return { ok: false, error: 'denied' };
       }
 
       const first = await webGeolocation({
@@ -80,12 +92,17 @@ export async function getDeviceLocation(opts?: {
   }
 
   try {
-    let status: Location.PermissionStatus;
-    if (requestPermission) {
+    const current = await Location.getForegroundPermissionsAsync();
+    let status = current.status;
+
+    if (requestPermission && status !== Location.PermissionStatus.GRANTED) {
+      if (status !== Location.PermissionStatus.DENIED && beforeRequest) {
+        const proceed = await beforeRequest();
+        if (!proceed) return { ok: false, error: 'denied' };
+      }
       ({ status } = await Location.requestForegroundPermissionsAsync());
-    } else {
-      ({ status } = await Location.getForegroundPermissionsAsync());
     }
+
     if (status !== Location.PermissionStatus.GRANTED) {
       return { ok: false, error: 'denied' };
     }

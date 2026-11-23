@@ -12,12 +12,12 @@ export default defineMessages({
     fulfillment_CANCELLED: 'Bekor qilingan',
     fulfillment_unknown: 'Holati noma’lum',
 
-    payment_PENDING: 'To‘lov kutilmoqda',
+    payment_PENDING: 'Kutilmoqda',
     payment_PAID: 'To‘langan',
-    payment_FAILED: 'To‘lov amalga oshmadi',
+    payment_FAILED: 'Amalga oshmadi',
     payment_REFUNDED: 'Qaytarilgan',
     payment_PARTIALLY_REFUNDED: 'Qisman qaytarilgan',
-    payment_unknown: 'To‘lov holati noma’lum',
+    payment_unknown: 'Noma’lum',
 
     reservation_NONE: 'Band qilinmagan',
     reservation_ACTIVE: 'Mahsulotlar band qilindi',
@@ -72,12 +72,12 @@ export default defineMessages({
     fulfillment_CANCELLED: 'Отменён',
     fulfillment_unknown: 'Статус неизвестен',
 
-    payment_PENDING: 'Ожидает оплаты',
+    payment_PENDING: 'Ожидается',
     payment_PAID: 'Оплачен',
-    payment_FAILED: 'Оплата не прошла',
+    payment_FAILED: 'Не прошла',
     payment_REFUNDED: 'Возвращён',
     payment_PARTIALLY_REFUNDED: 'Частично возвращён',
-    payment_unknown: 'Статус оплаты неизвестен',
+    payment_unknown: 'Неизвестно',
 
     reservation_NONE: 'Не забронировано',
     reservation_ACTIVE: 'Товары забронированы',
@@ -132,12 +132,12 @@ export default defineMessages({
     fulfillment_CANCELLED: 'Cancelled',
     fulfillment_unknown: 'Status unknown',
 
-    payment_PENDING: 'Awaiting payment',
+    payment_PENDING: 'Pending',
     payment_PAID: 'Paid',
-    payment_FAILED: 'Payment failed',
+    payment_FAILED: 'Failed',
     payment_REFUNDED: 'Refunded',
     payment_PARTIALLY_REFUNDED: 'Partially refunded',
-    payment_unknown: 'Payment status unknown',
+    payment_unknown: 'Unknown',
 
     reservation_NONE: 'Not reserved',
     reservation_ACTIVE: 'Items reserved',

@@ -17,7 +17,7 @@ import BranchMap from '@/components/BranchMap';
 import { useApp } from '@/context/AppContext';
 import { api, type ApiError } from '@/lib/api';
 import { getDeviceLocation, type DeviceLocationError } from '@/lib/deviceLocation';
-import { notify } from '@/lib/dialogs';
+import { confirmAction, notify } from '@/lib/dialogs';
 import { branchRegionLabel, uniqueBranchRegionChips } from '@/lib/branchRegions';
 import type { TFunction } from '@/lib/i18n';
 import { localizeError } from '@/lib/i18n/errors';
@@ -128,10 +128,28 @@ export default function BranchesScreen() {
     else setLocStatus('unavailable');
   }, []);
 
+  const askLocationRationale = useCallback(async () => {
+    return confirmAction({
+      title: t('branches.locationPermissionTitle'),
+      message: t('branches.locationPermissionBody'),
+      confirmText: t('branches.locationPermissionAllow'),
+      cancelText: t('common.cancel'),
+    });
+  }, [t]);
+
+  const resolveDeviceLocation = useCallback(
+    (requestPermission = true) =>
+      getDeviceLocation({
+        requestPermission,
+        beforeRequest: requestPermission ? askLocationRationale : undefined,
+      }),
+    [askLocationRationale],
+  );
+
   useEffect(() => {
     let alive = true;
     (async () => {
-      const result = await getDeviceLocation({ requestPermission: true });
+      const result = await resolveDeviceLocation(true);
       if (!alive) return;
       if (result.ok && isPlausibleServiceArea(result.coords)) {
         setUserLocation(result.coords);
@@ -149,7 +167,7 @@ export default function BranchesScreen() {
     return () => {
       alive = false;
     };
-  }, [applyLocationError]);
+  }, [applyLocationError, resolveDeviceLocation]);
 
   // Infer viloyat/hudud from the nearest branch once GPS + catalog are ready.
   useEffect(() => {
@@ -206,7 +224,7 @@ export default function BranchesScreen() {
     if (userLocation && hasValidCoords(userLocation) && isPlausibleServiceArea(userLocation)) {
       return userLocation;
     }
-    const result = await getDeviceLocation({ requestPermission: true });
+    const result = await resolveDeviceLocation(true);
     if (result.ok && isPlausibleServiceArea(result.coords)) {
       setUserLocation(result.coords);
       setLocStatus('granted');
@@ -219,7 +237,7 @@ export default function BranchesScreen() {
     }
     if (!result.ok) applyLocationError(result.error);
     return null;
-  }, [applyLocationError, userLocation]);
+  }, [applyLocationError, resolveDeviceLocation, userLocation]);
 
   const buildRouteFrom = useCallback(
     async (from: LatLng, branch: any) => {
@@ -310,15 +328,20 @@ export default function BranchesScreen() {
 
   const retryLocation = useCallback(async () => {
     setLocStatus('pending');
-    const result = await getDeviceLocation({ requestPermission: true });
-    if (result.ok) {
+    const result = await resolveDeviceLocation(true);
+    if (result.ok && isPlausibleServiceArea(result.coords)) {
       setUserLocation(result.coords);
       setLocStatus('granted');
       setPickOriginActive(false);
       return;
     }
-    applyLocationError(result.error);
-  }, [applyLocationError]);
+    if (result.ok && !isPlausibleServiceArea(result.coords)) {
+      setUserLocation(null);
+      setLocStatus('far');
+      return;
+    }
+    if (!result.ok) applyLocationError(result.error);
+  }, [applyLocationError, resolveDeviceLocation]);
 
   // Deep-link from order detail: open that branch and draw the in-app route once.
   useEffect(() => {
