@@ -49,14 +49,20 @@ export function isPaymeMerchantApiEnabled(): boolean {
 
 export function resolvePaymeCheckoutBaseUrl(): string | null {
   const explicit = process.env.PAYME_CHECKOUT_BASE_URL?.trim();
-  if (explicit) return explicit.replace(/\/$/, "");
-  if (flagEnabled("PAYME_LIVE") && isProductionLike()) {
-    return "https://checkout.paycom.uz";
+  let base = explicit ? explicit.replace(/\/$/, "") : null;
+  if (!base) {
+    if (flagEnabled("PAYME_LIVE") && isProductionLike()) {
+      base = "https://checkout.paycom.uz";
+    } else if (!isProductionLike()) {
+      base = "https://checkout.test.paycom.uz";
+    }
   }
-  if (!isProductionLike()) {
-    return "https://checkout.test.paycom.uz";
+  if (!base) return null;
+  // Live/staging merchants must never hit Payme sandbox — "Поставщик не найден".
+  if (isProductionLike() && /checkout\.test\.paycom\.uz/i.test(base)) {
+    return null;
   }
-  return null;
+  return base;
 }
 
 export function buildPaymeCheckoutUrl(input: {
@@ -72,7 +78,8 @@ export function buildPaymeCheckoutUrl(input: {
     return {
       checkoutUrl: null,
       code: "CONTRACT_PENDING",
-      message: "Payme checkout host not enabled (set PAYME_CHECKOUT_BASE_URL or PAYME_LIVE=1)",
+      message:
+        "Payme checkout host not enabled or sandbox blocked in production (set PAYME_CHECKOUT_BASE_URL=https://checkout.paycom.uz)",
       amountTiyin,
     };
   }

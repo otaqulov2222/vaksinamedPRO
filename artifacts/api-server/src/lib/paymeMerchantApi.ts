@@ -127,15 +127,20 @@ export function isPaymeMerchantApiEnabled(): boolean {
 /** Checkout host: verified production + test hosts; live prod host gated. */
 export function resolvePaymeCheckoutBaseUrl(): string | null {
   const explicit = process.env.PAYME_CHECKOUT_BASE_URL?.trim();
-  if (explicit) return explicit.replace(/\/$/, "");
-  if (flagEnabled("PAYME_LIVE") && isProductionLike()) {
-    return "https://checkout.paycom.uz";
+  let base = explicit ? explicit.replace(/\/$/, "") : null;
+  if (!base) {
+    if (flagEnabled("PAYME_LIVE") && isProductionLike()) {
+      base = "https://checkout.paycom.uz";
+    } else if (!isProductionLike()) {
+      base = "https://checkout.test.paycom.uz";
+    }
   }
-  if (!isProductionLike()) {
-    return "https://checkout.test.paycom.uz";
+  if (!base) return null;
+  // Live/staging merchants must never hit Payme sandbox — "Поставщик не найден".
+  if (isProductionLike() && /checkout\.test\.paycom\.uz/i.test(base)) {
+    return null;
   }
-  // Production-like without explicit base / PAYME_LIVE → do not invent enablement
-  return null;
+  return base;
 }
 
 /**

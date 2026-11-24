@@ -42,6 +42,9 @@ import {
   getAuthoritativeBalance,
 } from "../lib/cashbackFinance";
 import { rateLimit } from "../lib/rateLimit";
+import { resolvePaymentMerchantConfig } from "../lib/branchPaymentMerchant";
+import { resolvePaymeCheckoutBaseUrl } from "../lib/paymeContract";
+import { resolveClickCheckoutBaseUrl } from "../lib/clickContract";
 
 const router = Router();
 
@@ -506,6 +509,34 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
       return res.status(400).json({ message: "Yetkazib berish manzili kiriting", code: "ADDRESS_REQUIRED" });
     }
 
+    // Fail closed before creating an unpaid online order.
+    if (paymentMethod === "payme" || paymentMethod === "click") {
+      const merchant = await resolvePaymentMerchantConfig({
+        branchId: branch.id,
+        provider: paymentMethod,
+        expectedBranchId: branch.id,
+        requireConfigured: false,
+      });
+      if (!merchant.configured) {
+        return res.status(400).json({
+          message: `${branch.name} uchun ${paymentMethod.toUpperCase()} kalitlari sozlanmagan`,
+          code: "MERCHANT_NOT_CONFIGURED",
+        });
+      }
+      if (paymentMethod === "payme" && !resolvePaymeCheckoutBaseUrl()) {
+        return res.status(503).json({
+          message: "Payme to‘lov sahifasi sozlanmagan. Keyinroq urinib ko‘ring.",
+          code: "CHECKOUT_UNAVAILABLE",
+        });
+      }
+      if (paymentMethod === "click" && !resolveClickCheckoutBaseUrl()) {
+        return res.status(503).json({
+          message: "Click to‘lov sahifasi sozlanmagan. Keyinroq urinib ko‘ring.",
+          code: "CHECKOUT_UNAVAILABLE",
+        });
+      }
+    }
+
     // Strongest idempotency: order.checkout_idempotency_key, then reservation key
     if (idempotencyKey) {
       const byCheckout = await db
@@ -787,6 +818,35 @@ router.post("/orders", orderCreateLimiter, async (req, res, next) => {
       provider: paymentMethod,
       amount: result.order.total,
     });
+
+    // Online checkout must open a real PSP URL — otherwise cancel and restore cashback.
+    if (
+      (paymentMethod === "payme" || paymentMethod === "click")
+      && (!payment.checkoutUrl || !payment.configured)
+    ) {
+      try {
+        await applyOrderTransition({
+          orderId: result.order.id,
+          toFulfillment: "CANCELLED",
+          actor: `system:checkout:${customer.id}`,
+          actorType: "system",
+          reason: "checkout_unavailable",
+          inventory: "release",
+        });
+        if (Number(result.order.cashbackUsed) > 0) {
+          await reverseOrderUseOnCancel(result.order.id, {
+            actor: `system:checkout:${customer.id}`,
+            reason: "checkout_unavailable",
+          });
+        }
+      } catch {
+        // Best-effort cleanup; still fail the checkout response.
+      }
+      return res.status(503).json({
+        message: payment.message || "To‘lov sahifasi ochilmadi. Buyurtma yaratilmadi.",
+        code: payment.adapterCode || "CHECKOUT_UNAVAILABLE",
+      });
+    }
 
     return res.status(result.idempotent ? 200 : 201).json({
       order: await serializeOrder(result.order),

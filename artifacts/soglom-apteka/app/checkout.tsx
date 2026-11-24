@@ -60,6 +60,8 @@ const CHECKOUT_ERROR_FALLBACK: Record<string, TranslationKey> = {
   SPEND_CAP_ZERO: 'cart.checkoutCashbackCapZero',
   CART_EMPTY: 'cart.cartEmptyTitle',
   ADDRESS_REQUIRED: 'cart.checkoutAddressRequired',
+  CHECKOUT_UNAVAILABLE: 'cart.checkoutPaymentUnavailable',
+  MERCHANT_NOT_CONFIGURED: 'cart.checkoutPaymentUnavailable',
 };
 
 function productIconName(icon: unknown) {
@@ -354,7 +356,13 @@ export default function CheckoutScreen() {
       await refresh();
       idempotencyRef.current = null;
       const checkoutUrl = result.payment?.checkoutUrl as string | undefined;
-      if (checkoutUrl && (paymentMethod === 'payme' || paymentMethod === 'click')) {
+      if (paymentMethod === 'payme' || paymentMethod === 'click') {
+        if (!checkoutUrl) {
+          throw Object.assign(new Error('Checkout URL missing'), {
+            code: 'CHECKOUT_UNAVAILABLE',
+            message: t('cart.checkoutPaymentUnavailable'),
+          });
+        }
         const absolute =
           /^https?:\/\//i.test(checkoutUrl)
             ? checkoutUrl
