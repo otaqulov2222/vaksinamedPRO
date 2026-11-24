@@ -63,6 +63,8 @@ Online to‘lovning o‘zi cashback bermaydi.
 |----------|---------|
 | `POST /api/integrations/fom/sale` | Chek yopish (tijorat) |
 | `POST /api/integrations/fom/catalog-sync` | **Phase 2** — FOM katalog → ilova mahsulotlari (stock yozilmaydi) |
+| `POST /api/integrations/fom/site-xml` | **Phase 2** — SITE.exe XML qabul (`FOM-{I}` sku; qoldiq yozilmaydi) |
+| `POST /api/integrations/fom/catalog-from-report` | **Phase 2** — REPORT_ID=188 spravochnik JSON → katalog |
 | `POST /api/integrations/fom/inventory-shadow` | **Phase 1** — farq hisobot, stock yozilmaydi |
 | `POST /api/integrations/fom/inventory-sync` | Writer ON bo‘lganda (hozir 503) |
 | `GET /api/integrations/fom/status` | Honest holat + roadmap |
@@ -84,6 +86,38 @@ Online to‘lovning o‘zi cashback bermaydi.
   ]
 }
 ```
+
+### SITE.exe (PDF format) → ilova
+
+FOM texnik `SETUP.ini` da:
+
+```ini
+[SERVER]
+URL=https://<host>/api/integrations/fom/site-xml?token=<FOM_WEBHOOK_SECRET>
+TOCING=<FOM_WEBHOOK_SECRET>
+```
+
+XML qator: `<V I="2053" N="..." R="..." K="0.37" P="226400.00" O="1" IK="..." UP="..." UN="Qadoq"/>`  
+SKU = `FOM-{I}` — demo/VM dorilar o‘chirilmaydi. Qoldiq (`K`/`O`) faqat preview; `product_stocks` yozilmaydi.
+
+Spravochnik bridge: `POST /api/integrations/fom/catalog-from-report` body `{ "rows": [{ "I", "N", "P", "E", "C" }] }`.
+
+### CASHBACK.exe (F-Kassa) → ilova
+
+Kassa URL bazasi (bizning `/api` ni egallamaydi):
+
+```text
+https://<host>/fom-cashback
+```
+
+| Method | Path | Ichida |
+|--------|------|--------|
+| `POST /authPOS` | `{ login, password }` | Token |
+| `POST /api` | `GetBalance` / `scan_code` | Mavjud QR lookup |
+| `POST /api` | `CreateReceipt` | `confirmPosSale` (POS ledger, `receipt:FOMCB-…`) |
+
+Env: `FOM_CASHBACK_LOGIN`, `FOM_CASHBACK_PASSWORD`, `FOM_BRANCH_MAP` yoki `FOM_DEFAULT_BRANCH_ID`.  
+`FOM_POS` invent qilinmaydi; `/api/integrations/fom/sale` o‘zgarmaydi.
 
 ### Shadow payload namunasi
 

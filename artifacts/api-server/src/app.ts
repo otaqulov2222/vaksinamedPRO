@@ -4,6 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import fomCashbackExeRouter, { fomCashbackExeErrorHandler } from "./routes/fomCashbackExe";
 import { logger } from "./lib/logger";
 import { requestTelemetryMiddleware } from "./lib/requestTelemetry";
 import { isCorsOriginAllowed } from "./lib/corsPolicy";
@@ -32,6 +33,8 @@ app.use(
 app.use(cors({ origin: (origin, callback) => callback(null, isCorsOriginAllowed(origin)), credentials: true }));
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+// SITE.exe (F-Apteka) pushes stock/catalog as raw XML to our URL.
+app.use(express.text({ type: ["text/xml", "application/xml", "text/plain"], limit: "15mb" }));
 
 const uploadsDir = path.resolve(process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads"));
 if (!fs.existsSync(uploadsDir)) {
@@ -43,6 +46,11 @@ app.use("/uploads", express.static(uploadsDir));
 app.use(requestTelemetryMiddleware);
 
 app.use("/api", router);
+
+// F-Kassa CASHBACK.exe base URL (does not collide with /api router):
+//   SETUP → https://<host>/fom-cashback  → /authPOS + /api
+app.use("/fom-cashback", fomCashbackExeRouter);
+app.use("/fom-cashback", fomCashbackExeErrorHandler);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const error = err as { status?: number; message?: string; code?: string };

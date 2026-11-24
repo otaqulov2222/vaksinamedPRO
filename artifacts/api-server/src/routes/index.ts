@@ -17,6 +17,7 @@ import authRouter from "./auth";
 import posRouter from "./pos";
 import workersRouter from "./workers";
 import fomInventoryRouter from "./fomInventory";
+import fomCashbackExeRouter from "./fomCashbackExe";
 import remindersRouter from "./reminders";
 import familyRouter from "./family";
 import { addressesRouter } from "./addresses";
@@ -45,6 +46,7 @@ router.use(adminUsersRouter);
 router.use(adminSecurityRouter);
 router.use(integrationsRouter);
 router.use(fomInventoryRouter);
+router.use("/integrations/fom/cashback", fomCashbackExeRouter);
 router.use(mapsRouter);
 
 export default router;
