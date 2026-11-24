@@ -104,19 +104,21 @@ Spravochnik bridge: `POST /api/integrations/fom/catalog-from-report` body `{ "ro
 
 ### CASHBACK.exe (F-Kassa) → ilova
 
-Kassa URL bazasi (bizning `/api` ni egallamaydi):
+**Live uchun asosiy baza** (mavjud nginx `/api` proxy orqali — alohida `/fom-cashback` shart emas):
 
 ```text
-https://<host>/fom-cashback
+https://77-83-206-192.sslip.io/api/integrations/fom/cashback
 ```
 
 | Method | Path | Ichida |
 |--------|------|--------|
-| `POST /authPOS` | `{ login, password }` | Token |
-| `POST /api` | `GetBalance` / `scan_code` | Mavjud QR lookup |
-| `POST /api` | `CreateReceipt` | `confirmPosSale` (POS ledger, `receipt:FOMCB-…`) |
+| `POST …/authPOS` | `{ login, password }` | Token |
+| `POST …/api` | `GetBalance` / `scan_code` | Mavjud QR lookup |
+| `POST …/api` | `CreateReceipt` | `confirmPosSale` (POS ledger, `receipt:FOMCB-…`) |
 
-Env: `FOM_CASHBACK_LOGIN`, `FOM_CASHBACK_PASSWORD`, `FOM_BRANCH_MAP` yoki `FOM_DEFAULT_BRANCH_ID`.  
+Qisqa alias (nginx’da `location /fom-cashback` bo‘lsa): `https://<host>/fom-cashback`.
+
+Env: `FOM_CASHBACK_LOGIN`, `FOM_CASHBACK_PASSWORD` (yoki `FOM_WEBHOOK_SECRET`), `FOM_BRANCH_MAP` yoki `FOM_DEFAULT_BRANCH_ID`.  
 `FOM_POS` invent qilinmaydi; `/api/integrations/fom/sale` o‘zgarmaydi.
 
 ### Shadow payload namunasi
