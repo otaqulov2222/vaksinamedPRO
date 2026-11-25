@@ -178,7 +178,7 @@ router.post("/integrations/fom/catalog-from-report", async (req, res, next) => {
 
     const catalog = await syncCatalogFromFom({
       items: parsed.catalogItems,
-      batchId: body.batchId || body.syncId || `R188-${Date.now()}`,
+      batchId: (body.batchId || body.syncId || `R188-${Date.now()}`) as string,
       dryRun: Boolean(body.dryRun),
       actor: "fom-report-188",
     });

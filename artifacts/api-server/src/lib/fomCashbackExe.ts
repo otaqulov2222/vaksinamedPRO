@@ -98,7 +98,9 @@ export async function cashbackExeCreateReceipt(params: Record<string, unknown>) 
     return { http: 200 as const, body: cashbackErr("User not found by scan code!") };
   }
 
-  const branchResolved = resolveAppBranchId(params.branch);
+  const branchResolved = resolveAppBranchId(
+    params.branch as string | number | null | undefined,
+  );
   if (branchResolved.branchId == null) {
     return {
       http: 200 as const,
